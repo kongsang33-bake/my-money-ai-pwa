@@ -38,6 +38,7 @@ type AnalyzeBody = {
   text?: string;
   timezone?: string;
   images?: AnalyzeImage[];
+  debtorNames?: string[];
 };
 
 const maxImageBytes = 5 * 1024 * 1024;
@@ -46,7 +47,8 @@ function imageBytes(base64: string) {
   return Math.floor((base64.length * 3) / 4);
 }
 
-function buildPrompt(input: string, today: string, hasImages: boolean) {
+function buildPrompt(input: string, today: string, hasImages: boolean, debtorNames: string[]) {
+  const knownDebtors = debtorNames.length ? debtorNames.join(", ") : "ยังไม่มีรายชื่อลูกหนี้ที่บันทึกไว้";
   return [
     `วันนี้คือ ${today}`,
     "แยกรายรับรายจ่ายจากข้อความและ/หรือรูปสลิปเป็น JSON เท่านั้น ห้ามสร้างรายการที่ไม่มีหลักฐานในข้อความหรือรูป",
@@ -67,7 +69,9 @@ function buildPrompt(input: string, today: string, hasImages: boolean) {
     "",
     "กติกา debtor_name:",
     "- ใช้เฉพาะรายการ lend, split_half, debt_repayment",
-    "- ถ้าพบชื่อ เช่น แฟน, เพื่อนเอ, คุณบี ให้ใช้ชื่อนั้น",
+    `- รายชื่อลูกหนี้ที่มีอยู่ในระบบ: ${knownDebtors}`,
+    "- ถ้าข้อความใกล้เคียงกับรายชื่อที่มีอยู่ ให้ใช้ชื่อจากระบบให้ตรงที่สุด",
+    "- ถ้าพบชื่อใหม่ เช่น แฟน, เพื่อนเอ, คุณบี และไม่ตรงกับรายชื่อเดิม ให้คืนชื่อใหม่นั้นเพื่อให้แอพเสนอสร้างลูกหนี้ใหม่",
     "- ถ้ามีคำว่าออกให้เพื่อนก่อนแต่ไม่ระบุชื่อ ให้ใช้ เพื่อน",
     "- ถ้าไม่พบชื่อ ให้ใช้ ไม่ระบุ",
     "- รายรับ/รายจ่ายส่วนตัวให้ใช้ ไม่ระบุ",
@@ -83,6 +87,7 @@ export async function POST(request: Request) {
   const body = (await request.json()) as AnalyzeBody;
   const input = body.text?.trim() ?? "";
   const images = body.images ?? [];
+  const debtorNames = [...new Set((body.debtorNames ?? []).map((name) => name.trim()).filter(Boolean))].slice(0, 100);
 
   if (!input && images.length === 0) return Response.json({ error: "กรุณาพิมพ์ข้อความหรือแนบรูปสลิปก่อน" }, { status: 400 });
   if (input.length > 2000) return Response.json({ error: "ข้อความยาวเกินไป" }, { status: 400 });
@@ -94,7 +99,7 @@ export async function POST(request: Request) {
   }
 
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: body.timezone || "Asia/Bangkok" }).format(new Date());
-  const prompt = buildPrompt(input, today, images.length > 0);
+  const prompt = buildPrompt(input, today, images.length > 0, debtorNames);
 
   try {
     const ai = new GoogleGenAI({ apiKey });

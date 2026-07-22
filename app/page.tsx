@@ -25,6 +25,17 @@ type Entry = {
 };
 
 type Draft = Omit<Entry, "id"> & { id: string };
+type Profile = {
+  user_id: string;
+  nickname: string | null;
+  app_icon: string | null;
+};
+type Debtor = {
+  id: string;
+  user_id: string;
+  name: string;
+  note: string | null;
+};
 type EntryInput = {
   id: string;
   title: string;
@@ -150,16 +161,19 @@ export default function Home() {
   const [ready, setReady] = useState(!supabase);
   const [tab, setTab] = useState<Tab>("home");
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [text, setText] = useState("");
   const [slipImages, setSlipImages] = useState<SlipImage[]>([]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [editing, setEditing] = useState<Entry | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [debtorsOpen, setDebtorsOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(monthKey(new Date()));
+  const displayName = profile?.nickname?.trim() || user?.user_metadata?.full_name || user?.user_metadata?.name || "เงินของฉัน";
+  const displayIcon = profile?.app_icon?.trim() || user?.email?.[0]?.toUpperCase() || "฿";
 
   const loadEntries = useCallback(async () => {
     if (!supabase) return;
@@ -195,22 +209,55 @@ export default function Home() {
     );
   }, []);
 
+  const loadProfile = useCallback(async () => {
+    if (!supabase) return;
+
+    const { data, error } = await supabase.from("profiles").select("user_id,nickname,app_icon").maybeSingle();
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setProfile(data as Profile | null);
+  }, []);
+
+  const loadDebtors = useCallback(async () => {
+    if (!supabase) return;
+
+    const { data, error } = await supabase.from("debtors").select("id,user_id,name,note").order("name", { ascending: true });
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setDebtors((data ?? []) as Debtor[]);
+  }, []);
+
   useEffect(() => {
     if (!supabase) return;
 
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
       setReady(true);
-      if (data.user) void loadEntries();
+      if (data.user) {
+        void loadEntries();
+        void loadProfile();
+        void loadDebtors();
+      }
     });
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      if (session?.user) void loadEntries();
-      else setEntries([]);
+      if (session?.user) {
+        void loadEntries();
+        void loadProfile();
+        void loadDebtors();
+      } else {
+        setEntries([]);
+        setProfile(null);
+        setDebtors([]);
+      }
     });
     return () => data.subscription.unsubscribe();
-  }, [loadEntries]);
+  }, [loadDebtors, loadEntries, loadProfile]);
 
   const mainWallet = useMemo(() => entries.reduce((sum, entry) => sum + entry.wallet_impact, 0), [entries]);
   const debtorSummary = useMemo(() => {
@@ -224,7 +271,6 @@ export default function Home() {
       .filter((item) => item.amount > 0.005)
       .sort((a, b) => b.amount - a.amount);
   }, [entries]);
-  const totalDebt = useMemo(() => debtorSummary.reduce((sum, item) => sum + item.amount, 0), [debtorSummary]);
 
   const monthlyEntries = useMemo(
     () => entries.filter((entry) => entry.occurred_at.slice(0, 7) === selectedMonth),
@@ -286,6 +332,7 @@ export default function Home() {
           text,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           images: slipImages.map(({ data, mimeType, name }) => ({ data, mimeType, name })),
+          debtorNames: debtors.map((debtor) => debtor.name),
         }),
       });
       const data = await response.json();
@@ -318,10 +365,9 @@ export default function Home() {
 
     setBusy(true);
     setError("");
+    const normalizedItems = items.map((item) => normalizeEntry(item));
 
-    const payload = items.map((item) => {
-      const normalized = normalizeEntry(item);
-      return {
+    const payload = normalizedItems.map((normalized) => ({
         user_id: user.id,
         title: normalized.title.trim(),
         category: normalized.category,
@@ -335,14 +381,14 @@ export default function Home() {
         partner_share: normalized.partner_share,
         occurred_at: normalized.occurred_at,
         source_text: normalized.source_text,
-      };
-    });
+    }));
 
     const { error } = await supabase.from("transactions").insert(payload);
 
     if (error) {
       setError(error.message);
     } else {
+      await createMissingDebtors(normalizedItems);
       setDrafts([]);
       setText("");
       setSlipImages([]);
@@ -351,6 +397,28 @@ export default function Home() {
     }
 
     setBusy(false);
+  }
+
+  async function createMissingDebtors(items: Entry[]) {
+    if (!supabase || !user) return;
+    const known = new Set(debtors.map((debtor) => debtor.name.trim().toLowerCase()));
+    const names = [
+      ...new Set(
+        items
+          .filter((item) => ["lend", "split_half", "debt_repayment"].includes(item.transaction_type))
+          .map((item) => item.debtor_name.trim())
+          .filter((name) => name && name !== unnamedDebtor && !known.has(name.toLowerCase())),
+      ),
+    ];
+
+    for (const name of names) {
+      const { error } = await supabase.from("debtors").insert({ user_id: user.id, name });
+      if (error && error.code !== "23505") {
+        setError(error.message);
+        return;
+      }
+    }
+    if (names.length) await loadDebtors();
   }
 
   async function updateEntry() {
@@ -401,6 +469,58 @@ export default function Home() {
     setBusy(false);
   }
 
+  async function saveProfile(next: { nickname: string; app_icon: string }) {
+    if (!supabase || !user) return;
+    setBusy(true);
+    setError("");
+
+    const payload = {
+      user_id: user.id,
+      nickname: next.nickname.trim() || null,
+      app_icon: next.app_icon.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await supabase.from("profiles").upsert(payload, { onConflict: "user_id" }).select("user_id,nickname,app_icon").single();
+
+    if (error) setError(error.message);
+    else setProfile(data as Profile);
+    setBusy(false);
+  }
+
+  async function createDebtor(name: string, note = "") {
+    if (!supabase || !user || !name.trim()) return;
+    setBusy(true);
+    setError("");
+    const { error } = await supabase.from("debtors").insert({ user_id: user.id, name: name.trim(), note: note.trim() || null });
+    if (error) setError(error.code === "23505" ? "มีลูกหนี้ชื่อนี้แล้ว" : error.message);
+    else await loadDebtors();
+    setBusy(false);
+  }
+
+  async function updateDebtor(debtor: Debtor, patch: { name: string; note: string }) {
+    if (!supabase) return;
+    setBusy(true);
+    setError("");
+    const { error } = await supabase
+      .from("debtors")
+      .update({ name: patch.name.trim(), note: patch.note.trim() || null, updated_at: new Date().toISOString() })
+      .eq("id", debtor.id);
+    if (error) setError(error.code === "23505" ? "มีลูกหนี้ชื่อนี้แล้ว" : error.message);
+    else await loadDebtors();
+    setBusy(false);
+  }
+
+  async function deleteDebtor(debtor: Debtor) {
+    if (!supabase) return;
+    if (!window.confirm(`ลบลูกหนี้ "${debtor.name}" ออกจากรายชื่อใช่ไหม? รายการเก่าจะไม่ถูกลบ`)) return;
+    setBusy(true);
+    setError("");
+    const { error } = await supabase.from("debtors").delete().eq("id", debtor.id);
+    if (error) setError(error.message);
+    else await loadDebtors();
+    setBusy(false);
+  }
+
   if (!ready) {
     return (
       <main className="shell">
@@ -415,9 +535,12 @@ export default function Home() {
     <main className="shell">
       <section className="phone">
         <header className="topbar">
-          <div>
+          <div className="home-identity">
+            <span className="home-profile-icon">{displayIcon}</span>
+            <div>
             <p className="eyebrow">สวัสดี</p>
-            <h1>เงินของฉัน</h1>
+              <h1>{displayName}</h1>
+            </div>
           </div>
           <button className="menu-button" onClick={() => setMenuOpen(true)} title="เมนู">
             <span />
@@ -454,28 +577,15 @@ export default function Home() {
               categories={categorySummary}
             />
 
-            <section className="debtor-card">
-              <div className="section-title compact-title">
-                <h2>ลูกหนี้</h2>
-                <button onClick={() => setDebtorsOpen(true)}>ดูทั้งหมด</button>
-              </div>
-              {debtorSummary.slice(0, 3).map((item) => (
-                <div className="debtor-row" key={item.name}>
-                  <span>{item.name}</span>
-                  <strong>{moneySign}{formatMoney(item.amount)}</strong>
-                </div>
-              ))}
-              {!debtorSummary.length && <p className="empty-note">ยังไม่มียอดลูกหนี้</p>}
-              {!!debtorSummary.length && <small className="debtor-total">รวม {moneySign}{formatMoney(totalDebt)} · รายการคืนเงินบันทึกผ่าน AI</small>}
-            </section>
-
             {error && <p className="error-box">{error}</p>}
 
             <div className="section-title">
               <h2>รายการล่าสุด</h2>
               <button onClick={() => setTab("history")}>ดูทั้งหมด</button>
             </div>
-            <EntryList entries={entries.slice(0, 5)} onEdit={setEditing} onDelete={deleteEntry} />
+            <div className="latest-scroll">
+              <EntryList entries={entries.slice(0, 20)} onEdit={setEditing} onDelete={deleteEntry} />
+            </div>
           </div>
         )}
 
@@ -531,7 +641,12 @@ export default function Home() {
                   <span>AI</span>
                 </div>
                 {drafts.map((draft, index) => (
-                  <DraftRow key={draft.id} draft={draft} onChange={(next) => setDrafts((items) => items.map((item, i) => (i === index ? next : item)))} />
+                  <DraftRow
+                    key={draft.id}
+                    draft={draft}
+                    knownDebtorNames={debtors.map((debtor) => debtor.name)}
+                    onChange={(next) => setDrafts((items) => items.map((item, i) => (i === index ? next : item)))}
+                  />
                 ))}
                 <DraftImpact items={drafts} />
                 <button className="save" onClick={() => saveEntries(drafts)} disabled={busy}>
@@ -566,8 +681,21 @@ export default function Home() {
         )}
 
         {editing && <EditSheet entry={editing} busy={busy} onChange={setEditing} onClose={() => setEditing(null)} onSave={updateEntry} />}
-        {debtorsOpen && <DebtorSheet debtors={debtorSummary} onClose={() => setDebtorsOpen(false)} />}
-        {menuOpen && <SideMenu user={user} onClose={() => setMenuOpen(false)} onLogout={() => { setMenuOpen(false); setLogoutOpen(true); }} />}
+        {menuOpen && (
+          <SideMenu
+            user={user}
+            profile={profile}
+            debtors={debtors}
+            debtorSummary={debtorSummary}
+            busy={busy}
+            onClose={() => setMenuOpen(false)}
+            onLogout={() => { setMenuOpen(false); setLogoutOpen(true); }}
+            onSaveProfile={saveProfile}
+            onCreateDebtor={createDebtor}
+            onUpdateDebtor={updateDebtor}
+            onDeleteDebtor={deleteDebtor}
+          />
+        )}
         {logoutOpen && <ConfirmLogout onCancel={() => setLogoutOpen(false)} onConfirm={() => supabase?.auth.signOut()} />}
 
         <nav className="bottom-nav">
@@ -728,8 +856,10 @@ function Metric({ label, value, tone }: { label: string; value: number; tone: "i
   );
 }
 
-function DraftRow({ draft, onChange }: { draft: Draft; onChange: (draft: Draft) => void }) {
+function DraftRow({ draft, knownDebtorNames, onChange }: { draft: Draft; knownDebtorNames: string[]; onChange: (draft: Draft) => void }) {
   const update = (patch: Partial<Draft>) => onChange(normalizeEntry({ ...draft, ...patch }));
+  const isDebtType = (["lend", "split_half", "debt_repayment"] as TransactionType[]).includes(draft.transaction_type);
+  const isNewDebtor = isDebtType && draft.debtor_name !== unnamedDebtor && !knownDebtorNames.some((name) => name.trim().toLowerCase() === draft.debtor_name.trim().toLowerCase());
 
   return (
     <div className="draft">
@@ -759,8 +889,11 @@ function DraftRow({ draft, onChange }: { draft: Draft; onChange: (draft: Draft) 
         <span>กระเป๋า {formatSignedMoney(draft.wallet_impact)}</span>
         <span>ลูกหนี้ {formatSignedMoney(draft.debt_impact)}</span>
       </div>
-      {(["lend", "split_half", "debt_repayment"] as TransactionType[]).includes(draft.transaction_type) && (
-        <input className="draft-date" placeholder="ชื่อผู้เกี่ยวข้อง เช่น แฟน หรือ เพื่อนเอ" value={draft.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
+      {isDebtType && (
+        <div className="draft-debtor-field">
+          <input className="draft-date" placeholder="ชื่อผู้เกี่ยวข้อง เช่น แฟน หรือ เพื่อนเอ" value={draft.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
+          {isNewDebtor && <small>ลูกหนี้ใหม่ · จะสร้างให้อัตโนมัติเมื่อบันทึก</small>}
+        </div>
       )}
       <input className="draft-date" type="date" value={toDateInput(draft.occurred_at)} onChange={(event) => update({ occurred_at: fromDateInput(event.target.value) })} />
     </div>
@@ -883,34 +1016,61 @@ function EditSheet({
   );
 }
 
-function DebtorSheet({ debtors, onClose }: { debtors: { name: string; amount: number }[]; onClose: () => void }) {
-  return (
-    <div className="sheet-backdrop">
-      <section className="edit-sheet">
-        <div className="sheet-head">
-          <div>
-            <p className="eyebrow">สรุปยอดค้าง</p>
-            <h2>ลูกหนี้ทั้งหมด</h2>
-          </div>
-          <button onClick={onClose}>×</button>
-        </div>
-        {debtors.map((item) => (
-          <div className="debtor-row large" key={item.name}>
-            <span>{item.name}</span>
-            <strong>{moneySign}{formatMoney(item.amount)}</strong>
-          </div>
-        ))}
-        {!debtors.length && <p className="empty-note">ยังไม่มียอดลูกหนี้</p>}
-        <p className="privacy">รายการรับชำระเงินให้พิมพ์ผ่าน AI Chat เช่น “เพื่อนเอโอนคืน 200 บาท”</p>
-      </section>
-    </div>
-  );
-}
-
-function SideMenu({ user, onClose, onLogout }: { user: User; onClose: () => void; onLogout: () => void }) {
+function SideMenu({
+  user,
+  profile,
+  debtors,
+  debtorSummary,
+  busy,
+  onClose,
+  onLogout,
+  onSaveProfile,
+  onCreateDebtor,
+  onUpdateDebtor,
+  onDeleteDebtor,
+}: {
+  user: User;
+  profile: Profile | null;
+  debtors: Debtor[];
+  debtorSummary: { name: string; amount: number }[];
+  busy: boolean;
+  onClose: () => void;
+  onLogout: () => void;
+  onSaveProfile: (profile: { nickname: string; app_icon: string }) => void;
+  onCreateDebtor: (name: string, note: string) => void;
+  onUpdateDebtor: (debtor: Debtor, patch: { name: string; note: string }) => void;
+  onDeleteDebtor: (debtor: Debtor) => void;
+}) {
   const metadata = user.user_metadata ?? {};
-  const name = metadata.full_name ?? metadata.name ?? "ผู้ใช้";
+  const name = profile?.nickname || metadata.full_name || metadata.name || "ผู้ใช้";
+  const appIcon = profile?.app_icon || user.email?.[0]?.toUpperCase() || "฿";
   const provider = user.app_metadata?.provider ?? "Google";
+  const [nickname, setNickname] = useState(profile?.nickname ?? "");
+  const [app_icon, setAppIcon] = useState(profile?.app_icon ?? "");
+  const [newDebtorName, setNewDebtorName] = useState("");
+  const [newDebtorNote, setNewDebtorNote] = useState("");
+  const [editingDebtor, setEditingDebtor] = useState<Debtor | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editNote, setEditNote] = useState("");
+
+  const startEdit = (debtor: Debtor) => {
+    setEditingDebtor(debtor);
+    setEditName(debtor.name);
+    setEditNote(debtor.note ?? "");
+  };
+
+  const createAndClear = () => {
+    onCreateDebtor(newDebtorName, newDebtorNote);
+    setNewDebtorName("");
+    setNewDebtorNote("");
+  };
+
+  const updateAndClear = () => {
+    if (!editingDebtor) return;
+    onUpdateDebtor(editingDebtor, { name: editName, note: editNote });
+    setEditingDebtor(null);
+  };
+
   return (
     <div className="side-menu-backdrop" onClick={onClose}>
       <aside className="side-menu" onClick={(event) => event.stopPropagation()}>
@@ -923,7 +1083,7 @@ function SideMenu({ user, onClose, onLogout }: { user: User; onClose: () => void
         </div>
 
         <div className="profile-head">
-          {metadata.avatar_url ? <span className="profile-photo" style={{ backgroundImage: `url(${metadata.avatar_url})` }} aria-label={name} /> : <div className="avatar profile-avatar">{String(name)[0]}</div>}
+          <div className="avatar profile-avatar">{appIcon}</div>
           <div>
             <b>{name}</b>
             <small>{user.email}</small>
@@ -936,12 +1096,65 @@ function SideMenu({ user, onClose, onLogout }: { user: User; onClose: () => void
           <b>{user.created_at ? new Date(user.created_at).toLocaleDateString("th-TH") : "—"}</b>
         </div>
 
-        <nav className="side-menu-list">
-          <button>
-            <span>บัญชี</span>
-            <small>ข้อมูลโปรไฟล์และการเข้าสู่ระบบ</small>
+        <section className="side-section">
+          <h3>จัดการโปรไฟล์</h3>
+          <label>
+            ชื่อเล่น
+            <input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="เช่น ก้อง" />
+          </label>
+          <label>
+            ไอคอนในแอพ
+            <input value={app_icon} onChange={(event) => setAppIcon(event.target.value)} placeholder="เช่น ก, ฿, 🙂" maxLength={4} />
+          </label>
+          <button className="side-save" onClick={() => onSaveProfile({ nickname, app_icon })} disabled={busy}>
+            บันทึกโปรไฟล์
           </button>
-        </nav>
+        </section>
+
+        <section className="side-section">
+          <div className="side-section-head">
+            <h3>ลูกหนี้</h3>
+            <small>รวม {moneySign}{formatMoney(debtorSummary.reduce((sum, item) => sum + item.amount, 0))}</small>
+          </div>
+          <div className="debtor-create">
+            <input value={newDebtorName} onChange={(event) => setNewDebtorName(event.target.value)} placeholder="ชื่อลูกหนี้ใหม่" />
+            <input value={newDebtorNote} onChange={(event) => setNewDebtorNote(event.target.value)} placeholder="หมายเหตุ" />
+            <button onClick={createAndClear} disabled={busy || !newDebtorName.trim()}>เพิ่ม</button>
+          </div>
+
+          <div className="side-debtor-list">
+            {debtors.map((debtor) => {
+              const amount = debtorSummary.find((item) => item.name.trim().toLowerCase() === debtor.name.trim().toLowerCase())?.amount ?? 0;
+              const isEditing = editingDebtor?.id === debtor.id;
+              return (
+                <article className="side-debtor-item" key={debtor.id}>
+                  {isEditing ? (
+                    <>
+                      <input value={editName} onChange={(event) => setEditName(event.target.value)} />
+                      <input value={editNote} onChange={(event) => setEditNote(event.target.value)} placeholder="หมายเหตุ" />
+                      <div>
+                        <button onClick={updateAndClear} disabled={busy || !editName.trim()}>บันทึก</button>
+                        <button onClick={() => setEditingDebtor(null)}>ยกเลิก</button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <b>{debtor.name}</b>
+                        <small>{debtor.note || "ไม่มีหมายเหตุ"} · ค้าง {moneySign}{formatMoney(amount)}</small>
+                      </div>
+                      <menu>
+                        <button onClick={() => startEdit(debtor)}>แก้</button>
+                        <button onClick={() => onDeleteDebtor(debtor)}>ลบ</button>
+                      </menu>
+                    </>
+                  )}
+                </article>
+              );
+            })}
+            {!debtors.length && <p className="empty-note">ยังไม่มีรายชื่อลูกหนี้</p>}
+          </div>
+        </section>
 
         <button className="logout-button" onClick={onLogout}>ออกจากระบบ</button>
       </aside>
