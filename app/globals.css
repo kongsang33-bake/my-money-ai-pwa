@@ -4741,11 +4741,11 @@ select:focus {
 }
 
 .phone.tab-home > .view {
-  padding-top: 58px;
+  padding-top: 36px;
 }
 
 .living-mascot.safe-mode {
-  top: max(104px, calc(84px + env(safe-area-inset-top)));
+  top: max(80px, calc(60px + env(safe-area-inset-top)));
   width: 74px;
 }
 
@@ -4804,7 +4804,7 @@ select:focus {
   }
 
   .living-mascot.safe-mode {
-    top: 116px;
+    top: 92px;
   }
 
   .pet-panel {
@@ -4814,7 +4814,7 @@ select:focus {
 
 @media (max-width: 420px) {
   .phone.tab-home > .view {
-    padding-top: 52px;
+    padding-top: 32px;
   }
 
   .living-mascot {
@@ -4823,7 +4823,7 @@ select:focus {
   }
 
   .living-mascot.safe-mode {
-    top: max(98px, calc(78px + env(safe-area-inset-top)));
+    top: max(76px, calc(56px + env(safe-area-inset-top)));
   }
 
   .pet-stage {
