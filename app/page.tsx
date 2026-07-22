@@ -9,7 +9,7 @@ type EntryKind = "expense" | "income";
 type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "gift";
 type Tab = "home" | "add" | "history" | "debtors" | "wallets";
 type MascotMood = "idle" | "thinking" | "happy" | "sleepy" | "oops";
-type MascotVariant = "mint" | "whale" | "coin" | "berry";
+type MascotVariant = "whale";
 type PetStats = { happiness: number; energy: number; treats: number; lastSeen: number; message: string };
 const defaultPetStats: PetStats = {
   happiness: 72,
@@ -20,10 +20,7 @@ const defaultPetStats: PetStats = {
 };
 const defaultMascotVariant: MascotVariant = "whale";
 const mascotOptions: { id: MascotVariant; name: string; detail: string }[] = [
-  { id: "whale", name: "น้องวาฬเงิน", detail: "โทนฟ้าแบบตัวอย่างที่ส่งมา" },
-  { id: "mint", name: "น้องมิ้นต์", detail: "เขียวครีม เข้ากับธีมหลัก" },
-  { id: "coin", name: "น้องเหรียญ", detail: "สดใส เหมาะกับสายเก็บเงิน" },
-  { id: "berry", name: "น้องเบอร์รี่", detail: "ชมพูพาสเทล นุ่มและขี้เล่น" },
+  { id: "whale", name: "น้องวาฬเงิน", detail: "โทนฟ้าประจำแอพ" },
 ];
 
 type Entry = {

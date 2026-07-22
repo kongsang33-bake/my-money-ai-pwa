@@ -4578,43 +4578,9 @@ select:focus {
   --mascot-accent: #f4d08a;
 }
 
-.mascot-mint .money-mascot,
-.money-mascot.variant-mint {
-  --mascot-primary: #dff6e8;
-  --mascot-mid: #9eddb9;
-  --mascot-deep: #4ba67c;
-  --mascot-accent: #f6ddad;
-}
-
-.mascot-coin .money-mascot,
-.money-mascot.variant-coin {
-  --mascot-primary: #fff1b9;
-  --mascot-mid: #ffd36d;
-  --mascot-deep: #e8a844;
-  --mascot-accent: #bfe7cf;
-}
-
-.mascot-berry .money-mascot,
-.money-mascot.variant-berry {
-  --mascot-primary: #ffe4ee;
-  --mascot-mid: #f5a8c6;
-  --mascot-deep: #d96b9a;
-  --mascot-accent: #f7d790;
-}
-
 .mascot-whale .mascot-body,
 .money-mascot.variant-whale .mascot-body {
   border-radius: 46% 54% 42% 58%;
-}
-
-.mascot-coin .mascot-body,
-.money-mascot.variant-coin .mascot-body {
-  border-radius: 50%;
-}
-
-.mascot-berry .mascot-body,
-.money-mascot.variant-berry .mascot-body {
-  border-radius: 44% 44% 50% 50%;
 }
 
 .mascot-whale .mascot-ear,
