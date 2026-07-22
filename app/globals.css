@@ -1537,6 +1537,56 @@ h2 {
   font-weight: 700;
 }
 
+.report-sheet {
+  gap: 14px;
+}
+
+.report-period-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 16px;
+  background: var(--surface-alt);
+}
+
+.report-period-toggle button {
+  border: 0;
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.report-period-toggle button.active {
+  background: white;
+  color: var(--green);
+  box-shadow: 0 8px 20px #173d2f12;
+}
+
+.report-preview {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-alt);
+}
+
+.report-preview div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.report-preview b {
+  color: var(--ink);
+  text-align: right;
+}
+
 @media (max-width: 500px) {
   .shell {
     padding: 0;

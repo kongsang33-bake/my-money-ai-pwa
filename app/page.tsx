@@ -47,6 +47,7 @@ type Wallet = {
   tag: WalletTag;
   balance: number;
 };
+type ReportPeriod = "month" | "year";
 const walletTagLabels: Record<WalletTag, string> = {
   cash: "เงินสด",
   savings: "ออมทรัพย์",
@@ -234,6 +235,125 @@ function cycleBounds(selectedMonth: string, startDay: number) {
   return { start, end };
 }
 
+function reportBounds(period: ReportPeriod, selectedMonth: string, selectedYear: number, startDay: number) {
+  if (period === "month") return cycleBounds(selectedMonth, startDay);
+  const safeYear = Number.isFinite(selectedYear) ? selectedYear : new Date().getFullYear();
+  return {
+    start: new Date(safeYear, 0, 1, 0, 0, 0, 0),
+    end: new Date(safeYear + 1, 0, 1, 0, 0, 0, 0),
+  };
+}
+
+function reportLabel(period: ReportPeriod, selectedMonth: string, selectedYear: number, startDay: number) {
+  if (period === "year") return `รายปี ${selectedYear}`;
+  const range = cycleBounds(selectedMonth, startDay);
+  const start = range.start.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+  const end = new Date(range.end.getTime() - 1).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+  return `รายเดือน ${start} - ${end}`;
+}
+
+function entriesInRange(entries: Entry[], start: Date, end: Date) {
+  return entries.filter((entry) => {
+    const occurredAt = new Date(entry.occurred_at);
+    return occurredAt >= start && occurredAt < end;
+  });
+}
+
+function csvCell(value: string | number | null | undefined) {
+  const text = value == null ? "" : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function csvRow(values: (string | number | null | undefined)[]) {
+  return values.map(csvCell).join(",");
+}
+
+function buildReportCsv({
+  entries,
+  wallets,
+  debtorSummary,
+  period,
+  selectedMonth,
+  selectedYear,
+  monthStartDay,
+}: {
+  entries: Entry[];
+  wallets: Wallet[];
+  debtorSummary: { name: string; amount: number }[];
+  period: ReportPeriod;
+  selectedMonth: string;
+  selectedYear: number;
+  monthStartDay: number;
+}) {
+  const range = reportBounds(period, selectedMonth, selectedYear, monthStartDay);
+  const reportEntries = entriesInRange(entries, range.start, range.end).sort((a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime());
+  const income = totalWallet(reportEntries, "income");
+  const outflow = Math.abs(totalWallet(reportEntries, "expense"));
+  const balance = income - outflow;
+  const debtChange = reportEntries.reduce((sum, entry) => sum + entry.debt_impact, 0);
+  const categoryMap = new Map<string, number>();
+
+  for (const entry of reportEntries) {
+    if (entry.wallet_impact >= 0) continue;
+    categoryMap.set(entry.category, (categoryMap.get(entry.category) ?? 0) + Math.abs(entry.wallet_impact));
+  }
+
+  const lines = [
+    csvRow(["รายงาน", reportLabel(period, selectedMonth, selectedYear, monthStartDay)]),
+    csvRow(["วันที่สร้างไฟล์", new Date().toLocaleString("th-TH")]),
+    csvRow([""]),
+    csvRow(["สรุปยอด"]),
+    csvRow(["รายการ", "จำนวนเงิน"]),
+    csvRow(["รายรับ", income]),
+    csvRow(["รายจ่าย", outflow]),
+    csvRow(["สุทธิ", balance]),
+    csvRow(["ลูกหนี้เปลี่ยนแปลง", debtChange]),
+    csvRow(["จำนวนรายการ", reportEntries.length]),
+    csvRow([""]),
+    csvRow(["สรุปหมวดหมู่รายจ่าย"]),
+    csvRow(["หมวดหมู่", "จำนวนเงิน"]),
+    ...[...categoryMap.entries()].sort((a, b) => b[1] - a[1]).map(([category, amount]) => csvRow([category, amount])),
+    csvRow([""]),
+    csvRow(["ลูกหนี้คงค้าง"]),
+    csvRow(["ชื่อ", "ยอดค้าง"]),
+    ...debtorSummary.map((debtor) => csvRow([debtor.name, debtor.amount])),
+    csvRow([""]),
+    csvRow(["กระเป๋า/กองเงิน"]),
+    csvRow(["ชื่อ", "ประเภท", "ยอดตั้งต้น"]),
+    ...wallets.map((wallet) => csvRow([wallet.name, walletTagLabels[wallet.tag], wallet.balance])),
+    csvRow([""]),
+    csvRow(["รายการละเอียด"]),
+    csvRow(["วันที่", "ชื่อรายการ", "หมวดหมู่", "ประเภท", "จำนวน", "ผลต่อกระเป๋า", "ผลต่อลูกหนี้", "ชื่อผู้เกี่ยวข้อง", "ข้อความต้นทาง"]),
+    ...reportEntries.map((entry) =>
+      csvRow([
+        formatDateTime(entry.occurred_at),
+        entry.title,
+        entry.category,
+        transactionTypeLabels[entry.transaction_type],
+        entry.amount,
+        entry.wallet_impact,
+        entry.debt_impact,
+        entry.debtor_name,
+        entry.source_text ?? "",
+      ]),
+    ),
+  ];
+
+  return `\uFEFF${lines.join("\r\n")}`;
+}
+
+function downloadCsv(filename: string, csv: string) {
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function calculateImpacts(amount: number, transactionType: TransactionType) {
   if (transactionType === "income") {
     return { wallet_impact: amount, debt_impact: 0, user_share: amount, partner_share: 0 };
@@ -374,6 +494,7 @@ export default function Home() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [budgets, setBudgets] = useState<Record<string, number>>({});
   const [budgetSheetOpen, setBudgetSheetOpen] = useState(false);
+  const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
   const displayName = profile?.nickname?.trim() || user?.user_metadata?.full_name || user?.user_metadata?.name || "เงินของฉัน";
   const displayIcon = profile?.app_icon?.trim() || user?.email?.[0]?.toUpperCase() || "฿";
@@ -1122,12 +1243,23 @@ export default function Home() {
             onOpenWallets={() => { setMenuOpen(false); setTab("wallets"); }}
             onOpenDebtors={() => { setMenuOpen(false); setSelectedDebtor(null); setTab("debtors"); }}
             onOpenBudgets={() => { setMenuOpen(false); setBudgetSheetOpen(true); }}
+            onOpenReport={() => { setMenuOpen(false); setReportSheetOpen(true); }}
           />
         )}
         {profileSheetOpen && (
           <ProfileEditSheet profile={profile} busy={busy} onClose={() => setProfileSheetOpen(false)} onSave={saveProfile} />
         )}
         {budgetSheetOpen && <BudgetSheet budgets={budgets} onClose={() => setBudgetSheetOpen(false)} onSave={updateBudgets} />}
+        {reportSheetOpen && (
+          <ReportExportSheet
+            entries={entries}
+            wallets={wallets}
+            debtorSummary={debtorSummary}
+            selectedMonth={selectedMonth}
+            monthStartDay={monthStartDay}
+            onClose={() => setReportSheetOpen(false)}
+          />
+        )}
         {recapOpen && (
           <RecapSheet
             selectedMonth={selectedMonth}
@@ -1839,6 +1971,106 @@ function BudgetSheet({
   );
 }
 
+function ReportExportSheet({
+  entries,
+  wallets,
+  debtorSummary,
+  selectedMonth,
+  monthStartDay,
+  onClose,
+}: {
+  entries: Entry[];
+  wallets: Wallet[];
+  debtorSummary: { name: string; amount: number }[];
+  selectedMonth: string;
+  monthStartDay: number;
+  onClose: () => void;
+}) {
+  const [period, setPeriod] = useState<ReportPeriod>("month");
+  const [month, setMonth] = useState(selectedMonth);
+  const [year, setYear] = useState(Number(selectedMonth.slice(0, 4)) || new Date().getFullYear());
+  const range = useMemo(() => reportBounds(period, month, year, monthStartDay), [period, month, year, monthStartDay]);
+  const reportEntries = useMemo(() => entriesInRange(entries, range.start, range.end), [entries, range]);
+  const income = useMemo(() => totalWallet(reportEntries, "income"), [reportEntries]);
+  const outflow = useMemo(() => Math.abs(totalWallet(reportEntries, "expense")), [reportEntries]);
+  const balance = income - outflow;
+
+  function submit() {
+    const safeYear = Number.isFinite(year) ? year : new Date().getFullYear();
+    const filenamePeriod = period === "month" ? month : String(safeYear);
+    const csv = buildReportCsv({
+      entries,
+      wallets,
+      debtorSummary,
+      period,
+      selectedMonth: month,
+      selectedYear: safeYear,
+      monthStartDay,
+    });
+    downloadCsv(`money-report-${filenamePeriod}.csv`, csv);
+  }
+
+  return (
+    <div className="sheet-backdrop">
+      <section className="edit-sheet report-sheet">
+        <div className="sheet-head">
+          <div>
+            <p className="eyebrow">ส่งออกข้อมูล</p>
+            <h2>รีพอร์ท Excel / Sheets</h2>
+          </div>
+          <button onClick={onClose}>×</button>
+        </div>
+
+        <div className="report-period-toggle">
+          <button className={period === "month" ? "active" : ""} onClick={() => setPeriod("month")}>รายเดือน</button>
+          <button className={period === "year" ? "active" : ""} onClick={() => setPeriod("year")}>รายปี</button>
+        </div>
+
+        {period === "month" ? (
+          <label>
+            เลือกเดือน
+            <input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
+            <small>ใช้รอบเดือนตามวันที่เริ่มรอบที่ตั้งไว้: วันที่ {monthStartDay}</small>
+          </label>
+        ) : (
+          <label>
+            เลือกปี
+            <input type="number" min={2000} max={2100} value={year} onChange={(event) => setYear(Number(event.target.value))} />
+          </label>
+        )}
+
+        <div className="report-preview">
+          <div>
+            <span>ช่วงรายงาน</span>
+            <b>{reportLabel(period, month, year, monthStartDay)}</b>
+          </div>
+          <div>
+            <span>รายรับ</span>
+            <b>{moneySign}{formatMoney(income)}</b>
+          </div>
+          <div>
+            <span>รายจ่าย</span>
+            <b>{moneySign}{formatMoney(outflow)}</b>
+          </div>
+          <div>
+            <span>สุทธิ</span>
+            <b>{formatSignedMoney(balance)}</b>
+          </div>
+          <div>
+            <span>จำนวนรายการ</span>
+            <b>{reportEntries.length}</b>
+          </div>
+        </div>
+
+        <p className="budget-hint">ไฟล์ CSV เปิดด้วย Excel, Google Sheets หรือ Numbers ได้ และมีทั้งสรุปยอด หมวดหมู่ ลูกหนี้ กระเป๋า และรายการละเอียด</p>
+        <button className="save" onClick={submit}>
+          ดาวน์โหลดไฟล์ CSV
+        </button>
+      </section>
+    </div>
+  );
+}
+
 function SideMenu({
   user,
   profile,
@@ -1850,6 +2082,7 @@ function SideMenu({
   onOpenWallets,
   onOpenDebtors,
   onOpenBudgets,
+  onOpenReport,
 }: {
   user: User;
   profile: Profile | null;
@@ -1861,6 +2094,7 @@ function SideMenu({
   onOpenWallets: () => void;
   onOpenDebtors: () => void;
   onOpenBudgets: () => void;
+  onOpenReport: () => void;
 }) {
   const metadata = user.user_metadata ?? {};
   const name = profile?.nickname || metadata.full_name || metadata.name || "ผู้ใช้";
@@ -1912,6 +2146,10 @@ function SideMenu({
           <button onClick={onOpenBudgets}>
             <span>งบประมาณ</span>
             <small>ตั้งวงเงินต่อหมวดหมู่ต่อเดือน</small>
+          </button>
+          <button onClick={onOpenReport}>
+            <span>ส่งออกรีพอร์ท</span>
+            <small>ดาวน์โหลดสรุปรายเดือนหรือรายปีเป็นไฟล์ CSV สำหรับ Excel/Sheets</small>
           </button>
         </nav>
 
