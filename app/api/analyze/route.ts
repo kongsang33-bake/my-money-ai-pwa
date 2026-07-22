@@ -101,9 +101,10 @@ export async function POST(request: Request) {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: body.timezone || "Asia/Bangkok" }).format(new Date());
   const prompt = buildPrompt(input, today, images.length > 0, debtorNames);
 
+  let response;
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
+    response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [
         { text: prompt },
@@ -120,10 +121,16 @@ export async function POST(request: Request) {
         temperature: 0.1,
       },
     });
-
-    return Response.json({ items: JSON.parse(response.text || "[]") });
   } catch (error) {
     console.error("Gemini analyze failed", error);
-    return Response.json({ error: "AI วิเคราะห์รายการไม่สำเร็จ กรุณาลองใหม่" }, { status: 502 });
+    const detail = error instanceof Error ? error.message : String(error);
+    return Response.json({ error: `AI วิเคราะห์รายการไม่สำเร็จ: ${detail}` }, { status: 502 });
+  }
+
+  try {
+    return Response.json({ items: JSON.parse(response.text || "[]") });
+  } catch (error) {
+    console.error("Gemini analyze: could not parse response as JSON", error, response.text);
+    return Response.json({ error: "AI ส่งข้อมูลกลับมาในรูปแบบที่อ่านไม่ได้ กรุณาลองใหม่" }, { status: 502 });
   }
 }
