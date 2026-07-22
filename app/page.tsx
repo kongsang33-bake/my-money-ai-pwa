@@ -937,15 +937,6 @@ export default function Home() {
               </section>
             )}
 
-            <button className="ai-card" onClick={openAddTab}>
-              <span className="spark">AI</span>
-              <span>
-                <b>เล่าให้ AI ฟัง</b>
-                <small>พิมพ์รายการ หรือแนบรูปสลิปให้ AI แยกยอดและหมวดหมู่</small>
-              </span>
-              <span className="arrow">›</span>
-            </button>
-
             <MonthSummary
               selectedMonth={selectedMonth}
               setSelectedMonth={(value) => { setSelectedMonth(value); setSelectedDay(null); }}
@@ -959,14 +950,6 @@ export default function Home() {
             />
 
             {error && <p className="error-box">{error}</p>}
-
-            <div className="section-title">
-              <h2>รายการล่าสุด</h2>
-              <button onClick={() => setTab("history")}>ดูทั้งหมด</button>
-            </div>
-            <div className="latest-scroll">
-              <EntryList entries={entries.slice(0, 20)} onEdit={setEditing} onDelete={deleteEntry} />
-            </div>
           </div>
         )}
 

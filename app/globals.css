@@ -88,6 +88,12 @@ select {
   font: inherit;
 }
 
+input,
+textarea,
+select {
+  font-size: max(16px, 1rem);
+}
+
 button {
   cursor: pointer;
 }
@@ -119,11 +125,6 @@ button:active {
 }
 
 @media (hover: hover) {
-  .ai-card:hover {
-    box-shadow: 0 10px 26px #173d2f14;
-    border-color: var(--mint-border-hover);
-  }
-
   .side-menu-list button:hover,
   .debtor-page-item:hover {
     border-color: var(--line-hover);
@@ -337,49 +338,6 @@ h2 {
 .confirm-dialog button { border: 1px solid var(--line); border-radius: 12px; padding: 11px; background: var(--surface); }
 .confirm-dialog .danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 
-.ai-card {
-  width: 100%;
-  margin: 16px 0;
-  padding: 16px;
-  border: 1px solid var(--mint-border-soft);
-  border-radius: 18px;
-  background: var(--mint-surface);
-  display: flex;
-  align-items: center;
-  text-align: left;
-  color: var(--ink);
-  gap: 12px;
-}
-
-.ai-card .spark {
-  display: grid;
-  place-items: center;
-  background: var(--green);
-  color: white;
-  width: 38px;
-  height: 38px;
-  border-radius: 13px;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.ai-card b,
-.ai-card small {
-  display: block;
-}
-
-.ai-card small {
-  color: var(--muted);
-  margin-top: 4px;
-  font-size: 12px;
-}
-
-.ai-card .arrow {
-  margin-left: auto;
-  font-size: 28px;
-  color: var(--green);
-}
-
 .summary-panel,
 .entry-list {
   background: white;
@@ -588,12 +546,6 @@ h2 {
 
 .entry-list {
   overflow: hidden;
-}
-
-.latest-scroll {
-  max-height: 368px;
-  overflow-y: auto;
-  border-radius: 20px;
 }
 
 .entry-day {
