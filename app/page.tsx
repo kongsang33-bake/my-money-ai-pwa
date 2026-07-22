@@ -49,6 +49,7 @@ type Wallet = {
 };
 type ReportPeriod = "month" | "year";
 type Toast = { id: number; tone: "success" | "info" | "error"; title: string; detail?: string };
+type EmptyAction = { label: string; onClick: () => void };
 const walletTagLabels: Record<WalletTag, string> = {
   cash: "เงินสด",
   savings: "ออมทรัพย์",
@@ -556,6 +557,7 @@ export default function Home() {
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [savePulse, setSavePulse] = useState(0);
   const displayName = profile?.nickname?.trim() || user?.user_metadata?.full_name || user?.user_metadata?.name || "เงินของฉัน";
   const displayIcon = profile?.app_icon?.trim() || user?.email?.[0]?.toUpperCase() || "฿";
   const displayIconImage = profile?.app_icon_image?.trim() || "";
@@ -573,6 +575,12 @@ export default function Home() {
     }, 3200);
     return () => window.clearTimeout(timer);
   }, [toasts]);
+
+  useEffect(() => {
+    if (!savePulse) return;
+    const timer = window.setTimeout(() => setSavePulse(0), 4200);
+    return () => window.clearTimeout(timer);
+  }, [savePulse]);
 
   const loadEntries = useCallback(async () => {
     if (!supabase) return;
@@ -919,6 +927,7 @@ export default function Home() {
       setSlipImages([]);
       setTab("home");
       await loadEntries();
+      setSavePulse(normalizedItems.length);
       notify({ tone: "success", title: "บันทึกรายการแล้ว", detail: `${normalizedItems.length} รายการถูกซิงค์เรียบร้อย` });
     }
 
@@ -1145,6 +1154,7 @@ export default function Home() {
         {tab === "home" && (
           <div className="view">
             {dataLoading && <StateCard tone="loading" title="กำลังซิงค์ข้อมูล" detail="กำลังโหลดรายการ กระเป๋า และลูกหนี้ของคุณ" />}
+            {!!savePulse && <SuccessPulse count={savePulse} onAddMore={openAddTab} />}
             <section className="wallet-grid single-wallet">
               <HeroWalletCard balance={mainWallet} insight={walletInsight} streak={streak} />
             </section>
@@ -1217,6 +1227,10 @@ export default function Home() {
             </div>
 
             <div className="ai-input-wrap">
+              <div className="assistant-rail" aria-hidden="true">
+                <span>AI</span>
+                <i />
+              </div>
               <div className="chat-bubble assistant">
                 พิมพ์รายการแบบธรรมชาติ หรือแนบรูปสลิปได้เลย ผมจะแยกยอด หมวดหมู่ วันที่ และลูกหนี้ให้ตรวจสอบก่อนบันทึก
               </div>
@@ -1300,7 +1314,8 @@ export default function Home() {
               trend={sevenDayOutflow}
             />
             <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
-            <EntryList entries={dayEntries} onEdit={setEditing} onDelete={deleteEntry} />
+            <HistoryInsight entries={dayEntries} selectedDay={selectedDay} />
+            <EntryList entries={dayEntries} onEdit={setEditing} onDelete={deleteEntry} emptyAction={{ label: "จดด้วย AI", onClick: openAddTab }} />
           </div>
         )}
 
@@ -1635,6 +1650,44 @@ function MiniTrend({ items }: { items: { key: string; label: string; amount: num
   );
 }
 
+function SuccessPulse({ count, onAddMore }: { count: number; onAddMore: () => void }) {
+  return (
+    <section className="success-pulse" role="status">
+      <span aria-hidden="true">✓</span>
+      <div>
+        <b>บันทึกเรียบร้อย</b>
+        <small>{count} รายการถูกซิงค์แล้ว พร้อมจดรายการถัดไปได้เลย</small>
+      </div>
+      <button onClick={onAddMore}>+ AI</button>
+    </section>
+  );
+}
+
+function HistoryInsight({ entries, selectedDay }: { entries: Entry[]; selectedDay: string | null }) {
+  const outflow = entries.filter((entry) => entry.wallet_impact < 0).reduce((sum, entry) => sum + Math.abs(entry.wallet_impact), 0);
+  const income = entries.filter((entry) => entry.wallet_impact > 0).reduce((sum, entry) => sum + entry.wallet_impact, 0);
+  const top = [...entries]
+    .filter((entry) => entry.wallet_impact < 0)
+    .sort((a, b) => Math.abs(b.wallet_impact) - Math.abs(a.wallet_impact))[0];
+
+  return (
+    <section className="history-insight">
+      <div>
+        <span>{selectedDay ? "มุมมองวันที่เลือก" : "มุมมองรอบนี้"}</span>
+        <b>{entries.length} รายการ</b>
+      </div>
+      <div>
+        <span>เงินเข้า/ออก</span>
+        <b>{moneySign}{formatMoney(income)} / {moneySign}{formatMoney(outflow)}</b>
+      </div>
+      <div>
+        <span>รายการสูงสุด</span>
+        <b>{top ? `${top.title} ${moneySign}${formatMoney(Math.abs(top.wallet_impact))}` : "ยังไม่มีรายจ่าย"}</b>
+      </div>
+    </section>
+  );
+}
+
 function MonthSummary({
   selectedMonth,
   setSelectedMonth,
@@ -1704,11 +1757,12 @@ function MonthSummary({
   );
 }
 
-function EmptyNote({ glyph, children }: { glyph: string; children: React.ReactNode }) {
+function EmptyNote({ glyph, children, action }: { glyph: string; children: React.ReactNode; action?: EmptyAction }) {
   return (
     <div className="empty-note">
       <span className="empty-glyph">{glyph}</span>
       <p>{children}</p>
+      {action && <button onClick={action.onClick}>{action.label}</button>}
     </div>
   );
 }
@@ -1810,7 +1864,17 @@ function DraftImpact({ items }: { items: Draft[] }) {
   );
 }
 
-function EntryList({ entries, onEdit, onDelete }: { entries: Entry[]; onEdit?: (entry: Entry) => void; onDelete?: (entry: Entry) => void }) {
+function EntryList({
+  entries,
+  onEdit,
+  onDelete,
+  emptyAction,
+}: {
+  entries: Entry[];
+  onEdit?: (entry: Entry) => void;
+  onDelete?: (entry: Entry) => void;
+  emptyAction?: EmptyAction;
+}) {
   const groups = useMemo(() => groupEntriesByDay(entries), [entries]);
 
   return (
@@ -1848,7 +1912,7 @@ function EntryList({ entries, onEdit, onDelete }: { entries: Entry[]; onEdit?: (
           ))}
         </div>
       ))}
-      {!entries.length && <EmptyNote glyph="▪">ยังไม่มีรายการในช่วงนี้</EmptyNote>}
+      {!entries.length && <EmptyNote glyph="▪" action={emptyAction}>ยังไม่มีรายการในช่วงนี้</EmptyNote>}
     </div>
   );
 }
@@ -1971,6 +2035,7 @@ function DebtorsView({
           <strong>{moneySign}{formatMoney(selectedAmount)}</strong>
           {selectedDebtor.note && <small>{selectedDebtor.note}</small>}
         </section>
+        <DebtorStatementSummary entries={debtorEntries} />
         <div className="section-title">
           <h2>ประวัติยืม/จ่าย</h2>
           <button onClick={() => onEdit(selectedDebtor)}>แก้ไข</button>
@@ -2012,9 +2077,33 @@ function DebtorsView({
             </article>
           );
         })}
-        {!debtors.length && <EmptyNote glyph="◆">ยังไม่มีรายชื่อลูกหนี้</EmptyNote>}
+        {!debtors.length && <EmptyNote glyph="◆" action={{ label: "เพิ่มลูกหนี้", onClick: onAdd }}>ยังไม่มีรายชื่อลูกหนี้</EmptyNote>}
       </div>
     </div>
+  );
+}
+
+function DebtorStatementSummary({ entries }: { entries: Entry[] }) {
+  const lent = entries.filter((entry) => entry.debt_impact > 0).reduce((sum, entry) => sum + entry.debt_impact, 0);
+  const paid = entries.filter((entry) => entry.debt_impact < 0).reduce((sum, entry) => sum + Math.abs(entry.debt_impact), 0);
+  const latest = [...entries].sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime())[0];
+
+  return (
+    <section className="debtor-statement">
+      <div>
+        <span>ยืม/หารสะสม</span>
+        <b>{moneySign}{formatMoney(lent)}</b>
+      </div>
+      <div>
+        <span>คืนแล้ว</span>
+        <b>{moneySign}{formatMoney(paid)}</b>
+      </div>
+      <div>
+        <span>รายการ</span>
+        <b>{entries.length}</b>
+      </div>
+      <small>{latest ? `ล่าสุด: ${latest.title}` : "ยังไม่มีประวัติการเคลื่อนไหว"}</small>
+    </section>
   );
 }
 
@@ -2508,7 +2597,7 @@ function WalletsView({
             </details>
           </article>
         ))}
-        {!wallets.length && <EmptyNote glyph="▣">ยังไม่มีกระเป๋าตังค์ สร้างกองเงินแรกของคุณได้เลย</EmptyNote>}
+        {!wallets.length && <EmptyNote glyph="▣" action={{ label: "เพิ่มกระเป๋า", onClick: onAdd }}>ยังไม่มีกระเป๋าตังค์ สร้างกองเงินแรกของคุณได้เลย</EmptyNote>}
       </div>
     </div>
   );
