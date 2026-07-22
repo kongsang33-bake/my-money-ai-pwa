@@ -1578,7 +1578,22 @@ function CalendarHeatmap({
           </button>
         ))}
       </div>
+      <HeatmapLegend total={days.reduce((sum, day) => sum + day.amount, 0)} activeDays={days.filter((day) => day.amount > 0).length} />
     </section>
+  );
+}
+
+function HeatmapLegend({ total, activeDays }: { total: number; activeDays: number }) {
+  return (
+    <div className="heatmap-legend">
+      <span>เบา</span>
+      <i className="bucket-1" />
+      <i className="bucket-2" />
+      <i className="bucket-3" />
+      <i className="bucket-4" />
+      <span>หนัก</span>
+      <b>{activeDays} วัน · {moneySign}{formatMoney(total)}</b>
+    </div>
   );
 }
 
@@ -1688,6 +1703,36 @@ function HistoryInsight({ entries, selectedDay }: { entries: Entry[]; selectedDa
   );
 }
 
+function CategorySpotlight({
+  categories: categoryItems,
+  outflow,
+  budgets,
+}: {
+  categories: { category: string; amount: number }[];
+  outflow: number;
+  budgets: Record<string, number>;
+}) {
+  const top = categoryItems.find((item) => item.amount > 0);
+  if (!top) return null;
+  const budget = budgets[top.category] || 0;
+  const percent = budget > 0 ? Math.min(140, (top.amount / budget) * 100) : outflow > 0 ? Math.min(100, (top.amount / outflow) * 100) : 0;
+  const isOver = budget > 0 && top.amount > budget;
+
+  return (
+    <section className={`category-spotlight ${isOver ? "over" : ""}`}>
+      <span className="cat-dot" style={{ background: `${categoryColor(top.category)}22` }}>{categoryIcon(top.category)}</span>
+      <div>
+        <small>{budget > 0 ? "หมวดที่ต้องจับตา" : "หมวดใช้จ่ายเด่น"}</small>
+        <b>{top.category}</b>
+        <i>
+          <em style={{ width: `${Math.max(6, Math.min(100, percent))}%`, background: isOver ? "#d03b3b" : categoryColor(top.category) }} />
+        </i>
+      </div>
+      <strong>{moneySign}{formatMoney(top.amount)}</strong>
+    </section>
+  );
+}
+
 function MonthSummary({
   selectedMonth,
   setSelectedMonth,
@@ -1728,6 +1773,7 @@ function MonthSummary({
         <Metric label="ลูกหนี้เปลี่ยน" value={debtChange} tone={debtChange >= 0 ? "income" : "expense"} />
       </div>
       <MiniTrend items={trend} />
+      <CategorySpotlight categories={categoryItems} outflow={outflow} budgets={budgets} />
       <div className="category-bars">
         {categoryItems.length ? (
           categoryItems.map((item) => {
@@ -2365,6 +2411,8 @@ function ReportExportSheet({
           </label>
         )}
 
+        <ReportSummaryTiles income={income} outflow={outflow} balance={balance} count={reportEntries.length} />
+
         <div className="report-preview">
           <div>
             <span>ช่วงรายงาน</span>
@@ -2388,11 +2436,38 @@ function ReportExportSheet({
           </div>
         </div>
 
+        <div className="report-includes">
+          <span>CSV พร้อมเปิดใน Excel / Sheets</span>
+          <b>สรุปยอด · หมวดหมู่ · ลูกหนี้ · กระเป๋า · รายการละเอียด</b>
+        </div>
         <p className="budget-hint">ไฟล์ CSV เปิดด้วย Excel, Google Sheets หรือ Numbers ได้ และมีทั้งสรุปยอด หมวดหมู่ ลูกหนี้ กระเป๋า และรายการละเอียด</p>
         <button className="save" onClick={submit}>
           ดาวน์โหลดไฟล์ CSV
         </button>
       </section>
+    </div>
+  );
+}
+
+function ReportSummaryTiles({ income, outflow, balance, count }: { income: number; outflow: number; balance: number; count: number }) {
+  return (
+    <div className="report-summary-tiles">
+      <div className="income">
+        <span>รายรับ</span>
+        <b>{moneySign}{formatMoney(income)}</b>
+      </div>
+      <div className="expense">
+        <span>รายจ่าย</span>
+        <b>{moneySign}{formatMoney(outflow)}</b>
+      </div>
+      <div className={balance >= 0 ? "income" : "expense"}>
+        <span>สุทธิ</span>
+        <b>{formatSignedMoney(balance)}</b>
+      </div>
+      <div>
+        <span>รายการ</span>
+        <b>{count}</b>
+      </div>
     </div>
   );
 }
