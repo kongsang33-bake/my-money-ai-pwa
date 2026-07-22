@@ -154,7 +154,7 @@ export default function Home() {
   const [slipImages, setSlipImages] = useState<SlipImage[]>([]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [editing, setEditing] = useState<Entry | null>(null);
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [debtorsOpen, setDebtorsOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -419,8 +419,10 @@ export default function Home() {
             <p className="eyebrow">สวัสดี</p>
             <h1>เงินของฉัน</h1>
           </div>
-          <button className="avatar" onClick={() => setProfileOpen(true)} title="โปรไฟล์">
-            {user.email?.[0].toUpperCase()}
+          <button className="menu-button" onClick={() => setMenuOpen(true)} title="เมนู">
+            <span />
+            <span />
+            <span />
           </button>
         </header>
 
@@ -565,7 +567,7 @@ export default function Home() {
 
         {editing && <EditSheet entry={editing} busy={busy} onChange={setEditing} onClose={() => setEditing(null)} onSave={updateEntry} />}
         {debtorsOpen && <DebtorSheet debtors={debtorSummary} onClose={() => setDebtorsOpen(false)} />}
-        {profileOpen && <ProfileSheet user={user} onClose={() => setProfileOpen(false)} onLogout={() => { setProfileOpen(false); setLogoutOpen(true); }} />}
+        {menuOpen && <SideMenu user={user} onClose={() => setMenuOpen(false)} onLogout={() => { setMenuOpen(false); setLogoutOpen(true); }} />}
         {logoutOpen && <ConfirmLogout onCancel={() => setLogoutOpen(false)} onConfirm={() => supabase?.auth.signOut()} />}
 
         <nav className="bottom-nav">
@@ -905,20 +907,21 @@ function DebtorSheet({ debtors, onClose }: { debtors: { name: string; amount: nu
   );
 }
 
-function ProfileSheet({ user, onClose, onLogout }: { user: User; onClose: () => void; onLogout: () => void }) {
+function SideMenu({ user, onClose, onLogout }: { user: User; onClose: () => void; onLogout: () => void }) {
   const metadata = user.user_metadata ?? {};
   const name = metadata.full_name ?? metadata.name ?? "ผู้ใช้";
   const provider = user.app_metadata?.provider ?? "Google";
   return (
-    <div className="sheet-backdrop">
-      <section className="edit-sheet profile-sheet">
-        <div className="sheet-head">
+    <div className="side-menu-backdrop" onClick={onClose}>
+      <aside className="side-menu" onClick={(event) => event.stopPropagation()}>
+        <div className="side-menu-head">
           <div>
-            <p className="eyebrow">บัญชีของฉัน</p>
-            <h2>โปรไฟล์</h2>
+            <p className="eyebrow">เมนู</p>
+            <h2>บัญชีของฉัน</h2>
           </div>
           <button onClick={onClose}>×</button>
         </div>
+
         <div className="profile-head">
           {metadata.avatar_url ? <span className="profile-photo" style={{ backgroundImage: `url(${metadata.avatar_url})` }} aria-label={name} /> : <div className="avatar profile-avatar">{String(name)[0]}</div>}
           <div>
@@ -932,8 +935,16 @@ function ProfileSheet({ user, onClose, onLogout }: { user: User; onClose: () => 
           <span>สร้างบัญชี</span>
           <b>{user.created_at ? new Date(user.created_at).toLocaleDateString("th-TH") : "—"}</b>
         </div>
+
+        <nav className="side-menu-list">
+          <button>
+            <span>บัญชี</span>
+            <small>ข้อมูลโปรไฟล์และการเข้าสู่ระบบ</small>
+          </button>
+        </nav>
+
         <button className="logout-button" onClick={onLogout}>ออกจากระบบ</button>
-      </section>
+      </aside>
     </div>
   );
 }
