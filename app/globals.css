@@ -147,6 +147,35 @@ h2 {
   margin-bottom: 14px;
 }
 
+/* Neutral debtor/profile redesign */
+.debt-wallet,
+.settlement-card { display: none; }
+.single-wallet { grid-template-columns: 1fr; }
+.debtor-card { background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 8px 16px 14px; margin: 0 0 16px; }
+.compact-title { margin: 4px 0 8px; }
+.debtor-row { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px solid #eee; font-size: 13px; }
+.debtor-row:last-of-type { border-bottom: 0; }
+.debtor-row strong { color: #a54a2f; }
+.debtor-row.large { font-size: 16px; padding: 16px 0; }
+.debtor-total { display: block; color: var(--muted); font-size: 11px; padding-top: 10px; }
+.chat-bubble { border-radius: 16px; padding: 12px 14px; font-size: 12px; line-height: 1.6; margin-bottom: 10px; }
+.chat-bubble.assistant { background: #eef7f1; color: var(--green); }
+.profile-head { display: flex; align-items: center; gap: 12px; padding: 12px 0 18px; border-bottom: 1px solid var(--line); }
+.profile-head img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; }
+.profile-head b, .profile-head small { display: block; }
+.profile-head small { color: var(--muted); margin-top: 4px; font-size: 12px; }
+.profile-avatar { display: grid; place-items: center; flex: 0 0 52px; }
+.profile-info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 18px 0; font-size: 12px; }
+.profile-info span { color: var(--muted); }
+.profile-info b { text-align: right; }
+.logout-button { width: 100%; border: 1px solid #e1b8aa; background: #fff5f1; color: #a54a2f; border-radius: 14px; padding: 13px; font-weight: 700; }
+.dialog-backdrop { position: absolute; inset: 0; z-index: 8; background: #11251d66; display: grid; place-items: center; padding: 24px; }
+.confirm-dialog { width: 100%; background: #fff; border-radius: 20px; padding: 22px; box-shadow: 0 18px 48px #0f271d33; }
+.confirm-dialog p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.confirm-dialog > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.confirm-dialog button { border: 1px solid var(--line); border-radius: 12px; padding: 11px; background: #fff; }
+.confirm-dialog .danger { background: #a54a2f; border-color: #a54a2f; color: #fff; }
+
 .settlement-card b,
 .settlement-card small {
   display: block;

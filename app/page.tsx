@@ -19,6 +19,7 @@ type Entry = {
   debt_impact: number;
   user_share: number;
   partner_share: number;
+  debtor_name: string;
   occurred_at: string;
   source_text?: string | null;
 };
@@ -35,6 +36,7 @@ type EntryInput = {
   debt_impact?: number;
   user_share?: number;
   partner_share?: number;
+  debtor_name?: string | null;
   occurred_at: string;
   source_text?: string | null;
 };
@@ -45,9 +47,9 @@ const transactionTypeLabels: Record<TransactionType, string> = {
   income: "รายรับ",
   personal_expense: "จ่ายเอง",
   lend: "ออกให้ก่อน",
-  split_half: "หารกับแฟน",
-  debt_repayment: "แฟนคืนเงิน",
-  gift: "เลี้ยงแฟน",
+  split_half: "หารร่วมกัน",
+  debt_repayment: "รับชำระหนี้",
+  gift: "ให้โดยไม่คิดคืน",
 };
 
 const transactionKind: Record<TransactionType, EntryKind> = {
@@ -102,6 +104,7 @@ function normalizeEntry(input: EntryInput): Entry {
     debt_impact: input.debt_impact ?? impacts.debt_impact,
     user_share: input.user_share ?? impacts.user_share,
     partner_share: input.partner_share ?? impacts.partner_share,
+    debtor_name: input.debtor_name?.trim() || "ไม่ระบุ",
   };
 }
 
@@ -110,10 +113,12 @@ export default function Home() {
   const [ready, setReady] = useState(false);
   const [tab, setTab] = useState<Tab>("home");
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [text, setText] = useState("วันนี้กินข้าว 140 บาท หารกับแฟน แล้วเติมน้ำมัน 800 บาท");
+  const [text, setText] = useState("");
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [editing, setEditing] = useState<Entry | null>(null);
-  const [settlementAmount, setSettlementAmount] = useState("");
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [debtorsOpen, setDebtorsOpen] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(monthKey(new Date()));
@@ -146,7 +151,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("transactions")
-      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,occurred_at,source_text")
+      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text")
       .order("occurred_at", { ascending: false });
 
     if (error) {
@@ -167,6 +172,7 @@ export default function Home() {
           debt_impact: row.debt_impact == null ? undefined : Number(row.debt_impact),
           user_share: row.user_share == null ? undefined : Number(row.user_share),
           partner_share: row.partner_share == null ? undefined : Number(row.partner_share),
+          debtor_name: row.debtor_name,
           occurred_at: row.occurred_at,
           source_text: row.source_text,
         }),
@@ -175,7 +181,17 @@ export default function Home() {
   }
 
   const mainWallet = useMemo(() => entries.reduce((sum, entry) => sum + entry.wallet_impact, 0), [entries]);
-  const partnerDebt = useMemo(() => entries.reduce((sum, entry) => sum + entry.debt_impact, 0), [entries]);
+  const debtorSummary = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const entry of entries) {
+      if (!["lend", "split_half", "debt_repayment"].includes(entry.transaction_type)) continue;
+      map.set(entry.debtor_name, (map.get(entry.debtor_name) ?? 0) + entry.debt_impact);
+    }
+    return [...map.entries()].map(([name, amount]) => ({ name, amount })).filter((item) => item.amount > 0.005).sort((a, b) => b.amount - a.amount);
+  }, [entries]);
+  const totalDebt = useMemo(() => debtorSummary.reduce((sum, item) => sum + item.amount, 0), [debtorSummary]);
+  const partnerDebt = totalDebt;
+  const [settlementAmount, setSettlementAmount] = useState("");
 
   const monthlyEntries = useMemo(
     () => entries.filter((entry) => entry.occurred_at.slice(0, 7) === selectedMonth),
@@ -212,13 +228,14 @@ export default function Home() {
       if (!response.ok) throw new Error(data.error);
 
       setDrafts(
-        data.items.map((item: { title: string; category: string; amount: number; transaction_type: TransactionType; date: string }, index: number) =>
+        data.items.map((item: { title: string; category: string; amount: number; transaction_type: TransactionType; debtor_name?: string; date: string }, index: number) =>
           normalizeEntry({
             id: `${Date.now()}-${index}`,
             title: item.title,
             category: item.category,
             amount: item.amount,
             transaction_type: item.transaction_type,
+            debtor_name: item.debtor_name,
             occurred_at: fromDateInput(item.date),
             source_text: text,
           }),
@@ -245,7 +262,8 @@ export default function Home() {
         category: normalized.category,
         amount: normalized.amount,
         kind: normalized.type,
-        transaction_type: normalized.transaction_type,
+            transaction_type: normalized.transaction_type,
+            debtor_name: normalized.debtor_name,
         wallet_impact: normalized.wallet_impact,
         debt_impact: normalized.debt_impact,
         user_share: normalized.user_share,
@@ -262,7 +280,6 @@ export default function Home() {
     } else {
       setDrafts([]);
       setText("");
-      setSettlementAmount("");
       setTab("home");
       await loadEntries();
     }
@@ -285,6 +302,7 @@ export default function Home() {
         amount: normalized.amount,
         kind: normalized.type,
         transaction_type: normalized.transaction_type,
+        debtor_name: normalized.debtor_name,
         wallet_impact: normalized.wallet_impact,
         debt_impact: normalized.debt_impact,
         user_share: normalized.user_share,
@@ -302,6 +320,7 @@ export default function Home() {
 
     setBusy(false);
   }
+  async function settleDebt(_full?: boolean) { setSettlementAmount(""); setTab("add"); setText("รับชำระเงินคืนจากผู้เกี่ยวข้อง"); }
 
   async function deleteEntry(entry: Entry) {
     if (!supabase) return;
@@ -315,23 +334,6 @@ export default function Home() {
     else setEntries((current) => current.filter((item) => item.id !== entry.id));
 
     setBusy(false);
-  }
-
-  async function settleDebt(full = false) {
-    const amount = full ? partnerDebt : Number(settlementAmount);
-    if (!amount || amount <= 0) return;
-
-    await saveEntries([
-      normalizeEntry({
-        id: `${Date.now()}-settle`,
-        title: full ? "แฟนโอนคืนทั้งหมด" : "แฟนโอนคืนบางส่วน",
-        category: "รายได้",
-        amount: Math.min(amount, Math.max(partnerDebt, amount)),
-        transaction_type: "debt_repayment",
-        occurred_at: fromDateInput(new Date().toISOString().slice(0, 10)),
-        source_text: "quick settlement",
-      }),
-    ]);
   }
 
   if (!ready) {
@@ -352,7 +354,7 @@ export default function Home() {
             <p className="eyebrow">สวัสดี</p>
             <h1>เงินของฉัน</h1>
           </div>
-          <button className="avatar" onClick={() => supabase?.auth.signOut()} title="ออกจากระบบ">
+          <button className="avatar" onClick={() => setProfileOpen(true)} title="โปรไฟล์">
             {user.email?.[0].toUpperCase()}
           </button>
         </header>
@@ -365,14 +367,14 @@ export default function Home() {
                 <strong>฿{formatMoney(mainWallet)}</strong>
               </div>
               <div className="wallet-card debt-wallet">
-                <span>แฟนค้างชำระ</span>
+                <span>ยอดลูกหนี้</span>
                 <strong>฿{formatMoney(Math.max(0, partnerDebt))}</strong>
               </div>
             </section>
 
             <section className="settlement-card">
               <div>
-                <b>Quick Settlement</b>
+                <b>บันทึกการรับชำระ</b>
                 <small>บันทึกเงินที่แฟนโอนคืน แล้วลดยอดค้างให้อัตโนมัติ</small>
               </div>
               <div className="settlement-actions">
@@ -405,6 +407,13 @@ export default function Home() {
               categories={categorySummary}
             />
 
+            <section className="debtor-card">
+              <div className="section-title compact-title"><h2>ลูกหนี้</h2><button onClick={() => setDebtorsOpen(true)}>ดูทั้งหมด</button></div>
+              {debtorSummary.slice(0, 3).map((item) => <div className="debtor-row" key={item.name}><span>{item.name}</span><strong>฿{formatMoney(item.amount)}</strong></div>)}
+              {!debtorSummary.length && <p className="empty-note">ยังไม่มียอดลูกหนี้</p>}
+              {!!debtorSummary.length && <small className="debtor-total">รวม ฿{formatMoney(totalDebt)} · รายการคืนเงินบันทึกผ่าน AI</small>}
+            </section>
+
             {error && <p className="error-box">{error}</p>}
 
             <div className="section-title">
@@ -426,7 +435,8 @@ export default function Home() {
             </div>
 
             <div className="ai-input-wrap">
-              <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="เช่น กินข้าว 140 หารกับแฟน เติมน้ำมัน 800 แฟนโอนคืน 500" />
+              <div className="chat-bubble assistant">สวัสดีครับ พิมพ์รายการเงินแบบธรรมชาติได้เลย ระบบจะช่วยแยกเป็นรายการให้ตรวจสอบก่อนบันทึก</div>
+              <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="พิมพ์รายการที่ต้องการบันทึก..." />
               <div className="input-tools">
                 <span>Gemini จะช่วยแยกชนิดรายการตาม logic กระเป๋า</span>
                 <span>AI</span>
@@ -483,6 +493,9 @@ export default function Home() {
         )}
 
         {editing && <EditSheet entry={editing} busy={busy} onChange={setEditing} onClose={() => setEditing(null)} onSave={updateEntry} />}
+        {debtorsOpen && <DebtorSheet debtors={debtorSummary} onClose={() => setDebtorsOpen(false)} />}
+        {profileOpen && <ProfileSheet user={user} onClose={() => setProfileOpen(false)} onLogout={() => { setProfileOpen(false); setLogoutOpen(true); }} />}
+        {logoutOpen && <ConfirmLogout onCancel={() => setLogoutOpen(false)} onConfirm={() => supabase?.auth.signOut()} />}
 
         <nav className="bottom-nav">
           <button className={tab === "home" ? "active" : ""} onClick={() => setTab("home")}>
@@ -608,7 +621,7 @@ function MonthSummary({
         <Metric label="เงินเข้า" value={income} tone="income" />
         <Metric label="เงินออก" value={outflow} tone="expense" />
         <Metric label="สุทธิ" value={balance} tone={balance >= 0 ? "income" : "expense"} />
-        <Metric label="หนี้แฟนเปลี่ยน" value={debtChange} tone={debtChange >= 0 ? "income" : "expense"} />
+        <Metric label="ยอดลูกหนี้เปลี่ยน" value={debtChange} tone={debtChange >= 0 ? "income" : "expense"} />
       </div>
       <div className="category-bars">
         {categories.length ? (
@@ -671,8 +684,9 @@ function DraftRow({ draft, onChange }: { draft: Draft; onChange: (draft: Draft) 
       </div>
       <div className="impact-row">
         <span>กระเป๋า {formatSignedMoney(draft.wallet_impact)}</span>
-        <span>หนี้แฟน {formatSignedMoney(draft.debt_impact)}</span>
+        <span>ลูกหนี้ {formatSignedMoney(draft.debt_impact)}</span>
       </div>
+      {(["lend", "split_half", "debt_repayment"] as TransactionType[]).includes(draft.transaction_type) && <input className="draft-date" placeholder="ชื่อผู้เกี่ยวข้อง เช่น แฟน หรือ เพื่อนเอ" value={draft.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />}
       <input className="draft-date" type="date" value={toDateInput(draft.occurred_at)} onChange={(event) => update({ occurred_at: fromDateInput(event.target.value) })} />
     </div>
   );
@@ -685,7 +699,7 @@ function DraftImpact({ items }: { items: Draft[] }) {
   return (
     <div className="draft-impact">
       <span>กระเป๋าหลัก {formatSignedMoney(wallet)}</span>
-      <span>หนี้แฟน {formatSignedMoney(debt)}</span>
+      <span>ลูกหนี้ {formatSignedMoney(debt)}</span>
     </div>
   );
 }
@@ -702,7 +716,7 @@ function EntryList({ entries, onEdit, onDelete }: { entries: Entry[]; onEdit: (e
               {transactionTypeLabels[entry.transaction_type]} • {entry.category} • {formatDateTime(entry.occurred_at)}
             </small>
             <small>
-              กระเป๋า {formatSignedMoney(entry.wallet_impact)} • หนี้แฟน {formatSignedMoney(entry.debt_impact)}
+              กระเป๋า {formatSignedMoney(entry.wallet_impact)} • {entry.debtor_name}: {formatSignedMoney(entry.debt_impact)}
             </small>
           </div>
           <strong className={entry.wallet_impact >= 0 ? "income" : "expense"}>{formatSignedMoney(entry.wallet_impact)}</strong>
@@ -775,12 +789,16 @@ function EditSheet({
         </label>
         <label>
           วันที่
+          <input type="text" placeholder="ชื่อผู้เกี่ยวข้อง" value={entry.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
+        </label>
+        <label>
+          วันที่
           <input type="date" value={toDateInput(entry.occurred_at)} onChange={(event) => update({ occurred_at: fromDateInput(event.target.value) })} />
         </label>
 
         <div className="draft-impact">
           <span>กระเป๋า {formatSignedMoney(entry.wallet_impact)}</span>
-          <span>หนี้แฟน {formatSignedMoney(entry.debt_impact)}</span>
+          <span>ลูกหนี้ {formatSignedMoney(entry.debt_impact)}</span>
         </div>
 
         <button className="save" onClick={onSave} disabled={busy || !entry.title.trim() || entry.amount < 0}>
@@ -795,4 +813,19 @@ function totalWallet(entries: Entry[], direction: EntryKind) {
   return entries
     .filter((entry) => (direction === "income" ? entry.wallet_impact > 0 : entry.wallet_impact < 0))
     .reduce((sum, entry) => sum + entry.wallet_impact, 0);
+}
+
+function DebtorSheet({ debtors, onClose }: { debtors: { name: string; amount: number }[]; onClose: () => void }) {
+  return <div className="sheet-backdrop"><section className="edit-sheet"><div className="sheet-head"><div><p className="eyebrow">สรุปยอดค้าง</p><h2>ลูกหนี้ทั้งหมด</h2></div><button onClick={onClose}>×</button></div>{debtors.map((item) => <div className="debtor-row large" key={item.name}><span>{item.name}</span><strong>฿{formatMoney(item.amount)}</strong></div>)}{!debtors.length && <p className="empty-note">ยังไม่มียอดลูกหนี้</p>}<p className="privacy">รายการรับชำระเงินให้พิมพ์ผ่าน AI Chat เช่น “เพื่อนเอโอนคืน 200 บาท”</p></section></div>;
+}
+
+function ProfileSheet({ user, onClose, onLogout }: { user: User; onClose: () => void; onLogout: () => void }) {
+  const metadata = user.user_metadata ?? {};
+  const name = metadata.full_name ?? metadata.name ?? "ผู้ใช้";
+  const provider = user.app_metadata?.provider ?? "Google";
+  return <div className="sheet-backdrop"><section className="edit-sheet profile-sheet"><div className="sheet-head"><div><p className="eyebrow">บัญชีของฉัน</p><h2>โปรไฟล์</h2></div><button onClick={onClose}>×</button></div><div className="profile-head">{metadata.avatar_url ? <img src={metadata.avatar_url} alt="" /> : <div className="avatar profile-avatar">{name[0]}</div>}<div><b>{name}</b><small>{user.email}</small></div></div><div className="profile-info"><span>เข้าสู่ระบบด้วย</span><b>{provider}</b><span>สร้างบัญชี</span><b>{user.created_at ? new Date(user.created_at).toLocaleDateString("th-TH") : "—"}</b></div><button className="logout-button" onClick={onLogout}>ออกจากระบบ</button></section></div>;
+}
+
+function ConfirmLogout({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
+  return <div className="dialog-backdrop"><section className="confirm-dialog"><h2>ออกจากระบบ?</h2><p>คุณสามารถกลับมาเข้าสู่ระบบและดูข้อมูลเดิมได้ทุกเมื่อ</p><div><button onClick={onCancel}>ยกเลิก</button><button className="danger" onClick={onConfirm}>ออกจากระบบ</button></div></section></div>;
 }

@@ -26,6 +26,10 @@ const schema = {
         enum: transactionTypes,
         description: "ชนิดธุรกรรมตาม logic ของกระเป๋าหลักและยอดค้างจากแฟน",
       },
+      debtor_name: {
+        type: "string",
+        description: "ชื่อบุคคลที่เป็นลูกหนี้ เช่น แฟน เพื่อนเอ คุณบี ถ้าไม่พบให้ใช้ ไม่ระบุ",
+      },
       date: {
         type: "string",
         description: "วันที่รูปแบบ YYYY-MM-DD",
@@ -35,7 +39,7 @@ const schema = {
         description: "คำอธิบายสั้น ๆ ถ้ามีบริบทสำคัญ",
       },
     },
-    required: ["title", "category", "amount", "transaction_type", "date", "note"],
+    required: ["title", "category", "amount", "transaction_type", "debtor_name", "date", "note"],
     additionalProperties: false,
   },
 };
@@ -60,6 +64,8 @@ export async function POST(request: Request) {
         "ถ้าไม่ระบุวันที่ ให้ใช้วันนี้",
         "",
         "กติกา transaction_type:",
+        "ใช้ logic แบบเป็นกลาง ไม่ผูกกับคำว่าแฟน: lend คือออกเงินให้บุคคลอื่นก่อน, split_half คือหารกับบุคคลอื่น, debt_repayment คือบุคคลอื่นคืนเงิน, gift คือให้โดยไม่คิดคืน",
+        "คืน debtor_name เป็นชื่อบุคคลจากข้อความ เช่น แฟน เพื่อนเอ คุณบี; ถ้าไม่พบชื่อให้คืน ไม่ระบุ และใช้ชื่อเดียวกันในรายการคืนเงิน",
         "- income = เงินเข้าบัญชี เช่น เงินเดือน รายรับ ตู้กดน้ำ",
         "- personal_expense = จ่ายเองส่วนตัว 100%",
         "- lend = ออกให้แฟนก่อน/ให้ยืม/จ่ายแทนแฟน 100%",
