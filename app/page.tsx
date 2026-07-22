@@ -83,9 +83,9 @@ const transactionKind: Record<TransactionType, EntryKind> = {
 };
 
 const categoryIcon = (category: string) => {
-  if (category === "อาหาร") return "🍜";
-  if (category === "เดินทาง") return "🚕";
-  if (category === "รายได้") return "💼";
+  if (category === "อาหาร") return "●";
+  if (category === "เดินทาง") return "◆";
+  if (category === "รายได้") return "฿";
   if (category === "สุขภาพ") return "✚";
   if (category === "บิลประจำ") return "▣";
   if (category === "บันเทิง") return "♪";
@@ -787,7 +787,7 @@ export default function Home() {
                 <span>เงินพร้อมใช้สุทธิ</span>
                 <div>
                   <strong>{moneySign}{formatMoney(mainWallet)}</strong>
-                  {streak >= 2 && <small className="streak-badge">🔥 {streak} วันติด</small>}
+                  {streak >= 2 && <small className="streak-badge">{streak} วันติดต่อกัน</small>}
                 </div>
               </div>
             </section>
@@ -1204,7 +1204,7 @@ function MonthSummary({
             );
           })
         ) : (
-          <EmptyNote glyph="📊">ยังไม่มีรายจ่ายในเดือนนี้</EmptyNote>
+          <EmptyNote glyph="▣">ยังไม่มีรายจ่ายในเดือนนี้</EmptyNote>
         )}
       </div>
     </section>
@@ -1323,7 +1323,7 @@ function EntryList({ entries, onEdit, onDelete }: { entries: Entry[]; onEdit?: (
           ))}
         </div>
       ))}
-      {!entries.length && <EmptyNote glyph="🧾">ยังไม่มีรายการในช่วงนี้</EmptyNote>}
+      {!entries.length && <EmptyNote glyph="▪">ยังไม่มีรายการในช่วงนี้</EmptyNote>}
     </div>
   );
 }
@@ -1487,7 +1487,7 @@ function DebtorsView({
             </article>
           );
         })}
-        {!debtors.length && <EmptyNote glyph="🤝">ยังไม่มีรายชื่อลูกหนี้</EmptyNote>}
+        {!debtors.length && <EmptyNote glyph="◆">ยังไม่มีรายชื่อลูกหนี้</EmptyNote>}
       </div>
     </div>
   );
@@ -1560,7 +1560,7 @@ function RecapSheet({
   onClose: () => void;
 }) {
   const monthLabel = new Date(`${selectedMonth}-01T00:00:00`).toLocaleDateString("th-TH", { month: "long", year: "numeric" });
-  const closingLine = balance >= 0 ? "เก่งมาก เดือนนี้ยังมีเงินเหลือเก็บ 🎉" : "เดือนหน้าลองคุมงบดูอีกนิดนะ สู้ๆ 💪";
+  const closingLine = balance >= 0 ? "เดือนนี้ยังมีเงินเหลือเก็บ" : "เดือนหน้าลองคุมงบดูอีกนิด";
 
   async function share() {
     const text = [
@@ -1569,7 +1569,7 @@ function RecapSheet({
       `รายจ่าย ${moneySign}${formatMoney(outflow)}`,
       `คงเหลือสุทธิ ${moneySign}${formatMoney(balance)}`,
       topCategory ? `ใช้จ่ายเยอะสุด: ${topCategory.category} (${moneySign}${formatMoney(topCategory.amount)})` : "",
-      streak >= 2 ? `จดต่อเนื่อง ${streak} วัน 🔥` : "",
+      streak >= 2 ? `จดต่อเนื่อง ${streak} วัน` : "",
     ]
       .filter(Boolean)
       .join("\n");
@@ -1615,7 +1615,7 @@ function RecapSheet({
             </div>
           </div>
         )}
-        {streak >= 2 && <p className="recap-streak">🔥 จดต่อเนื่อง {streak} วัน</p>}
+        {streak >= 2 && <p className="recap-streak">จดต่อเนื่อง {streak} วัน</p>}
         <p className="recap-line">{closingLine}</p>
         <button className="recap-share" onClick={share}>แชร์สรุปเดือนนี้</button>
       </section>
@@ -1657,7 +1657,7 @@ function BudgetSheet({
           </div>
           <button onClick={onClose}>×</button>
         </div>
-        <p className="budget-hint">ตั้งวงเงินต่อหมวดหมู่ เว้นว่างไว้ถ้าไม่ต้องการจำกัด — บันทึกเฉพาะในเครื่องนี้เท่านั้น</p>
+        <p className="budget-hint">ตั้งวงเงินต่อหมวดหมู่ เว้นว่างไว้ถ้าไม่ต้องการจำกัด บันทึกเฉพาะในเครื่องนี้เท่านั้น</p>
         {expenseCategories.map((category) => (
           <label key={category} className="budget-row">
             <span className="cat-dot" style={{ background: `${categoryColor(category)}22` }}>{categoryIcon(category)}</span>
