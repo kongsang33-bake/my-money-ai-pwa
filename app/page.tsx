@@ -125,13 +125,15 @@ const formatSignedMoney = (value: number) => `${value >= 0 ? "+" : "−"}${money
 const formatDateTime = (value: string) => new Date(value).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
 const toDateInput = (value: string) => new Date(value).toISOString().slice(0, 10);
 const fromDateInput = (value: string) => `${value}T12:00:00`;
+const todayEntryDate = () => fromDateInput(new Date().toISOString().slice(0, 10));
+
+function startOfDay(date: Date) {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy.getTime();
+}
 
 function dayLabel(value: string) {
-  const startOfDay = (date: Date) => {
-    const copy = new Date(date);
-    copy.setHours(0, 0, 0, 0);
-    return copy.getTime();
-  };
   const diffDays = Math.round((startOfDay(new Date()) - startOfDay(new Date(value))) / 86400000);
   if (diffDays === 0) return "วันนี้";
   if (diffDays === 1) return "เมื่อวาน";
@@ -139,14 +141,69 @@ function dayLabel(value: string) {
 }
 
 function groupEntriesByDay(entries: Entry[]) {
-  const groups: { label: string; items: Entry[] }[] = [];
+  const byDay = new Map<number, Entry[]>();
   for (const entry of entries) {
-    const label = dayLabel(entry.occurred_at);
-    const lastGroup = groups[groups.length - 1];
-    if (lastGroup && lastGroup.label === label) lastGroup.items.push(entry);
-    else groups.push({ label, items: [entry] });
+    const key = startOfDay(new Date(entry.occurred_at));
+    const list = byDay.get(key);
+    if (list) list.push(entry);
+    else byDay.set(key, [entry]);
   }
-  return groups;
+  return [...byDay.entries()]
+    .sort(([a], [b]) => b - a)
+    .map(([, items]) => ({ label: dayLabel(items[0].occurred_at), items }));
+}
+
+function budgetStorageKey(userId: string) {
+  return `money-ai-budgets:${userId}`;
+}
+
+function loadBudgets(userId: string): Record<string, number> {
+  try {
+    const raw = window.localStorage.getItem(budgetStorageKey(userId));
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveBudgets(userId: string, budgets: Record<string, number>) {
+  try {
+    window.localStorage.setItem(budgetStorageKey(userId), JSON.stringify(budgets));
+  } catch {
+    // localStorage unavailable (private mode, quota) — budgets simply won't persist
+  }
+}
+
+type QuickShortcut = { title: string; category: string; transaction_type: TransactionType; amount: number; count: number };
+
+function deriveQuickShortcuts(entries: Entry[]): QuickShortcut[] {
+  const cutoff = Date.now() - 90 * 86400000;
+  const map = new Map<string, QuickShortcut>();
+  for (const entry of entries) {
+    if (entry.transaction_type !== "personal_expense" && entry.transaction_type !== "income") continue;
+    if (new Date(entry.occurred_at).getTime() < cutoff) continue;
+    const title = entry.title.trim();
+    const key = `${title.toLowerCase()}|${entry.category}|${entry.transaction_type}`;
+    const existing = map.get(key);
+    if (existing) existing.count += 1;
+    else map.set(key, { title, category: entry.category, transaction_type: entry.transaction_type, amount: entry.amount, count: 1 });
+  }
+  return [...map.values()]
+    .filter((item) => item.count >= 2)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 4);
+}
+
+function computeStreak(entries: Entry[]) {
+  const days = new Set(entries.map((entry) => startOfDay(new Date(entry.occurred_at))));
+  let cursor = startOfDay(new Date());
+  if (!days.has(cursor)) cursor -= 86400000;
+  let streak = 0;
+  while (days.has(cursor)) {
+    streak += 1;
+    cursor -= 86400000;
+  }
+  return streak;
 }
 
 function cycleBounds(selectedMonth: string, startDay: number) {
@@ -289,6 +346,10 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(monthKey(new Date()));
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [budgets, setBudgets] = useState<Record<string, number>>({});
+  const [budgetSheetOpen, setBudgetSheetOpen] = useState(false);
+  const [recapOpen, setRecapOpen] = useState(false);
   const displayName = profile?.nickname?.trim() || user?.user_metadata?.full_name || user?.user_metadata?.name || "เงินของฉัน";
   const displayIcon = profile?.app_icon?.trim() || user?.email?.[0]?.toUpperCase() || "฿";
   const displayIconImage = profile?.app_icon_image?.trim() || "";
@@ -360,6 +421,7 @@ export default function Home() {
         void loadEntries();
         void loadProfile();
         void loadDebtors();
+        setBudgets(loadBudgets(data.user.id));
       }
     });
 
@@ -369,16 +431,20 @@ export default function Home() {
         void loadEntries();
         void loadProfile();
         void loadDebtors();
+        setBudgets(loadBudgets(session.user.id));
       } else {
         setEntries([]);
         setProfile(null);
         setDebtors([]);
+        setBudgets({});
       }
     });
     return () => data.subscription.unsubscribe();
   }, [loadDebtors, loadEntries, loadProfile]);
 
   const mainWallet = useMemo(() => entries.reduce((sum, entry) => sum + entry.wallet_impact, 0), [entries]);
+  const streak = useMemo(() => computeStreak(entries), [entries]);
+  const quickShortcuts = useMemo(() => deriveQuickShortcuts(entries), [entries]);
   const debtorSummary = useMemo(() => {
     const map = new Map<string, number>();
     for (const entry of entries) {
@@ -391,17 +457,22 @@ export default function Home() {
       .sort((a, b) => b.amount - a.amount);
   }, [entries]);
 
+  const cycleRange = useMemo(() => cycleBounds(selectedMonth, monthStartDay), [selectedMonth, monthStartDay]);
   const monthlyEntries = useMemo(() => {
-    const { start, end } = cycleBounds(selectedMonth, monthStartDay);
+    const { start, end } = cycleRange;
     return entries.filter((entry) => {
       const occurred = new Date(entry.occurred_at);
       return occurred >= start && occurred < end;
     });
-  }, [entries, monthStartDay, selectedMonth]);
+  }, [entries, cycleRange]);
   const monthlyIncome = useMemo(() => totalWallet(monthlyEntries, "income"), [monthlyEntries]);
   const monthlyOutflow = useMemo(() => Math.abs(totalWallet(monthlyEntries, "expense")), [monthlyEntries]);
   const monthlyDebtChange = useMemo(() => monthlyEntries.reduce((sum, entry) => sum + entry.debt_impact, 0), [monthlyEntries]);
   const monthlyBalance = monthlyIncome - monthlyOutflow;
+  const dayEntries = useMemo(
+    () => (selectedDay ? monthlyEntries.filter((entry) => new Date(entry.occurred_at).toDateString() === selectedDay) : monthlyEntries),
+    [monthlyEntries, selectedDay],
+  );
 
   const categorySummary = useMemo(() => {
     const map = new Map<string, number>();
@@ -409,11 +480,15 @@ export default function Home() {
       if (entry.wallet_impact >= 0) continue;
       map.set(entry.category, (map.get(entry.category) ?? 0) + Math.abs(entry.wallet_impact));
     }
-    return [...map.entries()]
-      .map(([category, amount]) => ({ category, amount }))
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 4);
-  }, [monthlyEntries]);
+    for (const category of Object.keys(budgets)) {
+      if (!map.has(category)) map.set(category, 0);
+    }
+    const sorted = [...map.entries()].map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount);
+    const shown = sorted.slice(0, 4);
+    const shownNames = new Set(shown.map((item) => item.category));
+    const missingBudgeted = sorted.filter((item) => !shownNames.has(item.category) && budgets[item.category] > 0);
+    return [...shown, ...missingBudgeted];
+  }, [monthlyEntries, budgets]);
 
   async function addSlipFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -435,6 +510,21 @@ export default function Home() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "แนบรูปไม่สำเร็จ");
     }
+  }
+
+  function addQuickShortcut(shortcut: { title: string; category: string; transaction_type: TransactionType; amount: number }) {
+    setDrafts((items) => [
+      ...items,
+      normalizeEntry({
+        id: `${Date.now()}-quick`,
+        title: shortcut.title,
+        category: shortcut.category,
+        amount: shortcut.amount,
+        transaction_type: shortcut.transaction_type,
+        occurred_at: todayEntryDate(),
+        source_text: "ทางลัด",
+      }),
+    ]);
   }
 
   async function analyze() {
@@ -591,6 +681,12 @@ export default function Home() {
     setBusy(false);
   }
 
+  function updateBudgets(next: Record<string, number>) {
+    if (!user) return;
+    setBudgets(next);
+    saveBudgets(user.id, next);
+  }
+
   async function saveProfile(next: { nickname: string; app_icon: string; app_icon_image: string; month_start_day: number }) {
     if (!supabase || !user) return;
     setBusy(true);
@@ -689,7 +785,10 @@ export default function Home() {
             <section className="wallet-grid single-wallet">
               <div className="wallet-card primary-wallet">
                 <span>เงินพร้อมใช้สุทธิ</span>
-                <strong>{moneySign}{formatMoney(mainWallet)}</strong>
+                <div>
+                  <strong>{moneySign}{formatMoney(mainWallet)}</strong>
+                  {streak >= 2 && <small className="streak-badge">🔥 {streak} วันติด</small>}
+                </div>
               </div>
             </section>
 
@@ -704,13 +803,14 @@ export default function Home() {
 
             <MonthSummary
               selectedMonth={selectedMonth}
-              setSelectedMonth={setSelectedMonth}
+              setSelectedMonth={(value) => { setSelectedMonth(value); setSelectedDay(null); }}
               income={monthlyIncome}
               outflow={monthlyOutflow}
               debtChange={monthlyDebtChange}
               balance={monthlyBalance}
               categories={categorySummary}
               monthStartDay={monthStartDay}
+              budgets={budgets}
             />
 
             {error && <p className="error-box">{error}</p>}
@@ -734,6 +834,20 @@ export default function Home() {
                 <h2>วันนี้มีรายการอะไรบ้าง?</h2>
               </div>
             </div>
+
+            {!!quickShortcuts.length && (
+              <div className="quick-shortcuts">
+                {quickShortcuts.map((shortcut) => (
+                  <button key={`${shortcut.title}|${shortcut.category}|${shortcut.transaction_type}`} className="quick-chip" onClick={() => addQuickShortcut(shortcut)}>
+                    <span className="cat-dot" style={{ background: `${categoryColor(shortcut.category)}22` }}>{categoryIcon(shortcut.category)}</span>
+                    <span>
+                      <b>{shortcut.title}</b>
+                      <small>{moneySign}{formatMoney(shortcut.amount)}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="ai-input-wrap">
               <div className="chat-bubble assistant">
@@ -802,18 +916,21 @@ export default function Home() {
                 <p className="eyebrow">ข้อมูลที่ซิงก์แล้ว</p>
                 <h2>รายการทั้งหมด</h2>
               </div>
+              <button className="header-add-button" onClick={() => setRecapOpen(true)}>สรุปเดือนนี้</button>
             </div>
             <MonthSummary
               selectedMonth={selectedMonth}
-              setSelectedMonth={setSelectedMonth}
+              setSelectedMonth={(value) => { setSelectedMonth(value); setSelectedDay(null); }}
               income={monthlyIncome}
               outflow={monthlyOutflow}
               debtChange={monthlyDebtChange}
               balance={monthlyBalance}
               categories={categorySummary}
               monthStartDay={monthStartDay}
+              budgets={budgets}
             />
-            <EntryList entries={monthlyEntries} onEdit={setEditing} onDelete={deleteEntry} />
+            <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
+            <EntryList entries={dayEntries} onEdit={setEditing} onDelete={deleteEntry} />
           </div>
         )}
 
@@ -851,6 +968,19 @@ export default function Home() {
             onLogout={() => { setMenuOpen(false); setLogoutOpen(true); }}
             onSaveProfile={saveProfile}
             onOpenDebtors={() => { setMenuOpen(false); setSelectedDebtor(null); setTab("debtors"); }}
+            onOpenBudgets={() => { setMenuOpen(false); setBudgetSheetOpen(true); }}
+          />
+        )}
+        {budgetSheetOpen && <BudgetSheet budgets={budgets} onClose={() => setBudgetSheetOpen(false)} onSave={updateBudgets} />}
+        {recapOpen && (
+          <RecapSheet
+            selectedMonth={selectedMonth}
+            income={monthlyIncome}
+            outflow={monthlyOutflow}
+            balance={monthlyBalance}
+            topCategory={categorySummary[0] ?? null}
+            streak={streak}
+            onClose={() => setRecapOpen(false)}
           />
         )}
         {logoutOpen && <ConfirmLogout onCancel={() => setLogoutOpen(false)} onConfirm={() => supabase?.auth.signOut()} />}
@@ -949,6 +1079,72 @@ function GoogleIcon() {
   );
 }
 
+function CalendarHeatmap({
+  start,
+  end,
+  entries,
+  selectedDay,
+  onSelectDay,
+}: {
+  start: Date;
+  end: Date;
+  entries: Entry[];
+  selectedDay: string | null;
+  onSelectDay: (day: string | null) => void;
+}) {
+  const dayTotals = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const entry of entries) {
+      if (entry.wallet_impact >= 0) continue;
+      const key = new Date(entry.occurred_at).toDateString();
+      map.set(key, (map.get(key) ?? 0) + Math.abs(entry.wallet_impact));
+    }
+    return map;
+  }, [entries]);
+
+  const days = useMemo(() => {
+    const list: { key: string; date: Date; amount: number }[] = [];
+    const cursor = new Date(start);
+    while (cursor < end) {
+      const key = cursor.toDateString();
+      list.push({ key, date: new Date(cursor), amount: dayTotals.get(key) ?? 0 });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return list;
+  }, [start, end, dayTotals]);
+
+  const max = Math.max(1, ...days.map((day) => day.amount));
+  const bucket = (amount: number) => {
+    if (amount <= 0) return 0;
+    const ratio = amount / max;
+    if (ratio > 0.75) return 4;
+    if (ratio > 0.5) return 3;
+    if (ratio > 0.25) return 2;
+    return 1;
+  };
+
+  return (
+    <section className="heatmap-panel">
+      <div className="section-title">
+        <h2>ปฏิทินการใช้จ่าย</h2>
+        {selectedDay && <button onClick={() => onSelectDay(null)}>ล้างตัวกรอง</button>}
+      </div>
+      <div className="heatmap-grid">
+        {days.map((day) => (
+          <button
+            key={day.key}
+            className={`heatmap-cell bucket-${bucket(day.amount)}${selectedDay === day.key ? " selected" : ""}`}
+            onClick={() => onSelectDay(selectedDay === day.key ? null : day.key)}
+            title={`${day.date.toLocaleDateString("th-TH", { day: "numeric", month: "short" })} · ${moneySign}${formatMoney(day.amount)}`}
+          >
+            {day.date.getDate()}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function MonthSummary({
   selectedMonth,
   setSelectedMonth,
@@ -958,6 +1154,7 @@ function MonthSummary({
   balance,
   categories: categoryItems,
   monthStartDay,
+  budgets,
 }: {
   selectedMonth: string;
   setSelectedMonth: (value: string) => void;
@@ -967,6 +1164,7 @@ function MonthSummary({
   balance: number;
   categories: { category: string; amount: number }[];
   monthStartDay: number;
+  budgets: Record<string, number>;
 }) {
   return (
     <section className="summary-panel">
@@ -987,17 +1185,21 @@ function MonthSummary({
       <div className="category-bars">
         {categoryItems.length ? (
           categoryItems.map((item) => {
-            const color = categoryColor(item.category);
-            const percent = outflow > 0 ? (item.amount / outflow) * 100 : 0;
+            const budget = budgets[item.category];
+            const hasBudget = !!budget && budget > 0;
+            const overBudget = hasBudget && item.amount > budget;
+            const color = overBudget ? "#d03b3b" : categoryColor(item.category);
+            const percent = hasBudget ? (item.amount / budget) * 100 : outflow > 0 ? (item.amount / outflow) * 100 : 0;
             return (
               <div className="category-bar" key={item.category}>
                 <div>
-                  <span className="cat-dot" style={{ background: `${color}22` }}>{categoryIcon(item.category)}</span>
+                  <span className="cat-dot" style={{ background: `${categoryColor(item.category)}22` }}>{categoryIcon(item.category)}</span>
                   <b>{item.category}</b>
-                  <small>{percent.toFixed(0)}%</small>
+                  {overBudget && <span className="over-budget-chip">เกินงบ</span>}
+                  <small>{hasBudget ? `${moneySign}${formatMoney(item.amount)} / ${moneySign}${formatMoney(budget)}` : `${percent.toFixed(0)}%`}</small>
                 </div>
-                <strong>{moneySign}{formatMoney(item.amount)}</strong>
-                <i style={{ width: `${Math.max(4, percent)}%`, background: color }} />
+                {!hasBudget && <strong>{moneySign}{formatMoney(item.amount)}</strong>}
+                <i style={{ width: `${Math.max(4, Math.min(100, percent))}%`, background: color }} />
               </div>
             );
           })
@@ -1340,6 +1542,142 @@ function DebtorEditSheet({
   );
 }
 
+function RecapSheet({
+  selectedMonth,
+  income,
+  outflow,
+  balance,
+  topCategory,
+  streak,
+  onClose,
+}: {
+  selectedMonth: string;
+  income: number;
+  outflow: number;
+  balance: number;
+  topCategory: { category: string; amount: number } | null;
+  streak: number;
+  onClose: () => void;
+}) {
+  const monthLabel = new Date(`${selectedMonth}-01T00:00:00`).toLocaleDateString("th-TH", { month: "long", year: "numeric" });
+  const closingLine = balance >= 0 ? "เก่งมาก เดือนนี้ยังมีเงินเหลือเก็บ 🎉" : "เดือนหน้าลองคุมงบดูอีกนิดนะ สู้ๆ 💪";
+
+  async function share() {
+    const text = [
+      `สรุปเดือน ${monthLabel}`,
+      `รายรับ ${moneySign}${formatMoney(income)}`,
+      `รายจ่าย ${moneySign}${formatMoney(outflow)}`,
+      `คงเหลือสุทธิ ${moneySign}${formatMoney(balance)}`,
+      topCategory ? `ใช้จ่ายเยอะสุด: ${topCategory.category} (${moneySign}${formatMoney(topCategory.amount)})` : "",
+      streak >= 2 ? `จดต่อเนื่อง ${streak} วัน 🔥` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `สรุปเดือน ${monthLabel}`, text });
+      } catch {
+        // user cancelled the share sheet
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      window.alert("คัดลอกสรุปเดือนนี้แล้ว");
+    } catch {
+      window.alert(text);
+    }
+  }
+
+  return (
+    <div className="sheet-backdrop">
+      <section className="recap-card">
+        <button className="recap-close" onClick={onClose}>×</button>
+        <p className="recap-month">{monthLabel}</p>
+        <strong className={`recap-balance ${balance >= 0 ? "income" : "expense"}`}>{formatSignedMoney(balance)}</strong>
+        <div className="recap-grid">
+          <div>
+            <span>รายรับ</span>
+            <b>{moneySign}{formatMoney(income)}</b>
+          </div>
+          <div>
+            <span>รายจ่าย</span>
+            <b>{moneySign}{formatMoney(outflow)}</b>
+          </div>
+        </div>
+        {topCategory && (
+          <div className="recap-top-category">
+            <span className="cat-dot" style={{ background: `${categoryColor(topCategory.category)}33` }}>{categoryIcon(topCategory.category)}</span>
+            <div>
+              <small>ใช้จ่ายเยอะสุด</small>
+              <b>{topCategory.category} · {moneySign}{formatMoney(topCategory.amount)}</b>
+            </div>
+          </div>
+        )}
+        {streak >= 2 && <p className="recap-streak">🔥 จดต่อเนื่อง {streak} วัน</p>}
+        <p className="recap-line">{closingLine}</p>
+        <button className="recap-share" onClick={share}>แชร์สรุปเดือนนี้</button>
+      </section>
+    </div>
+  );
+}
+
+function BudgetSheet({
+  budgets,
+  onClose,
+  onSave,
+}: {
+  budgets: Record<string, number>;
+  onClose: () => void;
+  onSave: (next: Record<string, number>) => void;
+}) {
+  const expenseCategories = categories.filter((category) => category !== "รายได้");
+  const [draft, setDraft] = useState<Record<string, string>>(() =>
+    Object.fromEntries(expenseCategories.map((category) => [category, budgets[category] ? String(budgets[category]) : ""])),
+  );
+
+  const submit = () => {
+    const next: Record<string, number> = {};
+    for (const category of expenseCategories) {
+      const value = Number(draft[category]);
+      if (draft[category]?.trim() && value > 0) next[category] = value;
+    }
+    onSave(next);
+    onClose();
+  };
+
+  return (
+    <div className="sheet-backdrop">
+      <section className="edit-sheet budget-sheet">
+        <div className="sheet-head">
+          <div>
+            <p className="eyebrow">ตั้งค่า</p>
+            <h2>งบประมาณต่อเดือน</h2>
+          </div>
+          <button onClick={onClose}>×</button>
+        </div>
+        <p className="budget-hint">ตั้งวงเงินต่อหมวดหมู่ เว้นว่างไว้ถ้าไม่ต้องการจำกัด — บันทึกเฉพาะในเครื่องนี้เท่านั้น</p>
+        {expenseCategories.map((category) => (
+          <label key={category} className="budget-row">
+            <span className="cat-dot" style={{ background: `${categoryColor(category)}22` }}>{categoryIcon(category)}</span>
+            {category}
+            <input
+              inputMode="decimal"
+              placeholder="ไม่จำกัด"
+              value={draft[category] ?? ""}
+              onChange={(event) => setDraft((current) => ({ ...current, [category]: event.target.value }))}
+            />
+          </label>
+        ))}
+        <button className="save" onClick={submit}>
+          บันทึกงบประมาณ
+        </button>
+      </section>
+    </div>
+  );
+}
+
 function SideMenu({
   user,
   profile,
@@ -1349,6 +1687,7 @@ function SideMenu({
   onLogout,
   onSaveProfile,
   onOpenDebtors,
+  onOpenBudgets,
 }: {
   user: User;
   profile: Profile | null;
@@ -1358,6 +1697,7 @@ function SideMenu({
   onLogout: () => void;
   onSaveProfile: (profile: { nickname: string; app_icon: string; app_icon_image: string; month_start_day: number }) => void;
   onOpenDebtors: () => void;
+  onOpenBudgets: () => void;
 }) {
   const metadata = user.user_metadata ?? {};
   const name = profile?.nickname || metadata.full_name || metadata.name || "ผู้ใช้";
@@ -1437,6 +1777,10 @@ function SideMenu({
           <button onClick={onOpenDebtors}>
             <span>ลูกหนี้</span>
             <small>ยอดรวม {moneySign}{formatMoney(totalDebt)} · จัดการรายชื่อและประวัติ</small>
+          </button>
+          <button onClick={onOpenBudgets}>
+            <span>งบประมาณ</span>
+            <small>ตั้งวงเงินต่อหมวดหมู่ต่อเดือน</small>
           </button>
         </nav>
 
