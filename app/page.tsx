@@ -92,6 +92,28 @@ const categoryIcon = (category: string) => {
   return "▪";
 };
 
+// Categorical palette validated for CVD-safe adjacency + normal-vision separation
+// (dataviz skill, 7-slot subset of the default 8-hue order; brand green reserved for income).
+const categoryColors: Record<string, string> = {
+  เดินทาง: "#2a78d6",
+  อาหาร: "#eb6834",
+  บิลประจำ: "#1baf7a",
+  ที่อยู่อาศัย: "#eda100",
+  บันเทิง: "#e87ba4",
+  ของใช้: "#4a3aa7",
+  สุขภาพ: "#e34948",
+};
+const categoryColor = (category: string) => categoryColors[category] ?? "#898781";
+
+const avatarPalette = Object.values(categoryColors);
+function nameColor(name: string) {
+  const sum = [...name.trim()].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  return avatarPalette[sum % avatarPalette.length];
+}
+function nameInitial(name: string) {
+  return name.trim().slice(0, 1).toUpperCase() || "?";
+}
+
 const moneySign = "฿";
 const unnamedDebtor = "ไม่ระบุ";
 const profileImageMaxInputBytes = 10 * 1024 * 1024;
@@ -103,6 +125,29 @@ const formatSignedMoney = (value: number) => `${value >= 0 ? "+" : "−"}${money
 const formatDateTime = (value: string) => new Date(value).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
 const toDateInput = (value: string) => new Date(value).toISOString().slice(0, 10);
 const fromDateInput = (value: string) => `${value}T12:00:00`;
+
+function dayLabel(value: string) {
+  const startOfDay = (date: Date) => {
+    const copy = new Date(date);
+    copy.setHours(0, 0, 0, 0);
+    return copy.getTime();
+  };
+  const diffDays = Math.round((startOfDay(new Date()) - startOfDay(new Date(value))) / 86400000);
+  if (diffDays === 0) return "วันนี้";
+  if (diffDays === 1) return "เมื่อวาน";
+  return new Date(value).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function groupEntriesByDay(entries: Entry[]) {
+  const groups: { label: string; items: Entry[] }[] = [];
+  for (const entry of entries) {
+    const label = dayLabel(entry.occurred_at);
+    const lastGroup = groups[groups.length - 1];
+    if (lastGroup && lastGroup.label === label) lastGroup.items.push(entry);
+    else groups.push({ label, items: [entry] });
+  }
+  return groups;
+}
 
 function cycleBounds(selectedMonth: string, startDay: number) {
   const [year, month] = selectedMonth.split("-").map(Number);
@@ -609,7 +654,10 @@ export default function Home() {
   if (!ready) {
     return (
       <main className="shell">
-        <section className="phone auth-screen">กำลังเตรียมบัญชี...</section>
+        <section className="phone auth-screen">
+          <div className="loading-spinner" aria-hidden="true" />
+          <p className="auth-copy">กำลังเตรียมบัญชี...</p>
+        </section>
       </main>
     );
   }
@@ -939,23 +987,34 @@ function MonthSummary({
       <div className="category-bars">
         {categoryItems.length ? (
           categoryItems.map((item) => {
-            const max = Math.max(...categoryItems.map((x) => x.amount));
+            const color = categoryColor(item.category);
+            const percent = outflow > 0 ? (item.amount / outflow) * 100 : 0;
             return (
               <div className="category-bar" key={item.category}>
                 <div>
-                  <span>{categoryIcon(item.category)}</span>
+                  <span className="cat-dot" style={{ background: `${color}22` }}>{categoryIcon(item.category)}</span>
                   <b>{item.category}</b>
+                  <small>{percent.toFixed(0)}%</small>
                 </div>
                 <strong>{moneySign}{formatMoney(item.amount)}</strong>
-                <i style={{ width: `${Math.max(8, (item.amount / max) * 100)}%` }} />
+                <i style={{ width: `${Math.max(4, percent)}%`, background: color }} />
               </div>
             );
           })
         ) : (
-          <p className="empty-note">ยังไม่มีรายจ่ายในเดือนนี้</p>
+          <EmptyNote glyph="📊">ยังไม่มีรายจ่ายในเดือนนี้</EmptyNote>
         )}
       </div>
     </section>
+  );
+}
+
+function EmptyNote({ glyph, children }: { glyph: string; children: React.ReactNode }) {
+  return (
+    <div className="empty-note">
+      <span className="empty-glyph">{glyph}</span>
+      <p>{children}</p>
+    </div>
   );
 }
 
@@ -975,7 +1034,7 @@ function DraftRow({ draft, knownDebtorNames, onChange }: { draft: Draft; knownDe
 
   return (
     <div className="draft">
-      <span className="cat-icon">{categoryIcon(draft.category)}</span>
+      <span className="cat-icon" style={{ background: `${categoryColor(draft.category)}22` }}>{categoryIcon(draft.category)}</span>
       <div>
         <input value={draft.title} onChange={(event) => update({ title: event.target.value })} />
         <select value={draft.category} onChange={(event) => update({ category: event.target.value })}>
@@ -1025,31 +1084,44 @@ function DraftImpact({ items }: { items: Draft[] }) {
 }
 
 function EntryList({ entries, onEdit, onDelete }: { entries: Entry[]; onEdit?: (entry: Entry) => void; onDelete?: (entry: Entry) => void }) {
+  const groups = useMemo(() => groupEntriesByDay(entries), [entries]);
+
   return (
     <div className="entry-list">
-      {entries.map((entry) => (
-        <article className="entry" key={entry.id}>
-          <span className="entry-icon">{categoryIcon(entry.category)}</span>
-          <div>
-            <b>{entry.title}</b>
-            <small>
-              {transactionTypeLabels[entry.transaction_type]} · {entry.category} · {formatDateTime(entry.occurred_at)}
-            </small>
-            <small>
-              กระเป๋า {formatSignedMoney(entry.wallet_impact)}
-              {entry.debt_impact !== 0 ? ` · ${entry.debtor_name}: ${formatSignedMoney(entry.debt_impact)}` : ""}
-            </small>
-          </div>
-          <strong className={entry.wallet_impact >= 0 ? "income" : "expense"}>{formatSignedMoney(entry.wallet_impact)}</strong>
-          {(onEdit || onDelete) && (
-            <menu>
-              {onEdit && <button onClick={() => onEdit(entry)} title="แก้ไข">แก้</button>}
-              {onDelete && <button onClick={() => onDelete(entry)} title="ลบ">ลบ</button>}
-            </menu>
-          )}
-        </article>
+      {groups.map((group) => (
+        <div className="entry-group" key={group.label}>
+          <p className="entry-day">{group.label}</p>
+          {group.items.map((entry) => (
+            <article
+              className={onEdit ? "entry entry-tappable" : "entry"}
+              key={entry.id}
+              onClick={onEdit ? () => onEdit(entry) : undefined}
+              role={onEdit ? "button" : undefined}
+              tabIndex={onEdit ? 0 : undefined}
+            >
+              <span className="entry-icon" style={{ background: `${categoryColor(entry.category)}22` }}>{categoryIcon(entry.category)}</span>
+              <div>
+                <b>{entry.title}</b>
+                <small>
+                  {transactionTypeLabels[entry.transaction_type]} · {entry.category} · {formatDateTime(entry.occurred_at)}
+                </small>
+                <small>
+                  กระเป๋า {formatSignedMoney(entry.wallet_impact)}
+                  {entry.debt_impact !== 0 ? ` · ${entry.debtor_name}: ${formatSignedMoney(entry.debt_impact)}` : ""}
+                </small>
+              </div>
+              <strong className={entry.wallet_impact >= 0 ? "income" : "expense"}>{formatSignedMoney(entry.wallet_impact)}</strong>
+              {(onEdit || onDelete) && (
+                <menu onClick={(event) => event.stopPropagation()}>
+                  {onEdit && <button onClick={() => onEdit(entry)} title="แก้ไข">แก้</button>}
+                  {onDelete && <button onClick={() => onDelete(entry)} title="ลบ">ลบ</button>}
+                </menu>
+              )}
+            </article>
+          ))}
+        </div>
       ))}
-      {!entries.length && <p className="empty-note">ยังไม่มีรายการในช่วงนี้</p>}
+      {!entries.length && <EmptyNote glyph="🧾">ยังไม่มีรายการในช่วงนี้</EmptyNote>}
     </div>
   );
 }
@@ -1161,6 +1233,7 @@ function DebtorsView({
       <div className="view debtor-view">
         <div className="add-title">
           <button onClick={onBack}>‹</button>
+          <span className="debtor-avatar" style={{ background: nameColor(selectedDebtor.name) }}>{nameInitial(selectedDebtor.name)}</span>
           <div>
             <p className="eyebrow">ประวัติลูกหนี้</p>
             <h2>{selectedDebtor.name}</h2>
@@ -1196,8 +1269,11 @@ function DebtorsView({
           return (
             <article className="debtor-page-item" key={debtor.id}>
               <button className="debtor-main-button" onClick={() => onSelect(debtor)}>
-                <span>{debtor.name}</span>
-                <small>{debtor.note || "ไม่มีหมายเหตุ"} · ค้าง {moneySign}{formatMoney(amount)}</small>
+                <span className="debtor-avatar" style={{ background: nameColor(debtor.name) }}>{nameInitial(debtor.name)}</span>
+                <div>
+                  <span>{debtor.name}</span>
+                  <small>{debtor.note || "ไม่มีหมายเหตุ"} · ค้าง {moneySign}{formatMoney(amount)}</small>
+                </div>
               </button>
               <details className="kebab-menu">
                 <summary>⋮</summary>
@@ -1209,7 +1285,7 @@ function DebtorsView({
             </article>
           );
         })}
-        {!debtors.length && <p className="empty-note">ยังไม่มีรายชื่อลูกหนี้</p>}
+        {!debtors.length && <EmptyNote glyph="🤝">ยังไม่มีรายชื่อลูกหนี้</EmptyNote>}
       </div>
     </div>
   );
