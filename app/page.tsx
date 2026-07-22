@@ -1208,6 +1208,15 @@ export default function Home() {
               </div>
             </div>
 
+            <section className="mascot-hero" aria-label="AI assistant mascot">
+              <MoneyMascot mood={busy ? "thinking" : drafts.length ? "happy" : "idle"} />
+              <div>
+                <p className="eyebrow">AI Buddy</p>
+                <h3>{busy ? "กำลังอ่านให้แบบตั้งใจสุด ๆ" : drafts.length ? "แยกข้อมูลให้แล้ว ลองตรวจอีกนิด" : "เล่าแบบภาษาคนได้เลย"}</h3>
+                <small>พิมพ์รายการหรือแนบสลิป เดี๋ยวช่วยแยกยอด หมวดหมู่ วันที่ และลูกหนี้ให้</small>
+              </div>
+            </section>
+
             <label className="entry-date-picker">
               <span>บันทึกของวันที่</span>
               <input type="date" value={entryDate} max={todayDateInput()} onChange={(event) => setEntryDate(event.target.value)} />
@@ -1677,6 +1686,7 @@ function MiniTrend({ items }: { items: { key: string; label: string; amount: num
 function SuccessPulse({ count, onAddMore }: { count: number; onAddMore: () => void }) {
   return (
     <section className="success-pulse" role="status">
+      <MoneyMascot mood="happy" tiny />
       <span aria-hidden="true">✓</span>
       <div>
         <b>บันทึกเรียบร้อย</b>
@@ -1815,6 +1825,7 @@ function MonthSummary({
 function EmptyNote({ glyph, children, action }: { glyph: string; children: React.ReactNode; action?: EmptyAction }) {
   return (
     <div className="empty-note">
+      <MoneyMascot mood="sleepy" tiny />
       <span className="empty-glyph">{glyph}</span>
       <p>{children}</p>
       {action && <button onClick={action.onClick}>{action.label}</button>}
@@ -1852,6 +1863,7 @@ function StateCard({
 }) {
   return (
     <div className={`state-card ${tone}`} role={tone === "error" ? "alert" : "status"}>
+      <MoneyMascot mood={tone === "loading" ? "thinking" : tone === "error" ? "oops" : "sleepy"} tiny />
       <span className="state-orb" aria-hidden="true">
         {tone === "loading" ? <span className="loading-spinner mini" /> : tone === "error" ? "!" : "•"}
       </span>
@@ -1861,6 +1873,26 @@ function StateCard({
         {action && <button onClick={action.onClick}>{action.label}</button>}
       </div>
     </div>
+  );
+}
+
+function MoneyMascot({ mood = "idle", tiny = false }: { mood?: "idle" | "thinking" | "happy" | "sleepy" | "oops"; tiny?: boolean }) {
+  return (
+    <span className={`money-mascot ${tiny ? "tiny" : ""} ${mood}`} aria-hidden="true">
+      <span className="mascot-shadow" />
+      <span className="mascot-body">
+        <span className="mascot-ear left" />
+        <span className="mascot-ear right" />
+        <span className="mascot-face">
+          <span className="mascot-eye left" />
+          <span className="mascot-eye right" />
+          <span className="mascot-mouth" />
+        </span>
+        <span className="mascot-coin">฿</span>
+      </span>
+      <span className="mascot-spark one" />
+      <span className="mascot-spark two" />
+    </span>
   );
 }
 

@@ -4156,3 +4156,412 @@ select:focus {
     grid-template-columns: 1fr;
   }
 }
+
+/* Cozy cartoon layer: lightweight CSS mascot + playful state motion. */
+.money-mascot {
+  --mascot-size: 78px;
+  position: relative;
+  width: var(--mascot-size);
+  height: var(--mascot-size);
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 var(--mascot-size);
+  isolation: isolate;
+  animation: mascot-float 3.8s ease-in-out infinite;
+}
+
+.money-mascot.tiny {
+  --mascot-size: 48px;
+}
+
+.mascot-shadow {
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: 1px;
+  height: 10%;
+  border-radius: 50%;
+  background: rgba(32, 59, 47, 0.14);
+  filter: blur(2px);
+  animation: mascot-shadow 3.8s ease-in-out infinite;
+  z-index: 0;
+}
+
+.mascot-body {
+  position: relative;
+  width: 78%;
+  height: 78%;
+  border-radius: 34% 34% 38% 38%;
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.95), transparent 18%),
+    linear-gradient(145deg, #dff6e8 0%, #9eddb9 56%, #4ba67c 100%);
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset -8px -10px 18px rgba(20, 92, 69, 0.16),
+    inset 8px 9px 16px rgba(255, 255, 255, 0.48),
+    0 16px 28px rgba(20, 92, 69, 0.2);
+  z-index: 1;
+}
+
+.mascot-ear {
+  position: absolute;
+  top: -4%;
+  width: 30%;
+  height: 28%;
+  border-radius: 48% 48% 28% 28%;
+  background: #f6ddad;
+  border: 2px solid rgba(255, 255, 255, 0.62);
+  box-shadow: inset -4px -5px 8px rgba(139, 98, 50, 0.1);
+  z-index: -1;
+}
+
+.mascot-ear.left {
+  left: 8%;
+  transform: rotate(-18deg);
+}
+
+.mascot-ear.right {
+  right: 8%;
+  transform: rotate(18deg);
+}
+
+.mascot-face {
+  position: absolute;
+  inset: 25% 18% 24%;
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.82);
+  box-shadow: inset 0 -3px 8px rgba(20, 92, 69, 0.08);
+}
+
+.mascot-eye {
+  position: absolute;
+  top: 36%;
+  width: 13%;
+  height: 16%;
+  border-radius: 50%;
+  background: #18342b;
+  animation: mascot-blink 5.4s ease-in-out infinite;
+}
+
+.mascot-eye.left {
+  left: 26%;
+}
+
+.mascot-eye.right {
+  right: 26%;
+}
+
+.mascot-mouth {
+  position: absolute;
+  left: 41%;
+  bottom: 26%;
+  width: 18%;
+  height: 9%;
+  border-radius: 0 0 999px 999px;
+  border-bottom: 2px solid #18342b;
+}
+
+.mascot-coin {
+  position: absolute;
+  right: -8%;
+  bottom: 6%;
+  width: 36%;
+  height: 36%;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, #ffe8a8, #efbd54);
+  color: #7c5718;
+  font-size: 0.72em;
+  font-weight: 1000;
+  border: 2px solid rgba(255, 255, 255, 0.82);
+  box-shadow: 0 8px 14px rgba(156, 105, 29, 0.2);
+  animation: coin-wiggle 2.8s ease-in-out infinite;
+}
+
+.mascot-spark {
+  position: absolute;
+  width: 12%;
+  height: 12%;
+  border-radius: 35% 65% 35% 65%;
+  background: #ffd782;
+  box-shadow: 0 0 0 5px rgba(255, 215, 130, 0.14);
+  opacity: 0.9;
+  z-index: 2;
+  animation: sparkle-pop 2.6s ease-in-out infinite;
+}
+
+.mascot-spark.one {
+  top: 5%;
+  right: 2%;
+}
+
+.mascot-spark.two {
+  left: 6%;
+  bottom: 17%;
+  width: 9%;
+  height: 9%;
+  animation-delay: 0.8s;
+}
+
+.money-mascot.happy .mascot-body {
+  animation: mascot-hop 1.15s ease-in-out infinite;
+}
+
+.money-mascot.happy .mascot-mouth {
+  left: 38%;
+  width: 24%;
+  height: 14%;
+  border-radius: 0 0 999px 999px;
+  border-bottom-width: 3px;
+}
+
+.money-mascot.thinking .mascot-body {
+  animation: mascot-think 1.7s ease-in-out infinite;
+}
+
+.money-mascot.thinking .mascot-spark.one {
+  animation-name: thought-dot;
+}
+
+.money-mascot.sleepy {
+  animation-duration: 5.6s;
+  opacity: 0.92;
+}
+
+.money-mascot.sleepy .mascot-eye {
+  height: 3px;
+  border-radius: 999px;
+  animation: none;
+}
+
+.money-mascot.oops .mascot-body {
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.95), transparent 18%),
+    linear-gradient(145deg, #ffe9df 0%, #ffc3ae 55%, #e87462 100%);
+  animation: mascot-oops 1.8s ease-in-out infinite;
+}
+
+.money-mascot.oops .mascot-mouth {
+  left: 43%;
+  bottom: 23%;
+  width: 14%;
+  height: 14%;
+  border: 2px solid #18342b;
+  border-radius: 50%;
+}
+
+.mascot-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  margin: -4px 0 14px;
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(232, 226, 214, 0.88);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 8% 15%, rgba(255, 255, 255, 0.9), transparent 30%),
+    linear-gradient(135deg, #fff7df, #e6f6ec 62%, #f5e3f1);
+  box-shadow: 0 14px 28px rgba(37, 50, 43, 0.08);
+  animation: panel-rise 460ms var(--ease-out-smooth) both;
+}
+
+.mascot-hero::after {
+  content: "";
+  position: absolute;
+  right: -36px;
+  top: -42px;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.42);
+  pointer-events: none;
+}
+
+.mascot-hero h3,
+.mascot-hero small {
+  display: block;
+  position: relative;
+  z-index: 1;
+}
+
+.mascot-hero h3 {
+  margin: 0 0 5px;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+
+.mascot-hero small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.state-card .money-mascot,
+.success-pulse .money-mascot {
+  grid-row: 1 / span 2;
+}
+
+.success-pulse > .money-mascot {
+  width: var(--mascot-size);
+  height: var(--mascot-size);
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  font-weight: inherit;
+}
+
+.empty-note .money-mascot {
+  margin-bottom: -4px;
+}
+
+.empty-note .empty-glyph {
+  display: none;
+}
+
+.state-card.loading .money-mascot + .state-orb,
+.state-card.empty .money-mascot + .state-orb,
+.state-card.error .money-mascot + .state-orb {
+  display: none;
+}
+
+.success-pulse > .money-mascot + span {
+  display: none;
+}
+
+@keyframes mascot-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(1.5deg);
+  }
+}
+
+@keyframes mascot-shadow {
+  0%,
+  100% {
+    opacity: 0.22;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.14;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes mascot-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.12);
+  }
+}
+
+@keyframes coin-wiggle {
+  0%,
+  100% {
+    transform: rotate(-7deg) translateY(0);
+  }
+  50% {
+    transform: rotate(8deg) translateY(-2px);
+  }
+}
+
+@keyframes sparkle-pop {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.72) rotate(0deg);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(1.08) rotate(12deg);
+  }
+}
+
+@keyframes mascot-hop {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  42% {
+    transform: translateY(-5px) scale(1.035);
+  }
+}
+
+@keyframes mascot-think {
+  0%,
+  100% {
+    transform: rotate(-2deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes thought-dot {
+  0%,
+  100% {
+    opacity: 0.28;
+    transform: translateY(5px) scale(0.72);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1);
+  }
+}
+
+@keyframes mascot-oops {
+  0%,
+  100% {
+    transform: rotate(-2deg);
+  }
+  35% {
+    transform: rotate(4deg);
+  }
+  65% {
+    transform: rotate(-5deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .money-mascot,
+  .mascot-shadow,
+  .mascot-eye,
+  .mascot-coin,
+  .mascot-spark,
+  .money-mascot.happy .mascot-body,
+  .money-mascot.thinking .mascot-body,
+  .money-mascot.oops .mascot-body {
+    animation: none !important;
+  }
+}
+
+@media (min-width: 900px) {
+  .mascot-hero {
+    padding: 18px 20px;
+  }
+
+  .add-view .mascot-hero {
+    margin-bottom: 18px;
+  }
+}
+
+@media (max-width: 420px) {
+  .mascot-hero {
+    grid-template-columns: 62px minmax(0, 1fr);
+  }
+
+  .mascot-hero .money-mascot {
+    --mascot-size: 62px;
+  }
+}
