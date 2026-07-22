@@ -1,0 +1,8 @@
+
+> my-money-ai-pwa@0.1.0 start
+> next start -p 4175 -H 127.0.0.1
+
+▲ Next.js 16.2.6
+- Local:         http://127.0.0.1:4175
+- Network:       http://127.0.0.1:4175
+✓ Ready in 294ms

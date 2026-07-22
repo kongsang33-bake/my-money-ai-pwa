@@ -1,0 +1,10 @@
+{
+  "name": "เงินของฉัน",
+  "short_name": "เงินของฉัน",
+  "description": "บันทึกรายรับรายจ่ายอย่างง่ายด้วย AI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f5ef",
+  "theme_color": "#145c45",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
