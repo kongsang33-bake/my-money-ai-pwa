@@ -102,6 +102,92 @@ h2 {
   box-shadow: 0 14px 30px #145c4530;
 }
 
+.wallet-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.wallet-card {
+  min-height: 126px;
+  border-radius: 20px;
+  padding: 18px;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 14px 30px #145c4522;
+}
+
+.wallet-card span {
+  font-size: 12px;
+  color: #eef8f2;
+}
+
+.wallet-card strong {
+  font-size: 24px;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.primary-wallet {
+  background: linear-gradient(135deg, #185e49, #0d3e30);
+}
+
+.debt-wallet {
+  background: linear-gradient(135deg, #87472f, #d1754d);
+}
+
+.settlement-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.settlement-card b,
+.settlement-card small {
+  display: block;
+}
+
+.settlement-card small {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.settlement-actions {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.settlement-actions input {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: #fbfbf7;
+}
+
+.settlement-actions button {
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--green);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.settlement-actions button:disabled {
+  opacity: 0.45;
+}
+
 .balance-head {
   display: flex;
   justify-content: space-between;
@@ -229,7 +315,7 @@ h2 {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   margin: 14px 0;
 }
@@ -604,6 +690,31 @@ h2 {
   padding-top: 8px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.impact-row {
+  grid-column: 2 / 4;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  border-top: 1px solid #eee;
+  padding-top: 8px;
+}
+
+.draft-impact {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background: #f0faf5;
+  border: 1px solid #d3e8dd;
+  border-radius: 14px;
+  color: var(--green);
+  padding: 12px;
+  margin-top: 12px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .privacy {

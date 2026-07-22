@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
 type EntryKind = "expense" | "income";
+type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "gift";
 type Tab = "home" | "add" | "history";
 
 type Entry = {
@@ -13,37 +14,106 @@ type Entry = {
   category: string;
   amount: number;
   type: EntryKind;
+  transaction_type: TransactionType;
+  wallet_impact: number;
+  debt_impact: number;
+  user_share: number;
+  partner_share: number;
   occurred_at: string;
   source_text?: string | null;
 };
 
 type Draft = Omit<Entry, "id"> & { id: string };
+type EntryInput = {
+  id: string;
+  title: string;
+  category: string;
+  amount: number;
+  type?: EntryKind;
+  transaction_type?: TransactionType;
+  wallet_impact?: number;
+  debt_impact?: number;
+  user_share?: number;
+  partner_share?: number;
+  occurred_at: string;
+  source_text?: string | null;
+};
 
-const categories = ["อาหาร", "เดินทาง", "ของใช้", "ที่อยู่อาศัย", "สุขภาพ", "บันเทิง", "รายได้", "อื่น ๆ"];
+const categories = ["อาหาร", "เดินทาง", "ของใช้", "ที่อยู่อาศัย", "สุขภาพ", "บันเทิง", "รายได้", "บิลประจำ", "อื่น ๆ"];
+
+const transactionTypeLabels: Record<TransactionType, string> = {
+  income: "รายรับ",
+  personal_expense: "จ่ายเอง",
+  lend: "ออกให้ก่อน",
+  split_half: "หารกับแฟน",
+  debt_repayment: "แฟนคืนเงิน",
+  gift: "เลี้ยงแฟน",
+};
+
+const transactionKind: Record<TransactionType, EntryKind> = {
+  income: "income",
+  debt_repayment: "income",
+  personal_expense: "expense",
+  lend: "expense",
+  split_half: "expense",
+  gift: "expense",
+};
 
 const categoryIcon = (category: string) => {
   if (category === "อาหาร") return "🍜";
   if (category === "เดินทาง") return "🚕";
   if (category === "รายได้") return "💼";
   if (category === "สุขภาพ") return "✚";
+  if (category === "บิลประจำ") return "▤";
   return "▣";
 };
 
-const todayDate = () => new Date().toISOString().slice(0, 10);
 const monthKey = (date: Date) => date.toISOString().slice(0, 7);
 const formatMoney = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 0 });
+const formatSignedMoney = (value: number) => `${value >= 0 ? "+" : "−"}฿${formatMoney(Math.abs(value))}`;
 const formatDateTime = (value: string) => new Date(value).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
 const toDateInput = (value: string) => new Date(value).toISOString().slice(0, 10);
 const fromDateInput = (value: string) => `${value}T12:00:00`;
+
+function calculateImpacts(amount: number, transactionType: TransactionType) {
+  if (transactionType === "income") {
+    return { wallet_impact: amount, debt_impact: 0, user_share: amount, partner_share: 0 };
+  }
+  if (transactionType === "lend") {
+    return { wallet_impact: -amount, debt_impact: amount, user_share: 0, partner_share: amount };
+  }
+  if (transactionType === "split_half") {
+    return { wallet_impact: -amount, debt_impact: amount / 2, user_share: amount / 2, partner_share: amount / 2 };
+  }
+  if (transactionType === "debt_repayment") {
+    return { wallet_impact: amount, debt_impact: -amount, user_share: 0, partner_share: 0 };
+  }
+  return { wallet_impact: -amount, debt_impact: 0, user_share: amount, partner_share: 0 };
+}
+
+function normalizeEntry(input: EntryInput): Entry {
+  const transaction_type = input.transaction_type ?? (input.type === "income" ? "income" : "personal_expense");
+  const impacts = calculateImpacts(Number(input.amount), transaction_type);
+  return {
+    ...input,
+    type: transactionKind[transaction_type],
+    transaction_type,
+    wallet_impact: input.wallet_impact ?? impacts.wallet_impact,
+    debt_impact: input.debt_impact ?? impacts.debt_impact,
+    user_share: input.user_share ?? impacts.user_share,
+    partner_share: input.partner_share ?? impacts.partner_share,
+  };
+}
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
   const [tab, setTab] = useState<Tab>("home");
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [text, setText] = useState("วันนี้กินข้าว 120 บาท แล้วนั่งรถกลับบ้าน 85 บาท");
+  const [text, setText] = useState("วันนี้กินข้าว 140 บาท หารกับแฟน แล้วเติมน้ำมัน 800 บาท");
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [editing, setEditing] = useState<Entry | null>(null);
+  const [settlementAmount, setSettlementAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(monthKey(new Date()));
@@ -59,10 +129,7 @@ export default function Home() {
       setReady(true);
     });
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null));
     return () => data.subscription.unsubscribe();
   }, []);
 
@@ -79,7 +146,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("transactions")
-      .select("id,title,category,amount,kind,occurred_at,source_text")
+      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,occurred_at,source_text")
       .order("occurred_at", { ascending: false });
 
     if (error) {
@@ -88,34 +155,42 @@ export default function Home() {
     }
 
     setEntries(
-      (data ?? []).map((row) => ({
-        id: row.id,
-        title: row.title,
-        category: row.category,
-        amount: Number(row.amount),
-        type: row.kind,
-        occurred_at: row.occurred_at,
-        source_text: row.source_text,
-      })),
+      (data ?? []).map((row) =>
+        normalizeEntry({
+          id: row.id,
+          title: row.title,
+          category: row.category,
+          amount: Number(row.amount),
+          type: row.kind as EntryKind,
+          transaction_type: row.transaction_type as TransactionType | undefined,
+          wallet_impact: row.wallet_impact == null ? undefined : Number(row.wallet_impact),
+          debt_impact: row.debt_impact == null ? undefined : Number(row.debt_impact),
+          user_share: row.user_share == null ? undefined : Number(row.user_share),
+          partner_share: row.partner_share == null ? undefined : Number(row.partner_share),
+          occurred_at: row.occurred_at,
+          source_text: row.source_text,
+        }),
+      ),
     );
   }
 
-  const allIncome = useMemo(() => totalByType(entries, "income"), [entries]);
-  const allExpense = useMemo(() => totalByType(entries, "expense"), [entries]);
+  const mainWallet = useMemo(() => entries.reduce((sum, entry) => sum + entry.wallet_impact, 0), [entries]);
+  const partnerDebt = useMemo(() => entries.reduce((sum, entry) => sum + entry.debt_impact, 0), [entries]);
 
   const monthlyEntries = useMemo(
     () => entries.filter((entry) => entry.occurred_at.slice(0, 7) === selectedMonth),
     [entries, selectedMonth],
   );
-  const monthlyIncome = useMemo(() => totalByType(monthlyEntries, "income"), [monthlyEntries]);
-  const monthlyExpense = useMemo(() => totalByType(monthlyEntries, "expense"), [monthlyEntries]);
-  const monthlyBalance = monthlyIncome - monthlyExpense;
+  const monthlyIncome = useMemo(() => totalWallet(monthlyEntries, "income"), [monthlyEntries]);
+  const monthlyOutflow = useMemo(() => Math.abs(totalWallet(monthlyEntries, "expense")), [monthlyEntries]);
+  const monthlyDebtChange = useMemo(() => monthlyEntries.reduce((sum, entry) => sum + entry.debt_impact, 0), [monthlyEntries]);
+  const monthlyBalance = monthlyIncome - monthlyOutflow;
 
   const categorySummary = useMemo(() => {
     const map = new Map<string, number>();
     for (const entry of monthlyEntries) {
-      if (entry.type !== "expense") continue;
-      map.set(entry.category, (map.get(entry.category) ?? 0) + entry.amount);
+      if (entry.wallet_impact >= 0) continue;
+      map.set(entry.category, (map.get(entry.category) ?? 0) + Math.abs(entry.wallet_impact));
     }
     return [...map.entries()]
       .map(([category, amount]) => ({ category, amount }))
@@ -131,24 +206,23 @@ export default function Home() {
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          text,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        }),
+        body: JSON.stringify({ text, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
 
       setDrafts(
-        data.items.map((item: { title: string; category: string; amount: number; type: EntryKind; date: string }, index: number) => ({
-          id: `${Date.now()}-${index}`,
-          title: item.title,
-          category: item.category,
-          amount: item.amount,
-          type: item.type,
-          occurred_at: fromDateInput(item.date),
-          source_text: text,
-        })),
+        data.items.map((item: { title: string; category: string; amount: number; transaction_type: TransactionType; date: string }, index: number) =>
+          normalizeEntry({
+            id: `${Date.now()}-${index}`,
+            title: item.title,
+            category: item.category,
+            amount: item.amount,
+            transaction_type: item.transaction_type,
+            occurred_at: fromDateInput(item.date),
+            source_text: text,
+          }),
+        ),
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
@@ -157,21 +231,29 @@ export default function Home() {
     setBusy(false);
   }
 
-  async function saveAll() {
-    if (!supabase || !user || !drafts.length) return;
+  async function saveEntries(items: Draft[]) {
+    if (!supabase || !user || !items.length) return;
 
     setBusy(true);
     setError("");
 
-    const payload = drafts.map((draft) => ({
-      user_id: user.id,
-      title: draft.title.trim(),
-      category: draft.category,
-      amount: draft.amount,
-      kind: draft.type,
-      occurred_at: draft.occurred_at,
-      source_text: draft.source_text,
-    }));
+    const payload = items.map((item) => {
+      const normalized = normalizeEntry(item);
+      return {
+        user_id: user.id,
+        title: normalized.title.trim(),
+        category: normalized.category,
+        amount: normalized.amount,
+        kind: normalized.type,
+        transaction_type: normalized.transaction_type,
+        wallet_impact: normalized.wallet_impact,
+        debt_impact: normalized.debt_impact,
+        user_share: normalized.user_share,
+        partner_share: normalized.partner_share,
+        occurred_at: normalized.occurred_at,
+        source_text: normalized.source_text,
+      };
+    });
 
     const { error } = await supabase.from("transactions").insert(payload);
 
@@ -180,6 +262,7 @@ export default function Home() {
     } else {
       setDrafts([]);
       setText("");
+      setSettlementAmount("");
       setTab("home");
       await loadEntries();
     }
@@ -190,19 +273,25 @@ export default function Home() {
   async function updateEntry() {
     if (!supabase || !editing) return;
 
+    const normalized = normalizeEntry(editing);
     setBusy(true);
     setError("");
 
     const { error } = await supabase
       .from("transactions")
       .update({
-        title: editing.title.trim(),
-        category: editing.category,
-        amount: editing.amount,
-        kind: editing.type,
-        occurred_at: editing.occurred_at,
+        title: normalized.title.trim(),
+        category: normalized.category,
+        amount: normalized.amount,
+        kind: normalized.type,
+        transaction_type: normalized.transaction_type,
+        wallet_impact: normalized.wallet_impact,
+        debt_impact: normalized.debt_impact,
+        user_share: normalized.user_share,
+        partner_share: normalized.partner_share,
+        occurred_at: normalized.occurred_at,
       })
-      .eq("id", editing.id);
+      .eq("id", normalized.id);
 
     if (error) {
       setError(error.message);
@@ -222,15 +311,27 @@ export default function Home() {
     setError("");
 
     const { error } = await supabase.from("transactions").delete().eq("id", entry.id);
-
-    if (error) {
-      setError(error.message);
-    } else {
-      setEntries((current) => current.filter((item) => item.id !== entry.id));
-      if (editing?.id === entry.id) setEditing(null);
-    }
+    if (error) setError(error.message);
+    else setEntries((current) => current.filter((item) => item.id !== entry.id));
 
     setBusy(false);
+  }
+
+  async function settleDebt(full = false) {
+    const amount = full ? partnerDebt : Number(settlementAmount);
+    if (!amount || amount <= 0) return;
+
+    await saveEntries([
+      normalizeEntry({
+        id: `${Date.now()}-settle`,
+        title: full ? "แฟนโอนคืนทั้งหมด" : "แฟนโอนคืนบางส่วน",
+        category: "รายได้",
+        amount: Math.min(amount, Math.max(partnerDebt, amount)),
+        transaction_type: "debt_repayment",
+        occurred_at: fromDateInput(new Date().toISOString().slice(0, 10)),
+        source_text: "quick settlement",
+      }),
+    ]);
   }
 
   if (!ready) {
@@ -258,21 +359,30 @@ export default function Home() {
 
         {tab === "home" && (
           <div className="view">
-            <section className="balance-card">
-              <div className="balance-head">
-                <span>ยอดคงเหลือทั้งหมด</span>
-                <span className="sync">ซิงก์แล้ว</span>
+            <section className="wallet-grid">
+              <div className="wallet-card primary-wallet">
+                <span>เงินพร้อมใช้สุทธิ</span>
+                <strong>฿{formatMoney(mainWallet)}</strong>
               </div>
-              <strong>฿{formatMoney(allIncome - allExpense)}</strong>
-              <div className="balance-stats">
-                <div>
-                  <span className="dot income" />
-                  รายรับ <b>฿{formatMoney(allIncome)}</b>
-                </div>
-                <div>
-                  <span className="dot expense" />
-                  รายจ่าย <b>฿{formatMoney(allExpense)}</b>
-                </div>
+              <div className="wallet-card debt-wallet">
+                <span>แฟนค้างชำระ</span>
+                <strong>฿{formatMoney(Math.max(0, partnerDebt))}</strong>
+              </div>
+            </section>
+
+            <section className="settlement-card">
+              <div>
+                <b>Quick Settlement</b>
+                <small>บันทึกเงินที่แฟนโอนคืน แล้วลดยอดค้างให้อัตโนมัติ</small>
+              </div>
+              <div className="settlement-actions">
+                <input inputMode="decimal" placeholder="ยอดคืน" value={settlementAmount} onChange={(event) => setSettlementAmount(event.target.value)} />
+                <button onClick={() => settleDebt(false)} disabled={busy || !Number(settlementAmount)}>
+                  บันทึก
+                </button>
+                <button onClick={() => settleDebt(true)} disabled={busy || partnerDebt <= 0}>
+                  คืนทั้งหมด
+                </button>
               </div>
             </section>
 
@@ -280,7 +390,7 @@ export default function Home() {
               <span className="spark">AI</span>
               <span>
                 <b>เล่าให้ AI ฟัง</b>
-                <small>พิมพ์หลายรายการพร้อมกันได้</small>
+                <small>รองรับจ่ายเอง หารแฟน ออกให้ก่อน คืนเงิน</small>
               </span>
               <span className="arrow">›</span>
             </button>
@@ -289,7 +399,8 @@ export default function Home() {
               selectedMonth={selectedMonth}
               setSelectedMonth={setSelectedMonth}
               income={monthlyIncome}
-              expense={monthlyExpense}
+              outflow={monthlyOutflow}
+              debtChange={monthlyDebtChange}
               balance={monthlyBalance}
               categories={categorySummary}
             />
@@ -301,12 +412,6 @@ export default function Home() {
               <button onClick={() => setTab("history")}>ดูทั้งหมด</button>
             </div>
             <EntryList entries={entries.slice(0, 5)} onEdit={setEditing} onDelete={deleteEntry} />
-            {!entries.length && (
-              <div className="tips">
-                <b>ยังไม่มีรายการ</b>
-                <p>แตะ “เล่าให้ AI ฟัง” เพื่อเริ่มบันทึกครั้งแรก</p>
-              </div>
-            )}
           </div>
         )}
 
@@ -321,13 +426,9 @@ export default function Home() {
             </div>
 
             <div className="ai-input-wrap">
-              <textarea
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                placeholder="เช่น วันนี้กินข้าว 120 บาท เติมน้ำมัน 800 บาท"
-              />
+              <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="เช่น กินข้าว 140 หารกับแฟน เติมน้ำมัน 800 แฟนโอนคืน 500" />
               <div className="input-tools">
-                <span>Gemini จะช่วยแยกและจัดหมวดหมู่</span>
+                <span>Gemini จะช่วยแยกชนิดรายการตาม logic กระเป๋า</span>
                 <span>AI</span>
               </div>
             </div>
@@ -342,17 +443,18 @@ export default function Home() {
                 <div className="review-head">
                   <div>
                     <h3>ตรวจสอบก่อนบันทึก</h3>
-                    <p>พบ {drafts.length} รายการ แก้ไขได้ก่อนยืนยัน</p>
+                    <p>พบ {drafts.length} รายการ แก้ชนิดรายการได้ก่อนยืนยัน</p>
                   </div>
                   <span>AI</span>
                 </div>
                 {drafts.map((draft, index) => (
                   <DraftRow key={draft.id} draft={draft} onChange={(next) => setDrafts((items) => items.map((item, i) => (i === index ? next : item)))} />
                 ))}
-                <button className="save" onClick={saveAll} disabled={busy}>
+                <DraftImpact items={drafts} />
+                <button className="save" onClick={() => saveEntries(drafts)} disabled={busy}>
                   บันทึก {drafts.length} รายการ
                 </button>
-                <p className="privacy">บันทึกเฉพาะหลังจากคุณตรวจสอบและกดยืนยัน</p>
+                <p className="privacy">สูตรคำนวณถูกล็อกในแอพ AI มีหน้าที่ช่วยแยกประเภทเท่านั้น</p>
               </section>
             )}
           </div>
@@ -371,7 +473,8 @@ export default function Home() {
               selectedMonth={selectedMonth}
               setSelectedMonth={setSelectedMonth}
               income={monthlyIncome}
-              expense={monthlyExpense}
+              outflow={monthlyOutflow}
+              debtChange={monthlyDebtChange}
               balance={monthlyBalance}
               categories={categorySummary}
             />
@@ -379,15 +482,7 @@ export default function Home() {
           </div>
         )}
 
-        {editing && (
-          <EditSheet
-            entry={editing}
-            busy={busy}
-            onChange={setEditing}
-            onClose={() => setEditing(null)}
-            onSave={updateEntry}
-          />
-        )}
+        {editing && <EditSheet entry={editing} busy={busy} onChange={setEditing} onClose={() => setEditing(null)} onSave={updateEntry} />}
 
         <nav className="bottom-nav">
           <button className={tab === "home" ? "active" : ""} onClick={() => setTab("home")}>
@@ -413,12 +508,7 @@ function Auth() {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
-
-    const { error } = await supabase!.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin },
-    });
-
+    const { error } = await supabase!.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
     setMessage(error ? error.message : "ส่งลิงก์เข้าใช้งานแล้ว กรุณาตรวจอีเมลของคุณ");
     setBusy(false);
   }
@@ -448,14 +538,16 @@ function MonthSummary({
   selectedMonth,
   setSelectedMonth,
   income,
-  expense,
+  outflow,
+  debtChange,
   balance,
   categories,
 }: {
   selectedMonth: string;
   setSelectedMonth: (value: string) => void;
   income: number;
-  expense: number;
+  outflow: number;
+  debtChange: number;
   balance: number;
   categories: { category: string; amount: number }[];
 }) {
@@ -469,22 +561,26 @@ function MonthSummary({
         <input type="month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
       </div>
       <div className="summary-grid">
-        <Metric label="รับ" value={income} tone="income" />
-        <Metric label="จ่าย" value={expense} tone="expense" />
+        <Metric label="เงินเข้า" value={income} tone="income" />
+        <Metric label="เงินออก" value={outflow} tone="expense" />
         <Metric label="สุทธิ" value={balance} tone={balance >= 0 ? "income" : "expense"} />
+        <Metric label="หนี้แฟนเปลี่ยน" value={debtChange} tone={debtChange >= 0 ? "income" : "expense"} />
       </div>
       <div className="category-bars">
         {categories.length ? (
-          categories.map((item) => (
-            <div className="category-bar" key={item.category}>
-              <div>
-                <span>{categoryIcon(item.category)}</span>
-                <b>{item.category}</b>
+          categories.map((item) => {
+            const max = Math.max(...categories.map((x) => x.amount));
+            return (
+              <div className="category-bar" key={item.category}>
+                <div>
+                  <span>{categoryIcon(item.category)}</span>
+                  <b>{item.category}</b>
+                </div>
+                <strong>฿{formatMoney(item.amount)}</strong>
+                <i style={{ width: `${Math.max(8, (item.amount / max) * 100)}%` }} />
               </div>
-              <strong>฿{formatMoney(item.amount)}</strong>
-              <i style={{ width: `${Math.max(8, (item.amount / Math.max(...categories.map((x) => x.amount))) * 100)}%` }} />
-            </div>
-          ))
+            );
+          })
         ) : (
           <p className="empty-note">ยังไม่มีรายจ่ายในเดือนนี้</p>
         )}
@@ -497,34 +593,55 @@ function Metric({ label, value, tone }: { label: string; value: number; tone: "i
   return (
     <div className={`metric ${tone}`}>
       <span>{label}</span>
-      <b>฿{formatMoney(Math.abs(value))}</b>
+      <b>{value < 0 ? "−" : ""}฿{formatMoney(Math.abs(value))}</b>
     </div>
   );
 }
 
 function DraftRow({ draft, onChange }: { draft: Draft; onChange: (draft: Draft) => void }) {
+  const update = (patch: Partial<Draft>) => onChange(normalizeEntry({ ...draft, ...patch }));
+
   return (
     <div className="draft">
       <span className="cat-icon">{categoryIcon(draft.category)}</span>
       <div>
-        <input value={draft.title} onChange={(event) => onChange({ ...draft, title: event.target.value })} />
-        <select value={draft.category} onChange={(event) => onChange({ ...draft, category: event.target.value })}>
+        <input value={draft.title} onChange={(event) => update({ title: event.target.value })} />
+        <select value={draft.category} onChange={(event) => update({ category: event.target.value })}>
           {categories.map((category) => (
             <option key={category}>{category}</option>
           ))}
         </select>
       </div>
       <div className="draft-side">
-        <select value={draft.type} onChange={(event) => onChange({ ...draft, type: event.target.value as EntryKind })}>
-          <option value="expense">จ่าย</option>
-          <option value="income">รับ</option>
+        <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
+          {Object.entries(transactionTypeLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
         </select>
         <label>
           ฿
-          <input inputMode="decimal" value={draft.amount} onChange={(event) => onChange({ ...draft, amount: Number(event.target.value) })} />
+          <input inputMode="decimal" value={draft.amount} onChange={(event) => update({ amount: Number(event.target.value) })} />
         </label>
       </div>
-      <input className="draft-date" type="date" value={toDateInput(draft.occurred_at)} onChange={(event) => onChange({ ...draft, occurred_at: fromDateInput(event.target.value) })} />
+      <div className="impact-row">
+        <span>กระเป๋า {formatSignedMoney(draft.wallet_impact)}</span>
+        <span>หนี้แฟน {formatSignedMoney(draft.debt_impact)}</span>
+      </div>
+      <input className="draft-date" type="date" value={toDateInput(draft.occurred_at)} onChange={(event) => update({ occurred_at: fromDateInput(event.target.value) })} />
+    </div>
+  );
+}
+
+function DraftImpact({ items }: { items: Draft[] }) {
+  const wallet = items.reduce((sum, item) => sum + item.wallet_impact, 0);
+  const debt = items.reduce((sum, item) => sum + item.debt_impact, 0);
+
+  return (
+    <div className="draft-impact">
+      <span>กระเป๋าหลัก {formatSignedMoney(wallet)}</span>
+      <span>หนี้แฟน {formatSignedMoney(debt)}</span>
     </div>
   );
 }
@@ -538,12 +655,13 @@ function EntryList({ entries, onEdit, onDelete }: { entries: Entry[]; onEdit: (e
           <div>
             <b>{entry.title}</b>
             <small>
-              {entry.category} • {formatDateTime(entry.occurred_at)}
+              {transactionTypeLabels[entry.transaction_type]} • {entry.category} • {formatDateTime(entry.occurred_at)}
+            </small>
+            <small>
+              กระเป๋า {formatSignedMoney(entry.wallet_impact)} • หนี้แฟน {formatSignedMoney(entry.debt_impact)}
             </small>
           </div>
-          <strong className={entry.type}>
-            {entry.type === "expense" ? "−" : "+"}฿{formatMoney(entry.amount)}
-          </strong>
+          <strong className={entry.wallet_impact >= 0 ? "income" : "expense"}>{formatSignedMoney(entry.wallet_impact)}</strong>
           <menu>
             <button onClick={() => onEdit(entry)} title="แก้ไข">
               แก้
@@ -572,6 +690,8 @@ function EditSheet({
   onClose: () => void;
   onSave: () => void;
 }) {
+  const update = (patch: Partial<Entry>) => onChange(normalizeEntry({ ...entry, ...patch }));
+
   return (
     <div className="sheet-backdrop">
       <section className="edit-sheet">
@@ -585,31 +705,39 @@ function EditSheet({
 
         <label>
           ชื่อรายการ
-          <input value={entry.title} onChange={(event) => onChange({ ...entry, title: event.target.value })} />
+          <input value={entry.title} onChange={(event) => update({ title: event.target.value })} />
         </label>
         <label>
           หมวดหมู่
-          <select value={entry.category} onChange={(event) => onChange({ ...entry, category: event.target.value })}>
+          <select value={entry.category} onChange={(event) => update({ category: event.target.value })}>
             {categories.map((category) => (
               <option key={category}>{category}</option>
             ))}
           </select>
         </label>
         <label>
-          ประเภท
-          <select value={entry.type} onChange={(event) => onChange({ ...entry, type: event.target.value as EntryKind })}>
-            <option value="expense">รายจ่าย</option>
-            <option value="income">รายรับ</option>
+          ชนิดรายการ
+          <select value={entry.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
+            {Object.entries(transactionTypeLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
           </select>
         </label>
         <label>
           จำนวนเงิน
-          <input inputMode="decimal" value={entry.amount} onChange={(event) => onChange({ ...entry, amount: Number(event.target.value) })} />
+          <input inputMode="decimal" value={entry.amount} onChange={(event) => update({ amount: Number(event.target.value) })} />
         </label>
         <label>
           วันที่
-          <input type="date" value={toDateInput(entry.occurred_at)} onChange={(event) => onChange({ ...entry, occurred_at: fromDateInput(event.target.value) })} />
+          <input type="date" value={toDateInput(entry.occurred_at)} onChange={(event) => update({ occurred_at: fromDateInput(event.target.value) })} />
         </label>
+
+        <div className="draft-impact">
+          <span>กระเป๋า {formatSignedMoney(entry.wallet_impact)}</span>
+          <span>หนี้แฟน {formatSignedMoney(entry.debt_impact)}</span>
+        </div>
 
         <button className="save" onClick={onSave} disabled={busy || !entry.title.trim() || entry.amount < 0}>
           บันทึกการแก้ไข
@@ -619,6 +747,8 @@ function EditSheet({
   );
 }
 
-function totalByType(entries: Entry[], type: EntryKind) {
-  return entries.filter((entry) => entry.type === type).reduce((sum, entry) => sum + entry.amount, 0);
+function totalWallet(entries: Entry[], direction: EntryKind) {
+  return entries
+    .filter((entry) => (direction === "income" ? entry.wallet_impact > 0 : entry.wallet_impact < 0))
+    .reduce((sum, entry) => sum + entry.wallet_impact, 0);
 }
