@@ -612,6 +612,7 @@ export default function Home() {
     !!debtorSheetMode ||
     !!walletSheetMode ||
     budgetSheetOpen ||
+    reportSheetOpen ||
     recapOpen ||
     logoutOpen;
   useEffect(() => {
@@ -1273,32 +1274,34 @@ export default function Home() {
         )}
         {logoutOpen && <ConfirmLogout onCancel={() => setLogoutOpen(false)} onConfirm={() => supabase?.auth.signOut()} />}
 
-        <nav className="bottom-nav">
-          <button className={tab === "home" ? "active" : ""} onClick={() => setTab("home")} aria-label="หน้าหลัก">
-            <span className="nav-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path d="M4 10.8 12 4l8 6.8v8.7a1.5 1.5 0 0 1-1.5 1.5H15v-6H9v6H5.5A1.5 1.5 0 0 1 4 19.5v-8.7Z" />
-              </svg>
-            </span>
-            <span className="nav-label">หน้าหลัก</span>
-          </button>
-          <button className="add-button" onClick={openAddTab} aria-label="เพิ่มรายการด้วย AI">
-            <span className="nav-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            </span>
-          </button>
-          <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")} aria-label="รายการ">
-            <span className="nav-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path d="M6.5 5.5h11v13h-11z" />
-                <path d="M9.5 9h5M9.5 12h5M9.5 15h3" />
-              </svg>
-            </span>
-            <span className="nav-label">รายการ</span>
-          </button>
-        </nav>
+        {!overlayOpen && (
+          <nav className="bottom-nav">
+            <button className={tab === "home" ? "active" : ""} onClick={() => setTab("home")} aria-label="หน้าหลัก">
+              <span className="nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M4 10.8 12 4l8 6.8v8.7a1.5 1.5 0 0 1-1.5 1.5H15v-6H9v6H5.5A1.5 1.5 0 0 1 4 19.5v-8.7Z" />
+                </svg>
+              </span>
+              <span className="nav-label">หน้าหลัก</span>
+            </button>
+            <button className="add-button" onClick={openAddTab} aria-label="เพิ่มรายการด้วย AI">
+              <span className="nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </span>
+            </button>
+            <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")} aria-label="รายการ">
+              <span className="nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M6.5 5.5h11v13h-11z" />
+                  <path d="M9.5 9h5M9.5 12h5M9.5 15h3" />
+                </svg>
+              </span>
+              <span className="nav-label">รายการ</span>
+            </button>
+          </nav>
+        )}
       </section>
     </main>
   );

@@ -1403,7 +1403,7 @@ h2 {
 .sheet-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 5;
+  z-index: 20;
   background: #11251d66;
   display: flex;
   align-items: flex-end;
@@ -1413,7 +1413,9 @@ h2 {
   width: 100%;
   background: var(--cream);
   border-radius: 26px 26px 0 0;
-  padding: 20px;
+  padding: 20px 20px max(24px, env(safe-area-inset-bottom));
+  max-height: min(86vh, 760px);
+  overflow-y: auto;
   box-shadow: 0 -18px 48px #0f271d33;
 }
 
