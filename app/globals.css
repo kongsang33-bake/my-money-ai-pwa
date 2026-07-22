@@ -4565,3 +4565,244 @@ select:focus {
     --mascot-size: 62px;
   }
 }
+
+/* Living companion: a tiny Tamagotchi-like layer that stays clear of core finance UI. */
+.living-mascot {
+  position: absolute;
+  left: var(--pet-left, 18%);
+  bottom: calc(104px + env(safe-area-inset-bottom));
+  z-index: 6;
+  width: 92px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  transition: left 3.9s cubic-bezier(0.34, 1.18, 0.42, 1);
+}
+
+.pet-stage {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  filter: drop-shadow(0 16px 22px rgba(20, 92, 69, 0.16));
+  animation: pet-walk-bob 820ms ease-in-out infinite;
+}
+
+.pet-stage .money-mascot {
+  --mascot-size: 76px;
+}
+
+.living-mascot.facing-left .pet-stage .money-mascot {
+  transform: scaleX(-1);
+}
+
+.pet-shadow-line {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  bottom: 9px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(25, 51, 41, 0.14);
+  filter: blur(1px);
+  z-index: -1;
+}
+
+.pet-panel {
+  position: absolute;
+  left: 50%;
+  bottom: 92px;
+  width: 246px;
+  padding: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.95), transparent 34%),
+    linear-gradient(145deg, rgba(255, 250, 232, 0.94), rgba(224, 246, 233, 0.92));
+  box-shadow: 0 22px 52px rgba(20, 54, 40, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px) saturate(1.18);
+  -webkit-backdrop-filter: blur(16px) saturate(1.18);
+  color: var(--ink);
+  pointer-events: auto;
+  transform: translateX(-50%);
+  animation: pet-panel-pop 240ms var(--ease-spring-soft) both;
+}
+
+.pet-panel::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  width: 18px;
+  height: 18px;
+  background: rgba(238, 248, 236, 0.94);
+  border-right: 1px solid rgba(255, 255, 255, 0.72);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.72);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.pet-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+
+.pet-panel-head b {
+  font-size: 13px;
+}
+
+.pet-panel-head button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.pet-panel p {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.pet-meter {
+  display: grid;
+  grid-template-columns: 34px 1fr 28px;
+  align-items: center;
+  gap: 7px;
+  margin: 7px 0;
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--green);
+}
+
+.pet-meter i {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(198, 207, 199, 0.42);
+  box-shadow: inset 0 1px 3px rgba(26, 52, 40, 0.08);
+}
+
+.pet-meter em {
+  display: block;
+  height: 100%;
+  min-width: 8px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #91d9a8, #ffd57c);
+  transition: width 260ms var(--ease-out-smooth);
+}
+
+.pet-meter b {
+  color: var(--muted);
+  text-align: right;
+}
+
+.pet-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin: 11px 0 9px;
+}
+
+.pet-actions button {
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--green);
+  padding: 9px 7px;
+  font-size: 11px;
+  font-weight: 900;
+  box-shadow: 0 8px 16px rgba(20, 92, 69, 0.1);
+}
+
+.pet-actions button:disabled {
+  opacity: 0.48;
+}
+
+.pet-panel small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.living-mascot.open {
+  z-index: 8;
+}
+
+.living-mascot.open .pet-stage {
+  animation-duration: 1.35s;
+}
+
+@keyframes pet-walk-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(1deg);
+  }
+}
+
+@keyframes pet-panel-pop {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px) scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@media (min-width: 900px) {
+  .living-mascot {
+    bottom: 118px;
+  }
+
+  .pet-panel {
+    width: 268px;
+  }
+}
+
+@media (max-width: 420px) {
+  .living-mascot {
+    width: 76px;
+    bottom: calc(98px + env(safe-area-inset-bottom));
+  }
+
+  .pet-stage {
+    width: 76px;
+    height: 76px;
+  }
+
+  .pet-stage .money-mascot {
+    --mascot-size: 64px;
+  }
+
+  .pet-panel {
+    width: min(232px, calc(100vw - 28px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .living-mascot,
+  .pet-stage,
+  .pet-panel,
+  .pet-meter em {
+    animation: none !important;
+    transition: none !important;
+  }
+}

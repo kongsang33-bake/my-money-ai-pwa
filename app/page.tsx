@@ -1,12 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
 type EntryKind = "expense" | "income";
 type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "gift";
 type Tab = "home" | "add" | "history" | "debtors" | "wallets";
+type MascotMood = "idle" | "thinking" | "happy" | "sleepy" | "oops";
+type PetStats = { happiness: number; energy: number; treats: number; lastSeen: number; message: string };
+const defaultPetStats: PetStats = {
+  happiness: 72,
+  energy: 68,
+  treats: 0,
+  lastSeen: 0,
+  message: "แตะมาเล่นกันได้นะ",
+};
 
 type Entry = {
   id: string;
@@ -1423,6 +1433,8 @@ export default function Home() {
         {logoutOpen && <ConfirmLogout onCancel={() => setLogoutOpen(false)} onConfirm={() => supabase?.auth.signOut()} />}
         <ToastHost toasts={toasts} onDismiss={(id) => setToasts((items) => items.filter((toast) => toast.id !== id))} />
 
+        {!overlayOpen && <LivingMascot storageKey={`money-pet-${user.id}`} />}
+
         {!overlayOpen && (
           <nav className="bottom-nav">
             <button className={tab === "home" ? "active" : ""} onClick={() => setTab("home")} aria-label="หน้าหลัก">
@@ -1876,7 +1888,135 @@ function StateCard({
   );
 }
 
-function MoneyMascot({ mood = "idle", tiny = false }: { mood?: "idle" | "thinking" | "happy" | "sleepy" | "oops"; tiny?: boolean }) {
+function LivingMascot({ storageKey }: { storageKey: string }) {
+  const [open, setOpen] = useState(false);
+  const [x, setX] = useState(18);
+  const [facing, setFacing] = useState<"left" | "right">("right");
+  const [stats, setStats] = useState<PetStats>(defaultPetStats);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (!raw) return;
+        const saved = JSON.parse(raw) as Partial<PetStats>;
+        const now = Date.now();
+        const hoursAway = Math.max(0, (now - Number(saved.lastSeen || now)) / 36e5);
+        setStats({
+          happiness: clampStat(Number(saved.happiness ?? defaultPetStats.happiness) - hoursAway * 2.2),
+          energy: clampStat(Number(saved.energy ?? defaultPetStats.energy) - hoursAway * 1.4),
+          treats: Math.max(0, Math.floor(Number(saved.treats ?? 0))),
+          lastSeen: now,
+          message: hoursAway > 3 ? "คิดถึงเลย กลับมาแล้ว!" : saved.message || defaultPetStats.message,
+        });
+      } catch {
+        window.localStorage.removeItem(storageKey);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [storageKey]);
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKey, JSON.stringify({ ...stats, lastSeen: Date.now() }));
+  }, [stats, storageKey]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setX((current) => {
+        const next = Math.round(10 + Math.random() * 76);
+        setFacing(next >= current ? "right" : "left");
+        return next;
+      });
+      setStats((current) => ({
+        ...current,
+        happiness: clampStat(current.happiness - 0.8),
+        energy: clampStat(current.energy - 0.6),
+        lastSeen: Date.now(),
+      }));
+    }, 6200);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const mood: MascotMood = stats.energy < 24 ? "sleepy" : stats.happiness < 28 ? "oops" : stats.happiness > 82 ? "happy" : open ? "thinking" : "idle";
+
+  function nudge(message: string, patch: Partial<Pick<PetStats, "happiness" | "energy" | "treats">>) {
+    setStats((current) => ({
+      happiness: clampStat(patch.happiness ?? current.happiness),
+      energy: clampStat(patch.energy ?? current.energy),
+      treats: Math.max(0, Math.floor(patch.treats ?? current.treats)),
+      lastSeen: Date.now(),
+      message,
+    }));
+  }
+
+  function play() {
+    nudge("เย้! ได้เล่นแล้ว สดชื่นขึ้นเยอะ", {
+      happiness: stats.happiness + 18,
+      energy: stats.energy - 10,
+      treats: stats.treats,
+    });
+  }
+
+  function feed() {
+    nudge("งั่ม ๆ เหรียญอร่อยมาก", {
+      happiness: stats.happiness + 7,
+      energy: stats.energy + 16,
+      treats: stats.treats + 1,
+    });
+  }
+
+  function rest() {
+    nudge("ขอชาร์จพลังแป๊บนึงนะ", {
+      happiness: stats.happiness + 3,
+      energy: stats.energy + 24,
+      treats: stats.treats,
+    });
+  }
+
+  return (
+    <aside className={`living-mascot ${open ? "open" : ""} facing-${facing}`} style={{ "--pet-left": `${x}%` } as CSSProperties} aria-label="มาสคอตผู้ช่วย">
+      {open && (
+        <section className="pet-panel">
+          <div className="pet-panel-head">
+            <b>น้องบันทึกเงิน</b>
+            <button onClick={() => setOpen(false)} aria-label="ปิดมาสคอต">×</button>
+          </div>
+          <p>{stats.message}</p>
+          <PetMeter label="สุข" value={stats.happiness} />
+          <PetMeter label="พลัง" value={stats.energy} />
+          <div className="pet-actions">
+            <button onClick={play} disabled={stats.energy < 10}>เล่น</button>
+            <button onClick={feed}>ให้อาหาร</button>
+            <button onClick={rest}>พัก</button>
+          </div>
+          <small>ขนมเหรียญ {stats.treats} ชิ้น · รอบนี้จำในเครื่องนี้ก่อน</small>
+        </section>
+      )}
+      <button className="pet-stage" onClick={() => setOpen((value) => !value)} aria-label={open ? "ปิดมาสคอต" : "เปิดมาสคอต"}>
+        <MoneyMascot mood={mood} />
+        <span className="pet-shadow-line" />
+      </button>
+    </aside>
+  );
+}
+
+function PetMeter({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="pet-meter">
+      <span>{label}</span>
+      <i>
+        <em style={{ width: `${Math.round(value)}%` }} />
+      </i>
+      <b>{Math.round(value)}</b>
+    </div>
+  );
+}
+
+function clampStat(value: number) {
+  return Math.max(0, Math.min(100, value));
+}
+
+function MoneyMascot({ mood = "idle", tiny = false }: { mood?: MascotMood; tiny?: boolean }) {
   return (
     <span className={`money-mascot ${tiny ? "tiny" : ""} ${mood}`} aria-hidden="true">
       <span className="mascot-shadow" />
