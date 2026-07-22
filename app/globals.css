@@ -103,11 +103,21 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: hidden;
+  background: #f6f4ee;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   background: var(--page-bg);
   color: var(--ink);
   font-family: Arial, "Noto Sans Thai", sans-serif;
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button,
@@ -125,6 +135,19 @@ select {
 
 button {
   cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible {
+  outline: 3px solid rgba(20, 92, 69, 0.22);
+  outline-offset: 3px;
 }
 
 button,
@@ -3696,6 +3719,90 @@ select:focus {
   box-shadow: 0 14px 28px rgba(20, 92, 69, 0.2);
 }
 
+/* Phase five hardening: touch-first behavior and overflow guardrails */
+.shell,
+.phone,
+.view,
+.topbar,
+.wallet-grid,
+.summary-panel,
+.entry-list,
+.heatmap-panel,
+.ai-input-wrap,
+.draft,
+.edit-sheet,
+.side-menu,
+.bottom-nav {
+  min-width: 0;
+}
+
+.view {
+  padding-bottom: calc(118px + env(safe-area-inset-bottom));
+}
+
+.entry,
+.draft,
+.history-insight,
+.debtor-statement,
+.report-preview,
+.report-summary-tiles,
+.category-spotlight,
+.success-pulse {
+  overflow-wrap: anywhere;
+}
+
+.side-menu,
+.edit-sheet {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sheet-backdrop,
+.side-menu-backdrop,
+.dialog-backdrop {
+  touch-action: none;
+}
+
+.edit-sheet,
+.side-menu {
+  touch-action: pan-y;
+}
+
+.toast-host {
+  bottom: calc(max(18px, env(safe-area-inset-bottom)) + 104px);
+}
+
+@media (hover: none), (pointer: coarse) {
+  .wallet-card:hover,
+  .summary-panel:hover,
+  .entry-list:hover,
+  .debtor-page-item:hover,
+  .draft:hover,
+  .report-preview:hover,
+  .entry:hover,
+  .quick-chip:hover,
+  .metric:hover,
+  .heatmap-cell:hover,
+  .home-profile-icon:hover,
+  .menu-button:hover,
+  .bottom-nav button:hover,
+  .side-menu-list button:hover,
+  .kebab-menu summary:hover,
+  .sheet-head button:hover,
+  .bottom-nav .add-button:hover {
+    transform: none;
+    filter: none;
+  }
+
+  .bottom-nav .active .nav-icon {
+    transform: translateY(-1px) scale(1.02);
+  }
+
+  .bottom-nav .add-button {
+    animation-duration: 8s;
+  }
+}
+
 @media (max-width: 420px) {
   .error-actions {
     grid-template-columns: 1fr;
@@ -3733,6 +3840,7 @@ select:focus {
   .phone {
     width: 100%;
     min-height: 100vh;
+    min-height: 100dvh;
     border-radius: 0;
     box-shadow: none;
   }
@@ -3747,5 +3855,17 @@ select:focus {
     margin: auto;
     bottom: max(18px, env(safe-area-inset-bottom));
     padding: 0 14px;
+  }
+
+  .sheet-backdrop {
+    align-items: end;
+    padding: 12px 0 max(12px, env(safe-area-inset-bottom));
+  }
+
+  .edit-sheet {
+    width: 100%;
+    max-height: min(86vh, 760px);
+    max-height: min(86dvh, 760px);
+    border-radius: 30px 30px 0 0;
   }
 }
