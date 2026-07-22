@@ -152,7 +152,7 @@ function nameInitial(name: string) {
   return name.trim().slice(0, 1).toUpperCase() || "?";
 }
 
-const moneySign = "฿";
+const moneySign = "฿ ";
 const unnamedDebtor = "ไม่ระบุ";
 const profileImageMaxInputBytes = 10 * 1024 * 1024;
 const profileImageMaxStoredBytes = 1.5 * 1024 * 1024;
