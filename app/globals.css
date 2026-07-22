@@ -3869,3 +3869,290 @@ select:focus {
     border-radius: 30px 30px 0 0;
   }
 }
+
+/* Desktop/tablet polish: keep the mobile feel, but stop the app from looking like a stretched phone. */
+@media (min-width: 900px) {
+  body {
+    background:
+      radial-gradient(circle at 10% 4%, rgba(195, 226, 207, 0.38), transparent 28%),
+      radial-gradient(circle at 92% 10%, rgba(245, 218, 180, 0.32), transparent 30%),
+      var(--paper);
+  }
+
+  .shell {
+    align-items: start;
+    padding: 34px;
+  }
+
+  .phone {
+    width: min(1180px, calc(100vw - 68px));
+    min-height: calc(100vh - 68px);
+    border-radius: 42px;
+    padding-bottom: 116px;
+    box-shadow: 0 32px 90px rgba(38, 58, 50, 0.16);
+  }
+
+  .phone::before {
+    left: -14%;
+    width: 48%;
+  }
+
+  .phone::after {
+    right: -16%;
+    width: 44%;
+  }
+
+  .topbar {
+    padding: 34px 38px 22px;
+  }
+
+  .home-profile-icon {
+    width: 58px;
+    height: 58px;
+    border-radius: 20px;
+    font-size: 22px;
+  }
+
+  .home-identity {
+    gap: 16px;
+  }
+
+  .home-identity h1 {
+    max-width: min(560px, 50vw);
+    font-size: clamp(30px, 3vw, 42px);
+    letter-spacing: -0.04em;
+  }
+
+  .menu-button {
+    width: 54px;
+    height: 54px;
+    border-radius: 19px;
+  }
+
+  .view {
+    padding: 0 38px 138px;
+  }
+
+  .phone > .view:not(.add-view):not(.history-view):not(.debtor-view) {
+    display: grid;
+    grid-template-columns: minmax(330px, 0.9fr) minmax(500px, 1.25fr);
+    gap: 18px;
+    align-items: start;
+  }
+
+  .phone > .view:not(.add-view):not(.history-view):not(.debtor-view) > .wallet-grid {
+    grid-column: 1;
+  }
+
+  .phone > .view:not(.add-view):not(.history-view):not(.debtor-view) > .summary-panel {
+    grid-column: 2;
+    grid-row: 1 / span 4;
+    margin: 0;
+    position: sticky;
+    top: 24px;
+  }
+
+  .phone > .view:not(.add-view):not(.history-view):not(.debtor-view) > .state-card,
+  .phone > .view:not(.add-view):not(.history-view):not(.debtor-view) > .success-pulse,
+  .phone > .view:not(.add-view):not(.history-view):not(.debtor-view) > .skeleton-stack,
+  .phone > .view:not(.add-view):not(.history-view):not(.debtor-view) > .error-actions {
+    grid-column: 1 / -1;
+  }
+
+  .wallet-grid {
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .wallet-grid.single-wallet {
+    grid-template-columns: 1fr;
+  }
+
+  .wallet-card {
+    min-height: 150px;
+    border-radius: 28px;
+    padding: 24px;
+  }
+
+  .wallet-card strong {
+    font-size: clamp(28px, 3vw, 46px);
+  }
+
+  .summary-panel,
+  .entry-list,
+  .heatmap-panel,
+  .debtor-detail-card,
+  .ai-input-wrap,
+  .review,
+  .report-preview,
+  .state-card,
+  .success-pulse,
+  .history-insight,
+  .debtor-statement {
+    border-radius: 30px;
+  }
+
+  .summary-grid,
+  .report-summary-tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .category-row {
+    grid-template-columns: 46px 1fr auto;
+    gap: 16px;
+  }
+
+  .add-view {
+    width: min(860px, 100%);
+    margin: 0 auto;
+  }
+
+  .add-view .add-title {
+    margin-top: 8px;
+  }
+
+  .ai-suggestions,
+  .quick-shortcuts {
+    max-width: none;
+  }
+
+  .quick-shortcuts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ai-input-wrap textarea {
+    min-height: 190px;
+  }
+
+  .review {
+    padding: 20px;
+  }
+
+  .draft {
+    grid-template-columns: 52px minmax(0, 1fr) minmax(190px, 0.45fr);
+    gap: 14px;
+  }
+
+  .history-view {
+    display: grid;
+    grid-template-columns: minmax(430px, 0.9fr) minmax(430px, 1.1fr);
+    gap: 18px;
+    align-items: start;
+  }
+
+  .history-view > .add-title,
+  .history-view > .summary-panel,
+  .history-view > .heatmap-panel,
+  .history-view > .history-insight,
+  .history-view > .state-card,
+  .history-view > .skeleton-stack {
+    grid-column: 1;
+  }
+
+  .history-view > .entry-list {
+    grid-column: 2;
+    grid-row: 2 / span 4;
+    margin: 0;
+    max-height: min(720px, calc(100vh - 210px));
+    overflow: auto;
+  }
+
+  .history-view > .error-actions {
+    grid-column: 1 / -1;
+  }
+
+  .debtor-view {
+    width: min(100%, 980px);
+    margin: 0 auto;
+  }
+
+  .debtor-page-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .debtor-page-list > .empty-note,
+  .debtor-page-list > .state-card {
+    grid-column: 1 / -1;
+  }
+
+  .debtor-page-item {
+    min-height: 94px;
+  }
+
+  .debtor-statement {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .edit-sheet {
+    width: min(620px, calc(100vw - 48px));
+    max-height: min(84vh, 820px);
+    border-radius: 34px;
+  }
+
+  .report-sheet {
+    width: min(760px, calc(100vw - 48px));
+  }
+
+  .sheet-backdrop {
+    align-items: center;
+    padding: 24px;
+  }
+
+  .side-menu {
+    width: min(420px, 42vw);
+    padding: 30px 26px;
+  }
+
+  .bottom-nav {
+    left: 50%;
+    right: auto;
+    bottom: 28px;
+    width: 470px;
+    max-width: calc(100vw - 68px);
+    transform: translateX(-50%);
+  }
+
+  .toast-host {
+    right: 34px;
+    left: auto;
+    width: min(360px, calc(100vw - 56px));
+  }
+}
+
+@media (min-width: 1180px) {
+  .phone > .view:not(.add-view):not(.history-view):not(.debtor-view) {
+    grid-template-columns: minmax(380px, 0.86fr) minmax(600px, 1.3fr);
+    gap: 22px;
+  }
+
+  .history-view {
+    grid-template-columns: minmax(500px, 0.95fr) minmax(500px, 1.05fr);
+    gap: 22px;
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1040px) {
+  .phone > .view:not(.add-view):not(.history-view):not(.debtor-view),
+  .history-view {
+    grid-template-columns: 1fr;
+  }
+
+  .phone > .view:not(.add-view):not(.history-view):not(.debtor-view) > .summary-panel,
+  .history-view > .entry-list,
+  .history-view > .add-title,
+  .history-view > .summary-panel,
+  .history-view > .heatmap-panel,
+  .history-view > .history-insight,
+  .history-view > .state-card,
+  .history-view > .skeleton-stack {
+    grid-column: 1;
+    grid-row: auto;
+    position: static;
+  }
+
+  .debtor-page-list {
+    grid-template-columns: 1fr;
+  }
+}
