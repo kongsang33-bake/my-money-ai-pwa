@@ -4160,6 +4160,10 @@ select:focus {
 /* Cozy cartoon layer: lightweight CSS mascot + playful state motion. */
 .money-mascot {
   --mascot-size: 78px;
+  --mascot-primary: #9fd8f4;
+  --mascot-mid: #72b8e8;
+  --mascot-deep: #4f93cf;
+  --mascot-accent: #f4d08a;
   position: relative;
   width: var(--mascot-size);
   height: var(--mascot-size);
@@ -4194,7 +4198,7 @@ select:focus {
   border-radius: 34% 34% 38% 38%;
   background:
     radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.95), transparent 18%),
-    linear-gradient(145deg, #dff6e8 0%, #9eddb9 56%, #4ba67c 100%);
+    linear-gradient(145deg, var(--mascot-primary) 0%, var(--mascot-mid) 56%, var(--mascot-deep) 100%);
   border: 2px solid rgba(255, 255, 255, 0.72);
   box-shadow:
     inset -8px -10px 18px rgba(20, 92, 69, 0.16),
@@ -4209,7 +4213,7 @@ select:focus {
   width: 30%;
   height: 28%;
   border-radius: 48% 48% 28% 28%;
-  background: #f6ddad;
+  background: var(--mascot-accent);
   border: 2px solid rgba(255, 255, 255, 0.62);
   box-shadow: inset -4px -5px 8px rgba(139, 98, 50, 0.1);
   z-index: -1;
@@ -4564,6 +4568,136 @@ select:focus {
   .mascot-hero .money-mascot {
     --mascot-size: 62px;
   }
+}
+
+.mascot-whale .money-mascot,
+.money-mascot.variant-whale {
+  --mascot-primary: #9fd8f4;
+  --mascot-mid: #72b8e8;
+  --mascot-deep: #4f93cf;
+  --mascot-accent: #f4d08a;
+}
+
+.mascot-mint .money-mascot,
+.money-mascot.variant-mint {
+  --mascot-primary: #dff6e8;
+  --mascot-mid: #9eddb9;
+  --mascot-deep: #4ba67c;
+  --mascot-accent: #f6ddad;
+}
+
+.mascot-coin .money-mascot,
+.money-mascot.variant-coin {
+  --mascot-primary: #fff1b9;
+  --mascot-mid: #ffd36d;
+  --mascot-deep: #e8a844;
+  --mascot-accent: #bfe7cf;
+}
+
+.mascot-berry .money-mascot,
+.money-mascot.variant-berry {
+  --mascot-primary: #ffe4ee;
+  --mascot-mid: #f5a8c6;
+  --mascot-deep: #d96b9a;
+  --mascot-accent: #f7d790;
+}
+
+.mascot-whale .mascot-body,
+.money-mascot.variant-whale .mascot-body {
+  border-radius: 46% 54% 42% 58%;
+}
+
+.mascot-coin .mascot-body,
+.money-mascot.variant-coin .mascot-body {
+  border-radius: 50%;
+}
+
+.mascot-berry .mascot-body,
+.money-mascot.variant-berry .mascot-body {
+  border-radius: 44% 44% 50% 50%;
+}
+
+.mascot-whale .mascot-ear,
+.money-mascot.variant-whale .mascot-ear {
+  background: var(--mascot-accent);
+  border-radius: 999px 999px 45% 45%;
+  transform-origin: bottom center;
+}
+
+.mascot-whale .mascot-ear.left,
+.money-mascot.variant-whale .mascot-ear.left {
+  left: 42%;
+  top: -9%;
+  transform: rotate(-18deg);
+}
+
+.mascot-whale .mascot-ear.right,
+.money-mascot.variant-whale .mascot-ear.right {
+  right: 18%;
+  top: -8%;
+  transform: rotate(16deg);
+}
+
+.mascot-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 16px;
+}
+
+.mascot-choice {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-height: 172px;
+  border: 1px solid rgba(232, 226, 214, 0.9);
+  border-radius: 24px;
+  background: linear-gradient(145deg, #fffdf8, #eef8f1);
+  color: var(--ink);
+  padding: 14px 10px;
+  text-align: center;
+  box-shadow: 0 12px 26px rgba(37, 50, 43, 0.08);
+}
+
+.mascot-choice.active {
+  border-color: rgba(20, 92, 69, 0.34);
+  background: linear-gradient(145deg, #e9f8ef, #fff7df);
+  box-shadow: 0 16px 32px rgba(20, 92, 69, 0.14);
+}
+
+.mascot-choice b,
+.mascot-choice small,
+.mascot-choice em {
+  display: block;
+}
+
+.mascot-choice b {
+  font-size: 13px;
+}
+
+.mascot-choice small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.mascot-choice em {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  border-radius: 999px;
+  background: var(--green);
+  color: white;
+  padding: 4px 7px;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.mascot-sheet .save {
+  margin-top: 2px;
 }
 
 /* Living companion: a tiny Tamagotchi-like layer that stays clear of core finance UI. */

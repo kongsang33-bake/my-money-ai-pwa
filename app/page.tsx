@@ -9,6 +9,7 @@ type EntryKind = "expense" | "income";
 type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "gift";
 type Tab = "home" | "add" | "history" | "debtors" | "wallets";
 type MascotMood = "idle" | "thinking" | "happy" | "sleepy" | "oops";
+type MascotVariant = "mint" | "whale" | "coin" | "berry";
 type PetStats = { happiness: number; energy: number; treats: number; lastSeen: number; message: string };
 const defaultPetStats: PetStats = {
   happiness: 72,
@@ -17,6 +18,13 @@ const defaultPetStats: PetStats = {
   lastSeen: 0,
   message: "แตะมาเล่นกันได้นะ",
 };
+const defaultMascotVariant: MascotVariant = "whale";
+const mascotOptions: { id: MascotVariant; name: string; detail: string }[] = [
+  { id: "whale", name: "น้องวาฬเงิน", detail: "โทนฟ้าแบบตัวอย่างที่ส่งมา" },
+  { id: "mint", name: "น้องมิ้นต์", detail: "เขียวครีม เข้ากับธีมหลัก" },
+  { id: "coin", name: "น้องเหรียญ", detail: "สดใส เหมาะกับสายเก็บเงิน" },
+  { id: "berry", name: "น้องเบอร์รี่", detail: "ชมพูพาสเทล นุ่มและขี้เล่น" },
+];
 
 type Entry = {
   id: string;
@@ -566,6 +574,8 @@ export default function Home() {
   const [budgetSheetOpen, setBudgetSheetOpen] = useState(false);
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
+  const [mascotSheetOpen, setMascotSheetOpen] = useState(false);
+  const [mascotVariant, setMascotVariant] = useState<MascotVariant>(defaultMascotVariant);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [savePulse, setSavePulse] = useState(0);
   const displayName = profile?.nickname?.trim() || user?.user_metadata?.full_name || user?.user_metadata?.name || "เงินของฉัน";
@@ -591,6 +601,20 @@ export default function Home() {
     const timer = window.setTimeout(() => setSavePulse(0), 4200);
     return () => window.clearTimeout(timer);
   }, [savePulse]);
+
+  useEffect(() => {
+    if (!user) return;
+    const timer = window.setTimeout(() => {
+      const saved = window.localStorage.getItem(`money-mascot-${user.id}`);
+      if (isMascotVariant(saved)) setMascotVariant(saved);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [user]);
+
+  function chooseMascot(next: MascotVariant) {
+    setMascotVariant(next);
+    if (user) window.localStorage.setItem(`money-mascot-${user.id}`, next);
+  }
 
   const loadEntries = useCallback(async () => {
     if (!supabase) return;
@@ -708,6 +732,7 @@ export default function Home() {
     !!walletSheetMode ||
     budgetSheetOpen ||
     reportSheetOpen ||
+    mascotSheetOpen ||
     recapOpen ||
     logoutOpen;
   useEffect(() => {
@@ -1148,7 +1173,7 @@ export default function Home() {
 
   return (
     <main className="shell">
-      <section className="phone">
+      <section className={`phone mascot-${mascotVariant}`}>
         <header className="topbar">
           <div className="home-identity">
             <span className="home-profile-icon" style={displayIconImage ? { backgroundImage: `url(${displayIconImage})` } : undefined}>
@@ -1403,6 +1428,7 @@ export default function Home() {
             onOpenDebtors={() => { setMenuOpen(false); setSelectedDebtor(null); setTab("debtors"); }}
             onOpenBudgets={() => { setMenuOpen(false); setBudgetSheetOpen(true); }}
             onOpenReport={() => { setMenuOpen(false); setReportSheetOpen(true); }}
+            onOpenMascots={() => { setMenuOpen(false); setMascotSheetOpen(true); }}
           />
         )}
         {profileSheetOpen && (
@@ -1419,6 +1445,7 @@ export default function Home() {
             onClose={() => setReportSheetOpen(false)}
           />
         )}
+        {mascotSheetOpen && <MascotSheet selected={mascotVariant} onSelect={chooseMascot} onClose={() => setMascotSheetOpen(false)} />}
         {recapOpen && (
           <RecapSheet
             selectedMonth={selectedMonth}
@@ -2016,9 +2043,13 @@ function clampStat(value: number) {
   return Math.max(0, Math.min(100, value));
 }
 
-function MoneyMascot({ mood = "idle", tiny = false }: { mood?: MascotMood; tiny?: boolean }) {
+function isMascotVariant(value: string | null): value is MascotVariant {
+  return mascotOptions.some((option) => option.id === value);
+}
+
+function MoneyMascot({ mood = "idle", tiny = false, variant }: { mood?: MascotMood; tiny?: boolean; variant?: MascotVariant }) {
   return (
-    <span className={`money-mascot ${tiny ? "tiny" : ""} ${mood}`} aria-hidden="true">
+    <span className={`money-mascot ${tiny ? "tiny" : ""} ${mood} ${variant ? `variant-${variant}` : ""}`} aria-hidden="true">
       <span className="mascot-shadow" />
       <span className="mascot-body">
         <span className="mascot-ear left" />
@@ -2718,6 +2749,7 @@ function SideMenu({
   onOpenDebtors,
   onOpenBudgets,
   onOpenReport,
+  onOpenMascots,
 }: {
   user: User;
   profile: Profile | null;
@@ -2730,6 +2762,7 @@ function SideMenu({
   onOpenDebtors: () => void;
   onOpenBudgets: () => void;
   onOpenReport: () => void;
+  onOpenMascots: () => void;
 }) {
   const metadata = user.user_metadata ?? {};
   const name = profile?.nickname || metadata.full_name || metadata.name || "ผู้ใช้";
@@ -2782,6 +2815,10 @@ function SideMenu({
             <span>งบประมาณ</span>
             <small>ตั้งวงเงินต่อหมวดหมู่ต่อเดือน</small>
           </button>
+          <button onClick={onOpenMascots}>
+            <span>มาสคอต</span>
+            <small>เลือกเพื่อนเดินในแอพ และเปลี่ยนบุคลิกตัวช่วย</small>
+          </button>
           <button onClick={onOpenReport}>
             <span>ส่งออกรีพอร์ท</span>
             <small>ดาวน์โหลดสรุปรายเดือนหรือรายปีเป็นไฟล์ CSV สำหรับ Excel/Sheets</small>
@@ -2790,6 +2827,48 @@ function SideMenu({
 
         <button className="logout-button" onClick={onLogout}>ออกจากระบบ</button>
       </aside>
+    </div>
+  );
+}
+
+function MascotSheet({
+  selected,
+  onSelect,
+  onClose,
+}: {
+  selected: MascotVariant;
+  onSelect: (variant: MascotVariant) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="sheet-backdrop">
+      <section className="edit-sheet mascot-sheet">
+        <div className="sheet-head">
+          <div>
+            <p className="eyebrow">Tamagotchi Buddy</p>
+            <h2>เลือกมาสคอต</h2>
+          </div>
+          <button onClick={onClose}>×</button>
+        </div>
+        <p className="budget-hint">เลือกตัวละครที่อยากให้เดินเล่นในแอพ ตอนนี้เป็นชุดในตัวแอพก่อน ถ้ามีไฟล์ PNG/Sprite โปร่งใสจริงค่อยเพิ่มเป็นชุด custom ได้ต่อเลย</p>
+        <div className="mascot-picker-grid">
+          {mascotOptions.map((option) => (
+            <button
+              key={option.id}
+              className={`mascot-choice ${selected === option.id ? "active" : ""}`}
+              onClick={() => onSelect(option.id)}
+            >
+              <MoneyMascot mood={selected === option.id ? "happy" : "idle"} variant={option.id} />
+              <span>
+                <b>{option.name}</b>
+                <small>{option.detail}</small>
+              </span>
+              {selected === option.id && <em>ใช้อยู่</em>}
+            </button>
+          ))}
+        </div>
+        <button className="save" onClick={onClose}>เสร็จแล้ว</button>
+      </section>
     </div>
   );
 }
