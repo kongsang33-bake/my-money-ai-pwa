@@ -4570,7 +4570,7 @@ select:focus {
 .living-mascot {
   position: absolute;
   left: var(--pet-left, 18%);
-  bottom: calc(104px + env(safe-area-inset-bottom));
+  top: max(92px, calc(72px + env(safe-area-inset-top)));
   z-index: 6;
   width: 92px;
   transform: translateX(-50%);
@@ -4616,7 +4616,7 @@ select:focus {
 .pet-panel {
   position: absolute;
   left: 50%;
-  bottom: 92px;
+  top: 86px;
   width: 246px;
   padding: 13px;
   border: 1px solid rgba(255, 255, 255, 0.72);
@@ -4637,12 +4637,12 @@ select:focus {
   content: "";
   position: absolute;
   left: 50%;
-  bottom: -8px;
+  top: -8px;
   width: 18px;
   height: 18px;
   background: rgba(238, 248, 236, 0.94);
-  border-right: 1px solid rgba(255, 255, 255, 0.72);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.72);
+  border-left: 1px solid rgba(255, 255, 255, 0.72);
+  border-top: 1px solid rgba(255, 255, 255, 0.72);
   transform: translateX(-50%) rotate(45deg);
 }
 
@@ -4759,7 +4759,7 @@ select:focus {
 @keyframes pet-panel-pop {
   0% {
     opacity: 0;
-    transform: translateX(-50%) translateY(10px) scale(0.94);
+    transform: translateX(-50%) translateY(-10px) scale(0.94);
   }
   100% {
     opacity: 1;
@@ -4769,7 +4769,7 @@ select:focus {
 
 @media (min-width: 900px) {
   .living-mascot {
-    bottom: 118px;
+    top: 112px;
   }
 
   .pet-panel {
@@ -4780,7 +4780,7 @@ select:focus {
 @media (max-width: 420px) {
   .living-mascot {
     width: 76px;
-    bottom: calc(98px + env(safe-area-inset-bottom));
+    top: max(84px, calc(64px + env(safe-area-inset-top)));
   }
 
   .pet-stage {
