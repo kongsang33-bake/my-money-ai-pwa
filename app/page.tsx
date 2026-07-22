@@ -475,6 +475,7 @@ export default function Home() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [dataLoading, setDataLoading] = useState(false);
   const [text, setText] = useState("");
   const [slipImages, setSlipImages] = useState<SlipImage[]>([]);
   const [entryDate, setEntryDate] = useState(todayDateInput);
@@ -571,6 +572,17 @@ export default function Home() {
     setWallets((data ?? []).map((row) => ({ ...row, balance: Number(row.balance) || 0 })) as Wallet[]);
   }, []);
 
+  const loadUserData = useCallback(async (userId: string) => {
+    setDataLoading(true);
+    setError("");
+    try {
+      await Promise.all([loadEntries(), loadProfile(), loadDebtors(), loadWallets()]);
+      setBudgets(loadBudgets(userId));
+    } finally {
+      setDataLoading(false);
+    }
+  }, [loadDebtors, loadEntries, loadProfile, loadWallets]);
+
   useEffect(() => {
     if (!supabase) return;
 
@@ -578,32 +590,25 @@ export default function Home() {
       setUser(data.user);
       setReady(true);
       if (data.user) {
-        void loadEntries();
-        void loadProfile();
-        void loadDebtors();
-        void loadWallets();
-        setBudgets(loadBudgets(data.user.id));
+        void loadUserData(data.user.id);
       }
     });
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        void loadEntries();
-        void loadProfile();
-        void loadDebtors();
-        void loadWallets();
-        setBudgets(loadBudgets(session.user.id));
+        void loadUserData(session.user.id);
       } else {
         setEntries([]);
         setProfile(null);
         setDebtors([]);
         setWallets([]);
         setBudgets({});
+        setDataLoading(false);
       }
     });
     return () => data.subscription.unsubscribe();
-  }, [loadDebtors, loadEntries, loadProfile, loadWallets]);
+  }, [loadUserData]);
 
   const overlayOpen =
     menuOpen ||
@@ -1036,6 +1041,7 @@ export default function Home() {
 
         {tab === "home" && (
           <div className="view">
+            {dataLoading && <StateCard tone="loading" title="กำลังซิงค์ข้อมูล" detail="กำลังโหลดรายการ กระเป๋า และลูกหนี้ของคุณ" />}
             <section className="wallet-grid single-wallet">
               <div className="wallet-card primary-wallet">
                 <span>เงินพร้อมใช้สุทธิ</span>
@@ -1071,12 +1077,13 @@ export default function Home() {
               budgets={budgets}
             />
 
-            {error && <p className="error-box">{error}</p>}
+            {error && <StateCard tone="error" title="มีบางอย่างไม่สำเร็จ" detail={error} />}
           </div>
         )}
 
         {tab === "add" && (
           <div className="view add-view">
+            {dataLoading && <StateCard tone="loading" title="กำลังเตรียมข้อมูล" detail="กำลังโหลดรายชื่อ ลูกหนี้ และรายการล่าสุดเพื่อช่วย AI วิเคราะห์" />}
             <div className="add-title">
               <button onClick={() => setTab("home")}>‹</button>
               <div>
@@ -1134,7 +1141,7 @@ export default function Home() {
             <button className="primary" onClick={analyze} disabled={busy || (!text.trim() && !slipImages.length)}>
               {busy ? "กำลังวิเคราะห์..." : "ให้ AI แยกรายการ"}
             </button>
-            {error && <p className="error-box">{error}</p>}
+            {error && <StateCard tone="error" title="AI ยังทำรายการนี้ไม่ได้" detail={error} />}
 
             {!!drafts.length && (
               <section className="review">
@@ -1165,6 +1172,7 @@ export default function Home() {
 
         {tab === "history" && (
           <div className="view history-view">
+            {dataLoading && <StateCard tone="loading" title="กำลังโหลดประวัติ" detail="กำลังซิงค์รายการจาก Supabase" />}
             <div className="add-title">
               <button onClick={() => setTab("home")}>‹</button>
               <div>
@@ -1522,6 +1530,20 @@ function EmptyNote({ glyph, children }: { glyph: string; children: React.ReactNo
     <div className="empty-note">
       <span className="empty-glyph">{glyph}</span>
       <p>{children}</p>
+    </div>
+  );
+}
+
+function StateCard({ tone, title, detail }: { tone: "loading" | "empty" | "error"; title: string; detail: string }) {
+  return (
+    <div className={`state-card ${tone}`} role={tone === "error" ? "alert" : "status"}>
+      <span className="state-orb" aria-hidden="true">
+        {tone === "loading" ? <span className="loading-spinner mini" /> : tone === "error" ? "!" : "•"}
+      </span>
+      <div>
+        <b>{title}</b>
+        <small>{detail}</small>
+      </div>
     </div>
   );
 }
