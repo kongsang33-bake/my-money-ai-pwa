@@ -94,6 +94,9 @@ const categoryIcon = (category: string) => {
 
 const moneySign = "฿";
 const unnamedDebtor = "ไม่ระบุ";
+const profileImageMaxInputBytes = 10 * 1024 * 1024;
+const profileImageMaxStoredBytes = 1.5 * 1024 * 1024;
+const profileImageSize = 512;
 const monthKey = (date: Date) => date.toISOString().slice(0, 7);
 const formatMoney = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 0 });
 const formatSignedMoney = (value: number) => `${value >= 0 ? "+" : "−"}${moneySign}${formatMoney(Math.abs(value))}`;
@@ -173,6 +176,53 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.onload = () => resolve(String(reader.result ?? ""));
     reader.readAsDataURL(file);
   });
+}
+
+function dataUrlBytes(value: string) {
+  const payload = value.split(",")[1] ?? "";
+  return Math.ceil((payload.length * 3) / 4);
+}
+
+function loadImage(value: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("อ่านรูปไม่สำเร็จ"));
+    image.src = value;
+  });
+}
+
+async function compressProfileImage(file: File) {
+  if (file.size > profileImageMaxInputBytes) {
+    throw new Error("รูปใหญ่เกินไป กรุณาเลือกรูปไม่เกิน 10MB");
+  }
+
+  const source = await fileToDataUrl(file);
+  const image = await loadImage(source);
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("เบราว์เซอร์ไม่รองรับการย่อรูป");
+
+  canvas.width = profileImageSize;
+  canvas.height = profileImageSize;
+
+  const sourceSize = Math.min(image.naturalWidth, image.naturalHeight);
+  const sourceX = (image.naturalWidth - sourceSize) / 2;
+  const sourceY = (image.naturalHeight - sourceSize) / 2;
+
+  context.clearRect(0, 0, profileImageSize, profileImageSize);
+  context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, profileImageSize, profileImageSize);
+
+  const webpPreview = canvas.toDataURL("image/webp", 0.86);
+  const mimeType = webpPreview.startsWith("data:image/webp") ? "image/webp" : "image/jpeg";
+  const qualities = [0.9, 0.82, 0.74, 0.66, 0.58];
+
+  for (const quality of qualities) {
+    const compressed = canvas.toDataURL(mimeType, quality);
+    if (dataUrlBytes(compressed) <= profileImageMaxStoredBytes) return compressed;
+  }
+
+  throw new Error("ย่อรูปแล้วยังใหญ่เกินไป ลองเลือกรูปอื่นที่ไม่ซับซ้อนมากครับ");
 }
 
 export default function Home() {
@@ -1248,11 +1298,11 @@ function SideMenu({
     const file = files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) return;
-    if (file.size > 800 * 1024) {
-      window.alert("รูปโปรไฟล์ควรมีขนาดไม่เกิน 800KB");
-      return;
+    try {
+      setAppIconImage(await compressProfileImage(file));
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "เลือกรูปไม่สำเร็จ");
     }
-    setAppIconImage(await fileToDataUrl(file));
   }
 
   return (
@@ -1295,6 +1345,7 @@ function SideMenu({
           <label>
             รูปไอคอนจากภายนอก
             <input type="file" accept="image/*" onChange={(event) => { void chooseProfileImage(event.target.files); event.currentTarget.value = ""; }} />
+            <small>รองรับรูปจากมือถือได้ถึง 10MB ระบบจะย่อเป็นไอคอนให้อัตโนมัติ</small>
           </label>
           {!!app_icon_image && <button className="side-ghost" onClick={() => setAppIconImage("")}>ลบรูปไอคอน</button>}
           <label>
