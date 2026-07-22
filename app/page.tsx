@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 
 type EntryKind = "expense" | "income";
 type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "gift";
-type Tab = "home" | "add" | "history" | "debtors";
+type Tab = "home" | "add" | "history" | "debtors" | "wallets";
 
 type Entry = {
   id: string;
@@ -31,9 +31,6 @@ type Profile = {
   app_icon: string | null;
   app_icon_image: string | null;
   month_start_day: number;
-  opening_cash_balance: number;
-  savings_balance: number;
-  investment_balance: number;
 };
 type Debtor = {
   id: string;
@@ -42,6 +39,25 @@ type Debtor = {
   note: string | null;
   opening_balance: number;
 };
+type WalletTag = "cash" | "savings" | "investment" | "other";
+type Wallet = {
+  id: string;
+  user_id: string;
+  name: string;
+  tag: WalletTag;
+  balance: number;
+};
+const walletTagLabels: Record<WalletTag, string> = {
+  cash: "เงินสด",
+  savings: "ออมทรัพย์",
+  investment: "เงินลงทุน",
+  other: "อื่น ๆ",
+};
+const secondaryWalletTags: { tag: WalletTag; label: string; className: string }[] = [
+  { tag: "savings", label: walletTagLabels.savings, className: "savings-wallet" },
+  { tag: "investment", label: walletTagLabels.investment, className: "investment-wallet" },
+  { tag: "other", label: walletTagLabels.other, className: "other-wallet" },
+];
 type EntryInput = {
   id: string;
   title: string;
@@ -338,15 +354,19 @@ export default function Home() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [debtors, setDebtors] = useState<Debtor[]>([]);
+  const [wallets, setWallets] = useState<Wallet[]>([]);
   const [text, setText] = useState("");
   const [slipImages, setSlipImages] = useState<SlipImage[]>([]);
   const [entryDate, setEntryDate] = useState(todayDateInput);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [editing, setEditing] = useState<Entry | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [debtorSheetMode, setDebtorSheetMode] = useState<"create" | "edit" | null>(null);
   const [editingDebtor, setEditingDebtor] = useState<Debtor | null>(null);
   const [selectedDebtor, setSelectedDebtor] = useState<Debtor | null>(null);
+  const [walletSheetMode, setWalletSheetMode] = useState<"create" | "edit" | null>(null);
+  const [editingWallet, setEditingWallet] = useState<Wallet | null>(null);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -399,22 +419,13 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,opening_cash_balance,savings_balance,investment_balance")
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day")
       .maybeSingle();
     if (error) {
       setError(error.message);
       return;
     }
-    setProfile(
-      data
-        ? {
-            ...data,
-            opening_cash_balance: Number(data.opening_cash_balance) || 0,
-            savings_balance: Number(data.savings_balance) || 0,
-            investment_balance: Number(data.investment_balance) || 0,
-          }
-        : null,
-    );
+    setProfile(data ?? null);
   }, []);
 
   const loadDebtors = useCallback(async () => {
@@ -428,6 +439,17 @@ export default function Home() {
     setDebtors((data ?? []).map((row) => ({ ...row, opening_balance: Number(row.opening_balance) || 0 })) as Debtor[]);
   }, []);
 
+  const loadWallets = useCallback(async () => {
+    if (!supabase) return;
+
+    const { data, error } = await supabase.from("wallets").select("id,user_id,name,tag,balance").order("created_at", { ascending: true });
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setWallets((data ?? []).map((row) => ({ ...row, balance: Number(row.balance) || 0 })) as Wallet[]);
+  }, []);
+
   useEffect(() => {
     if (!supabase) return;
 
@@ -438,6 +460,7 @@ export default function Home() {
         void loadEntries();
         void loadProfile();
         void loadDebtors();
+        void loadWallets();
         setBudgets(loadBudgets(data.user.id));
       }
     });
@@ -448,28 +471,52 @@ export default function Home() {
         void loadEntries();
         void loadProfile();
         void loadDebtors();
+        void loadWallets();
         setBudgets(loadBudgets(session.user.id));
       } else {
         setEntries([]);
         setProfile(null);
         setDebtors([]);
+        setWallets([]);
         setBudgets({});
       }
     });
     return () => data.subscription.unsubscribe();
-  }, [loadDebtors, loadEntries, loadProfile]);
+  }, [loadDebtors, loadEntries, loadProfile, loadWallets]);
 
-  const overlayOpen = menuOpen || !!editing || !!debtorSheetMode || budgetSheetOpen || recapOpen || logoutOpen;
+  const overlayOpen =
+    menuOpen ||
+    profileSheetOpen ||
+    !!editing ||
+    !!debtorSheetMode ||
+    !!walletSheetMode ||
+    budgetSheetOpen ||
+    recapOpen ||
+    logoutOpen;
   useEffect(() => {
-    document.body.style.overflow = overlayOpen ? "hidden" : "";
+    if (!overlayOpen) return;
+    const scrollY = window.scrollY;
+    const { body } = document;
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
     return () => {
-      document.body.style.overflow = "";
+      body.style.position = "";
+      body.style.top = "";
+      body.style.width = "";
+      window.scrollTo(0, scrollY);
     };
   }, [overlayOpen]);
 
+  const walletTotals = useMemo(() => {
+    const totals: Record<WalletTag, number> = { cash: 0, savings: 0, investment: 0, other: 0 };
+    for (const wallet of wallets) totals[wallet.tag] += wallet.balance;
+    return totals;
+  }, [wallets]);
+
   const mainWallet = useMemo(
-    () => (profile?.opening_cash_balance ?? 0) + entries.reduce((sum, entry) => sum + entry.wallet_impact, 0),
-    [entries, profile?.opening_cash_balance],
+    () => walletTotals.cash + entries.reduce((sum, entry) => sum + entry.wallet_impact, 0),
+    [entries, walletTotals.cash],
   );
   const streak = useMemo(() => computeStreak(entries), [entries]);
   const quickShortcuts = useMemo(() => deriveQuickShortcuts(entries), [entries]);
@@ -729,9 +776,6 @@ export default function Home() {
     app_icon: string;
     app_icon_image: string;
     month_start_day: number;
-    opening_cash_balance: number;
-    savings_balance: number;
-    investment_balance: number;
   }) {
     if (!supabase || !user) return;
     setBusy(true);
@@ -743,25 +787,16 @@ export default function Home() {
       app_icon: next.app_icon.trim() || null,
       app_icon_image: next.app_icon_image.trim() || null,
       month_start_day: Math.min(28, Math.max(1, Number(next.month_start_day) || 1)),
-      opening_cash_balance: Number(next.opening_cash_balance) || 0,
-      savings_balance: Number(next.savings_balance) || 0,
-      investment_balance: Number(next.investment_balance) || 0,
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await supabase
       .from("profiles")
       .upsert(payload, { onConflict: "user_id" })
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,opening_cash_balance,savings_balance,investment_balance")
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day")
       .single();
 
     if (error) setError(error.message);
-    else
-      setProfile({
-        ...data,
-        opening_cash_balance: Number(data.opening_cash_balance) || 0,
-        savings_balance: Number(data.savings_balance) || 0,
-        investment_balance: Number(data.investment_balance) || 0,
-      } as Profile);
+    else setProfile(data as Profile);
     setBusy(false);
   }
 
@@ -810,6 +845,40 @@ export default function Home() {
     setBusy(false);
   }
 
+  async function createWallet(name: string, tag: WalletTag, balance: number) {
+    if (!supabase || !user || !name.trim()) return;
+    setBusy(true);
+    setError("");
+    const { error } = await supabase.from("wallets").insert({ user_id: user.id, name: name.trim(), tag, balance: Number(balance) || 0 });
+    if (error) setError(error.message);
+    else await loadWallets();
+    setBusy(false);
+  }
+
+  async function updateWallet(wallet: Wallet, patch: { name: string; tag: WalletTag; balance: number }) {
+    if (!supabase) return;
+    setBusy(true);
+    setError("");
+    const { error } = await supabase
+      .from("wallets")
+      .update({ name: patch.name.trim(), tag: patch.tag, balance: Number(patch.balance) || 0, updated_at: new Date().toISOString() })
+      .eq("id", wallet.id);
+    if (error) setError(error.message);
+    else await loadWallets();
+    setBusy(false);
+  }
+
+  async function deleteWallet(wallet: Wallet) {
+    if (!supabase) return;
+    if (!window.confirm(`ลบกระเป๋าตังค์ "${wallet.name}" ใช่ไหม?`)) return;
+    setBusy(true);
+    setError("");
+    const { error } = await supabase.from("wallets").delete().eq("id", wallet.id);
+    if (error) setError(error.message);
+    else await loadWallets();
+    setBusy(false);
+  }
+
   if (!ready) {
     return (
       <main className="shell">
@@ -855,16 +924,16 @@ export default function Home() {
               </div>
             </section>
 
-            {profile && (
+            {secondaryWalletTags.some((entry) => wallets.some((wallet) => wallet.tag === entry.tag)) && (
               <section className="wallet-grid">
-                <div className="wallet-card savings-wallet">
-                  <span>ออมทรัพย์</span>
-                  <strong>{moneySign}{formatMoney(profile.savings_balance)}</strong>
-                </div>
-                <div className="wallet-card investment-wallet">
-                  <span>เงินลงทุน</span>
-                  <strong>{moneySign}{formatMoney(profile.investment_balance)}</strong>
-                </div>
+                {secondaryWalletTags
+                  .filter((entry) => wallets.some((wallet) => wallet.tag === entry.tag))
+                  .map((entry) => (
+                    <div className={`wallet-card ${entry.className}`} key={entry.tag}>
+                      <span>{entry.label}</span>
+                      <strong>{moneySign}{formatMoney(walletTotals[entry.tag])}</strong>
+                    </div>
+                  ))}
               </section>
             )}
 
@@ -1029,6 +1098,16 @@ export default function Home() {
           />
         )}
 
+        {tab === "wallets" && (
+          <WalletsView
+            wallets={wallets}
+            onBack={() => setTab("home")}
+            onAdd={() => { setEditingWallet(null); setWalletSheetMode("create"); }}
+            onEdit={(wallet) => { setEditingWallet(wallet); setWalletSheetMode("edit"); }}
+            onDelete={deleteWallet}
+          />
+        )}
+
         {editing && <EditSheet entry={editing} busy={busy} onChange={setEditing} onClose={() => setEditing(null)} onSave={updateEntry} />}
         {debtorSheetMode && (
           <DebtorEditSheet
@@ -1039,18 +1118,31 @@ export default function Home() {
             onUpdate={(debtor, patch) => updateDebtor(debtor, patch)}
           />
         )}
+        {walletSheetMode && (
+          <WalletEditSheet
+            wallet={walletSheetMode === "edit" ? editingWallet : null}
+            busy={busy}
+            onClose={() => { setWalletSheetMode(null); setEditingWallet(null); }}
+            onCreate={(name, tag, balance) => createWallet(name, tag, balance)}
+            onUpdate={(wallet, patch) => updateWallet(wallet, patch)}
+          />
+        )}
         {menuOpen && (
           <SideMenu
             user={user}
             profile={profile}
             debtorSummary={debtorSummary}
-            busy={busy}
+            walletsTotal={walletTotals.cash + walletTotals.savings + walletTotals.investment + walletTotals.other}
             onClose={() => setMenuOpen(false)}
             onLogout={() => { setMenuOpen(false); setLogoutOpen(true); }}
-            onSaveProfile={saveProfile}
+            onOpenProfile={() => { setMenuOpen(false); setProfileSheetOpen(true); }}
+            onOpenWallets={() => { setMenuOpen(false); setTab("wallets"); }}
             onOpenDebtors={() => { setMenuOpen(false); setSelectedDebtor(null); setTab("debtors"); }}
             onOpenBudgets={() => { setMenuOpen(false); setBudgetSheetOpen(true); }}
           />
+        )}
+        {profileSheetOpen && (
+          <ProfileEditSheet profile={profile} busy={busy} onClose={() => setProfileSheetOpen(false)} onSave={saveProfile} />
         )}
         {budgetSheetOpen && <BudgetSheet budgets={budgets} onClose={() => setBudgetSheetOpen(false)} onSave={updateBudgets} />}
         {recapOpen && (
@@ -1768,28 +1860,22 @@ function SideMenu({
   user,
   profile,
   debtorSummary,
-  busy,
+  walletsTotal,
   onClose,
   onLogout,
-  onSaveProfile,
+  onOpenProfile,
+  onOpenWallets,
   onOpenDebtors,
   onOpenBudgets,
 }: {
   user: User;
   profile: Profile | null;
   debtorSummary: { name: string; amount: number }[];
-  busy: boolean;
+  walletsTotal: number;
   onClose: () => void;
   onLogout: () => void;
-  onSaveProfile: (profile: {
-    nickname: string;
-    app_icon: string;
-    app_icon_image: string;
-    month_start_day: number;
-    opening_cash_balance: number;
-    savings_balance: number;
-    investment_balance: number;
-  }) => void;
+  onOpenProfile: () => void;
+  onOpenWallets: () => void;
   onOpenDebtors: () => void;
   onOpenBudgets: () => void;
 }) {
@@ -1798,25 +1884,7 @@ function SideMenu({
   const appIcon = profile?.app_icon || user.email?.[0]?.toUpperCase() || "฿";
   const appIconImage = profile?.app_icon_image || "";
   const provider = user.app_metadata?.provider ?? "Google";
-  const [nickname, setNickname] = useState(profile?.nickname ?? "");
-  const app_icon = profile?.app_icon ?? "";
-  const [app_icon_image, setAppIconImage] = useState(appIconImage);
-  const [month_start_day, setMonthStartDay] = useState(profile?.month_start_day ?? 1);
-  const [opening_cash_balance, setOpeningCashBalance] = useState(profile?.opening_cash_balance ?? 0);
-  const [savings_balance, setSavingsBalance] = useState(profile?.savings_balance ?? 0);
-  const [investment_balance, setInvestmentBalance] = useState(profile?.investment_balance ?? 0);
   const totalDebt = debtorSummary.reduce((sum, item) => sum + item.amount, 0);
-
-  async function chooseProfileImage(files: FileList | null) {
-    const file = files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) return;
-    try {
-      setAppIconImage(await compressProfileImage(file));
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : "เลือกรูปไม่สำเร็จ");
-    }
-  }
 
   return (
     <div className="side-menu-backdrop" onClick={onClose}>
@@ -1830,8 +1898,8 @@ function SideMenu({
         </div>
 
         <div className="profile-head">
-          <div className="avatar profile-avatar profile-avatar-image" style={app_icon_image ? { backgroundImage: `url(${app_icon_image})` } : undefined}>
-            {!app_icon_image && appIcon}
+          <div className="avatar profile-avatar profile-avatar-image" style={appIconImage ? { backgroundImage: `url(${appIconImage})` } : undefined}>
+            {!appIconImage && appIcon}
           </div>
           <div>
             <b>{name}</b>
@@ -1845,60 +1913,15 @@ function SideMenu({
           <b>{user.created_at ? new Date(user.created_at).toLocaleDateString("th-TH") : "—"}</b>
         </div>
 
-        <section className="side-section">
-          <h3>จัดการโปรไฟล์</h3>
-          <label>
-            ชื่อเล่น
-            <input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="เช่น ก้อง" />
-          </label>
-          <label>
-            รูปไอคอนจากภายนอก
-            <input type="file" accept="image/*" onChange={(event) => { void chooseProfileImage(event.target.files); event.currentTarget.value = ""; }} />
-            <small>รองรับรูปจากมือถือได้ถึง 10MB ระบบจะย่อเป็นไอคอนให้อัตโนมัติ</small>
-          </label>
-          {!!app_icon_image && <button className="side-ghost" onClick={() => setAppIconImage("")}>ลบรูปไอคอน</button>}
-          <label>
-            วันเริ่มรอบเดือน
-            <input type="number" min={1} max={28} value={month_start_day} onChange={(event) => setMonthStartDay(Number(event.target.value))} />
-          </label>
-          <button
-            className="side-save"
-            onClick={() =>
-              onSaveProfile({ nickname, app_icon, app_icon_image, month_start_day, opening_cash_balance, savings_balance, investment_balance })
-            }
-            disabled={busy}
-          >
-            บันทึกโปรไฟล์
-          </button>
-        </section>
-
-        <section className="side-section">
-          <h3>ยอดเงินเริ่มต้น</h3>
-          <small className="side-section-hint">เงินที่มีอยู่ก่อนเริ่มใช้แอพ ใส่ไว้ครั้งเดียว ระบบจะรวมเข้ากับยอดที่คำนวณจากรายการที่บันทึกไว้</small>
-          <label>
-            เงินสดตั้งต้น (รวมในเงินพร้อมใช้สุทธิ)
-            <input inputMode="decimal" value={opening_cash_balance} onChange={(event) => setOpeningCashBalance(Number(event.target.value) || 0)} />
-          </label>
-          <label>
-            ออมทรัพย์
-            <input inputMode="decimal" value={savings_balance} onChange={(event) => setSavingsBalance(Number(event.target.value) || 0)} />
-          </label>
-          <label>
-            เงินลงทุน
-            <input inputMode="decimal" value={investment_balance} onChange={(event) => setInvestmentBalance(Number(event.target.value) || 0)} />
-          </label>
-          <button
-            className="side-save"
-            onClick={() =>
-              onSaveProfile({ nickname, app_icon, app_icon_image, month_start_day, opening_cash_balance, savings_balance, investment_balance })
-            }
-            disabled={busy}
-          >
-            บันทึกยอดเงินเริ่มต้น
-          </button>
-        </section>
-
         <nav className="side-menu-list">
+          <button onClick={onOpenProfile}>
+            <span>จัดการโปรไฟล์</span>
+            <small>ชื่อเล่น รูปไอคอน วันเริ่มรอบเดือน</small>
+          </button>
+          <button onClick={onOpenWallets}>
+            <span>กระเป๋าตังค์</span>
+            <small>ยอดรวม {moneySign}{formatMoney(walletsTotal)} · จัดการกองเงินและแท็ก</small>
+          </button>
           <button onClick={onOpenDebtors}>
             <span>ลูกหนี้</span>
             <small>ยอดรวม {moneySign}{formatMoney(totalDebt)} · จัดการรายชื่อและประวัติ</small>
@@ -1911,6 +1934,182 @@ function SideMenu({
 
         <button className="logout-button" onClick={onLogout}>ออกจากระบบ</button>
       </aside>
+    </div>
+  );
+}
+
+function ProfileEditSheet({
+  profile,
+  busy,
+  onClose,
+  onSave,
+}: {
+  profile: Profile | null;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (next: { nickname: string; app_icon: string; app_icon_image: string; month_start_day: number }) => void;
+}) {
+  const [nickname, setNickname] = useState(profile?.nickname ?? "");
+  const app_icon = profile?.app_icon ?? "";
+  const [app_icon_image, setAppIconImage] = useState(profile?.app_icon_image ?? "");
+  const [month_start_day, setMonthStartDay] = useState(profile?.month_start_day ?? 1);
+
+  async function chooseProfileImage(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+    try {
+      setAppIconImage(await compressProfileImage(file));
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "เลือกรูปไม่สำเร็จ");
+    }
+  }
+
+  const submit = () => {
+    onSave({ nickname, app_icon, app_icon_image, month_start_day });
+    onClose();
+  };
+
+  return (
+    <div className="sheet-backdrop">
+      <section className="edit-sheet">
+        <div className="sheet-head">
+          <div>
+            <p className="eyebrow">ตั้งค่า</p>
+            <h2>จัดการโปรไฟล์</h2>
+          </div>
+          <button onClick={onClose}>×</button>
+        </div>
+        <label>
+          ชื่อเล่น
+          <input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="เช่น ก้อง" />
+        </label>
+        <label>
+          รูปไอคอนจากภายนอก
+          <input type="file" accept="image/*" onChange={(event) => { void chooseProfileImage(event.target.files); event.currentTarget.value = ""; }} />
+          <small>รองรับรูปจากมือถือได้ถึง 10MB ระบบจะย่อเป็นไอคอนให้อัตโนมัติ</small>
+        </label>
+        {!!app_icon_image && <button className="side-ghost" onClick={() => setAppIconImage("")}>ลบรูปไอคอน</button>}
+        <label>
+          วันเริ่มรอบเดือน
+          <input type="number" min={1} max={28} value={month_start_day} onChange={(event) => setMonthStartDay(Number(event.target.value))} />
+        </label>
+        <button className="save" onClick={submit} disabled={busy}>
+          บันทึก
+        </button>
+      </section>
+    </div>
+  );
+}
+
+function WalletsView({
+  wallets,
+  onBack,
+  onAdd,
+  onEdit,
+  onDelete,
+}: {
+  wallets: Wallet[];
+  onBack: () => void;
+  onAdd: () => void;
+  onEdit: (wallet: Wallet) => void;
+  onDelete: (wallet: Wallet) => void;
+}) {
+  const total = wallets.reduce((sum, wallet) => sum + wallet.balance, 0);
+
+  return (
+    <div className="view debtor-view">
+      <div className="add-title">
+        <button onClick={onBack}>‹</button>
+        <div>
+          <p className="eyebrow">จัดการกองเงิน</p>
+          <h2>กระเป๋าตังค์</h2>
+        </div>
+        <button className="header-add-button" onClick={onAdd}>เพิ่ม</button>
+      </div>
+      <section className="debtor-detail-card">
+        <span>ยอดรวมทุกกระเป๋า</span>
+        <strong>{moneySign}{formatMoney(total)}</strong>
+      </section>
+      <div className="debtor-page-list">
+        {wallets.map((wallet) => (
+          <article className="debtor-page-item" key={wallet.id}>
+            <button className="debtor-main-button" onClick={() => onEdit(wallet)}>
+              <span className="debtor-avatar" style={{ background: nameColor(wallet.name) }}>{nameInitial(wallet.name)}</span>
+              <div>
+                <span>{wallet.name}</span>
+                <small>{walletTagLabels[wallet.tag]} · {moneySign}{formatMoney(wallet.balance)}</small>
+              </div>
+            </button>
+            <details className="kebab-menu">
+              <summary>⋮</summary>
+              <menu>
+                <button onClick={() => onEdit(wallet)}>แก้ไข</button>
+                <button onClick={() => onDelete(wallet)}>ลบ</button>
+              </menu>
+            </details>
+          </article>
+        ))}
+        {!wallets.length && <EmptyNote glyph="▣">ยังไม่มีกระเป๋าตังค์ สร้างกองเงินแรกของคุณได้เลย</EmptyNote>}
+      </div>
+    </div>
+  );
+}
+
+function WalletEditSheet({
+  wallet,
+  busy,
+  onClose,
+  onCreate,
+  onUpdate,
+}: {
+  wallet: Wallet | null;
+  busy: boolean;
+  onClose: () => void;
+  onCreate: (name: string, tag: WalletTag, balance: number) => void;
+  onUpdate: (wallet: Wallet, patch: { name: string; tag: WalletTag; balance: number }) => void;
+}) {
+  const [name, setName] = useState(wallet?.name ?? "");
+  const [tag, setTag] = useState<WalletTag>(wallet?.tag ?? "cash");
+  const [balance, setBalance] = useState(wallet?.balance ?? 0);
+
+  const submit = () => {
+    if (!name.trim()) return;
+    if (wallet) onUpdate(wallet, { name, tag, balance });
+    else onCreate(name, tag, balance);
+    onClose();
+  };
+
+  return (
+    <div className="sheet-backdrop">
+      <section className="edit-sheet">
+        <div className="sheet-head">
+          <div>
+            <p className="eyebrow">{wallet ? "แก้ไขกระเป๋าตังค์" : "เพิ่มกระเป๋าตังค์"}</p>
+            <h2>{wallet ? wallet.name : "กระเป๋าใหม่"}</h2>
+          </div>
+          <button onClick={onClose}>×</button>
+        </div>
+        <label>
+          ชื่อกระเป๋า
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น กระเป๋าหลัก, ออมทรัพย์ SCB" />
+        </label>
+        <label>
+          ประเภท
+          <select value={tag} onChange={(event) => setTag(event.target.value as WalletTag)}>
+            {(Object.keys(walletTagLabels) as WalletTag[]).map((key) => (
+              <option key={key} value={key}>{walletTagLabels[key]}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          ยอดเงิน
+          <input inputMode="decimal" value={balance} onChange={(event) => setBalance(Number(event.target.value) || 0)} />
+        </label>
+        <button className="save" onClick={submit} disabled={busy || !name.trim()}>
+          บันทึก
+        </button>
+      </section>
     </div>
   );
 }
