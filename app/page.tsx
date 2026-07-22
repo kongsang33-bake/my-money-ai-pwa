@@ -48,6 +48,7 @@ type Wallet = {
   balance: number;
 };
 type ReportPeriod = "month" | "year";
+type Toast = { id: number; tone: "success" | "info" | "error"; title: string; detail?: string };
 const walletTagLabels: Record<WalletTag, string> = {
   cash: "เงินสด",
   savings: "ออมทรัพย์",
@@ -196,6 +197,7 @@ function saveBudgets(userId: string, budgets: Record<string, number>) {
 }
 
 type QuickShortcut = { title: string; category: string; transaction_type: TransactionType; amount: number; count: number };
+type AiSuggestion = { label: string; detail: string; text: string; shortcut?: QuickShortcut };
 
 function deriveQuickShortcuts(entries: Entry[]): QuickShortcut[] {
   const cutoff = Date.now() - 90 * 86400000;
@@ -225,6 +227,62 @@ function computeStreak(entries: Entry[]) {
     cursor -= 86400000;
   }
   return streak;
+}
+
+function daysRemainingInCycle(end: Date) {
+  const today = startOfDay(new Date());
+  const endDay = startOfDay(new Date(end.getTime() - 1));
+  return Math.max(1, Math.round((endDay - today) / 86400000) + 1);
+}
+
+function buildWalletInsight(balance: number, outflow: number, cycleEnd: Date) {
+  const remainingDays = daysRemainingInCycle(cycleEnd);
+  const perDay = balance / remainingDays;
+  if (balance < 0) {
+    return {
+      tone: "danger",
+      label: "ต้องระวัง",
+      text: `ยอดสุทธิติดลบ ${moneySign}${formatMoney(Math.abs(balance))} ในรอบนี้`,
+      perDay,
+    };
+  }
+  if (outflow <= 0) {
+    return {
+      tone: "calm",
+      label: "เริ่มรอบใหม่",
+      text: `ยังไม่มีรายจ่ายในรอบนี้ เหลืออีก ${remainingDays} วัน`,
+      perDay,
+    };
+  }
+  if (perDay < 200) {
+    return {
+      tone: "warn",
+      label: "ใช้แบบประคอง",
+      text: `เฉลี่ยใช้ได้ประมาณ ${moneySign}${formatMoney(perDay)} ต่อวัน`,
+      perDay,
+    };
+  }
+  return {
+    tone: "good",
+    label: "ยังดูดี",
+    text: `เหลือใช้ได้ประมาณ ${moneySign}${formatMoney(perDay)} ต่อวัน`,
+    perDay,
+  };
+}
+
+function lastSevenDayOutflow(entries: Entry[]) {
+  const today = startOfDay(new Date());
+  return Array.from({ length: 7 }, (_, index) => {
+    const time = today - (6 - index) * 86400000;
+    const amount = entries
+      .filter((entry) => startOfDay(new Date(entry.occurred_at)) === time && entry.wallet_impact < 0)
+      .reduce((sum, entry) => sum + Math.abs(entry.wallet_impact), 0);
+    return {
+      key: String(time),
+      label: new Date(time).toLocaleDateString("th-TH", { weekday: "short" }),
+      amount,
+    };
+  });
 }
 
 function cycleBounds(selectedMonth: string, startDay: number) {
@@ -497,10 +555,24 @@ export default function Home() {
   const [budgetSheetOpen, setBudgetSheetOpen] = useState(false);
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const displayName = profile?.nickname?.trim() || user?.user_metadata?.full_name || user?.user_metadata?.name || "เงินของฉัน";
   const displayIcon = profile?.app_icon?.trim() || user?.email?.[0]?.toUpperCase() || "฿";
   const displayIconImage = profile?.app_icon_image?.trim() || "";
   const monthStartDay = profile?.month_start_day || 1;
+
+  const notify = useCallback((toast: Omit<Toast, "id">) => {
+    const id = Date.now() + Math.random();
+    setToasts((items) => [...items.slice(-2), { id, ...toast }]);
+  }, []);
+
+  useEffect(() => {
+    if (!toasts.length) return;
+    const timer = window.setTimeout(() => {
+      setToasts((items) => items.slice(1));
+    }, 3200);
+    return () => window.clearTimeout(timer);
+  }, [toasts]);
 
   const loadEntries = useCallback(async () => {
     if (!supabase) return;
@@ -674,6 +746,23 @@ export default function Home() {
   const monthlyOutflow = useMemo(() => Math.abs(totalWallet(monthlyEntries, "expense")), [monthlyEntries]);
   const monthlyDebtChange = useMemo(() => monthlyEntries.reduce((sum, entry) => sum + entry.debt_impact, 0), [monthlyEntries]);
   const monthlyBalance = monthlyIncome - monthlyOutflow;
+  const walletInsight = useMemo(() => buildWalletInsight(mainWallet, monthlyOutflow, cycleRange.end), [mainWallet, monthlyOutflow, cycleRange.end]);
+  const sevenDayOutflow = useMemo(() => lastSevenDayOutflow(entries), [entries]);
+  const aiSuggestions = useMemo<AiSuggestion[]>(() => {
+    const fromHistory = quickShortcuts.map((shortcut) => ({
+      label: shortcut.title,
+      detail: `${moneySign}${formatMoney(shortcut.amount)}`,
+      text: `${shortcut.title} ${shortcut.amount}`,
+      shortcut,
+    }));
+    const defaults = [
+      { label: "อาหารกลางวัน", detail: "120", text: "อาหารกลางวัน 120 บาท" },
+      { label: "กาแฟ", detail: "65", text: "กาแฟ 65 บาท" },
+      { label: "เพื่อนคืนเงิน", detail: "500", text: "เพื่อนเอโอนคืน 500 บาท" },
+      { label: "ออกให้ก่อน", detail: "300", text: "ออกให้เพื่อนก่อน 300 บาท" },
+    ];
+    return [...fromHistory, ...defaults].slice(0, 4);
+  }, [quickShortcuts]);
   const dayEntries = useMemo(
     () => (selectedDay ? monthlyEntries.filter((entry) => new Date(entry.occurred_at).toDateString() === selectedDay) : monthlyEntries),
     [monthlyEntries, selectedDay],
@@ -712,8 +801,10 @@ export default function Home() {
     try {
       const images = await Promise.all(nextFiles.map(fileToSlipImage));
       setSlipImages((current) => [...current, ...images].slice(0, 3));
+      notify({ tone: "success", title: "แนบสลิปแล้ว", detail: `${images.length} รูปพร้อมให้ AI อ่าน` });
     } catch (e) {
       setError(e instanceof Error ? e.message : "แนบรูปไม่สำเร็จ");
+      notify({ tone: "error", title: "แนบรูปไม่สำเร็จ", detail: e instanceof Error ? e.message : undefined });
     }
   }
 
@@ -735,6 +826,15 @@ export default function Home() {
         source_text: "ทางลัด",
       }),
     ]);
+    notify({ tone: "info", title: "เพิ่มรายการลัดแล้ว", detail: shortcut.title });
+  }
+
+  function applySuggestion(textValue: string, shortcut?: { title: string; category: string; transaction_type: TransactionType; amount: number }) {
+    if (shortcut) {
+      addQuickShortcut(shortcut);
+      return;
+    }
+    setText((current) => (current.trim() ? `${current.trim()}\n${textValue}` : textValue));
   }
 
   async function analyze() {
@@ -776,8 +876,10 @@ export default function Home() {
           }),
         ),
       );
+      notify({ tone: "success", title: "AI แยกรายการแล้ว", detail: `พบ ${data.items.length} รายการให้ตรวจสอบ` });
     } catch (e) {
       setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+      notify({ tone: "error", title: "AI ยังวิเคราะห์ไม่ได้", detail: e instanceof Error ? e.message : undefined });
     }
 
     setBusy(false);
@@ -817,6 +919,7 @@ export default function Home() {
       setSlipImages([]);
       setTab("home");
       await loadEntries();
+      notify({ tone: "success", title: "บันทึกรายการแล้ว", detail: `${normalizedItems.length} รายการถูกซิงค์เรียบร้อย` });
     }
 
     setBusy(false);
@@ -1043,13 +1146,7 @@ export default function Home() {
           <div className="view">
             {dataLoading && <StateCard tone="loading" title="กำลังซิงค์ข้อมูล" detail="กำลังโหลดรายการ กระเป๋า และลูกหนี้ของคุณ" />}
             <section className="wallet-grid single-wallet">
-              <div className="wallet-card primary-wallet">
-                <span>เงินพร้อมใช้สุทธิ</span>
-                <div>
-                  <strong>{moneySign}{formatMoney(mainWallet)}</strong>
-                  {streak >= 2 && <small className="streak-badge">{streak} วันติดต่อกัน</small>}
-                </div>
-              </div>
+              <HeroWalletCard balance={mainWallet} insight={walletInsight} streak={streak} />
             </section>
 
             {secondaryWalletTags.some((entry) => wallets.some((wallet) => wallet.tag === entry.tag)) && (
@@ -1075,6 +1172,7 @@ export default function Home() {
               categories={categorySummary}
               monthStartDay={monthStartDay}
               budgets={budgets}
+              trend={sevenDayOutflow}
             />
 
             {error && <StateCard tone="error" title="มีบางอย่างไม่สำเร็จ" detail={error} />}
@@ -1097,19 +1195,26 @@ export default function Home() {
               <input type="date" value={entryDate} max={todayDateInput()} onChange={(event) => setEntryDate(event.target.value)} />
             </label>
 
-            {!!quickShortcuts.length && (
+            <div className="ai-suggestions">
+              <span>แตะตัวอย่างเพื่อเริ่มเร็ว</span>
               <div className="quick-shortcuts">
-                {quickShortcuts.map((shortcut) => (
-                  <button key={`${shortcut.title}|${shortcut.category}|${shortcut.transaction_type}`} className="quick-chip" onClick={() => addQuickShortcut(shortcut)}>
-                    <span className="cat-dot" style={{ background: `${categoryColor(shortcut.category)}22` }}>{categoryIcon(shortcut.category)}</span>
+                {aiSuggestions.map((suggestion) => (
+                  <button
+                    key={`${suggestion.label}|${suggestion.detail}`}
+                    className="quick-chip"
+                    onClick={() => applySuggestion(suggestion.text, suggestion.shortcut)}
+                  >
+                    <span className="cat-dot" style={{ background: suggestion.shortcut ? `${categoryColor(suggestion.shortcut.category)}22` : undefined }}>
+                      {suggestion.shortcut ? categoryIcon(suggestion.shortcut.category) : "✦"}
+                    </span>
                     <span>
-                      <b>{shortcut.title}</b>
-                      <small>{moneySign}{formatMoney(shortcut.amount)}</small>
+                      <b>{suggestion.label}</b>
+                      <small>{suggestion.detail}</small>
                     </span>
                   </button>
                 ))}
               </div>
-            )}
+            </div>
 
             <div className="ai-input-wrap">
               <div className="chat-bubble assistant">
@@ -1141,6 +1246,7 @@ export default function Home() {
             <button className="primary" onClick={analyze} disabled={busy || (!text.trim() && !slipImages.length)}>
               {busy ? "กำลังวิเคราะห์..." : "ให้ AI แยกรายการ"}
             </button>
+            {busy && <StateCard tone="loading" title="AI กำลังอ่านข้อมูล" detail="กำลังแยกยอดเงิน หมวดหมู่ วันที่ และชื่อผู้เกี่ยวข้อง" />}
             {error && <StateCard tone="error" title="AI ยังทำรายการนี้ไม่ได้" detail={error} />}
 
             {!!drafts.length && (
@@ -1191,6 +1297,7 @@ export default function Home() {
               categories={categorySummary}
               monthStartDay={monthStartDay}
               budgets={budgets}
+              trend={sevenDayOutflow}
             />
             <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
             <EntryList entries={dayEntries} onEdit={setEditing} onDelete={deleteEntry} />
@@ -1281,6 +1388,7 @@ export default function Home() {
           />
         )}
         {logoutOpen && <ConfirmLogout onCancel={() => setLogoutOpen(false)} onConfirm={() => supabase?.auth.signOut()} />}
+        <ToastHost toasts={toasts} onDismiss={(id) => setToasts((items) => items.filter((toast) => toast.id !== id))} />
 
         {!overlayOpen && (
           <nav className="bottom-nav">
@@ -1459,6 +1567,74 @@ function CalendarHeatmap({
   );
 }
 
+function CountUpMoney({ value }: { value: number }) {
+  const [shown, setShown] = useState(value);
+
+  useEffect(() => {
+    const start = 0;
+    const diff = value;
+    let frame = 0;
+    const total = 26;
+    const tick = () => {
+      frame += 1;
+      const progress = 1 - Math.pow(1 - frame / total, 3);
+      setShown(start + diff * progress);
+      if (frame < total) window.requestAnimationFrame(tick);
+    };
+    const id = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(id);
+  }, [value]);
+
+  return <>{moneySign}{formatMoney(shown)}</>;
+}
+
+function HeroWalletCard({
+  balance,
+  insight,
+  streak,
+}: {
+  balance: number;
+  insight: { tone: string; label: string; text: string; perDay: number };
+  streak: number;
+}) {
+  return (
+    <div className={`wallet-card primary-wallet hero-wallet hero-${insight.tone}`}>
+      <div className="hero-wallet-top">
+        <span>เงินพร้อมใช้สุทธิ</span>
+        <em>{insight.label}</em>
+      </div>
+      <strong className="hero-amount">
+        {balance < 0 ? "−" : ""}
+        <CountUpMoney value={Math.abs(balance)} />
+      </strong>
+      <div className="hero-wallet-foot">
+        <small>{insight.text}</small>
+        {streak >= 2 && <small className="streak-badge">{streak} วันติดต่อกัน</small>}
+      </div>
+    </div>
+  );
+}
+
+function MiniTrend({ items }: { items: { key: string; label: string; amount: number }[] }) {
+  const max = Math.max(...items.map((item) => item.amount), 1);
+  return (
+    <div className="mini-trend" aria-label="รายจ่าย 7 วันล่าสุด">
+      <div className="mini-trend-head">
+        <span>รายจ่าย 7 วันล่าสุด</span>
+        <b>{moneySign}{formatMoney(items.reduce((sum, item) => sum + item.amount, 0))}</b>
+      </div>
+      <div className="mini-trend-bars">
+        {items.map((item) => (
+          <span key={item.key} title={`${item.label}: ${moneySign}${formatMoney(item.amount)}`}>
+            <i style={{ height: `${Math.max(8, (item.amount / max) * 100)}%` }} />
+            <small>{item.label}</small>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function MonthSummary({
   selectedMonth,
   setSelectedMonth,
@@ -1469,6 +1645,7 @@ function MonthSummary({
   categories: categoryItems,
   monthStartDay,
   budgets,
+  trend,
 }: {
   selectedMonth: string;
   setSelectedMonth: (value: string) => void;
@@ -1479,6 +1656,7 @@ function MonthSummary({
   categories: { category: string; amount: number }[];
   monthStartDay: number;
   budgets: Record<string, number>;
+  trend: { key: string; label: string; amount: number }[];
 }) {
   return (
     <section className="summary-panel">
@@ -1496,6 +1674,7 @@ function MonthSummary({
         <Metric label="สุทธิ" value={balance} tone={balance >= 0 ? "income" : "expense"} />
         <Metric label="ลูกหนี้เปลี่ยน" value={debtChange} tone={debtChange >= 0 ? "income" : "expense"} />
       </div>
+      <MiniTrend items={trend} />
       <div className="category-bars">
         {categoryItems.length ? (
           categoryItems.map((item) => {
@@ -1534,6 +1713,23 @@ function EmptyNote({ glyph, children }: { glyph: string; children: React.ReactNo
   );
 }
 
+function ToastHost({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
+  if (!toasts.length) return null;
+  return (
+    <div className="toast-host" aria-live="polite">
+      {toasts.map((toast) => (
+        <button key={toast.id} className={`toast ${toast.tone}`} onClick={() => onDismiss(toast.id)}>
+          <span aria-hidden="true">{toast.tone === "success" ? "✓" : toast.tone === "error" ? "!" : "✦"}</span>
+          <span>
+            <b>{toast.title}</b>
+            {toast.detail && <small>{toast.detail}</small>}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function StateCard({ tone, title, detail }: { tone: "loading" | "empty" | "error"; title: string; detail: string }) {
   return (
     <div className={`state-card ${tone}`} role={tone === "error" ? "alert" : "status"}>
@@ -1563,7 +1759,7 @@ function DraftRow({ draft, knownDebtorNames, onChange }: { draft: Draft; knownDe
   const isNewDebtor = isDebtType && draft.debtor_name !== unnamedDebtor && !knownDebtorNames.some((name) => name.trim().toLowerCase() === draft.debtor_name.trim().toLowerCase());
 
   return (
-    <div className="draft">
+    <div className={`draft draft-${draft.transaction_type}`}>
       <span className="cat-icon" style={{ background: `${categoryColor(draft.category)}22` }}>{categoryIcon(draft.category)}</span>
       <div>
         <input value={draft.title} onChange={(event) => update({ title: event.target.value })} />
@@ -1574,6 +1770,7 @@ function DraftRow({ draft, knownDebtorNames, onChange }: { draft: Draft; knownDe
         </select>
       </div>
       <div className="draft-side">
+        <span className="draft-type-badge">{transactionTypeLabels[draft.transaction_type]}</span>
         <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
           {Object.entries(transactionTypeLabels).map(([value, label]) => (
             <option key={value} value={value}>
