@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
@@ -41,6 +41,14 @@ type EntryInput = {
   source_text?: string | null;
 };
 
+type SlipImage = {
+  id: string;
+  name: string;
+  mimeType: string;
+  data: string;
+  preview: string;
+};
+
 const categories = ["อาหาร", "เดินทาง", "ของใช้", "ที่อยู่อาศัย", "สุขภาพ", "บันเทิง", "รายได้", "บิลประจำ", "อื่น ๆ"];
 
 const transactionTypeLabels: Record<TransactionType, string> = {
@@ -66,13 +74,16 @@ const categoryIcon = (category: string) => {
   if (category === "เดินทาง") return "🚕";
   if (category === "รายได้") return "💼";
   if (category === "สุขภาพ") return "✚";
-  if (category === "บิลประจำ") return "▤";
-  return "▣";
+  if (category === "บิลประจำ") return "▣";
+  if (category === "บันเทิง") return "♪";
+  return "▪";
 };
 
+const moneySign = "฿";
+const unnamedDebtor = "ไม่ระบุ";
 const monthKey = (date: Date) => date.toISOString().slice(0, 7);
 const formatMoney = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 0 });
-const formatSignedMoney = (value: number) => `${value >= 0 ? "+" : "−"}฿${formatMoney(Math.abs(value))}`;
+const formatSignedMoney = (value: number) => `${value >= 0 ? "+" : "−"}${moneySign}${formatMoney(Math.abs(value))}`;
 const formatDateTime = (value: string) => new Date(value).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
 const toDateInput = (value: string) => new Date(value).toISOString().slice(0, 10);
 const fromDateInput = (value: string) => `${value}T12:00:00`;
@@ -95,25 +106,52 @@ function calculateImpacts(amount: number, transactionType: TransactionType) {
 
 function normalizeEntry(input: EntryInput): Entry {
   const transaction_type = input.transaction_type ?? (input.type === "income" ? "income" : "personal_expense");
-  const impacts = calculateImpacts(Number(input.amount), transaction_type);
+  const impacts = calculateImpacts(Number(input.amount) || 0, transaction_type);
   return {
     ...input,
+    amount: Number(input.amount) || 0,
     type: transactionKind[transaction_type],
     transaction_type,
     wallet_impact: input.wallet_impact ?? impacts.wallet_impact,
     debt_impact: input.debt_impact ?? impacts.debt_impact,
     user_share: input.user_share ?? impacts.user_share,
     partner_share: input.partner_share ?? impacts.partner_share,
-    debtor_name: input.debtor_name?.trim() || "ไม่ระบุ",
+    debtor_name: input.debtor_name?.trim() || unnamedDebtor,
   };
+}
+
+function totalWallet(entries: Entry[], direction: EntryKind) {
+  return entries
+    .filter((entry) => (direction === "income" ? entry.wallet_impact > 0 : entry.wallet_impact < 0))
+    .reduce((sum, entry) => sum + entry.wallet_impact, 0);
+}
+
+function fileToSlipImage(file: File): Promise<SlipImage> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("อ่านไฟล์รูปไม่สำเร็จ"));
+    reader.onload = () => {
+      const value = String(reader.result ?? "");
+      const [, data = ""] = value.split(",");
+      resolve({
+        id: `${Date.now()}-${file.name}`,
+        name: file.name,
+        mimeType: file.type,
+        data,
+        preview: value,
+      });
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(!supabase);
   const [tab, setTab] = useState<Tab>("home");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [text, setText] = useState("");
+  const [slipImages, setSlipImages] = useState<SlipImage[]>([]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [editing, setEditing] = useState<Entry | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -123,31 +161,8 @@ export default function Home() {
   const [error, setError] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(monthKey(new Date()));
 
-  useEffect(() => {
-    if (!supabase) {
-      setReady(true);
-      return;
-    }
-
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user);
-      setReady(true);
-    });
-
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null));
-    return () => data.subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!user) {
-      setEntries([]);
-      return;
-    }
-    void loadEntries();
-  }, [user]);
-
-  async function loadEntries() {
-    if (!supabase || !user) return;
+  const loadEntries = useCallback(async () => {
+    if (!supabase) return;
 
     const { data, error } = await supabase
       .from("transactions")
@@ -178,7 +193,24 @@ export default function Home() {
         }),
       ),
     );
-  }
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+      setReady(true);
+      if (data.user) void loadEntries();
+    });
+
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) void loadEntries();
+      else setEntries([]);
+    });
+    return () => data.subscription.unsubscribe();
+  }, [loadEntries]);
 
   const mainWallet = useMemo(() => entries.reduce((sum, entry) => sum + entry.wallet_impact, 0), [entries]);
   const debtorSummary = useMemo(() => {
@@ -187,11 +219,12 @@ export default function Home() {
       if (!["lend", "split_half", "debt_repayment"].includes(entry.transaction_type)) continue;
       map.set(entry.debtor_name, (map.get(entry.debtor_name) ?? 0) + entry.debt_impact);
     }
-    return [...map.entries()].map(([name, amount]) => ({ name, amount })).filter((item) => item.amount > 0.005).sort((a, b) => b.amount - a.amount);
+    return [...map.entries()]
+      .map(([name, amount]) => ({ name, amount }))
+      .filter((item) => item.amount > 0.005)
+      .sort((a, b) => b.amount - a.amount);
   }, [entries]);
   const totalDebt = useMemo(() => debtorSummary.reduce((sum, item) => sum + item.amount, 0), [debtorSummary]);
-  const partnerDebt = totalDebt;
-  const [settlementAmount, setSettlementAmount] = useState("");
 
   const monthlyEntries = useMemo(
     () => entries.filter((entry) => entry.occurred_at.slice(0, 7) === selectedMonth),
@@ -214,7 +247,34 @@ export default function Home() {
       .slice(0, 4);
   }, [monthlyEntries]);
 
+  async function addSlipFiles(files: FileList | null) {
+    if (!files?.length) return;
+    setError("");
+
+    const nextFiles = [...files].slice(0, 3 - slipImages.length);
+    if (nextFiles.some((file) => !file.type.startsWith("image/"))) {
+      setError("รองรับเฉพาะไฟล์รูปภาพเท่านั้น");
+      return;
+    }
+    if (nextFiles.some((file) => file.size > 5 * 1024 * 1024)) {
+      setError("รูปภาพต้องมีขนาดไม่เกิน 5MB ต่อรูป");
+      return;
+    }
+
+    try {
+      const images = await Promise.all(nextFiles.map(fileToSlipImage));
+      setSlipImages((current) => [...current, ...images].slice(0, 3));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "แนบรูปไม่สำเร็จ");
+    }
+  }
+
   async function analyze() {
+    if (!text.trim() && !slipImages.length) {
+      setError("กรุณาพิมพ์ข้อความหรือแนบรูปสลิปก่อน");
+      return;
+    }
+
     setBusy(true);
     setError("");
 
@@ -222,11 +282,16 @@ export default function Home() {
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+        body: JSON.stringify({
+          text,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          images: slipImages.map(({ data, mimeType, name }) => ({ data, mimeType, name })),
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
 
+      const source = [text.trim(), slipImages.length ? `แนบรูปสลิป ${slipImages.length} รูป` : ""].filter(Boolean).join(" | ");
       setDrafts(
         data.items.map((item: { title: string; category: string; amount: number; transaction_type: TransactionType; debtor_name?: string; date: string }, index: number) =>
           normalizeEntry({
@@ -237,7 +302,7 @@ export default function Home() {
             transaction_type: item.transaction_type,
             debtor_name: item.debtor_name,
             occurred_at: fromDateInput(item.date),
-            source_text: text,
+            source_text: source,
           }),
         ),
       );
@@ -262,8 +327,8 @@ export default function Home() {
         category: normalized.category,
         amount: normalized.amount,
         kind: normalized.type,
-            transaction_type: normalized.transaction_type,
-            debtor_name: normalized.debtor_name,
+        transaction_type: normalized.transaction_type,
+        debtor_name: normalized.debtor_name,
         wallet_impact: normalized.wallet_impact,
         debt_impact: normalized.debt_impact,
         user_share: normalized.user_share,
@@ -280,6 +345,7 @@ export default function Home() {
     } else {
       setDrafts([]);
       setText("");
+      setSlipImages([]);
       setTab("home");
       await loadEntries();
     }
@@ -320,7 +386,6 @@ export default function Home() {
 
     setBusy(false);
   }
-  async function settleDebt(_full?: boolean) { setSettlementAmount(""); setTab("add"); setText("รับชำระเงินคืนจากผู้เกี่ยวข้อง"); }
 
   async function deleteEntry(entry: Entry) {
     if (!supabase) return;
@@ -361,30 +426,10 @@ export default function Home() {
 
         {tab === "home" && (
           <div className="view">
-            <section className="wallet-grid">
+            <section className="wallet-grid single-wallet">
               <div className="wallet-card primary-wallet">
                 <span>เงินพร้อมใช้สุทธิ</span>
-                <strong>฿{formatMoney(mainWallet)}</strong>
-              </div>
-              <div className="wallet-card debt-wallet">
-                <span>ยอดลูกหนี้</span>
-                <strong>฿{formatMoney(Math.max(0, partnerDebt))}</strong>
-              </div>
-            </section>
-
-            <section className="settlement-card">
-              <div>
-                <b>บันทึกการรับชำระ</b>
-                <small>บันทึกเงินที่แฟนโอนคืน แล้วลดยอดค้างให้อัตโนมัติ</small>
-              </div>
-              <div className="settlement-actions">
-                <input inputMode="decimal" placeholder="ยอดคืน" value={settlementAmount} onChange={(event) => setSettlementAmount(event.target.value)} />
-                <button onClick={() => settleDebt(false)} disabled={busy || !Number(settlementAmount)}>
-                  บันทึก
-                </button>
-                <button onClick={() => settleDebt(true)} disabled={busy || partnerDebt <= 0}>
-                  คืนทั้งหมด
-                </button>
+                <strong>{moneySign}{formatMoney(mainWallet)}</strong>
               </div>
             </section>
 
@@ -392,7 +437,7 @@ export default function Home() {
               <span className="spark">AI</span>
               <span>
                 <b>เล่าให้ AI ฟัง</b>
-                <small>รองรับจ่ายเอง หารแฟน ออกให้ก่อน คืนเงิน</small>
+                <small>พิมพ์รายการ หรือแนบรูปสลิปให้ AI แยกยอดและหมวดหมู่</small>
               </span>
               <span className="arrow">›</span>
             </button>
@@ -408,10 +453,18 @@ export default function Home() {
             />
 
             <section className="debtor-card">
-              <div className="section-title compact-title"><h2>ลูกหนี้</h2><button onClick={() => setDebtorsOpen(true)}>ดูทั้งหมด</button></div>
-              {debtorSummary.slice(0, 3).map((item) => <div className="debtor-row" key={item.name}><span>{item.name}</span><strong>฿{formatMoney(item.amount)}</strong></div>)}
+              <div className="section-title compact-title">
+                <h2>ลูกหนี้</h2>
+                <button onClick={() => setDebtorsOpen(true)}>ดูทั้งหมด</button>
+              </div>
+              {debtorSummary.slice(0, 3).map((item) => (
+                <div className="debtor-row" key={item.name}>
+                  <span>{item.name}</span>
+                  <strong>{moneySign}{formatMoney(item.amount)}</strong>
+                </div>
+              ))}
               {!debtorSummary.length && <p className="empty-note">ยังไม่มียอดลูกหนี้</p>}
-              {!!debtorSummary.length && <small className="debtor-total">รวม ฿{formatMoney(totalDebt)} · รายการคืนเงินบันทึกผ่าน AI</small>}
+              {!!debtorSummary.length && <small className="debtor-total">รวม {moneySign}{formatMoney(totalDebt)} · รายการคืนเงินบันทึกผ่าน AI</small>}
             </section>
 
             {error && <p className="error-box">{error}</p>}
@@ -429,21 +482,39 @@ export default function Home() {
             <div className="add-title">
               <button onClick={() => setTab("home")}>‹</button>
               <div>
-                <p className="eyebrow">บันทึกแบบรวดเร็ว</p>
+                <p className="eyebrow">AI Chat</p>
                 <h2>วันนี้มีรายการอะไรบ้าง?</h2>
               </div>
             </div>
 
             <div className="ai-input-wrap">
-              <div className="chat-bubble assistant">สวัสดีครับ พิมพ์รายการเงินแบบธรรมชาติได้เลย ระบบจะช่วยแยกเป็นรายการให้ตรวจสอบก่อนบันทึก</div>
-              <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="พิมพ์รายการที่ต้องการบันทึก..." />
+              <div className="chat-bubble assistant">
+                พิมพ์รายการแบบธรรมชาติ หรือแนบรูปสลิปได้เลย ผมจะแยกยอด หมวดหมู่ วันที่ และลูกหนี้ให้ตรวจสอบก่อนบันทึก
+              </div>
+              <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="เช่น กินข้าว 120 บาท, ออกให้เพื่อนเอก่อน 500, เพื่อนเอโอนคืน 200" />
+
+              {!!slipImages.length && (
+                <div className="slip-preview-list">
+                  {slipImages.map((image) => (
+                    <div className="slip-preview" key={image.id}>
+                      <span className="slip-thumb" style={{ backgroundImage: `url(${image.preview})` }} aria-label={image.name} />
+                      <span>{image.name}</span>
+                      <button onClick={() => setSlipImages((items) => items.filter((item) => item.id !== image.id))}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="input-tools">
-                <span>Gemini จะช่วยแยกชนิดรายการตาม logic กระเป๋า</span>
-                <span>AI</span>
+                <label className="attach-button">
+                  แนบสลิป
+                  <input type="file" accept="image/*" multiple onChange={(event) => { void addSlipFiles(event.target.files); event.currentTarget.value = ""; }} />
+                </label>
+                <span>{slipImages.length ? `${slipImages.length}/3 รูป` : "Gemini ช่วยอ่านรูปและข้อความ"}</span>
               </div>
             </div>
 
-            <button className="primary" onClick={analyze} disabled={busy || !text.trim()}>
+            <button className="primary" onClick={analyze} disabled={busy || (!text.trim() && !slipImages.length)}>
               {busy ? "กำลังวิเคราะห์..." : "ให้ AI แยกรายการ"}
             </button>
             {error && <p className="error-box">{error}</p>}
@@ -453,7 +524,7 @@ export default function Home() {
                 <div className="review-head">
                   <div>
                     <h3>ตรวจสอบก่อนบันทึก</h3>
-                    <p>พบ {drafts.length} รายการ แก้ชนิดรายการได้ก่อนยืนยัน</p>
+                    <p>พบ {drafts.length} รายการ แก้ข้อมูลได้ก่อนยืนยัน</p>
                   </div>
                   <span>AI</span>
                 </div>
@@ -464,7 +535,7 @@ export default function Home() {
                 <button className="save" onClick={() => saveEntries(drafts)} disabled={busy}>
                   บันทึก {drafts.length} รายการ
                 </button>
-                <p className="privacy">สูตรคำนวณถูกล็อกในแอพ AI มีหน้าที่ช่วยแยกประเภทเท่านั้น</p>
+                <p className="privacy">AI ช่วยอ่านและแยกข้อมูล แต่สูตรคำนวณกระเป๋า/ลูกหนี้ยังล็อกอยู่ในแอพ</p>
               </section>
             )}
           </div>
@@ -505,7 +576,7 @@ export default function Home() {
             <span>＋</span>
           </button>
           <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>
-            <span>▤</span>รายการ
+            <span>▣</span>รายการ
           </button>
         </nav>
       </section>
@@ -598,7 +669,7 @@ function MonthSummary({
   outflow,
   debtChange,
   balance,
-  categories,
+  categories: categoryItems,
 }: {
   selectedMonth: string;
   setSelectedMonth: (value: string) => void;
@@ -621,19 +692,19 @@ function MonthSummary({
         <Metric label="เงินเข้า" value={income} tone="income" />
         <Metric label="เงินออก" value={outflow} tone="expense" />
         <Metric label="สุทธิ" value={balance} tone={balance >= 0 ? "income" : "expense"} />
-        <Metric label="ยอดลูกหนี้เปลี่ยน" value={debtChange} tone={debtChange >= 0 ? "income" : "expense"} />
+        <Metric label="ลูกหนี้เปลี่ยน" value={debtChange} tone={debtChange >= 0 ? "income" : "expense"} />
       </div>
       <div className="category-bars">
-        {categories.length ? (
-          categories.map((item) => {
-            const max = Math.max(...categories.map((x) => x.amount));
+        {categoryItems.length ? (
+          categoryItems.map((item) => {
+            const max = Math.max(...categoryItems.map((x) => x.amount));
             return (
               <div className="category-bar" key={item.category}>
                 <div>
                   <span>{categoryIcon(item.category)}</span>
                   <b>{item.category}</b>
                 </div>
-                <strong>฿{formatMoney(item.amount)}</strong>
+                <strong>{moneySign}{formatMoney(item.amount)}</strong>
                 <i style={{ width: `${Math.max(8, (item.amount / max) * 100)}%` }} />
               </div>
             );
@@ -650,7 +721,7 @@ function Metric({ label, value, tone }: { label: string; value: number; tone: "i
   return (
     <div className={`metric ${tone}`}>
       <span>{label}</span>
-      <b>{value < 0 ? "−" : ""}฿{formatMoney(Math.abs(value))}</b>
+      <b>{value < 0 ? "−" : ""}{moneySign}{formatMoney(Math.abs(value))}</b>
     </div>
   );
 }
@@ -678,7 +749,7 @@ function DraftRow({ draft, onChange }: { draft: Draft; onChange: (draft: Draft) 
           ))}
         </select>
         <label>
-          ฿
+          {moneySign}
           <input inputMode="decimal" value={draft.amount} onChange={(event) => update({ amount: Number(event.target.value) })} />
         </label>
       </div>
@@ -686,7 +757,9 @@ function DraftRow({ draft, onChange }: { draft: Draft; onChange: (draft: Draft) 
         <span>กระเป๋า {formatSignedMoney(draft.wallet_impact)}</span>
         <span>ลูกหนี้ {formatSignedMoney(draft.debt_impact)}</span>
       </div>
-      {(["lend", "split_half", "debt_repayment"] as TransactionType[]).includes(draft.transaction_type) && <input className="draft-date" placeholder="ชื่อผู้เกี่ยวข้อง เช่น แฟน หรือ เพื่อนเอ" value={draft.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />}
+      {(["lend", "split_half", "debt_repayment"] as TransactionType[]).includes(draft.transaction_type) && (
+        <input className="draft-date" placeholder="ชื่อผู้เกี่ยวข้อง เช่น แฟน หรือ เพื่อนเอ" value={draft.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
+      )}
       <input className="draft-date" type="date" value={toDateInput(draft.occurred_at)} onChange={(event) => update({ occurred_at: fromDateInput(event.target.value) })} />
     </div>
   );
@@ -713,20 +786,17 @@ function EntryList({ entries, onEdit, onDelete }: { entries: Entry[]; onEdit: (e
           <div>
             <b>{entry.title}</b>
             <small>
-              {transactionTypeLabels[entry.transaction_type]} • {entry.category} • {formatDateTime(entry.occurred_at)}
+              {transactionTypeLabels[entry.transaction_type]} · {entry.category} · {formatDateTime(entry.occurred_at)}
             </small>
             <small>
-              กระเป๋า {formatSignedMoney(entry.wallet_impact)} • {entry.debtor_name}: {formatSignedMoney(entry.debt_impact)}
+              กระเป๋า {formatSignedMoney(entry.wallet_impact)}
+              {entry.debt_impact !== 0 ? ` · ${entry.debtor_name}: ${formatSignedMoney(entry.debt_impact)}` : ""}
             </small>
           </div>
           <strong className={entry.wallet_impact >= 0 ? "income" : "expense"}>{formatSignedMoney(entry.wallet_impact)}</strong>
           <menu>
-            <button onClick={() => onEdit(entry)} title="แก้ไข">
-              แก้
-            </button>
-            <button onClick={() => onDelete(entry)} title="ลบ">
-              ลบ
-            </button>
+            <button onClick={() => onEdit(entry)} title="แก้ไข">แก้</button>
+            <button onClick={() => onDelete(entry)} title="ลบ">ลบ</button>
           </menu>
         </article>
       ))}
@@ -787,10 +857,12 @@ function EditSheet({
           จำนวนเงิน
           <input inputMode="decimal" value={entry.amount} onChange={(event) => update({ amount: Number(event.target.value) })} />
         </label>
-        <label>
-          วันที่
-          <input type="text" placeholder="ชื่อผู้เกี่ยวข้อง" value={entry.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
-        </label>
+        {(["lend", "split_half", "debt_repayment"] as TransactionType[]).includes(entry.transaction_type) && (
+          <label>
+            ชื่อผู้เกี่ยวข้อง
+            <input type="text" placeholder="เช่น เพื่อนเอ" value={entry.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
+          </label>
+        )}
         <label>
           วันที่
           <input type="date" value={toDateInput(entry.occurred_at)} onChange={(event) => update({ occurred_at: fromDateInput(event.target.value) })} />
@@ -809,23 +881,74 @@ function EditSheet({
   );
 }
 
-function totalWallet(entries: Entry[], direction: EntryKind) {
-  return entries
-    .filter((entry) => (direction === "income" ? entry.wallet_impact > 0 : entry.wallet_impact < 0))
-    .reduce((sum, entry) => sum + entry.wallet_impact, 0);
-}
-
 function DebtorSheet({ debtors, onClose }: { debtors: { name: string; amount: number }[]; onClose: () => void }) {
-  return <div className="sheet-backdrop"><section className="edit-sheet"><div className="sheet-head"><div><p className="eyebrow">สรุปยอดค้าง</p><h2>ลูกหนี้ทั้งหมด</h2></div><button onClick={onClose}>×</button></div>{debtors.map((item) => <div className="debtor-row large" key={item.name}><span>{item.name}</span><strong>฿{formatMoney(item.amount)}</strong></div>)}{!debtors.length && <p className="empty-note">ยังไม่มียอดลูกหนี้</p>}<p className="privacy">รายการรับชำระเงินให้พิมพ์ผ่าน AI Chat เช่น “เพื่อนเอโอนคืน 200 บาท”</p></section></div>;
+  return (
+    <div className="sheet-backdrop">
+      <section className="edit-sheet">
+        <div className="sheet-head">
+          <div>
+            <p className="eyebrow">สรุปยอดค้าง</p>
+            <h2>ลูกหนี้ทั้งหมด</h2>
+          </div>
+          <button onClick={onClose}>×</button>
+        </div>
+        {debtors.map((item) => (
+          <div className="debtor-row large" key={item.name}>
+            <span>{item.name}</span>
+            <strong>{moneySign}{formatMoney(item.amount)}</strong>
+          </div>
+        ))}
+        {!debtors.length && <p className="empty-note">ยังไม่มียอดลูกหนี้</p>}
+        <p className="privacy">รายการรับชำระเงินให้พิมพ์ผ่าน AI Chat เช่น “เพื่อนเอโอนคืน 200 บาท”</p>
+      </section>
+    </div>
+  );
 }
 
 function ProfileSheet({ user, onClose, onLogout }: { user: User; onClose: () => void; onLogout: () => void }) {
   const metadata = user.user_metadata ?? {};
   const name = metadata.full_name ?? metadata.name ?? "ผู้ใช้";
   const provider = user.app_metadata?.provider ?? "Google";
-  return <div className="sheet-backdrop"><section className="edit-sheet profile-sheet"><div className="sheet-head"><div><p className="eyebrow">บัญชีของฉัน</p><h2>โปรไฟล์</h2></div><button onClick={onClose}>×</button></div><div className="profile-head">{metadata.avatar_url ? <img src={metadata.avatar_url} alt="" /> : <div className="avatar profile-avatar">{name[0]}</div>}<div><b>{name}</b><small>{user.email}</small></div></div><div className="profile-info"><span>เข้าสู่ระบบด้วย</span><b>{provider}</b><span>สร้างบัญชี</span><b>{user.created_at ? new Date(user.created_at).toLocaleDateString("th-TH") : "—"}</b></div><button className="logout-button" onClick={onLogout}>ออกจากระบบ</button></section></div>;
+  return (
+    <div className="sheet-backdrop">
+      <section className="edit-sheet profile-sheet">
+        <div className="sheet-head">
+          <div>
+            <p className="eyebrow">บัญชีของฉัน</p>
+            <h2>โปรไฟล์</h2>
+          </div>
+          <button onClick={onClose}>×</button>
+        </div>
+        <div className="profile-head">
+          {metadata.avatar_url ? <span className="profile-photo" style={{ backgroundImage: `url(${metadata.avatar_url})` }} aria-label={name} /> : <div className="avatar profile-avatar">{String(name)[0]}</div>}
+          <div>
+            <b>{name}</b>
+            <small>{user.email}</small>
+          </div>
+        </div>
+        <div className="profile-info">
+          <span>เข้าสู่ระบบด้วย</span>
+          <b>{provider}</b>
+          <span>สร้างบัญชี</span>
+          <b>{user.created_at ? new Date(user.created_at).toLocaleDateString("th-TH") : "—"}</b>
+        </div>
+        <button className="logout-button" onClick={onLogout}>ออกจากระบบ</button>
+      </section>
+    </div>
+  );
 }
 
 function ConfirmLogout({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
-  return <div className="dialog-backdrop"><section className="confirm-dialog"><h2>ออกจากระบบ?</h2><p>คุณสามารถกลับมาเข้าสู่ระบบและดูข้อมูลเดิมได้ทุกเมื่อ</p><div><button onClick={onCancel}>ยกเลิก</button><button className="danger" onClick={onConfirm}>ออกจากระบบ</button></div></section></div>;
+  return (
+    <div className="dialog-backdrop">
+      <section className="confirm-dialog">
+        <h2>ออกจากระบบ?</h2>
+        <p>คุณสามารถกลับมาเข้าสู่ระบบและดูข้อมูลเดิมได้ทุกเมื่อ</p>
+        <div>
+          <button onClick={onCancel}>ยกเลิก</button>
+          <button className="danger" onClick={onConfirm}>ออกจากระบบ</button>
+        </div>
+      </section>
+    </div>
+  );
 }

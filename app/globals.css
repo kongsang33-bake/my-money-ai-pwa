@@ -161,7 +161,7 @@ h2 {
 .chat-bubble { border-radius: 16px; padding: 12px 14px; font-size: 12px; line-height: 1.6; margin-bottom: 10px; }
 .chat-bubble.assistant { background: #eef7f1; color: var(--green); }
 .profile-head { display: flex; align-items: center; gap: 12px; padding: 12px 0 18px; border-bottom: 1px solid var(--line); }
-.profile-head img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; }
+.profile-photo { width: 52px; height: 52px; border-radius: 50%; background-size: cover; background-position: center; flex: 0 0 52px; }
 .profile-head b, .profile-head small { display: block; }
 .profile-head small { color: var(--muted); margin-top: 4px; font-size: 12px; }
 .profile-avatar { display: grid; place-items: center; flex: 0 0 52px; }
@@ -604,6 +604,71 @@ h2 {
   justify-content: space-between;
   font-size: 10px;
   color: var(--muted);
+  gap: 12px;
+}
+
+.attach-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border: 1px solid #d3e8dd;
+  border-radius: 999px;
+  background: #f0faf5;
+  color: var(--green);
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.attach-button input {
+  display: none;
+}
+
+.slip-preview-list {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+
+.slip-preview {
+  display: grid;
+  grid-template-columns: 44px 1fr 30px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #edf0ec;
+  border-radius: 14px;
+  background: #fbfbf7;
+  padding: 8px;
+}
+
+.slip-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background-size: cover;
+  background-position: center;
+}
+
+.slip-preview span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.slip-preview button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 10px;
+  background: #fff0ea;
+  color: #a54a2f;
+  font-size: 18px;
 }
 
 .primary,
