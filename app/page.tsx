@@ -125,7 +125,7 @@ const formatSignedMoney = (value: number) => `${value >= 0 ? "+" : "−"}${money
 const formatDateTime = (value: string) => new Date(value).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
 const toDateInput = (value: string) => new Date(value).toISOString().slice(0, 10);
 const fromDateInput = (value: string) => `${value}T12:00:00`;
-const todayEntryDate = () => fromDateInput(new Date().toISOString().slice(0, 10));
+const todayDateInput = () => new Date().toISOString().slice(0, 10);
 
 function startOfDay(date: Date) {
   const copy = new Date(date);
@@ -336,6 +336,7 @@ export default function Home() {
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [text, setText] = useState("");
   const [slipImages, setSlipImages] = useState<SlipImage[]>([]);
+  const [entryDate, setEntryDate] = useState(todayDateInput);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [editing, setEditing] = useState<Entry | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -512,6 +513,11 @@ export default function Home() {
     }
   }
 
+  function openAddTab() {
+    setEntryDate(todayDateInput());
+    setTab("add");
+  }
+
   function addQuickShortcut(shortcut: { title: string; category: string; transaction_type: TransactionType; amount: number }) {
     setDrafts((items) => [
       ...items,
@@ -521,7 +527,7 @@ export default function Home() {
         category: shortcut.category,
         amount: shortcut.amount,
         transaction_type: shortcut.transaction_type,
-        occurred_at: todayEntryDate(),
+        occurred_at: fromDateInput(entryDate),
         source_text: "ทางลัด",
       }),
     ]);
@@ -543,6 +549,7 @@ export default function Home() {
         body: JSON.stringify({
           text,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          defaultDate: entryDate,
           images: slipImages.map(({ data, mimeType, name }) => ({ data, mimeType, name })),
           debtorNames: debtors.map((debtor) => debtor.name),
         }),
@@ -792,7 +799,7 @@ export default function Home() {
               </div>
             </section>
 
-            <button className="ai-card" onClick={() => setTab("add")}>
+            <button className="ai-card" onClick={openAddTab}>
               <span className="spark">AI</span>
               <span>
                 <b>เล่าให้ AI ฟัง</b>
@@ -834,6 +841,11 @@ export default function Home() {
                 <h2>วันนี้มีรายการอะไรบ้าง?</h2>
               </div>
             </div>
+
+            <label className="entry-date-picker">
+              <span>บันทึกของวันที่</span>
+              <input type="date" value={entryDate} max={todayDateInput()} onChange={(event) => setEntryDate(event.target.value)} />
+            </label>
 
             {!!quickShortcuts.length && (
               <div className="quick-shortcuts">
@@ -989,7 +1001,7 @@ export default function Home() {
           <button className={tab === "home" ? "active" : ""} onClick={() => setTab("home")}>
             <span>⌂</span>หน้าหลัก
           </button>
-          <button className="add-button" onClick={() => setTab("add")}>
+          <button className="add-button" onClick={openAddTab}>
             <span>＋</span>
           </button>
           <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>

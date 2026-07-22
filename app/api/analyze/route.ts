@@ -37,9 +37,12 @@ type AnalyzeImage = {
 type AnalyzeBody = {
   text?: string;
   timezone?: string;
+  defaultDate?: string;
   images?: AnalyzeImage[];
   debtorNames?: string[];
 };
+
+const dateInputPattern = /^\d{4}-\d{2}-\d{2}$/;
 
 const maxImageBytes = 5 * 1024 * 1024;
 
@@ -50,9 +53,9 @@ function imageBytes(base64: string) {
 function buildPrompt(input: string, today: string, hasImages: boolean, debtorNames: string[]) {
   const knownDebtors = debtorNames.length ? debtorNames.join(", ") : "ยังไม่มีรายชื่อลูกหนี้ที่บันทึกไว้";
   return [
-    `วันนี้คือ ${today}`,
+    `วันที่กำลังบันทึกรายการนี้คือ ${today}`,
     "แยกรายรับรายจ่ายจากข้อความและ/หรือรูปสลิปเป็น JSON เท่านั้น ห้ามสร้างรายการที่ไม่มีหลักฐานในข้อความหรือรูป",
-    "ถ้าไม่ระบุวันที่ ให้ใช้วันนี้ ถ้ารูปสลิปมีวันที่ ให้ใช้วันที่บนสลิป",
+    "ถ้าข้อความหรือรูปไม่ได้ระบุวันที่ไว้ชัดเจน ให้ใช้วันที่กำลังบันทึกด้านบน ถ้ารูปสลิปมีวันที่ ให้ใช้วันที่บนสลิปแทน",
     hasImages
       ? "ถ้ามีรูปสลิป ให้อ่านชื่อร้าน/ผู้รับเงิน รายการสินค้า ยอดเงิน วันที่ เวลา และข้อความอ้างอิงจากรูป"
       : "ไม่มีรูปแนบ ให้วิเคราะห์จากข้อความเท่านั้น",
@@ -108,7 +111,10 @@ export async function POST(request: Request) {
     if (imageBytes(image.data) > maxImageBytes) return Response.json({ error: "รูปภาพต้องมีขนาดไม่เกิน 5MB ต่อรูป" }, { status: 400 });
   }
 
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: body.timezone || "Asia/Bangkok" }).format(new Date());
+  const today =
+    body.defaultDate && dateInputPattern.test(body.defaultDate)
+      ? body.defaultDate
+      : new Intl.DateTimeFormat("en-CA", { timeZone: body.timezone || "Asia/Bangkok" }).format(new Date());
   const prompt = buildPrompt(input, today, images.length > 0, debtorNames);
 
   let response;

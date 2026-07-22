@@ -824,6 +824,31 @@ h2 {
   font-size: 22px;
 }
 
+.entry-date-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.entry-date-picker input {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 7px 9px;
+  background: #fbfbf7;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .quick-shortcuts {
   display: flex;
   gap: 8px;
