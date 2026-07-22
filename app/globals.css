@@ -729,11 +729,22 @@ h2 {
 }
 
 .auth-screen {
-  padding: 90px 28px;
+  padding: 42px 28px;
   text-align: center;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  background:
+    radial-gradient(circle at 50% -8%, #c9ead8 0 24%, transparent 25%),
+    linear-gradient(180deg, #eff6f0 0%, var(--cream) 62%);
+}
+
+.auth-card {
+  background: #ffffff;
+  border: 1px solid #edf0ec;
+  border-radius: 24px;
+  padding: 28px 26px;
+  box-shadow: 0 18px 48px #22352b1c;
 }
 
 .auth-mark {
@@ -756,8 +767,52 @@ h2 {
 .auth-copy {
   color: var(--muted);
   line-height: 1.7;
-  margin: 14px auto 30px;
+  margin: 14px auto 24px;
   max-width: 310px;
+}
+
+.google-button {
+  width: 100%;
+  min-height: 50px;
+  border: 1px solid #dfe4df;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #17211e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0;
+  box-shadow: 0 1px 0 #f0f0ee;
+}
+
+.google-button:disabled {
+  opacity: 0.58;
+}
+
+.email-fallback {
+  margin-top: 18px;
+  border-top: 1px solid #eef0ec;
+  padding-top: 16px;
+}
+
+.email-fallback summary {
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.email-fallback summary::-webkit-details-marker {
+  display: none;
+}
+
+.email-fallback[open] summary {
+  margin-bottom: 14px;
+  color: var(--green);
+  font-weight: 700;
 }
 
 .auth-screen form {
@@ -803,6 +858,19 @@ h2 {
   color: var(--muted);
   font-size: 10px;
   margin-top: 18px;
+}
+
+.auth-card > small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.7;
+  margin-top: 22px;
+}
+
+.auth-card > small span {
+  color: #245dc8;
+  font-weight: 700;
 }
 
 .error-box {
