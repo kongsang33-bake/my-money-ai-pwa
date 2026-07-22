@@ -459,6 +459,14 @@ export default function Home() {
     return () => data.subscription.unsubscribe();
   }, [loadDebtors, loadEntries, loadProfile]);
 
+  const overlayOpen = menuOpen || !!editing || !!debtorSheetMode || budgetSheetOpen || recapOpen || logoutOpen;
+  useEffect(() => {
+    document.body.style.overflow = overlayOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [overlayOpen]);
+
   const mainWallet = useMemo(
     () => (profile?.opening_cash_balance ?? 0) + entries.reduce((sum, entry) => sum + entry.wallet_impact, 0),
     [entries, profile?.opening_cash_balance],
