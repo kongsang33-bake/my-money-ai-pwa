@@ -68,6 +68,26 @@
 
   /* recap card (dark surface) accents */
   --recap-ink: #cfe9dd;
+
+  /* neumorphism + glass system */
+  --app-bg:
+    radial-gradient(circle at 12% 6%, rgba(255, 255, 255, 0.9) 0 13%, transparent 24%),
+    radial-gradient(circle at 92% 0%, rgba(195, 232, 214, 0.72) 0 16%, transparent 30%),
+    linear-gradient(145deg, #eef2ed 0%, #f7f5ef 48%, #dfe9e2 100%);
+  --glass: rgba(255, 255, 255, 0.52);
+  --glass-strong: rgba(255, 255, 255, 0.72);
+  --glass-soft: rgba(255, 255, 255, 0.34);
+  --glass-green: rgba(224, 246, 235, 0.58);
+  --glass-border: rgba(255, 255, 255, 0.74);
+  --glass-border-soft: rgba(255, 255, 255, 0.5);
+  --neumo-light: rgba(255, 255, 255, 0.86);
+  --neumo-dark: rgba(29, 60, 47, 0.15);
+  --neumo-dark-soft: rgba(29, 60, 47, 0.08);
+  --shadow-raised: 14px 16px 34px var(--neumo-dark), -12px -12px 26px var(--neumo-light);
+  --shadow-soft: 8px 10px 22px var(--neumo-dark-soft), -8px -8px 18px rgba(255, 255, 255, 0.72);
+  --shadow-float: 0 24px 60px rgba(15, 39, 29, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  --shadow-inset: inset 6px 6px 12px rgba(29, 60, 47, 0.12), inset -6px -6px 12px rgba(255, 255, 255, 0.78);
+  --blur-glass: blur(22px) saturate(1.35);
 }
 
 * {
@@ -1639,6 +1659,318 @@ h2 {
 .report-preview b {
   color: var(--ink);
   text-align: right;
+}
+
+/* Neumorphism + glass redesign layer */
+body {
+  background: var(--app-bg);
+}
+
+.phone {
+  background:
+    radial-gradient(circle at 14% 10%, rgba(255, 255, 255, 0.82) 0 10%, transparent 26%),
+    radial-gradient(circle at 90% 5%, rgba(205, 237, 222, 0.66) 0 13%, transparent 32%),
+    linear-gradient(155deg, rgba(249, 247, 241, 0.92), rgba(231, 238, 230, 0.9));
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: var(--shadow-float);
+}
+
+.phone::before,
+.phone::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  border-radius: 999px;
+  filter: blur(8px);
+}
+
+.phone::before {
+  width: 250px;
+  height: 250px;
+  right: -130px;
+  top: 70px;
+  background: rgba(186, 223, 205, 0.28);
+}
+
+.phone::after {
+  width: 220px;
+  height: 220px;
+  left: -120px;
+  bottom: 90px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.topbar,
+.view,
+.auth-screen {
+  position: relative;
+  z-index: 1;
+}
+
+.home-profile-icon,
+.menu-button,
+.add-title > button,
+.sheet-head button,
+.side-menu-head button,
+.recap-close,
+.kebab-menu summary,
+.entry menu button,
+.slip-preview button {
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+}
+
+.menu-button span {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.52);
+}
+
+.summary-panel,
+.entry-list,
+.heatmap-panel,
+.entry-date-picker,
+.ai-input-wrap,
+.draft,
+.draft-impact,
+.auth-card,
+.debtor-page-item,
+.debtor-detail-card,
+.quick-chip,
+.slip-preview,
+.report-preview,
+.side-menu-list button,
+.confirm-dialog,
+.recap-grid > div,
+.recap-top-category {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+}
+
+.summary-panel,
+.entry-list,
+.heatmap-panel,
+.ai-input-wrap,
+.auth-card,
+.debtor-detail-card,
+.confirm-dialog {
+  border-radius: 26px;
+}
+
+.wallet-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 18px 20px 40px rgba(20, 92, 69, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.wallet-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.26), transparent 45%);
+  pointer-events: none;
+}
+
+.wallet-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.primary-wallet {
+  background:
+    radial-gradient(circle at 18% 10%, rgba(255, 255, 255, 0.22), transparent 28%),
+    linear-gradient(135deg, #207b5f, var(--green-dark) 72%);
+}
+
+.savings-wallet {
+  background:
+    radial-gradient(circle at 18% 10%, rgba(255, 255, 255, 0.2), transparent 28%),
+    linear-gradient(135deg, #b48a30, var(--savings-dark));
+}
+
+.investment-wallet {
+  background:
+    radial-gradient(circle at 18% 10%, rgba(255, 255, 255, 0.18), transparent 28%),
+    linear-gradient(135deg, #3b68ba, var(--investment-dark));
+}
+
+.other-wallet {
+  background:
+    radial-gradient(circle at 18% 10%, rgba(255, 255, 255, 0.18), transparent 28%),
+    linear-gradient(135deg, #7a828d, var(--other-dark));
+}
+
+.metric,
+.heatmap-cell,
+.cat-dot,
+.entry-icon,
+.cat-icon,
+.quick-chip .cat-icon,
+.attach-button,
+.review-head > span,
+.report-period-toggle,
+.draft-impact {
+  background: var(--glass-green);
+  border: 1px solid var(--glass-border-soft);
+  box-shadow: var(--shadow-inset);
+}
+
+.metric {
+  border-radius: 18px;
+}
+
+.heatmap-cell {
+  box-shadow: inset 4px 4px 9px rgba(29, 60, 47, 0.09), inset -4px -4px 9px rgba(255, 255, 255, 0.72);
+}
+
+.entry,
+.impact-row,
+.input-tools,
+.draft-date,
+.profile-head {
+  border-color: rgba(255, 255, 255, 0.46);
+}
+
+.entry-tappable:hover,
+.entry-tappable:active,
+.debtor-page-item:hover,
+.debtor-page-item:active,
+.side-menu-list button:hover {
+  background: var(--glass-strong);
+  box-shadow: var(--shadow-raised);
+}
+
+input,
+textarea,
+select,
+.summary-head input,
+.entry-date-picker input,
+.auth-screen form input,
+.edit-sheet input,
+.edit-sheet select,
+.draft input,
+.draft select,
+.edit-sheet .budget-row input {
+  background: rgba(246, 248, 242, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  box-shadow: var(--shadow-inset);
+  color: var(--ink);
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+.auth-screen form input:focus,
+.edit-sheet input:focus,
+.edit-sheet select:focus {
+  border-color: rgba(20, 92, 69, 0.38);
+  box-shadow: var(--shadow-inset), 0 0 0 4px rgba(20, 92, 69, 0.12);
+}
+
+.primary,
+.save,
+.header-add-button,
+.recap-share,
+.google-button {
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  box-shadow: 10px 12px 24px rgba(20, 92, 69, 0.16), -8px -8px 18px rgba(255, 255, 255, 0.68), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.primary,
+.save,
+.header-add-button {
+  background: linear-gradient(145deg, #1b7056, var(--green-dark)) !important;
+}
+
+.google-button,
+.side-ghost,
+.logout-button {
+  background: var(--glass-strong);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+}
+
+.logout-button,
+.confirm-dialog .danger,
+.slip-preview button {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62), 8px 10px 20px rgba(165, 74, 47, 0.1);
+}
+
+.side-menu,
+.edit-sheet {
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.78), rgba(247, 245, 239, 0.72)),
+    var(--cream);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+}
+
+.side-menu {
+  border-left-color: var(--glass-border);
+}
+
+.sheet-backdrop,
+.side-menu-backdrop,
+.dialog-backdrop {
+  background: rgba(17, 37, 29, 0.34);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.recap-card {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  box-shadow: var(--shadow-float);
+}
+
+.recap-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.2), transparent 26%);
+  pointer-events: none;
+}
+
+.bottom-nav {
+  border-color: var(--glass-border);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(223, 246, 235, 0.42));
+  box-shadow: var(--shadow-float);
+}
+
+.bottom-nav .nav-icon {
+  background: rgba(255, 255, 255, 0.46);
+  box-shadow: var(--shadow-inset);
+}
+
+.bottom-nav .active .nav-icon {
+  background: rgba(224, 246, 235, 0.78);
+  box-shadow: var(--shadow-soft);
+}
+
+.bottom-nav .add-button {
+  background: linear-gradient(145deg, #1d765a, var(--green-dark));
+  box-shadow: 0 20px 40px rgba(20, 92, 69, 0.38), 0 0 0 12px rgba(255, 255, 255, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.kebab-menu menu {
+  background: var(--glass-strong);
+  border-color: var(--glass-border);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+}
+
+.report-period-toggle button.active {
+  background: var(--glass-strong);
+  box-shadow: var(--shadow-soft);
 }
 
 @media (max-width: 500px) {
