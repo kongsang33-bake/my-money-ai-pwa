@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 
 type EntryKind = "expense" | "income";
 type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "gift";
-type Tab = "home" | "add" | "history";
+type Tab = "home" | "add" | "history" | "debtors";
 
 type Entry = {
   id: string;
@@ -29,6 +29,8 @@ type Profile = {
   user_id: string;
   nickname: string | null;
   app_icon: string | null;
+  app_icon_image: string | null;
+  month_start_day: number;
 };
 type Debtor = {
   id: string;
@@ -99,6 +101,14 @@ const formatDateTime = (value: string) => new Date(value).toLocaleString("th-TH"
 const toDateInput = (value: string) => new Date(value).toISOString().slice(0, 10);
 const fromDateInput = (value: string) => `${value}T12:00:00`;
 
+function cycleBounds(selectedMonth: string, startDay: number) {
+  const [year, month] = selectedMonth.split("-").map(Number);
+  const safeDay = Math.min(28, Math.max(1, startDay || 1));
+  const start = new Date(year, month - 1, safeDay, 0, 0, 0, 0);
+  const end = new Date(year, month, safeDay, 0, 0, 0, 0);
+  return { start, end };
+}
+
 function calculateImpacts(amount: number, transactionType: TransactionType) {
   if (transactionType === "income") {
     return { wallet_impact: amount, debt_impact: 0, user_share: amount, partner_share: 0 };
@@ -156,6 +166,15 @@ function fileToSlipImage(file: File): Promise<SlipImage> {
   });
 }
 
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("อ่านไฟล์รูปไม่สำเร็จ"));
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(!supabase);
@@ -168,12 +187,17 @@ export default function Home() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [editing, setEditing] = useState<Entry | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [debtorSheetMode, setDebtorSheetMode] = useState<"create" | "edit" | null>(null);
+  const [editingDebtor, setEditingDebtor] = useState<Debtor | null>(null);
+  const [selectedDebtor, setSelectedDebtor] = useState<Debtor | null>(null);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(monthKey(new Date()));
   const displayName = profile?.nickname?.trim() || user?.user_metadata?.full_name || user?.user_metadata?.name || "เงินของฉัน";
   const displayIcon = profile?.app_icon?.trim() || user?.email?.[0]?.toUpperCase() || "฿";
+  const displayIconImage = profile?.app_icon_image?.trim() || "";
+  const monthStartDay = profile?.month_start_day || 1;
 
   const loadEntries = useCallback(async () => {
     if (!supabase) return;
@@ -212,7 +236,7 @@ export default function Home() {
   const loadProfile = useCallback(async () => {
     if (!supabase) return;
 
-    const { data, error } = await supabase.from("profiles").select("user_id,nickname,app_icon").maybeSingle();
+    const { data, error } = await supabase.from("profiles").select("user_id,nickname,app_icon,app_icon_image,month_start_day").maybeSingle();
     if (error) {
       setError(error.message);
       return;
@@ -272,10 +296,13 @@ export default function Home() {
       .sort((a, b) => b.amount - a.amount);
   }, [entries]);
 
-  const monthlyEntries = useMemo(
-    () => entries.filter((entry) => entry.occurred_at.slice(0, 7) === selectedMonth),
-    [entries, selectedMonth],
-  );
+  const monthlyEntries = useMemo(() => {
+    const { start, end } = cycleBounds(selectedMonth, monthStartDay);
+    return entries.filter((entry) => {
+      const occurred = new Date(entry.occurred_at);
+      return occurred >= start && occurred < end;
+    });
+  }, [entries, monthStartDay, selectedMonth]);
   const monthlyIncome = useMemo(() => totalWallet(monthlyEntries, "income"), [monthlyEntries]);
   const monthlyOutflow = useMemo(() => Math.abs(totalWallet(monthlyEntries, "expense")), [monthlyEntries]);
   const monthlyDebtChange = useMemo(() => monthlyEntries.reduce((sum, entry) => sum + entry.debt_impact, 0), [monthlyEntries]);
@@ -469,7 +496,7 @@ export default function Home() {
     setBusy(false);
   }
 
-  async function saveProfile(next: { nickname: string; app_icon: string }) {
+  async function saveProfile(next: { nickname: string; app_icon: string; app_icon_image: string; month_start_day: number }) {
     if (!supabase || !user) return;
     setBusy(true);
     setError("");
@@ -478,9 +505,11 @@ export default function Home() {
       user_id: user.id,
       nickname: next.nickname.trim() || null,
       app_icon: next.app_icon.trim() || null,
+      app_icon_image: next.app_icon_image.trim() || null,
+      month_start_day: Math.min(28, Math.max(1, Number(next.month_start_day) || 1)),
       updated_at: new Date().toISOString(),
     };
-    const { data, error } = await supabase.from("profiles").upsert(payload, { onConflict: "user_id" }).select("user_id,nickname,app_icon").single();
+    const { data, error } = await supabase.from("profiles").upsert(payload, { onConflict: "user_id" }).select("user_id,nickname,app_icon,app_icon_image,month_start_day").single();
 
     if (error) setError(error.message);
     else setProfile(data as Profile);
@@ -506,7 +535,10 @@ export default function Home() {
       .update({ name: patch.name.trim(), note: patch.note.trim() || null, updated_at: new Date().toISOString() })
       .eq("id", debtor.id);
     if (error) setError(error.code === "23505" ? "มีลูกหนี้ชื่อนี้แล้ว" : error.message);
-    else await loadDebtors();
+    else {
+      if (selectedDebtor?.id === debtor.id) setSelectedDebtor({ ...debtor, name: patch.name.trim(), note: patch.note.trim() || null });
+      await loadDebtors();
+    }
     setBusy(false);
   }
 
@@ -517,7 +549,10 @@ export default function Home() {
     setError("");
     const { error } = await supabase.from("debtors").delete().eq("id", debtor.id);
     if (error) setError(error.message);
-    else await loadDebtors();
+    else {
+      if (selectedDebtor?.id === debtor.id) setSelectedDebtor(null);
+      await loadDebtors();
+    }
     setBusy(false);
   }
 
@@ -536,7 +571,9 @@ export default function Home() {
       <section className="phone">
         <header className="topbar">
           <div className="home-identity">
-            <span className="home-profile-icon">{displayIcon}</span>
+            <span className="home-profile-icon" style={displayIconImage ? { backgroundImage: `url(${displayIconImage})` } : undefined}>
+              {!displayIconImage && displayIcon}
+            </span>
             <div>
             <p className="eyebrow">สวัสดี</p>
               <h1>{displayName}</h1>
@@ -575,6 +612,7 @@ export default function Home() {
               debtChange={monthlyDebtChange}
               balance={monthlyBalance}
               categories={categorySummary}
+              monthStartDay={monthStartDay}
             />
 
             {error && <p className="error-box">{error}</p>}
@@ -675,25 +713,46 @@ export default function Home() {
               debtChange={monthlyDebtChange}
               balance={monthlyBalance}
               categories={categorySummary}
+              monthStartDay={monthStartDay}
             />
             <EntryList entries={monthlyEntries} onEdit={setEditing} onDelete={deleteEntry} />
           </div>
         )}
 
+        {tab === "debtors" && (
+          <DebtorsView
+            debtors={debtors}
+            entries={entries}
+            debtorSummary={debtorSummary}
+            selectedDebtor={selectedDebtor}
+            onBack={() => selectedDebtor ? setSelectedDebtor(null) : setTab("home")}
+            onAdd={() => { setEditingDebtor(null); setDebtorSheetMode("create"); }}
+            onSelect={(debtor) => setSelectedDebtor(debtor)}
+            onEdit={(debtor) => { setEditingDebtor(debtor); setDebtorSheetMode("edit"); }}
+            onDelete={deleteDebtor}
+          />
+        )}
+
         {editing && <EditSheet entry={editing} busy={busy} onChange={setEditing} onClose={() => setEditing(null)} onSave={updateEntry} />}
+        {debtorSheetMode && (
+          <DebtorEditSheet
+            debtor={debtorSheetMode === "edit" ? editingDebtor : null}
+            busy={busy}
+            onClose={() => { setDebtorSheetMode(null); setEditingDebtor(null); }}
+            onCreate={(name, note) => createDebtor(name, note)}
+            onUpdate={(debtor, patch) => updateDebtor(debtor, patch)}
+          />
+        )}
         {menuOpen && (
           <SideMenu
             user={user}
             profile={profile}
-            debtors={debtors}
             debtorSummary={debtorSummary}
             busy={busy}
             onClose={() => setMenuOpen(false)}
             onLogout={() => { setMenuOpen(false); setLogoutOpen(true); }}
             onSaveProfile={saveProfile}
-            onCreateDebtor={createDebtor}
-            onUpdateDebtor={updateDebtor}
-            onDeleteDebtor={deleteDebtor}
+            onOpenDebtors={() => { setMenuOpen(false); setSelectedDebtor(null); setTab("debtors"); }}
           />
         )}
         {logoutOpen && <ConfirmLogout onCancel={() => setLogoutOpen(false)} onConfirm={() => supabase?.auth.signOut()} />}
@@ -800,6 +859,7 @@ function MonthSummary({
   debtChange,
   balance,
   categories: categoryItems,
+  monthStartDay,
 }: {
   selectedMonth: string;
   setSelectedMonth: (value: string) => void;
@@ -808,6 +868,7 @@ function MonthSummary({
   debtChange: number;
   balance: number;
   categories: { category: string; amount: number }[];
+  monthStartDay: number;
 }) {
   return (
     <section className="summary-panel">
@@ -815,6 +876,7 @@ function MonthSummary({
         <div>
           <p className="eyebrow">สรุปรายเดือน</p>
           <h2>ภาพรวมเดือนนี้</h2>
+          <small className="cycle-note">รอบเริ่มวันที่ {monthStartDay} ของเดือน</small>
         </div>
         <input type="month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
       </div>
@@ -912,7 +974,7 @@ function DraftImpact({ items }: { items: Draft[] }) {
   );
 }
 
-function EntryList({ entries, onEdit, onDelete }: { entries: Entry[]; onEdit: (entry: Entry) => void; onDelete: (entry: Entry) => void }) {
+function EntryList({ entries, onEdit, onDelete }: { entries: Entry[]; onEdit?: (entry: Entry) => void; onDelete?: (entry: Entry) => void }) {
   return (
     <div className="entry-list">
       {entries.map((entry) => (
@@ -929,10 +991,12 @@ function EntryList({ entries, onEdit, onDelete }: { entries: Entry[]; onEdit: (e
             </small>
           </div>
           <strong className={entry.wallet_impact >= 0 ? "income" : "expense"}>{formatSignedMoney(entry.wallet_impact)}</strong>
-          <menu>
-            <button onClick={() => onEdit(entry)} title="แก้ไข">แก้</button>
-            <button onClick={() => onDelete(entry)} title="ลบ">ลบ</button>
-          </menu>
+          {(onEdit || onDelete) && (
+            <menu>
+              {onEdit && <button onClick={() => onEdit(entry)} title="แก้ไข">แก้</button>}
+              {onDelete && <button onClick={() => onDelete(entry)} title="ลบ">ลบ</button>}
+            </menu>
+          )}
         </article>
       ))}
       {!entries.length && <p className="empty-note">ยังไม่มีรายการในช่วงนี้</p>}
@@ -1016,60 +1080,180 @@ function EditSheet({
   );
 }
 
+function DebtorsView({
+  debtors,
+  entries,
+  debtorSummary,
+  selectedDebtor,
+  onBack,
+  onAdd,
+  onSelect,
+  onEdit,
+  onDelete,
+}: {
+  debtors: Debtor[];
+  entries: Entry[];
+  debtorSummary: { name: string; amount: number }[];
+  selectedDebtor: Debtor | null;
+  onBack: () => void;
+  onAdd: () => void;
+  onSelect: (debtor: Debtor) => void;
+  onEdit: (debtor: Debtor) => void;
+  onDelete: (debtor: Debtor) => void;
+}) {
+  const debtorEntries = selectedDebtor
+    ? entries.filter((entry) => entry.debtor_name.trim().toLowerCase() === selectedDebtor.name.trim().toLowerCase() && entry.debt_impact !== 0)
+    : [];
+  const selectedAmount = selectedDebtor ? debtorSummary.find((item) => item.name.trim().toLowerCase() === selectedDebtor.name.trim().toLowerCase())?.amount ?? 0 : 0;
+
+  if (selectedDebtor) {
+    return (
+      <div className="view debtor-view">
+        <div className="add-title">
+          <button onClick={onBack}>‹</button>
+          <div>
+            <p className="eyebrow">ประวัติลูกหนี้</p>
+            <h2>{selectedDebtor.name}</h2>
+          </div>
+        </div>
+        <section className="debtor-detail-card">
+          <span>ยอดค้างปัจจุบัน</span>
+          <strong>{moneySign}{formatMoney(selectedAmount)}</strong>
+          {selectedDebtor.note && <small>{selectedDebtor.note}</small>}
+        </section>
+        <div className="section-title">
+          <h2>ประวัติยืม/จ่าย</h2>
+          <button onClick={() => onEdit(selectedDebtor)}>แก้ไข</button>
+        </div>
+        <EntryList entries={debtorEntries} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="view debtor-view">
+      <div className="add-title">
+        <button onClick={onBack}>‹</button>
+        <div>
+          <p className="eyebrow">จัดการรายชื่อ</p>
+          <h2>ลูกหนี้</h2>
+        </div>
+        <button className="header-add-button" onClick={onAdd}>เพิ่ม</button>
+      </div>
+      <div className="debtor-page-list">
+        {debtors.map((debtor) => {
+          const amount = debtorSummary.find((item) => item.name.trim().toLowerCase() === debtor.name.trim().toLowerCase())?.amount ?? 0;
+          return (
+            <article className="debtor-page-item" key={debtor.id}>
+              <button className="debtor-main-button" onClick={() => onSelect(debtor)}>
+                <span>{debtor.name}</span>
+                <small>{debtor.note || "ไม่มีหมายเหตุ"} · ค้าง {moneySign}{formatMoney(amount)}</small>
+              </button>
+              <details className="kebab-menu">
+                <summary>⋮</summary>
+                <menu>
+                  <button onClick={() => onEdit(debtor)}>แก้ไข</button>
+                  <button onClick={() => onDelete(debtor)}>ลบ</button>
+                </menu>
+              </details>
+            </article>
+          );
+        })}
+        {!debtors.length && <p className="empty-note">ยังไม่มีรายชื่อลูกหนี้</p>}
+      </div>
+    </div>
+  );
+}
+
+function DebtorEditSheet({
+  debtor,
+  busy,
+  onClose,
+  onCreate,
+  onUpdate,
+}: {
+  debtor: Debtor | null;
+  busy: boolean;
+  onClose: () => void;
+  onCreate: (name: string, note: string) => void;
+  onUpdate: (debtor: Debtor, patch: { name: string; note: string }) => void;
+}) {
+  const [name, setName] = useState(debtor?.name ?? "");
+  const [note, setNote] = useState(debtor?.note ?? "");
+
+  const submit = () => {
+    if (!name.trim()) return;
+    if (debtor) onUpdate(debtor, { name, note });
+    else onCreate(name, note);
+    onClose();
+  };
+
+  return (
+    <div className="sheet-backdrop">
+      <section className="edit-sheet">
+        <div className="sheet-head">
+          <div>
+            <p className="eyebrow">{debtor ? "แก้ไขลูกหนี้" : "เพิ่มลูกหนี้"}</p>
+            <h2>{debtor ? debtor.name : "ลูกหนี้ใหม่"}</h2>
+          </div>
+          <button onClick={onClose}>×</button>
+        </div>
+        <label>
+          ชื่อ
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น เพื่อนเอ" />
+        </label>
+        <label>
+          หมายเหตุ
+          <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="เช่น เพื่อนร่วมงาน" />
+        </label>
+        <button className="save" onClick={submit} disabled={busy || !name.trim()}>
+          บันทึก
+        </button>
+      </section>
+    </div>
+  );
+}
+
 function SideMenu({
   user,
   profile,
-  debtors,
   debtorSummary,
   busy,
   onClose,
   onLogout,
   onSaveProfile,
-  onCreateDebtor,
-  onUpdateDebtor,
-  onDeleteDebtor,
+  onOpenDebtors,
 }: {
   user: User;
   profile: Profile | null;
-  debtors: Debtor[];
   debtorSummary: { name: string; amount: number }[];
   busy: boolean;
   onClose: () => void;
   onLogout: () => void;
-  onSaveProfile: (profile: { nickname: string; app_icon: string }) => void;
-  onCreateDebtor: (name: string, note: string) => void;
-  onUpdateDebtor: (debtor: Debtor, patch: { name: string; note: string }) => void;
-  onDeleteDebtor: (debtor: Debtor) => void;
+  onSaveProfile: (profile: { nickname: string; app_icon: string; app_icon_image: string; month_start_day: number }) => void;
+  onOpenDebtors: () => void;
 }) {
   const metadata = user.user_metadata ?? {};
   const name = profile?.nickname || metadata.full_name || metadata.name || "ผู้ใช้";
   const appIcon = profile?.app_icon || user.email?.[0]?.toUpperCase() || "฿";
+  const appIconImage = profile?.app_icon_image || "";
   const provider = user.app_metadata?.provider ?? "Google";
   const [nickname, setNickname] = useState(profile?.nickname ?? "");
   const [app_icon, setAppIcon] = useState(profile?.app_icon ?? "");
-  const [newDebtorName, setNewDebtorName] = useState("");
-  const [newDebtorNote, setNewDebtorNote] = useState("");
-  const [editingDebtor, setEditingDebtor] = useState<Debtor | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editNote, setEditNote] = useState("");
+  const [app_icon_image, setAppIconImage] = useState(appIconImage);
+  const [month_start_day, setMonthStartDay] = useState(profile?.month_start_day ?? 1);
+  const totalDebt = debtorSummary.reduce((sum, item) => sum + item.amount, 0);
 
-  const startEdit = (debtor: Debtor) => {
-    setEditingDebtor(debtor);
-    setEditName(debtor.name);
-    setEditNote(debtor.note ?? "");
-  };
-
-  const createAndClear = () => {
-    onCreateDebtor(newDebtorName, newDebtorNote);
-    setNewDebtorName("");
-    setNewDebtorNote("");
-  };
-
-  const updateAndClear = () => {
-    if (!editingDebtor) return;
-    onUpdateDebtor(editingDebtor, { name: editName, note: editNote });
-    setEditingDebtor(null);
-  };
+  async function chooseProfileImage(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+    if (file.size > 800 * 1024) {
+      window.alert("รูปโปรไฟล์ควรมีขนาดไม่เกิน 800KB");
+      return;
+    }
+    setAppIconImage(await fileToDataUrl(file));
+  }
 
   return (
     <div className="side-menu-backdrop" onClick={onClose}>
@@ -1083,7 +1267,9 @@ function SideMenu({
         </div>
 
         <div className="profile-head">
-          <div className="avatar profile-avatar">{appIcon}</div>
+          <div className="avatar profile-avatar profile-avatar-image" style={app_icon_image ? { backgroundImage: `url(${app_icon_image})` } : undefined}>
+            {!app_icon_image && appIcon}
+          </div>
           <div>
             <b>{name}</b>
             <small>{user.email}</small>
@@ -1106,55 +1292,26 @@ function SideMenu({
             ไอคอนในแอพ
             <input value={app_icon} onChange={(event) => setAppIcon(event.target.value)} placeholder="เช่น ก, ฿, 🙂" maxLength={4} />
           </label>
-          <button className="side-save" onClick={() => onSaveProfile({ nickname, app_icon })} disabled={busy}>
+          <label>
+            รูปไอคอนจากภายนอก
+            <input type="file" accept="image/*" onChange={(event) => { void chooseProfileImage(event.target.files); event.currentTarget.value = ""; }} />
+          </label>
+          {!!app_icon_image && <button className="side-ghost" onClick={() => setAppIconImage("")}>ลบรูปไอคอน</button>}
+          <label>
+            วันเริ่มรอบเดือน
+            <input type="number" min={1} max={28} value={month_start_day} onChange={(event) => setMonthStartDay(Number(event.target.value))} />
+          </label>
+          <button className="side-save" onClick={() => onSaveProfile({ nickname, app_icon, app_icon_image, month_start_day })} disabled={busy}>
             บันทึกโปรไฟล์
           </button>
         </section>
 
-        <section className="side-section">
-          <div className="side-section-head">
-            <h3>ลูกหนี้</h3>
-            <small>รวม {moneySign}{formatMoney(debtorSummary.reduce((sum, item) => sum + item.amount, 0))}</small>
-          </div>
-          <div className="debtor-create">
-            <input value={newDebtorName} onChange={(event) => setNewDebtorName(event.target.value)} placeholder="ชื่อลูกหนี้ใหม่" />
-            <input value={newDebtorNote} onChange={(event) => setNewDebtorNote(event.target.value)} placeholder="หมายเหตุ" />
-            <button onClick={createAndClear} disabled={busy || !newDebtorName.trim()}>เพิ่ม</button>
-          </div>
-
-          <div className="side-debtor-list">
-            {debtors.map((debtor) => {
-              const amount = debtorSummary.find((item) => item.name.trim().toLowerCase() === debtor.name.trim().toLowerCase())?.amount ?? 0;
-              const isEditing = editingDebtor?.id === debtor.id;
-              return (
-                <article className="side-debtor-item" key={debtor.id}>
-                  {isEditing ? (
-                    <>
-                      <input value={editName} onChange={(event) => setEditName(event.target.value)} />
-                      <input value={editNote} onChange={(event) => setEditNote(event.target.value)} placeholder="หมายเหตุ" />
-                      <div>
-                        <button onClick={updateAndClear} disabled={busy || !editName.trim()}>บันทึก</button>
-                        <button onClick={() => setEditingDebtor(null)}>ยกเลิก</button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <b>{debtor.name}</b>
-                        <small>{debtor.note || "ไม่มีหมายเหตุ"} · ค้าง {moneySign}{formatMoney(amount)}</small>
-                      </div>
-                      <menu>
-                        <button onClick={() => startEdit(debtor)}>แก้</button>
-                        <button onClick={() => onDeleteDebtor(debtor)}>ลบ</button>
-                      </menu>
-                    </>
-                  )}
-                </article>
-              );
-            })}
-            {!debtors.length && <p className="empty-note">ยังไม่มีรายชื่อลูกหนี้</p>}
-          </div>
-        </section>
+        <nav className="side-menu-list">
+          <button onClick={onOpenDebtors}>
+            <span>ลูกหนี้</span>
+            <small>ยอดรวม {moneySign}{formatMoney(totalDebt)} · จัดการรายชื่อและประวัติ</small>
+          </button>
+        </nav>
 
         <button className="logout-button" onClick={onLogout}>ออกจากระบบ</button>
       </aside>

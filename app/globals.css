@@ -74,6 +74,8 @@ button {
   place-items: center;
   font-weight: 900;
   box-shadow: 0 4px 14px #143c2d12;
+  background-size: cover;
+  background-position: center;
 }
 
 .home-identity h1 {
@@ -212,6 +214,7 @@ h2 {
 .profile-head b, .profile-head small { display: block; }
 .profile-head small { color: var(--muted); margin-top: 4px; font-size: 12px; }
 .profile-avatar { display: grid; place-items: center; flex: 0 0 52px; }
+.profile-avatar-image { width: 52px; height: 52px; background-size: cover; background-position: center; overflow: hidden; }
 .profile-info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 18px 0; font-size: 12px; }
 .profile-info span { color: var(--muted); }
 .profile-info b { text-align: right; }
@@ -232,6 +235,7 @@ h2 {
 .side-section input { width: 100%; border: 1px solid #d9ddd8; border-radius: 12px; padding: 11px 12px; background: white; outline: none; margin-top: 6px; color: var(--ink); }
 .side-save, .debtor-create button { width: 100%; border: 0; border-radius: 12px; background: var(--green); color: white; padding: 12px; font-weight: 800; }
 .side-save:disabled, .debtor-create button:disabled { opacity: 0.55; }
+.side-ghost { width: 100%; border: 1px solid var(--line); border-radius: 12px; background: white; color: var(--muted); padding: 10px; font-weight: 800; }
 .side-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .side-section-head small { color: #a54a2f; font-size: 12px; font-weight: 800; }
 .debtor-create { display: grid; gap: 8px; margin-bottom: 12px; }
@@ -416,6 +420,13 @@ h2 {
   font-size: 12px;
 }
 
+.cycle-note {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -582,6 +593,138 @@ h2 {
   border-radius: 999px;
   padding: 6px 10px;
   font-size: 11px;
+}
+
+.debtor-view .add-title {
+  align-items: flex-start;
+}
+
+.header-add-button {
+  margin-left: auto;
+  width: auto !important;
+  height: 38px !important;
+  border-radius: 12px !important;
+  background: var(--green) !important;
+  color: #fff !important;
+  font-size: 13px !important;
+  padding: 0 14px;
+}
+
+.debtor-page-list {
+  display: grid;
+  gap: 10px;
+}
+
+.debtor-page-item {
+  display: grid;
+  grid-template-columns: 1fr 42px;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: white;
+  padding: 10px;
+}
+
+.debtor-main-button {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 4px;
+  min-width: 0;
+}
+
+.debtor-main-button span,
+.debtor-main-button small {
+  display: block;
+}
+
+.debtor-main-button span {
+  font-weight: 900;
+  color: var(--ink);
+}
+
+.debtor-main-button small {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 5px;
+}
+
+.kebab-menu {
+  position: relative;
+}
+
+.kebab-menu summary {
+  list-style: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: #fbfbf7;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.kebab-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.kebab-menu menu {
+  position: absolute;
+  right: 0;
+  top: 42px;
+  z-index: 3;
+  display: grid;
+  min-width: 112px;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 12px 26px #0f271d20;
+}
+
+.kebab-menu menu button {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  border-radius: 9px;
+  padding: 9px 10px;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.debtor-detail-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 18px;
+  margin-bottom: 18px;
+}
+
+.debtor-detail-card span,
+.debtor-detail-card strong,
+.debtor-detail-card small {
+  display: block;
+}
+
+.debtor-detail-card span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.debtor-detail-card strong {
+  color: #a54a2f;
+  font-size: 28px;
+  margin-top: 6px;
+}
+
+.debtor-detail-card small {
+  color: var(--muted);
+  margin-top: 8px;
 }
 
 .bottom-nav {
