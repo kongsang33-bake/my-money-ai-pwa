@@ -3559,6 +3559,149 @@ select:focus {
   }
 }
 
+/* Phase four: robust loading/error states and safer mobile overlays */
+.skeleton-stack,
+.skeleton-list {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.skeleton-card,
+.skeleton-grid span,
+.skeleton-panel,
+.skeleton-list span {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  background: linear-gradient(145deg, #f4f1e8, #ffffff);
+  border: 1px solid rgba(232, 226, 214, 0.78);
+  box-shadow: 0 10px 22px rgba(37, 50, 43, 0.06);
+}
+
+.skeleton-card::after,
+.skeleton-grid span::after,
+.skeleton-panel i::after,
+.skeleton-list span::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.72), transparent);
+  animation: shimmer 1.25s ease-in-out infinite;
+}
+
+.skeleton-card.hero {
+  height: 152px;
+}
+
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 9px;
+}
+
+.skeleton-grid span {
+  height: 72px;
+}
+
+.skeleton-panel {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.skeleton-panel i {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(218, 224, 214, 0.62);
+}
+
+.skeleton-panel i:nth-child(2) {
+  width: 78%;
+}
+
+.skeleton-panel i:nth-child(3) {
+  width: 58%;
+}
+
+.skeleton-list span {
+  display: grid;
+  grid-template-columns: 42px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: 12px;
+}
+
+.skeleton-list i,
+.skeleton-list b,
+.skeleton-list em {
+  display: block;
+  border-radius: 999px;
+  background: rgba(218, 224, 214, 0.7);
+}
+
+.skeleton-list i {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+}
+
+.skeleton-list b {
+  width: min(150px, 100%);
+  height: 12px;
+}
+
+.skeleton-list em {
+  width: 54px;
+  height: 12px;
+}
+
+.error-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: -4px 0 10px;
+}
+
+.error-actions button,
+.state-card button {
+  border: 1px solid rgba(232, 226, 214, 0.86);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 900;
+  padding: 9px 10px;
+}
+
+.state-card button {
+  margin-top: 8px;
+}
+
+.sheet-backdrop {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+.edit-sheet {
+  scroll-padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+.edit-sheet .save,
+.recap-share {
+  bottom: max(8px, env(safe-area-inset-bottom));
+  box-shadow: 0 14px 28px rgba(20, 92, 69, 0.2);
+}
+
+@media (max-width: 420px) {
+  .error-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 420px) {
   .history-insight,
   .debtor-statement {

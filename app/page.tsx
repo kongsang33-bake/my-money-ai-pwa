@@ -821,6 +821,11 @@ export default function Home() {
     setTab("add");
   }
 
+  function retrySync() {
+    setError("");
+    if (user) void loadUserData(user.id);
+  }
+
   function addQuickShortcut(shortcut: { title: string; category: string; transaction_type: TransactionType; amount: number }) {
     setDrafts((items) => [
       ...items,
@@ -1153,6 +1158,7 @@ export default function Home() {
 
         {tab === "home" && (
           <div className="view">
+            {dataLoading && <SkeletonDashboard />}
             {dataLoading && <StateCard tone="loading" title="กำลังซิงค์ข้อมูล" detail="กำลังโหลดรายการ กระเป๋า และลูกหนี้ของคุณ" />}
             {!!savePulse && <SuccessPulse count={savePulse} onAddMore={openAddTab} />}
             <section className="wallet-grid single-wallet">
@@ -1185,12 +1191,14 @@ export default function Home() {
               trend={sevenDayOutflow}
             />
 
+            {error && <ErrorActions onRetry={retrySync} onDismiss={() => setError("")} />}
             {error && <StateCard tone="error" title="มีบางอย่างไม่สำเร็จ" detail={error} />}
           </div>
         )}
 
         {tab === "add" && (
           <div className="view add-view">
+            {dataLoading && <SkeletonList rows={3} />}
             {dataLoading && <StateCard tone="loading" title="กำลังเตรียมข้อมูล" detail="กำลังโหลดรายชื่อ ลูกหนี้ และรายการล่าสุดเพื่อช่วย AI วิเคราะห์" />}
             <div className="add-title">
               <button onClick={() => setTab("home")}>‹</button>
@@ -1292,6 +1300,7 @@ export default function Home() {
 
         {tab === "history" && (
           <div className="view history-view">
+            {dataLoading && <SkeletonList rows={5} />}
             {dataLoading && <StateCard tone="loading" title="กำลังโหลดประวัติ" detail="กำลังซิงค์รายการจาก Supabase" />}
             <div className="add-title">
               <button onClick={() => setTab("home")}>‹</button>
@@ -1830,7 +1839,17 @@ function ToastHost({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: num
   );
 }
 
-function StateCard({ tone, title, detail }: { tone: "loading" | "empty" | "error"; title: string; detail: string }) {
+function StateCard({
+  tone,
+  title,
+  detail,
+  action,
+}: {
+  tone: "loading" | "empty" | "error";
+  title: string;
+  detail: string;
+  action?: EmptyAction;
+}) {
   return (
     <div className={`state-card ${tone}`} role={tone === "error" ? "alert" : "status"}>
       <span className="state-orb" aria-hidden="true">
@@ -1839,7 +1858,50 @@ function StateCard({ tone, title, detail }: { tone: "loading" | "empty" | "error
       <div>
         <b>{title}</b>
         <small>{detail}</small>
+        {action && <button onClick={action.onClick}>{action.label}</button>}
       </div>
+    </div>
+  );
+}
+
+function SkeletonDashboard() {
+  return (
+    <div className="skeleton-stack" aria-hidden="true">
+      <div className="skeleton-card hero" />
+      <div className="skeleton-grid">
+        <span />
+        <span />
+        <span />
+        <span />
+      </div>
+      <div className="skeleton-panel">
+        <i />
+        <i />
+        <i />
+      </div>
+    </div>
+  );
+}
+
+function SkeletonList({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="skeleton-list" aria-hidden="true">
+      {Array.from({ length: rows }, (_, index) => (
+        <span key={index}>
+          <i />
+          <b />
+          <em />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function ErrorActions({ onRetry, onDismiss }: { onRetry: () => void; onDismiss: () => void }) {
+  return (
+    <div className="error-actions">
+      <button onClick={onRetry}>ลองซิงค์อีกครั้ง</button>
+      <button onClick={onDismiss}>ปิดข้อความ</button>
     </div>
   );
 }
