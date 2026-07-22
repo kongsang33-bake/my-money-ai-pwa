@@ -2496,6 +2496,326 @@ select,
   box-shadow: 0 10px 22px rgba(20, 92, 69, 0.18);
 }
 
+/* Smoothness pass: native-feeling micro motion */
+:root {
+  --ease-out-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring-soft: cubic-bezier(0.2, 1.15, 0.22, 1);
+  --ease-press: cubic-bezier(0.2, 0, 0, 1);
+  --motion-fast: 160ms;
+  --motion-medium: 280ms;
+  --motion-slow: 440ms;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+button,
+a,
+summary,
+input,
+textarea,
+select,
+.wallet-card,
+.summary-panel,
+.entry-list,
+.heatmap-panel,
+.ai-input-wrap,
+.draft,
+.draft-impact,
+.entry,
+.entry-tappable,
+.debtor-page-item,
+.debtor-detail-card,
+.quick-chip,
+.metric,
+.heatmap-cell,
+.state-card,
+.report-preview,
+.home-profile-icon,
+.menu-button,
+.bottom-nav,
+.bottom-nav button,
+.bottom-nav .nav-icon,
+.bottom-nav .add-button,
+.side-menu-list button,
+.kebab-menu summary,
+.kebab-menu menu,
+.edit-sheet,
+.side-menu,
+.confirm-dialog {
+  transition-duration: var(--motion-medium);
+  transition-timing-function: var(--ease-out-smooth);
+  transition-property: transform, opacity, box-shadow, background-color, border-color, color, filter;
+}
+
+button:active,
+summary:active,
+.entry-tappable:active,
+.debtor-page-item:active,
+.side-menu-list button:active,
+.quick-chip:active,
+.metric:active,
+.bottom-nav button:active {
+  transform: translateY(1px) scale(0.965);
+  transition-duration: 90ms;
+  transition-timing-function: var(--ease-press);
+}
+
+.wallet-card,
+.summary-panel,
+.entry-list,
+.heatmap-panel,
+.ai-input-wrap,
+.draft,
+.debtor-page-item,
+.debtor-detail-card,
+.auth-card,
+.state-card,
+.report-preview {
+  animation: smooth-card-in var(--motion-slow) var(--ease-out-smooth) both;
+}
+
+.view {
+  animation: smooth-view-in 360ms var(--ease-out-smooth) both;
+}
+
+.topbar {
+  animation: smooth-drop-in 420ms var(--ease-out-smooth) both;
+}
+
+.wallet-card:nth-of-type(2),
+.summary-panel:nth-of-type(2),
+.entry-group:nth-child(2),
+.draft:nth-child(2),
+.debtor-page-item:nth-child(2) {
+  animation-delay: 45ms;
+}
+
+.wallet-card:nth-of-type(3),
+.summary-panel:nth-of-type(3),
+.entry-group:nth-child(3),
+.draft:nth-child(3),
+.debtor-page-item:nth-child(3) {
+  animation-delay: 90ms;
+}
+
+.wallet-card:nth-of-type(4),
+.entry-group:nth-child(4),
+.draft:nth-child(4),
+.debtor-page-item:nth-child(4) {
+  animation-delay: 135ms;
+}
+
+.entry,
+.cat-row,
+.heatmap-cell,
+.chat-bubble,
+.draft,
+.side-menu-list button {
+  animation: smooth-list-in 360ms var(--ease-out-smooth) both;
+}
+
+.entry:nth-child(2),
+.cat-row:nth-child(2),
+.heatmap-cell:nth-child(2),
+.side-menu-list button:nth-child(2) {
+  animation-delay: 32ms;
+}
+
+.entry:nth-child(3),
+.cat-row:nth-child(3),
+.heatmap-cell:nth-child(3),
+.side-menu-list button:nth-child(3) {
+  animation-delay: 64ms;
+}
+
+.entry:nth-child(4),
+.cat-row:nth-child(4),
+.heatmap-cell:nth-child(4),
+.side-menu-list button:nth-child(4) {
+  animation-delay: 96ms;
+}
+
+.wallet-card:hover,
+.summary-panel:hover,
+.entry-list:hover,
+.debtor-page-item:hover,
+.draft:hover,
+.report-preview:hover {
+  transform: translateY(-3px);
+  filter: saturate(1.02);
+}
+
+.home-profile-icon:hover,
+.menu-button:hover,
+.bottom-nav button:hover,
+.side-menu-list button:hover,
+.kebab-menu summary:hover,
+.sheet-head button:hover {
+  transform: translateY(-2px);
+}
+
+.home-profile-icon,
+.menu-button,
+.bottom-nav .add-button {
+  transition-timing-function: var(--ease-spring-soft);
+}
+
+.bottom-nav {
+  animation: smooth-dock-in 520ms var(--ease-spring-soft) both;
+  will-change: transform;
+}
+
+.bottom-nav .active .nav-icon {
+  transform: translateY(-2px) scale(1.04);
+}
+
+.bottom-nav .add-button:hover {
+  transform: translateY(-6px) scale(1.025);
+}
+
+.bottom-nav .add-button:active {
+  transform: translateY(-2px) scale(0.94);
+}
+
+.side-menu-backdrop,
+.sheet-backdrop,
+.dialog-backdrop {
+  animation: smooth-fade-in var(--motion-medium) ease both;
+}
+
+.side-menu {
+  animation: smooth-drawer-in 420ms var(--ease-out-smooth) both;
+}
+
+.edit-sheet,
+.confirm-dialog,
+.kebab-menu menu {
+  animation: smooth-pop-in 340ms var(--ease-spring-soft) both;
+  transform-origin: center bottom;
+}
+
+.confirm-dialog {
+  transform-origin: center;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  transform: translateY(-1px);
+}
+
+.state-card.loading::before,
+.loading-dot,
+.saving-spinner {
+  animation-timing-function: linear;
+}
+
+@keyframes smooth-view-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes smooth-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes smooth-list-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes smooth-drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes smooth-dock-in {
+  from {
+    opacity: 0;
+    transform: translateY(26px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes smooth-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes smooth-drawer-in {
+  from {
+    opacity: 0.72;
+    transform: translateX(34px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes smooth-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+}
+
 @media (max-width: 500px) {
   .shell {
     padding: 0;
