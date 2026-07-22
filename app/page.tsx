@@ -31,12 +31,16 @@ type Profile = {
   app_icon: string | null;
   app_icon_image: string | null;
   month_start_day: number;
+  opening_cash_balance: number;
+  savings_balance: number;
+  investment_balance: number;
 };
 type Debtor = {
   id: string;
   user_id: string;
   name: string;
   note: string | null;
+  opening_balance: number;
 };
 type EntryInput = {
   id: string;
@@ -393,23 +397,35 @@ export default function Home() {
   const loadProfile = useCallback(async () => {
     if (!supabase) return;
 
-    const { data, error } = await supabase.from("profiles").select("user_id,nickname,app_icon,app_icon_image,month_start_day").maybeSingle();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,opening_cash_balance,savings_balance,investment_balance")
+      .maybeSingle();
     if (error) {
       setError(error.message);
       return;
     }
-    setProfile(data as Profile | null);
+    setProfile(
+      data
+        ? {
+            ...data,
+            opening_cash_balance: Number(data.opening_cash_balance) || 0,
+            savings_balance: Number(data.savings_balance) || 0,
+            investment_balance: Number(data.investment_balance) || 0,
+          }
+        : null,
+    );
   }, []);
 
   const loadDebtors = useCallback(async () => {
     if (!supabase) return;
 
-    const { data, error } = await supabase.from("debtors").select("id,user_id,name,note").order("name", { ascending: true });
+    const { data, error } = await supabase.from("debtors").select("id,user_id,name,note,opening_balance").order("name", { ascending: true });
     if (error) {
       setError(error.message);
       return;
     }
-    setDebtors((data ?? []) as Debtor[]);
+    setDebtors((data ?? []).map((row) => ({ ...row, opening_balance: Number(row.opening_balance) || 0 })) as Debtor[]);
   }, []);
 
   useEffect(() => {
@@ -443,11 +459,17 @@ export default function Home() {
     return () => data.subscription.unsubscribe();
   }, [loadDebtors, loadEntries, loadProfile]);
 
-  const mainWallet = useMemo(() => entries.reduce((sum, entry) => sum + entry.wallet_impact, 0), [entries]);
+  const mainWallet = useMemo(
+    () => (profile?.opening_cash_balance ?? 0) + entries.reduce((sum, entry) => sum + entry.wallet_impact, 0),
+    [entries, profile?.opening_cash_balance],
+  );
   const streak = useMemo(() => computeStreak(entries), [entries]);
   const quickShortcuts = useMemo(() => deriveQuickShortcuts(entries), [entries]);
   const debtorSummary = useMemo(() => {
     const map = new Map<string, number>();
+    for (const debtor of debtors) {
+      if (debtor.opening_balance) map.set(debtor.name, (map.get(debtor.name) ?? 0) + debtor.opening_balance);
+    }
     for (const entry of entries) {
       if (!["lend", "split_half", "debt_repayment"].includes(entry.transaction_type)) continue;
       map.set(entry.debtor_name, (map.get(entry.debtor_name) ?? 0) + entry.debt_impact);
@@ -456,7 +478,7 @@ export default function Home() {
       .map(([name, amount]) => ({ name, amount }))
       .filter((item) => item.amount > 0.005)
       .sort((a, b) => b.amount - a.amount);
-  }, [entries]);
+  }, [entries, debtors]);
 
   const cycleRange = useMemo(() => cycleBounds(selectedMonth, monthStartDay), [selectedMonth, monthStartDay]);
   const monthlyEntries = useMemo(() => {
@@ -694,7 +716,15 @@ export default function Home() {
     saveBudgets(user.id, next);
   }
 
-  async function saveProfile(next: { nickname: string; app_icon: string; app_icon_image: string; month_start_day: number }) {
+  async function saveProfile(next: {
+    nickname: string;
+    app_icon: string;
+    app_icon_image: string;
+    month_start_day: number;
+    opening_cash_balance: number;
+    savings_balance: number;
+    investment_balance: number;
+  }) {
     if (!supabase || !user) return;
     setBusy(true);
     setError("");
@@ -705,36 +735,54 @@ export default function Home() {
       app_icon: next.app_icon.trim() || null,
       app_icon_image: next.app_icon_image.trim() || null,
       month_start_day: Math.min(28, Math.max(1, Number(next.month_start_day) || 1)),
+      opening_cash_balance: Number(next.opening_cash_balance) || 0,
+      savings_balance: Number(next.savings_balance) || 0,
+      investment_balance: Number(next.investment_balance) || 0,
       updated_at: new Date().toISOString(),
     };
-    const { data, error } = await supabase.from("profiles").upsert(payload, { onConflict: "user_id" }).select("user_id,nickname,app_icon,app_icon_image,month_start_day").single();
+    const { data, error } = await supabase
+      .from("profiles")
+      .upsert(payload, { onConflict: "user_id" })
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,opening_cash_balance,savings_balance,investment_balance")
+      .single();
 
     if (error) setError(error.message);
-    else setProfile(data as Profile);
+    else
+      setProfile({
+        ...data,
+        opening_cash_balance: Number(data.opening_cash_balance) || 0,
+        savings_balance: Number(data.savings_balance) || 0,
+        investment_balance: Number(data.investment_balance) || 0,
+      } as Profile);
     setBusy(false);
   }
 
-  async function createDebtor(name: string, note = "") {
+  async function createDebtor(name: string, note = "", openingBalance = 0) {
     if (!supabase || !user || !name.trim()) return;
     setBusy(true);
     setError("");
-    const { error } = await supabase.from("debtors").insert({ user_id: user.id, name: name.trim(), note: note.trim() || null });
+    const { error } = await supabase
+      .from("debtors")
+      .insert({ user_id: user.id, name: name.trim(), note: note.trim() || null, opening_balance: Number(openingBalance) || 0 });
     if (error) setError(error.code === "23505" ? "มีลูกหนี้ชื่อนี้แล้ว" : error.message);
     else await loadDebtors();
     setBusy(false);
   }
 
-  async function updateDebtor(debtor: Debtor, patch: { name: string; note: string }) {
+  async function updateDebtor(debtor: Debtor, patch: { name: string; note: string; opening_balance: number }) {
     if (!supabase) return;
     setBusy(true);
     setError("");
+    const openingBalance = Number(patch.opening_balance) || 0;
     const { error } = await supabase
       .from("debtors")
-      .update({ name: patch.name.trim(), note: patch.note.trim() || null, updated_at: new Date().toISOString() })
+      .update({ name: patch.name.trim(), note: patch.note.trim() || null, opening_balance: openingBalance, updated_at: new Date().toISOString() })
       .eq("id", debtor.id);
     if (error) setError(error.code === "23505" ? "มีลูกหนี้ชื่อนี้แล้ว" : error.message);
     else {
-      if (selectedDebtor?.id === debtor.id) setSelectedDebtor({ ...debtor, name: patch.name.trim(), note: patch.note.trim() || null });
+      if (selectedDebtor?.id === debtor.id) {
+        setSelectedDebtor({ ...debtor, name: patch.name.trim(), note: patch.note.trim() || null, opening_balance: openingBalance });
+      }
       await loadDebtors();
     }
     setBusy(false);
@@ -798,6 +846,19 @@ export default function Home() {
                 </div>
               </div>
             </section>
+
+            {profile && (
+              <section className="wallet-grid">
+                <div className="wallet-card savings-wallet">
+                  <span>ออมทรัพย์</span>
+                  <strong>{moneySign}{formatMoney(profile.savings_balance)}</strong>
+                </div>
+                <div className="wallet-card investment-wallet">
+                  <span>เงินลงทุน</span>
+                  <strong>{moneySign}{formatMoney(profile.investment_balance)}</strong>
+                </div>
+              </section>
+            )}
 
             <button className="ai-card" onClick={openAddTab}>
               <span className="spark">AI</span>
@@ -966,7 +1027,7 @@ export default function Home() {
             debtor={debtorSheetMode === "edit" ? editingDebtor : null}
             busy={busy}
             onClose={() => { setDebtorSheetMode(null); setEditingDebtor(null); }}
-            onCreate={(name, note) => createDebtor(name, note)}
+            onCreate={(name, note, openingBalance) => createDebtor(name, note, openingBalance)}
             onUpdate={(debtor, patch) => updateDebtor(debtor, patch)}
           />
         )}
@@ -1515,16 +1576,17 @@ function DebtorEditSheet({
   debtor: Debtor | null;
   busy: boolean;
   onClose: () => void;
-  onCreate: (name: string, note: string) => void;
-  onUpdate: (debtor: Debtor, patch: { name: string; note: string }) => void;
+  onCreate: (name: string, note: string, openingBalance: number) => void;
+  onUpdate: (debtor: Debtor, patch: { name: string; note: string; opening_balance: number }) => void;
 }) {
   const [name, setName] = useState(debtor?.name ?? "");
   const [note, setNote] = useState(debtor?.note ?? "");
+  const [openingBalance, setOpeningBalance] = useState(debtor?.opening_balance ?? 0);
 
   const submit = () => {
     if (!name.trim()) return;
-    if (debtor) onUpdate(debtor, { name, note });
-    else onCreate(name, note);
+    if (debtor) onUpdate(debtor, { name, note, opening_balance: openingBalance });
+    else onCreate(name, note, openingBalance);
     onClose();
   };
 
@@ -1545,6 +1607,10 @@ function DebtorEditSheet({
         <label>
           หมายเหตุ
           <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="เช่น เพื่อนร่วมงาน" />
+        </label>
+        <label>
+          ยอดเริ่มต้น (ที่ค้างอยู่ก่อนเริ่มใช้แอพ)
+          <input inputMode="decimal" value={openingBalance} onChange={(event) => setOpeningBalance(Number(event.target.value) || 0)} />
         </label>
         <button className="save" onClick={submit} disabled={busy || !name.trim()}>
           บันทึก
@@ -1707,7 +1773,15 @@ function SideMenu({
   busy: boolean;
   onClose: () => void;
   onLogout: () => void;
-  onSaveProfile: (profile: { nickname: string; app_icon: string; app_icon_image: string; month_start_day: number }) => void;
+  onSaveProfile: (profile: {
+    nickname: string;
+    app_icon: string;
+    app_icon_image: string;
+    month_start_day: number;
+    opening_cash_balance: number;
+    savings_balance: number;
+    investment_balance: number;
+  }) => void;
   onOpenDebtors: () => void;
   onOpenBudgets: () => void;
 }) {
@@ -1720,6 +1794,9 @@ function SideMenu({
   const app_icon = profile?.app_icon ?? "";
   const [app_icon_image, setAppIconImage] = useState(appIconImage);
   const [month_start_day, setMonthStartDay] = useState(profile?.month_start_day ?? 1);
+  const [opening_cash_balance, setOpeningCashBalance] = useState(profile?.opening_cash_balance ?? 0);
+  const [savings_balance, setSavingsBalance] = useState(profile?.savings_balance ?? 0);
+  const [investment_balance, setInvestmentBalance] = useState(profile?.investment_balance ?? 0);
   const totalDebt = debtorSummary.reduce((sum, item) => sum + item.amount, 0);
 
   async function chooseProfileImage(files: FileList | null) {
@@ -1776,8 +1853,40 @@ function SideMenu({
             วันเริ่มรอบเดือน
             <input type="number" min={1} max={28} value={month_start_day} onChange={(event) => setMonthStartDay(Number(event.target.value))} />
           </label>
-          <button className="side-save" onClick={() => onSaveProfile({ nickname, app_icon, app_icon_image, month_start_day })} disabled={busy}>
+          <button
+            className="side-save"
+            onClick={() =>
+              onSaveProfile({ nickname, app_icon, app_icon_image, month_start_day, opening_cash_balance, savings_balance, investment_balance })
+            }
+            disabled={busy}
+          >
             บันทึกโปรไฟล์
+          </button>
+        </section>
+
+        <section className="side-section">
+          <h3>ยอดเงินเริ่มต้น</h3>
+          <small className="side-section-hint">เงินที่มีอยู่ก่อนเริ่มใช้แอพ ใส่ไว้ครั้งเดียว ระบบจะรวมเข้ากับยอดที่คำนวณจากรายการที่บันทึกไว้</small>
+          <label>
+            เงินสดตั้งต้น (รวมในเงินพร้อมใช้สุทธิ)
+            <input inputMode="decimal" value={opening_cash_balance} onChange={(event) => setOpeningCashBalance(Number(event.target.value) || 0)} />
+          </label>
+          <label>
+            ออมทรัพย์
+            <input inputMode="decimal" value={savings_balance} onChange={(event) => setSavingsBalance(Number(event.target.value) || 0)} />
+          </label>
+          <label>
+            เงินลงทุน
+            <input inputMode="decimal" value={investment_balance} onChange={(event) => setInvestmentBalance(Number(event.target.value) || 0)} />
+          </label>
+          <button
+            className="side-save"
+            onClick={() =>
+              onSaveProfile({ nickname, app_icon, app_icon_image, month_start_day, opening_cash_balance, savings_balance, investment_balance })
+            }
+            disabled={busy}
+          >
+            บันทึกยอดเงินเริ่มต้น
           </button>
         </section>
 
