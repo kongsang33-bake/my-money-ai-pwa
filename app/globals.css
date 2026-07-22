@@ -4880,6 +4880,43 @@ select:focus {
   animation-duration: 1.35s;
 }
 
+.phone.tab-home > .view {
+  padding-top: 58px;
+}
+
+.living-mascot.safe-mode {
+  top: max(104px, calc(84px + env(safe-area-inset-top)));
+  width: 74px;
+}
+
+.living-mascot.safe-mode .pet-stage {
+  width: 74px;
+  height: 74px;
+}
+
+.living-mascot.safe-mode .pet-stage .money-mascot {
+  --mascot-size: 60px;
+}
+
+.living-mascot.safe-mode .pet-shadow-line {
+  left: 18px;
+  right: 18px;
+  bottom: 8px;
+}
+
+.living-mascot.safe-mode .pet-panel {
+  left: auto;
+  right: -10px;
+  top: 72px;
+  transform: none;
+}
+
+.living-mascot.safe-mode .pet-panel::after {
+  left: auto;
+  right: 38px;
+  transform: rotate(45deg);
+}
+
 @keyframes pet-walk-bob {
   0%,
   100% {
@@ -4906,15 +4943,27 @@ select:focus {
     top: 112px;
   }
 
+  .living-mascot.safe-mode {
+    top: 116px;
+  }
+
   .pet-panel {
     width: 268px;
   }
 }
 
 @media (max-width: 420px) {
+  .phone.tab-home > .view {
+    padding-top: 52px;
+  }
+
   .living-mascot {
     width: 76px;
     top: max(84px, calc(64px + env(safe-area-inset-top)));
+  }
+
+  .living-mascot.safe-mode {
+    top: max(98px, calc(78px + env(safe-area-inset-top)));
   }
 
   .pet-stage {
