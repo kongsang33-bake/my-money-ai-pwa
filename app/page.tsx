@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
@@ -2046,17 +2046,73 @@ function isMascotVariant(value: string | null): value is MascotVariant {
 }
 
 function MoneyMascot({ mood = "idle", tiny = false, variant }: { mood?: MascotMood; tiny?: boolean; variant?: MascotVariant }) {
+  const gradientId = `mascot-body-${useId().replace(/:/g, "")}`;
+
+  const eyes =
+    mood === "sleepy" ? (
+      <>
+        <path d="M36 53 Q40 56 44 53" stroke="#18342b" strokeWidth={2.4} strokeLinecap="round" fill="none" />
+        <path d="M56 53 Q60 56 64 53" stroke="#18342b" strokeWidth={2.4} strokeLinecap="round" fill="none" />
+      </>
+    ) : mood === "oops" ? (
+      <>
+        <circle cx="40" cy="51" r="6.2" fill="#18342b" />
+        <circle cx="60" cy="51" r="6.2" fill="#18342b" />
+        <circle cx="42.4" cy="48.6" r="1.6" fill="#fff" />
+        <circle cx="62.4" cy="48.6" r="1.6" fill="#fff" />
+      </>
+    ) : (
+      <>
+        <ellipse className="mascot-eye" cx="40" cy="52" rx="4" ry="5" fill="#18342b" />
+        <ellipse className="mascot-eye" cx="60" cy="52" rx="4" ry="5" fill="#18342b" />
+      </>
+    );
+
+  const mouth =
+    mood === "happy" ? (
+      <path d="M38 64 Q50 79 62 64" stroke="#18342b" strokeWidth={3} strokeLinecap="round" fill="none" />
+    ) : mood === "thinking" ? (
+      <path d="M46 67 L54 67" stroke="#18342b" strokeWidth={2.4} strokeLinecap="round" />
+    ) : mood === "sleepy" ? (
+      <ellipse cx="50" cy="67" rx="3" ry="2.2" fill="#18342b" opacity={0.85} />
+    ) : mood === "oops" ? (
+      <ellipse cx="50" cy="68" rx="5" ry="6" fill="#18342b" />
+    ) : (
+      <path d="M45 66 Q50 71 55 66" stroke="#18342b" strokeWidth={2.4} strokeLinecap="round" fill="none" />
+    );
+
   return (
     <span className={`money-mascot ${tiny ? "tiny" : ""} ${mood} ${variant ? `variant-${variant}` : ""}`} aria-hidden="true">
       <span className="mascot-shadow" />
       <span className="mascot-body">
-        <span className="mascot-ear left" />
-        <span className="mascot-ear right" />
-        <span className="mascot-face">
-          <span className="mascot-eye left" />
-          <span className="mascot-eye right" />
-          <span className="mascot-mouth" />
-        </span>
+        <svg className="mascot-svg" viewBox="0 0 100 100">
+          <defs>
+            <linearGradient id={gradientId} x1="15%" y1="0%" x2="85%" y2="100%">
+              <stop offset="0%" style={{ stopColor: "var(--mascot-primary)" }} />
+              <stop offset="56%" style={{ stopColor: "var(--mascot-mid)" }} />
+              <stop offset="100%" style={{ stopColor: "var(--mascot-deep)" }} />
+            </linearGradient>
+          </defs>
+          <ellipse cx="50" cy="55" rx="40" ry="37" fill={`url(#${gradientId})`} stroke="rgba(255,255,255,0.7)" strokeWidth={2} />
+          <path d="M13 48 Q50 64 87 42" stroke="rgba(255,255,255,0.32)" strokeWidth={2} fill="none" />
+          <ellipse cx="33" cy="30" rx="10" ry="7" fill="#fff" opacity={0.5} transform="rotate(-15 33 30)" />
+          <g transform="rotate(-10 44 19)">
+            <ellipse cx="44" cy="23" rx="27" ry="7" fill="var(--mascot-accent)" stroke="rgba(255,255,255,0.6)" strokeWidth={1.4} />
+            <rect x="30" y="6" width="28" height="17" rx="8" fill="#f1e0b3" />
+            <rect x="30" y="15" width="28" height="5" fill="#4f9d6e" />
+          </g>
+          <ellipse cx="30" cy="61" rx="6" ry="4" fill="#ffb4c6" opacity={0.75} />
+          <ellipse cx="70" cy="61" rx="6" ry="4" fill="#ffb4c6" opacity={0.75} />
+          {eyes}
+          {mouth}
+          {mood === "sleepy" && (
+            <>
+              <text x="68" y="30" fontSize="9" fontWeight={800} fill="#5aa0d6">z</text>
+              <text x="76" y="20" fontSize="6" fontWeight={800} fill="#5aa0d6">z</text>
+            </>
+          )}
+          {mood === "oops" && <path d="M70 38 q3 5 0 8 q-3 -3 0 -8 Z" fill="#8fd0f0" opacity={0.85} />}
+        </svg>
         <span className="mascot-coin">฿</span>
       </span>
       <span className="mascot-spark one" />
