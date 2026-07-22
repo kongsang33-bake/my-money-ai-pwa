@@ -2438,7 +2438,6 @@ select,
   box-shadow: inset 2px 2px 7px rgba(47, 65, 56, 0.08), inset -3px -3px 8px rgba(255, 255, 255, 0.94);
 }
 
-.home-profile-icon,
 .menu-button,
 .add-title > button,
 .sheet-head button,
@@ -2448,6 +2447,19 @@ select,
 .slip-preview button {
   background: rgba(255, 255, 255, 0.72);
   box-shadow: 0 8px 18px rgba(37, 50, 43, 0.08);
+}
+
+.home-profile-icon {
+  flex: 0 0 58px;
+  width: 58px;
+  height: 58px;
+  overflow: hidden;
+  border-radius: 20px;
+  background-color: #fffaf2;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: cover !important;
+  box-shadow: 0 10px 22px rgba(37, 50, 43, 0.12);
 }
 
 .side-menu,
