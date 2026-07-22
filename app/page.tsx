@@ -1705,7 +1705,7 @@ function SideMenu({
   const appIconImage = profile?.app_icon_image || "";
   const provider = user.app_metadata?.provider ?? "Google";
   const [nickname, setNickname] = useState(profile?.nickname ?? "");
-  const [app_icon, setAppIcon] = useState(profile?.app_icon ?? "");
+  const app_icon = profile?.app_icon ?? "";
   const [app_icon_image, setAppIconImage] = useState(appIconImage);
   const [month_start_day, setMonthStartDay] = useState(profile?.month_start_day ?? 1);
   const totalDebt = debtorSummary.reduce((sum, item) => sum + item.amount, 0);
@@ -1753,10 +1753,6 @@ function SideMenu({
           <label>
             ชื่อเล่น
             <input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="เช่น ก้อง" />
-          </label>
-          <label>
-            ไอคอนในแอพ
-            <input value={app_icon} onChange={(event) => setAppIcon(event.target.value)} placeholder="เช่น ก, ฿, 🙂" maxLength={4} />
           </label>
           <label>
             รูปไอคอนจากภายนอก
