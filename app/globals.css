@@ -789,12 +789,22 @@ h2 {
   color: var(--nav-inactive);
   font-size: 10px;
   min-width: 60px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  justify-items: center;
+  gap: 4px;
+  line-height: 1;
+  text-align: center;
 }
 
 .bottom-nav button > span {
-  display: block;
+  display: grid;
+  place-items: center;
   font-size: 22px;
-  margin-bottom: 3px;
+  line-height: 1;
+  margin: 0;
 }
 
 .bottom-nav .active {
@@ -814,6 +824,9 @@ h2 {
   border-radius: 20px;
   color: white;
   box-shadow: 0 8px 20px #145c4550;
+  display: grid;
+  place-items: center;
+  padding: 0;
 }
 
 .bottom-nav .add-button span {
