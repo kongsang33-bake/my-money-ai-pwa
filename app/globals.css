@@ -414,8 +414,8 @@ h2 {
   border-radius: 12px;
   background: var(--surface-alt);
   color: var(--ink);
-  padding: 9px;
-  font-size: 12px;
+  padding: 7px 9px;
+  font-size: max(16px, 1rem);
 }
 
 .cycle-note {
@@ -964,10 +964,10 @@ h2 {
 .entry-date-picker input {
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 7px 9px;
+  padding: 5px 9px;
   background: var(--surface-alt);
   color: var(--ink);
-  font-size: 12px;
+  font-size: max(16px, 1rem);
   font-weight: 700;
 }
 
@@ -1172,12 +1172,12 @@ h2 {
 
 .draft input:first-child {
   font-weight: 700;
-  font-size: 13px;
+  font-size: max(16px, 1rem);
 }
 
 .draft select {
   color: var(--muted);
-  font-size: 11px;
+  font-size: max(16px, 1rem);
   margin-top: 4px;
 }
 
@@ -1198,7 +1198,7 @@ h2 {
   border-top: 1px solid var(--hairline) !important;
   padding-top: 8px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: max(16px, 1rem);
 }
 
 .draft-debtor-field {
