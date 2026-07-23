@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 
-const transactionTypes = ["income", "personal_expense", "lend", "split_half", "debt_repayment", "gift"] as const;
+const transactionTypes = ["income", "personal_expense", "lend", "split_half", "debt_repayment", "debt_payment", "gift"] as const;
 const categories = ["อาหาร", "เดินทาง", "ของใช้", "ที่อยู่อาศัย", "สุขภาพ", "บันเทิง", "รายได้", "บิลประจำ", "อื่น ๆ"] as const;
 
 const schema = {
@@ -34,12 +34,17 @@ type AnalyzeImage = {
   name?: string;
 };
 
+type AnalyzeDebtor = {
+  name: string;
+  kind: "lend" | "own";
+};
+
 type AnalyzeBody = {
   text?: string;
   timezone?: string;
   defaultDate?: string;
   images?: AnalyzeImage[];
-  debtorNames?: string[];
+  debtors?: AnalyzeDebtor[];
 };
 
 const dateInputPattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -50,8 +55,11 @@ function imageBytes(base64: string) {
   return Math.floor((base64.length * 3) / 4);
 }
 
-function buildPrompt(input: string, today: string, hasImages: boolean, debtorNames: string[]) {
-  const knownDebtors = debtorNames.length ? debtorNames.join(", ") : "ยังไม่มีรายชื่อลูกหนี้ที่บันทึกไว้";
+function buildPrompt(input: string, today: string, hasImages: boolean, debtors: AnalyzeDebtor[]) {
+  const lendNames = debtors.filter((debtor) => debtor.kind === "lend").map((debtor) => debtor.name);
+  const ownNames = debtors.filter((debtor) => debtor.kind === "own").map((debtor) => debtor.name);
+  const knownDebtors = lendNames.length ? lendNames.join(", ") : "ยังไม่มีรายชื่อลูกหนี้ที่บันทึกไว้";
+  const knownOwnDebts = ownNames.length ? ownNames.join(", ") : "ยังไม่มีรายการหนี้ของฉันที่บันทึกไว้";
   return [
     `วันที่กำลังบันทึกรายการนี้คือ ${today}`,
     "แยกรายรับรายจ่ายจากข้อความและ/หรือรูปสลิปเป็น JSON เท่านั้น ห้ามสร้างรายการที่ไม่มีหลักฐานในข้อความหรือรูป",
@@ -78,16 +86,22 @@ function buildPrompt(input: string, today: string, hasImages: boolean, debtorNam
     "- lend = ออกเงินให้บุคคลอื่นก่อน/ให้ยืม/จ่ายแทน 100%",
     "- split_half = หารกับบุคคลอื่น/หารครึ่ง/คนละครึ่ง ให้ amount เป็นยอดเต็มที่ผู้ใช้จ่ายจริง",
     "- debt_repayment = บุคคลอื่นคืนเงิน/โอนคืน/เคลียร์ยอด",
+    "- debt_payment = ผ่อนชำระหนี้สินของผู้ใช้เอง (ไม่ใช่ให้คนอื่นยืม) เช่น ผ่อนบ้าน ผ่อนรถ จ่ายค่างวดบัตรเครดิต",
     "- gift = เลี้ยงหรือให้โดยไม่คิดคืน",
     "",
     "กติกา debtor_name:",
     "- ใช้เฉพาะรายการ lend, split_half, debt_repayment",
-    `- รายชื่อลูกหนี้ที่มีอยู่ในระบบ: ${knownDebtors}`,
+    `- รายชื่อลูกหนี้ (คนที่ติดเรา) ที่มีอยู่ในระบบ: ${knownDebtors}`,
     "- ถ้าข้อความใกล้เคียงกับรายชื่อที่มีอยู่ ให้ใช้ชื่อจากระบบให้ตรงที่สุด",
     "- ถ้าพบชื่อใหม่ เช่น แฟน, เพื่อนเอ, คุณบี และไม่ตรงกับรายชื่อเดิม ให้คืนชื่อใหม่นั้นเพื่อให้แอพเสนอสร้างลูกหนี้ใหม่",
     "- ถ้ามีคำว่าออกให้เพื่อนก่อนแต่ไม่ระบุชื่อ ให้ใช้ เพื่อน",
     "- ถ้าไม่พบชื่อ ให้ใช้ ไม่ระบุ",
     "- รายรับ/รายจ่ายส่วนตัวให้ใช้ ไม่ระบุ",
+    "",
+    "กติกา debtor_name สำหรับ debt_payment:",
+    "- ใช้ debtor_name เป็นชื่อก้อนหนี้ของฉันเอง (เช่น บ้าน, รถ, บัตรเครดิต) ไม่ใช่ชื่อคน",
+    `- รายชื่อหนี้ของฉันที่มีอยู่ในระบบ: ${knownOwnDebts}`,
+    "- ถ้าใกล้เคียงชื่อที่มีอยู่ ให้ใช้ชื่อเดิม ถ้าไม่พบให้ตั้งชื่อใหม่สั้น ๆ เพื่อให้แอพสร้างรายการหนี้ให้อัตโนมัติ",
     "",
     `ข้อความจากผู้ใช้: ${input || "(ไม่มีข้อความ ผู้ใช้แนบรูปอย่างเดียว)"}`,
   ].join("\n");
@@ -100,7 +114,15 @@ export async function POST(request: Request) {
   const body = (await request.json()) as AnalyzeBody;
   const input = body.text?.trim() ?? "";
   const images = body.images ?? [];
-  const debtorNames = [...new Set((body.debtorNames ?? []).map((name) => name.trim()).filter(Boolean))].slice(0, 100);
+  const seen = new Set<string>();
+  const debtors = (body.debtors ?? [])
+    .map((debtor) => ({ name: debtor.name?.trim() ?? "", kind: debtor.kind }))
+    .filter((debtor) => {
+      if (!debtor.name || seen.has(debtor.name)) return false;
+      seen.add(debtor.name);
+      return true;
+    })
+    .slice(0, 100);
 
   if (!input && images.length === 0) return Response.json({ error: "กรุณาพิมพ์ข้อความหรือแนบรูปสลิปก่อน" }, { status: 400 });
   if (input.length > 2000) return Response.json({ error: "ข้อความยาวเกินไป" }, { status: 400 });
@@ -115,7 +137,7 @@ export async function POST(request: Request) {
     body.defaultDate && dateInputPattern.test(body.defaultDate)
       ? body.defaultDate
       : new Intl.DateTimeFormat("en-CA", { timeZone: body.timezone || "Asia/Bangkok" }).format(new Date());
-  const prompt = buildPrompt(input, today, images.length > 0, debtorNames);
+  const prompt = buildPrompt(input, today, images.length > 0, debtors);
 
   let response;
   try {

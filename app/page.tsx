@@ -5,7 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
 type EntryKind = "expense" | "income";
-type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "gift";
+type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "debt_payment" | "gift";
 type Tab = "home" | "add" | "history" | "debtors" | "wallets";
 type Theme = "light" | "dark";
 type MascotMood = "idle" | "thinking" | "happy" | "sleepy" | "oops";
@@ -34,12 +34,17 @@ type Profile = {
   app_icon_image: string | null;
   month_start_day: number;
 };
+type DebtorKind = "lend" | "own";
 type Debtor = {
   id: string;
   user_id: string;
   name: string;
   note: string | null;
   opening_balance: number;
+  kind: DebtorKind;
+  monthly_installment: number | null;
+  icon: string | null;
+  icon_color: string | null;
 };
 type WalletTag = "cash" | "savings" | "investment" | "other";
 type Wallet = {
@@ -48,6 +53,8 @@ type Wallet = {
   name: string;
   tag: WalletTag;
   balance: number;
+  icon: string | null;
+  icon_color: string | null;
 };
 type ReportPeriod = "month" | "year";
 type Toast = { id: number; tone: "success" | "info" | "error"; title: string; detail?: string };
@@ -95,6 +102,7 @@ const transactionTypeLabels: Record<TransactionType, string> = {
   lend: "ออกให้ก่อน",
   split_half: "หารร่วมกัน",
   debt_repayment: "รับชำระหนี้",
+  debt_payment: "ผ่อนชำระหนี้",
   gift: "ให้โดยไม่คิดคืน",
 };
 
@@ -104,6 +112,7 @@ const transactionKind: Record<TransactionType, EntryKind> = {
   personal_expense: "expense",
   lend: "expense",
   split_half: "expense",
+  debt_payment: "expense",
   gift: "expense",
 };
 
@@ -332,7 +341,8 @@ function csvRow(values: (string | number | null | undefined)[]) {
 function buildReportCsv({
   entries,
   wallets,
-  debtorSummary,
+  receivableSummary,
+  payableSummary,
   period,
   selectedMonth,
   selectedYear,
@@ -340,7 +350,8 @@ function buildReportCsv({
 }: {
   entries: Entry[];
   wallets: Wallet[];
-  debtorSummary: { name: string; amount: number }[];
+  receivableSummary: { name: string; amount: number }[];
+  payableSummary: { name: string; amount: number }[];
   period: ReportPeriod;
   selectedMonth: string;
   selectedYear: number;
@@ -351,7 +362,9 @@ function buildReportCsv({
   const income = totalWallet(reportEntries, "income");
   const outflow = Math.abs(totalWallet(reportEntries, "expense"));
   const balance = income - outflow;
-  const debtChange = reportEntries.reduce((sum, entry) => sum + entry.debt_impact, 0);
+  const debtChange = reportEntries
+    .filter((entry) => (["lend", "split_half", "debt_repayment"] as TransactionType[]).includes(entry.transaction_type))
+    .reduce((sum, entry) => sum + entry.debt_impact, 0);
   const categoryMap = new Map<string, number>();
 
   for (const entry of reportEntries) {
@@ -375,9 +388,13 @@ function buildReportCsv({
     csvRow(["หมวดหมู่", "จำนวนเงิน"]),
     ...[...categoryMap.entries()].sort((a, b) => b[1] - a[1]).map(([category, amount]) => csvRow([category, amount])),
     csvRow([""]),
-    csvRow(["ลูกหนี้คงค้าง"]),
+    csvRow(["ลูกหนี้คงค้าง (คนที่ติดเรา)"]),
     csvRow(["ชื่อ", "ยอดค้าง"]),
-    ...debtorSummary.map((debtor) => csvRow([debtor.name, debtor.amount])),
+    ...receivableSummary.map((debtor) => csvRow([debtor.name, debtor.amount])),
+    csvRow([""]),
+    csvRow(["หนี้ของฉันคงเหลือ (ที่ฉันติด)"]),
+    csvRow(["ชื่อ", "ยอดค้าง"]),
+    ...payableSummary.map((debtor) => csvRow([debtor.name, debtor.amount])),
     csvRow([""]),
     csvRow(["กระเป๋า/กองเงิน"]),
     csvRow(["ชื่อ", "ประเภท", "ยอดตั้งต้น"]),
@@ -428,6 +445,9 @@ function calculateImpacts(amount: number, transactionType: TransactionType) {
   if (transactionType === "debt_repayment") {
     return { wallet_impact: amount, debt_impact: -amount, user_share: 0, partner_share: 0 };
   }
+  if (transactionType === "debt_payment") {
+    return { wallet_impact: -amount, debt_impact: -amount, user_share: amount, partner_share: 0 };
+  }
   return { wallet_impact: -amount, debt_impact: 0, user_share: amount, partner_share: 0 };
 }
 
@@ -451,6 +471,22 @@ function totalWallet(entries: Entry[], direction: EntryKind) {
   return entries
     .filter((entry) => (direction === "income" ? entry.wallet_impact > 0 : entry.wallet_impact < 0))
     .reduce((sum, entry) => sum + entry.wallet_impact, 0);
+}
+
+function buildDebtSummary(debtors: Debtor[], entries: Entry[], kind: DebtorKind, types: TransactionType[]) {
+  const map = new Map<string, number>();
+  for (const debtor of debtors) {
+    if (debtor.kind !== kind) continue;
+    if (debtor.opening_balance) map.set(debtor.name, (map.get(debtor.name) ?? 0) + debtor.opening_balance);
+  }
+  for (const entry of entries) {
+    if (!types.includes(entry.transaction_type)) continue;
+    map.set(entry.debtor_name, (map.get(entry.debtor_name) ?? 0) + entry.debt_impact);
+  }
+  return [...map.entries()]
+    .map(([name, amount]) => ({ name, amount }))
+    .filter((item) => item.amount > 0.005)
+    .sort((a, b) => b.amount - a.amount);
 }
 
 function fileToSlipImage(file: File): Promise<SlipImage> {
@@ -547,6 +583,7 @@ export default function Home() {
   const [debtorSheetMode, setDebtorSheetMode] = useState<"create" | "edit" | null>(null);
   const [editingDebtor, setEditingDebtor] = useState<Debtor | null>(null);
   const [selectedDebtor, setSelectedDebtor] = useState<Debtor | null>(null);
+  const [debtorKindTab, setDebtorKindTab] = useState<DebtorKind>("lend");
   const [walletSheetMode, setWalletSheetMode] = useState<"create" | "edit" | null>(null);
   const [editingWallet, setEditingWallet] = useState<Wallet | null>(null);
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -652,18 +689,28 @@ export default function Home() {
   const loadDebtors = useCallback(async () => {
     if (!supabase) return;
 
-    const { data, error } = await supabase.from("debtors").select("id,user_id,name,note,opening_balance").order("name", { ascending: true });
+    const { data, error } = await supabase
+      .from("debtors")
+      .select("id,user_id,name,note,opening_balance,kind,monthly_installment,icon,icon_color")
+      .order("name", { ascending: true });
     if (error) {
       setError(error.message);
       return;
     }
-    setDebtors((data ?? []).map((row) => ({ ...row, opening_balance: Number(row.opening_balance) || 0 })) as Debtor[]);
+    setDebtors((data ?? []).map((row) => ({
+      ...row,
+      opening_balance: Number(row.opening_balance) || 0,
+      monthly_installment: row.monthly_installment == null ? null : Number(row.monthly_installment),
+    })) as Debtor[]);
   }, []);
 
   const loadWallets = useCallback(async () => {
     if (!supabase) return;
 
-    const { data, error } = await supabase.from("wallets").select("id,user_id,name,tag,balance").order("created_at", { ascending: true });
+    const { data, error } = await supabase
+      .from("wallets")
+      .select("id,user_id,name,tag,balance,icon,icon_color")
+      .order("created_at", { ascending: true });
     if (error) {
       setError(error.message);
       return;
@@ -746,20 +793,14 @@ export default function Home() {
   );
   const streak = useMemo(() => computeStreak(entries), [entries]);
   const quickShortcuts = useMemo(() => deriveQuickShortcuts(entries), [entries]);
-  const debtorSummary = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const debtor of debtors) {
-      if (debtor.opening_balance) map.set(debtor.name, (map.get(debtor.name) ?? 0) + debtor.opening_balance);
-    }
-    for (const entry of entries) {
-      if (!["lend", "split_half", "debt_repayment"].includes(entry.transaction_type)) continue;
-      map.set(entry.debtor_name, (map.get(entry.debtor_name) ?? 0) + entry.debt_impact);
-    }
-    return [...map.entries()]
-      .map(([name, amount]) => ({ name, amount }))
-      .filter((item) => item.amount > 0.005)
-      .sort((a, b) => b.amount - a.amount);
-  }, [entries, debtors]);
+  const receivableSummary = useMemo(
+    () => buildDebtSummary(debtors, entries, "lend", ["lend", "split_half", "debt_repayment"]),
+    [debtors, entries],
+  );
+  const payableSummary = useMemo(
+    () => buildDebtSummary(debtors, entries, "own", ["debt_payment"]),
+    [debtors, entries],
+  );
 
   const cycleRange = useMemo(() => cycleBounds(selectedMonth, monthStartDay), [selectedMonth, monthStartDay]);
   const monthlyEntries = useMemo(() => {
@@ -771,7 +812,13 @@ export default function Home() {
   }, [entries, cycleRange]);
   const monthlyIncome = useMemo(() => totalWallet(monthlyEntries, "income"), [monthlyEntries]);
   const monthlyOutflow = useMemo(() => Math.abs(totalWallet(monthlyEntries, "expense")), [monthlyEntries]);
-  const monthlyDebtChange = useMemo(() => monthlyEntries.reduce((sum, entry) => sum + entry.debt_impact, 0), [monthlyEntries]);
+  const monthlyDebtChange = useMemo(
+    () =>
+      monthlyEntries
+        .filter((entry) => (["lend", "split_half", "debt_repayment"] as TransactionType[]).includes(entry.transaction_type))
+        .reduce((sum, entry) => sum + entry.debt_impact, 0),
+    [monthlyEntries],
+  );
   const monthlyBalance = monthlyIncome - monthlyOutflow;
   const walletInsight = useMemo(() => buildWalletInsight(mainWallet, monthlyOutflow, cycleRange.end), [mainWallet, monthlyOutflow, cycleRange.end]);
   const sevenDayOutflow = useMemo(() => lastSevenDayOutflow(entries), [entries]);
@@ -887,7 +934,7 @@ export default function Home() {
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           defaultDate: entryDate,
           images: slipImages.map(({ data, mimeType, name }) => ({ data, mimeType, name })),
-          debtorNames: debtors.map((debtor) => debtor.name),
+          debtors: debtors.map((debtor) => ({ name: debtor.name, kind: debtor.kind })),
         }),
       });
       const data = await response.json();
@@ -961,23 +1008,23 @@ export default function Home() {
   async function createMissingDebtors(items: Entry[]) {
     if (!supabase || !user) return;
     const known = new Set(debtors.map((debtor) => debtor.name.trim().toLowerCase()));
-    const names = [
-      ...new Set(
-        items
-          .filter((item) => ["lend", "split_half", "debt_repayment"].includes(item.transaction_type))
-          .map((item) => item.debtor_name.trim())
-          .filter((name) => name && name !== unnamedDebtor && !known.has(name.toLowerCase())),
-      ),
-    ];
+    const debtTypes: TransactionType[] = ["lend", "split_half", "debt_repayment", "debt_payment"];
+    const nameKinds = new Map<string, DebtorKind>();
+    for (const item of items) {
+      if (!debtTypes.includes(item.transaction_type)) continue;
+      const name = item.debtor_name.trim();
+      if (!name || name === unnamedDebtor || known.has(name.toLowerCase())) continue;
+      if (!nameKinds.has(name)) nameKinds.set(name, item.transaction_type === "debt_payment" ? "own" : "lend");
+    }
 
-    for (const name of names) {
-      const { error } = await supabase.from("debtors").insert({ user_id: user.id, name });
+    for (const [name, kind] of nameKinds) {
+      const { error } = await supabase.from("debtors").insert({ user_id: user.id, name, kind });
       if (error && error.code !== "23505") {
         setError(error.message);
         return;
       }
     }
-    if (names.length) await loadDebtors();
+    if (nameKinds.size) await loadDebtors();
   }
 
   async function updateEntry() {
@@ -1063,31 +1110,47 @@ export default function Home() {
     setBusy(false);
   }
 
-  async function createDebtor(name: string, note = "", openingBalance = 0) {
-    if (!supabase || !user || !name.trim()) return;
+  async function createDebtor(input: DebtorInput) {
+    if (!supabase || !user || !input.name.trim()) return;
     setBusy(true);
     setError("");
-    const { error } = await supabase
-      .from("debtors")
-      .insert({ user_id: user.id, name: name.trim(), note: note.trim() || null, opening_balance: Number(openingBalance) || 0 });
-    if (error) setError(error.code === "23505" ? "มีลูกหนี้ชื่อนี้แล้ว" : error.message);
+    const { error } = await supabase.from("debtors").insert({
+      user_id: user.id,
+      name: input.name.trim(),
+      note: input.note.trim() || null,
+      opening_balance: Number(input.opening_balance) || 0,
+      kind: input.kind,
+      monthly_installment: input.monthly_installment,
+      icon: input.icon,
+      icon_color: input.icon_color,
+    });
+    if (error) setError(error.code === "23505" ? "มีชื่อนี้อยู่แล้ว" : error.message);
     else await loadDebtors();
     setBusy(false);
   }
 
-  async function updateDebtor(debtor: Debtor, patch: { name: string; note: string; opening_balance: number }) {
+  async function updateDebtor(debtor: Debtor, patch: DebtorInput) {
     if (!supabase) return;
     setBusy(true);
     setError("");
     const openingBalance = Number(patch.opening_balance) || 0;
     const { error } = await supabase
       .from("debtors")
-      .update({ name: patch.name.trim(), note: patch.note.trim() || null, opening_balance: openingBalance, updated_at: new Date().toISOString() })
+      .update({
+        name: patch.name.trim(),
+        note: patch.note.trim() || null,
+        opening_balance: openingBalance,
+        kind: patch.kind,
+        monthly_installment: patch.monthly_installment,
+        icon: patch.icon,
+        icon_color: patch.icon_color,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", debtor.id);
-    if (error) setError(error.code === "23505" ? "มีลูกหนี้ชื่อนี้แล้ว" : error.message);
+    if (error) setError(error.code === "23505" ? "มีชื่อนี้อยู่แล้ว" : error.message);
     else {
       if (selectedDebtor?.id === debtor.id) {
-        setSelectedDebtor({ ...debtor, name: patch.name.trim(), note: patch.note.trim() || null, opening_balance: openingBalance });
+        setSelectedDebtor({ ...debtor, ...patch, name: patch.name.trim(), note: patch.note.trim() || null, opening_balance: openingBalance });
       }
       await loadDebtors();
     }
@@ -1108,23 +1171,37 @@ export default function Home() {
     setBusy(false);
   }
 
-  async function createWallet(name: string, tag: WalletTag, balance: number) {
-    if (!supabase || !user || !name.trim()) return;
+  async function createWallet(input: WalletInput) {
+    if (!supabase || !user || !input.name.trim()) return;
     setBusy(true);
     setError("");
-    const { error } = await supabase.from("wallets").insert({ user_id: user.id, name: name.trim(), tag, balance: Number(balance) || 0 });
+    const { error } = await supabase.from("wallets").insert({
+      user_id: user.id,
+      name: input.name.trim(),
+      tag: input.tag,
+      balance: Number(input.balance) || 0,
+      icon: input.icon,
+      icon_color: input.icon_color,
+    });
     if (error) setError(error.message);
     else await loadWallets();
     setBusy(false);
   }
 
-  async function updateWallet(wallet: Wallet, patch: { name: string; tag: WalletTag; balance: number }) {
+  async function updateWallet(wallet: Wallet, patch: WalletInput) {
     if (!supabase) return;
     setBusy(true);
     setError("");
     const { error } = await supabase
       .from("wallets")
-      .update({ name: patch.name.trim(), tag: patch.tag, balance: Number(patch.balance) || 0, updated_at: new Date().toISOString() })
+      .update({
+        name: patch.name.trim(),
+        tag: patch.tag,
+        balance: Number(patch.balance) || 0,
+        icon: patch.icon,
+        icon_color: patch.icon_color,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", wallet.id);
     if (error) setError(error.message);
     else await loadWallets();
@@ -1290,7 +1367,7 @@ export default function Home() {
                   <DraftRow
                     key={draft.id}
                     draft={draft}
-                    knownDebtorNames={debtors.map((debtor) => debtor.name)}
+                    knownDebtors={debtors}
                     onChange={(next) => setDrafts((items) => items.map((item, i) => (i === index ? next : item)))}
                   />
                 ))}
@@ -1338,8 +1415,11 @@ export default function Home() {
           <DebtorsView
             debtors={debtors}
             entries={entries}
-            debtorSummary={debtorSummary}
+            receivableSummary={receivableSummary}
+            payableSummary={payableSummary}
             selectedDebtor={selectedDebtor}
+            activeKind={debtorKindTab}
+            onChangeActiveKind={setDebtorKindTab}
             onBack={() => selectedDebtor ? setSelectedDebtor(null) : setTab("home")}
             onAdd={() => { setEditingDebtor(null); setDebtorSheetMode("create"); }}
             onSelect={(debtor) => setSelectedDebtor(debtor)}
@@ -1363,9 +1443,10 @@ export default function Home() {
           <DebtorEditSheet
             debtor={debtorSheetMode === "edit" ? editingDebtor : null}
             busy={busy}
+            defaultKind={debtorKindTab}
             onClose={() => { setDebtorSheetMode(null); setEditingDebtor(null); }}
-            onCreate={(name, note, openingBalance) => createDebtor(name, note, openingBalance)}
-            onUpdate={(debtor, patch) => updateDebtor(debtor, patch)}
+            onCreate={createDebtor}
+            onUpdate={updateDebtor}
           />
         )}
         {walletSheetMode && (
@@ -1373,16 +1454,14 @@ export default function Home() {
             wallet={walletSheetMode === "edit" ? editingWallet : null}
             busy={busy}
             onClose={() => { setWalletSheetMode(null); setEditingWallet(null); }}
-            onCreate={(name, tag, balance) => createWallet(name, tag, balance)}
-            onUpdate={(wallet, patch) => updateWallet(wallet, patch)}
+            onCreate={createWallet}
+            onUpdate={updateWallet}
           />
         )}
         {menuOpen && (
           <SideMenu
             user={user}
             profile={profile}
-            debtorSummary={debtorSummary}
-            walletsTotal={walletTotals.cash + walletTotals.savings + walletTotals.investment + walletTotals.other}
             onClose={() => setMenuOpen(false)}
             onLogout={() => { setMenuOpen(false); setLogoutOpen(true); }}
             onOpenProfile={() => { setMenuOpen(false); setProfileSheetOpen(true); }}
@@ -1402,7 +1481,8 @@ export default function Home() {
           <ReportExportSheet
             entries={entries}
             wallets={wallets}
-            debtorSummary={debtorSummary}
+            receivableSummary={receivableSummary}
+            payableSummary={payableSummary}
             selectedMonth={selectedMonth}
             monthStartDay={monthStartDay}
             onClose={() => setReportSheetOpen(false)}
@@ -2002,10 +2082,12 @@ function Metric({ label, value, tone }: { label: string; value: number; tone: "i
   );
 }
 
-function DraftRow({ draft, knownDebtorNames, onChange }: { draft: Draft; knownDebtorNames: string[]; onChange: (draft: Draft) => void }) {
+function DraftRow({ draft, knownDebtors, onChange }: { draft: Draft; knownDebtors: Debtor[]; onChange: (draft: Draft) => void }) {
   const update = (patch: Partial<Draft>) => onChange(normalizeEntry({ ...draft, ...patch }));
-  const isDebtType = (["lend", "split_half", "debt_repayment"] as TransactionType[]).includes(draft.transaction_type);
-  const isNewDebtor = isDebtType && draft.debtor_name !== unnamedDebtor && !knownDebtorNames.some((name) => name.trim().toLowerCase() === draft.debtor_name.trim().toLowerCase());
+  const isDebtType = (["lend", "split_half", "debt_repayment", "debt_payment"] as TransactionType[]).includes(draft.transaction_type);
+  const relevantKind: DebtorKind = draft.transaction_type === "debt_payment" ? "own" : "lend";
+  const knownNames = knownDebtors.filter((debtor) => debtor.kind === relevantKind).map((debtor) => debtor.name);
+  const isNewDebtor = isDebtType && draft.debtor_name !== unnamedDebtor && !knownNames.some((name) => name.trim().toLowerCase() === draft.debtor_name.trim().toLowerCase());
 
   return (
     <div className={`draft draft-${draft.transaction_type}`}>
@@ -2034,12 +2116,17 @@ function DraftRow({ draft, knownDebtorNames, onChange }: { draft: Draft; knownDe
       </div>
       <div className="impact-row">
         <span>กระเป๋า {formatSignedMoney(draft.wallet_impact)}</span>
-        <span>ลูกหนี้ {formatSignedMoney(draft.debt_impact)}</span>
+        <span>หนี้ {formatSignedMoney(draft.debt_impact)}</span>
       </div>
       {isDebtType && (
         <div className="draft-debtor-field">
-          <input className="draft-date" placeholder="ชื่อผู้เกี่ยวข้อง เช่น แฟน หรือ เพื่อนเอ" value={draft.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
-          {isNewDebtor && <small>ลูกหนี้ใหม่ · จะสร้างให้อัตโนมัติเมื่อบันทึก</small>}
+          <input
+            className="draft-date"
+            placeholder={relevantKind === "own" ? "ชื่อหนี้ เช่น ผ่อนบ้าน ผ่อนรถ" : "ชื่อผู้เกี่ยวข้อง เช่น แฟน หรือ เพื่อนเอ"}
+            value={draft.debtor_name}
+            onChange={(event) => update({ debtor_name: event.target.value })}
+          />
+          {isNewDebtor && <small>{relevantKind === "own" ? "หนี้ใหม่" : "ลูกหนี้ใหม่"} · จะสร้างให้อัตโนมัติเมื่อบันทึก</small>}
         </div>
       )}
       <input className="draft-date" type="date" value={toDateInput(draft.occurred_at)} onChange={(event) => update({ occurred_at: fromDateInput(event.target.value) })} />
@@ -2191,7 +2278,7 @@ function EditSheet({
           จำนวนเงิน
           <input inputMode="decimal" value={entry.amount} onChange={(event) => update({ amount: Number(event.target.value) })} />
         </label>
-        {(["lend", "split_half", "debt_repayment"] as TransactionType[]).includes(entry.transaction_type) && (
+        {(["lend", "split_half", "debt_repayment", "debt_payment"] as TransactionType[]).includes(entry.transaction_type) && (
           <label>
             ชื่อผู้เกี่ยวข้อง
             <input type="text" placeholder="เช่น เพื่อนเอ" value={entry.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
@@ -2204,7 +2291,7 @@ function EditSheet({
 
         <div className="draft-impact">
           <span>กระเป๋า {formatSignedMoney(entry.wallet_impact)}</span>
-          <span>ลูกหนี้ {formatSignedMoney(entry.debt_impact)}</span>
+          <span>หนี้ {formatSignedMoney(entry.debt_impact)}</span>
         </div>
 
         <button className="save" onClick={onSave} disabled={busy || !entry.title.trim() || entry.amount < 0}>
@@ -2218,8 +2305,11 @@ function EditSheet({
 function DebtorsView({
   debtors,
   entries,
-  debtorSummary,
+  receivableSummary,
+  payableSummary,
   selectedDebtor,
+  activeKind,
+  onChangeActiveKind,
   onBack,
   onAdd,
   onSelect,
@@ -2228,8 +2318,11 @@ function DebtorsView({
 }: {
   debtors: Debtor[];
   entries: Entry[];
-  debtorSummary: { name: string; amount: number }[];
+  receivableSummary: { name: string; amount: number }[];
+  payableSummary: { name: string; amount: number }[];
   selectedDebtor: Debtor | null;
+  activeKind: DebtorKind;
+  onChangeActiveKind: (kind: DebtorKind) => void;
   onBack: () => void;
   onAdd: () => void;
   onSelect: (debtor: Debtor) => void;
@@ -2239,25 +2332,36 @@ function DebtorsView({
   const debtorEntries = selectedDebtor
     ? entries.filter((entry) => entry.debtor_name.trim().toLowerCase() === selectedDebtor.name.trim().toLowerCase() && entry.debt_impact !== 0)
     : [];
-  const selectedAmount = selectedDebtor ? debtorSummary.find((item) => item.name.trim().toLowerCase() === selectedDebtor.name.trim().toLowerCase())?.amount ?? 0 : 0;
+  const summary = activeKind === "own" ? payableSummary : receivableSummary;
+  const selectedAmount = selectedDebtor ? summary.find((item) => item.name.trim().toLowerCase() === selectedDebtor.name.trim().toLowerCase())?.amount ?? 0 : 0;
 
   if (selectedDebtor) {
+    const monthsLeft = selectedDebtor.kind === "own" && selectedDebtor.monthly_installment
+      ? Math.ceil(selectedAmount / selectedDebtor.monthly_installment)
+      : null;
     return (
       <div className="view debtor-view">
         <div className="add-title">
           <button onClick={onBack}>‹</button>
-          <span className="debtor-avatar" style={{ background: nameColor(selectedDebtor.name) }}>{nameInitial(selectedDebtor.name)}</span>
+          <span className="debtor-avatar" style={{ background: selectedDebtor.icon_color ?? nameColor(selectedDebtor.name) }}>{selectedDebtor.icon ?? nameInitial(selectedDebtor.name)}</span>
           <div>
-            <p className="eyebrow">ประวัติลูกหนี้</p>
+            <p className="eyebrow">{selectedDebtor.kind === "own" ? "หนี้ที่ฉันผ่อน" : "ประวัติลูกหนี้"}</p>
             <h2>{selectedDebtor.name}</h2>
           </div>
         </div>
         <section className="debtor-detail-card">
-          <span>ยอดค้างปัจจุบัน</span>
+          <span>{selectedDebtor.kind === "own" ? "ยอดหนี้คงเหลือ" : "ยอดค้างปัจจุบัน"}</span>
           <strong>{moneySign}{formatMoney(selectedAmount)}</strong>
-          {selectedDebtor.note && <small>{selectedDebtor.note}</small>}
+          {selectedDebtor.kind === "own" && selectedDebtor.monthly_installment ? (
+            <small>
+              ผ่อนเดือนละ {moneySign}{formatMoney(selectedDebtor.monthly_installment)}
+              {monthsLeft !== null && selectedAmount > 0.005 ? ` · เหลืออีกประมาณ ${monthsLeft} เดือน` : ""}
+            </small>
+          ) : (
+            selectedDebtor.note && <small>{selectedDebtor.note}</small>
+          )}
         </section>
-        <DebtorStatementSummary entries={debtorEntries} />
+        <DebtorStatementSummary entries={debtorEntries} kind={selectedDebtor.kind} />
         <div className="section-title">
           <h2>ประวัติยืม/จ่าย</h2>
           <button onClick={() => onEdit(selectedDebtor)}>แก้ไข</button>
@@ -2267,26 +2371,45 @@ function DebtorsView({
     );
   }
 
+  const visibleDebtors = debtors.filter((debtor) => debtor.kind === activeKind);
+  const summaryTotal = summary.reduce((sum, item) => sum + item.amount, 0);
+
   return (
     <div className="view debtor-view">
       <div className="add-title">
         <button onClick={onBack}>‹</button>
         <div>
-          <p className="eyebrow">จัดการรายชื่อ</p>
-          <h2>ลูกหนี้</h2>
+          <p className="eyebrow">จัดการหนี้</p>
+          <h2>{activeKind === "own" ? "หนี้ของฉัน" : "ยืมเรา"}</h2>
         </div>
         <button className="header-add-button" onClick={onAdd}>เพิ่ม</button>
       </div>
+      <div className="report-period-toggle">
+        <button className={activeKind === "lend" ? "active" : ""} onClick={() => onChangeActiveKind("lend")}>ยืมเรา</button>
+        <button className={activeKind === "own" ? "active" : ""} onClick={() => onChangeActiveKind("own")}>หนี้ของฉัน</button>
+      </div>
+      <section className="debtor-detail-card">
+        <span>{activeKind === "own" ? "หนี้ที่ต้องผ่อนรวม" : "ยอดรวมที่ค้างรับ"}</span>
+        <strong>{moneySign}{formatMoney(summaryTotal)}</strong>
+      </section>
       <div className="debtor-page-list">
-        {debtors.map((debtor) => {
-          const amount = debtorSummary.find((item) => item.name.trim().toLowerCase() === debtor.name.trim().toLowerCase())?.amount ?? 0;
+        {visibleDebtors.map((debtor) => {
+          const amount = summary.find((item) => item.name.trim().toLowerCase() === debtor.name.trim().toLowerCase())?.amount ?? 0;
+          const monthsLeft = debtor.kind === "own" && debtor.monthly_installment ? Math.ceil(amount / debtor.monthly_installment) : null;
           return (
             <article className="debtor-page-item" key={debtor.id}>
               <button className="debtor-main-button" onClick={() => onSelect(debtor)}>
-                <span className="debtor-avatar" style={{ background: nameColor(debtor.name) }}>{nameInitial(debtor.name)}</span>
+                <span className="debtor-avatar" style={{ background: debtor.icon_color ?? nameColor(debtor.name) }}>{debtor.icon ?? nameInitial(debtor.name)}</span>
                 <div>
                   <span>{debtor.name}</span>
-                  <small>{debtor.note || "ไม่มีหมายเหตุ"} · ค้าง {moneySign}{formatMoney(amount)}</small>
+                  {debtor.kind === "own" && debtor.monthly_installment ? (
+                    <small>
+                      ผ่อนเดือนละ {moneySign}{formatMoney(debtor.monthly_installment)}
+                      {monthsLeft !== null && amount > 0.005 ? ` · เหลืออีกประมาณ ${monthsLeft} เดือน` : ""}
+                    </small>
+                  ) : (
+                    <small>{debtor.note || "ไม่มีหมายเหตุ"} · ค้าง {moneySign}{formatMoney(amount)}</small>
+                  )}
                 </div>
               </button>
               <details className="kebab-menu">
@@ -2299,13 +2422,17 @@ function DebtorsView({
             </article>
           );
         })}
-        {!debtors.length && <EmptyNote glyph="◆" action={{ label: "เพิ่มลูกหนี้", onClick: onAdd }}>ยังไม่มีรายชื่อลูกหนี้</EmptyNote>}
+        {!visibleDebtors.length && (
+          <EmptyNote glyph="◆" action={{ label: "เพิ่ม", onClick: onAdd }}>
+            {activeKind === "own" ? "ยังไม่มีหนี้ของฉัน" : "ยังไม่มีรายชื่อลูกหนี้"}
+          </EmptyNote>
+        )}
       </div>
     </div>
   );
 }
 
-function DebtorStatementSummary({ entries }: { entries: Entry[] }) {
+function DebtorStatementSummary({ entries, kind }: { entries: Entry[]; kind: DebtorKind }) {
   const lent = entries.filter((entry) => entry.debt_impact > 0).reduce((sum, entry) => sum + entry.debt_impact, 0);
   const paid = entries.filter((entry) => entry.debt_impact < 0).reduce((sum, entry) => sum + Math.abs(entry.debt_impact), 0);
   const latest = [...entries].sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime())[0];
@@ -2313,11 +2440,11 @@ function DebtorStatementSummary({ entries }: { entries: Entry[] }) {
   return (
     <section className="debtor-statement">
       <div>
-        <span>ยืม/หารสะสม</span>
+        <span>{kind === "own" ? "เพิ่มยอดหนี้" : "ยืม/หารสะสม"}</span>
         <b>{moneySign}{formatMoney(lent)}</b>
       </div>
       <div>
-        <span>คืนแล้ว</span>
+        <span>{kind === "own" ? "ผ่อนชำระสะสม" : "คืนแล้ว"}</span>
         <b>{moneySign}{formatMoney(paid)}</b>
       </div>
       <div>
@@ -2329,27 +2456,96 @@ function DebtorStatementSummary({ entries }: { entries: Entry[] }) {
   );
 }
 
+const iconGlyphs = ["●", "◆", "฿", "✚", "▣", "♪", "▪", "✦", "✓", "⌂", "▲", "■"];
+const iconColorSwatches = [
+  "#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#4a3aa7", "#e34948",
+  "#145c45", "#14b889", "#898781",
+];
+
+function IconColorPicker({
+  value,
+  onChange,
+  fallbackName,
+}: {
+  value: { icon: string | null; color: string | null };
+  onChange: (next: { icon: string | null; color: string | null }) => void;
+  fallbackName: string;
+}) {
+  const previewColor = value.color ?? nameColor(fallbackName);
+  const previewGlyph = value.icon ?? nameInitial(fallbackName);
+
+  return (
+    <div className="icon-color-picker">
+      <div className="icon-color-picker-preview">
+        <span className="debtor-avatar" style={{ background: previewColor }}>{previewGlyph}</span>
+        {(value.icon || value.color) && (
+          <button type="button" className="icon-color-picker-reset" onClick={() => onChange({ icon: null, color: null })}>
+            ใช้ค่าเริ่มต้น
+          </button>
+        )}
+      </div>
+      <div className="icon-color-picker-glyphs" role="group" aria-label="เลือกไอคอน">
+        {iconGlyphs.map((glyph) => (
+          <button type="button" key={glyph} className={value.icon === glyph ? "active" : ""} onClick={() => onChange({ ...value, icon: glyph })}>
+            {glyph}
+          </button>
+        ))}
+      </div>
+      <div className="icon-color-picker-swatches" role="group" aria-label="เลือกสี">
+        {iconColorSwatches.map((hex) => (
+          <button type="button" key={hex} className={value.color === hex ? "active" : ""} style={{ background: hex }} onClick={() => onChange({ ...value, color: hex })} aria-label={hex} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type DebtorInput = {
+  name: string;
+  note: string;
+  opening_balance: number;
+  kind: DebtorKind;
+  monthly_installment: number | null;
+  icon: string | null;
+  icon_color: string | null;
+};
+
 function DebtorEditSheet({
   debtor,
   busy,
+  defaultKind,
   onClose,
   onCreate,
   onUpdate,
 }: {
   debtor: Debtor | null;
   busy: boolean;
+  defaultKind: DebtorKind;
   onClose: () => void;
-  onCreate: (name: string, note: string, openingBalance: number) => void;
-  onUpdate: (debtor: Debtor, patch: { name: string; note: string; opening_balance: number }) => void;
+  onCreate: (input: DebtorInput) => void;
+  onUpdate: (debtor: Debtor, patch: DebtorInput) => void;
 }) {
   const [name, setName] = useState(debtor?.name ?? "");
   const [note, setNote] = useState(debtor?.note ?? "");
   const [openingBalance, setOpeningBalance] = useState(debtor?.opening_balance ?? 0);
+  const [kind, setKind] = useState<DebtorKind>(debtor?.kind ?? defaultKind);
+  const [monthlyInstallment, setMonthlyInstallment] = useState<number | "">(debtor?.monthly_installment ?? "");
+  const [icon, setIcon] = useState<string | null>(debtor?.icon ?? null);
+  const [iconColor, setIconColor] = useState<string | null>(debtor?.icon_color ?? null);
 
   const submit = () => {
     if (!name.trim()) return;
-    if (debtor) onUpdate(debtor, { name, note, opening_balance: openingBalance });
-    else onCreate(name, note, openingBalance);
+    const payload: DebtorInput = {
+      name,
+      note,
+      opening_balance: openingBalance,
+      kind,
+      monthly_installment: kind === "own" && monthlyInstallment !== "" ? Number(monthlyInstallment) : null,
+      icon,
+      icon_color: iconColor,
+    };
+    if (debtor) onUpdate(debtor, payload);
+    else onCreate(payload);
     onClose();
   };
 
@@ -2358,23 +2554,36 @@ function DebtorEditSheet({
       <section className="edit-sheet">
         <div className="sheet-head">
           <div>
-            <p className="eyebrow">{debtor ? "แก้ไขลูกหนี้" : "เพิ่มลูกหนี้"}</p>
-            <h2>{debtor ? debtor.name : "ลูกหนี้ใหม่"}</h2>
+            <p className="eyebrow">{debtor ? "แก้ไขรายการหนี้" : "เพิ่มรายการหนี้"}</p>
+            <h2>{debtor ? debtor.name : "รายการใหม่"}</h2>
           </div>
           <button onClick={onClose}>×</button>
         </div>
+        <div className="report-period-toggle">
+          <button type="button" className={kind === "lend" ? "active" : ""} onClick={() => setKind("lend")}>ยืมเรา</button>
+          <button type="button" className={kind === "own" ? "active" : ""} onClick={() => setKind("own")}>หนี้ของฉัน</button>
+        </div>
+        <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
         <label>
           ชื่อ
-          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น เพื่อนเอ" />
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder={kind === "own" ? "เช่น ผ่อนบ้าน ผ่อนรถ" : "เช่น เพื่อนเอ"} />
         </label>
+        {kind === "lend" && (
+          <label>
+            หมายเหตุ
+            <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="เช่น เพื่อนร่วมงาน" />
+          </label>
+        )}
         <label>
-          หมายเหตุ
-          <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="เช่น เพื่อนร่วมงาน" />
-        </label>
-        <label>
-          ยอดเริ่มต้น (ที่ค้างอยู่ก่อนเริ่มใช้แอพ)
+          {kind === "own" ? "ยอดหนี้คงเหลือ" : "ยอดเริ่มต้น (ที่ค้างอยู่ก่อนเริ่มใช้แอพ)"}
           <input inputMode="decimal" value={openingBalance} onChange={(event) => setOpeningBalance(Number(event.target.value) || 0)} />
         </label>
+        {kind === "own" && (
+          <label>
+            ผ่อนต่อเดือน (ไม่บังคับ)
+            <input inputMode="decimal" value={monthlyInstallment} onChange={(event) => setMonthlyInstallment(event.target.value === "" ? "" : Number(event.target.value) || 0)} placeholder="เช่น 15000" />
+          </label>
+        )}
         <button className="save" onClick={submit} disabled={busy || !name.trim()}>
           บันทึก
         </button>
@@ -2522,14 +2731,16 @@ function BudgetSheet({
 function ReportExportSheet({
   entries,
   wallets,
-  debtorSummary,
+  receivableSummary,
+  payableSummary,
   selectedMonth,
   monthStartDay,
   onClose,
 }: {
   entries: Entry[];
   wallets: Wallet[];
-  debtorSummary: { name: string; amount: number }[];
+  receivableSummary: { name: string; amount: number }[];
+  payableSummary: { name: string; amount: number }[];
   selectedMonth: string;
   monthStartDay: number;
   onClose: () => void;
@@ -2549,7 +2760,8 @@ function ReportExportSheet({
     const csv = buildReportCsv({
       entries,
       wallets,
-      debtorSummary,
+      receivableSummary,
+      payableSummary,
       period,
       selectedMonth: month,
       selectedYear: safeYear,
@@ -2651,8 +2863,6 @@ function ReportSummaryTiles({ income, outflow, balance, count }: { income: numbe
 function SideMenu({
   user,
   profile,
-  debtorSummary,
-  walletsTotal,
   onClose,
   onLogout,
   onOpenProfile,
@@ -2665,8 +2875,6 @@ function SideMenu({
 }: {
   user: User;
   profile: Profile | null;
-  debtorSummary: { name: string; amount: number }[];
-  walletsTotal: number;
   onClose: () => void;
   onLogout: () => void;
   onOpenProfile: () => void;
@@ -2682,7 +2890,6 @@ function SideMenu({
   const appIcon = profile?.app_icon || user.email?.[0]?.toUpperCase() || "฿";
   const appIconImage = profile?.app_icon_image || "";
   const provider = user.app_metadata?.provider ?? "Google";
-  const totalDebt = debtorSummary.reduce((sum, item) => sum + item.amount, 0);
 
   return (
     <div className="side-menu-backdrop" onClick={onClose}>
@@ -2717,26 +2924,11 @@ function SideMenu({
         </div>
 
         <nav className="side-menu-list">
-          <button onClick={onOpenProfile}>
-            <span>จัดการโปรไฟล์</span>
-            <small>ชื่อเล่น รูปไอคอน วันเริ่มรอบเดือน</small>
-          </button>
-          <button onClick={onOpenWallets}>
-            <span>กระเป๋าตังค์</span>
-            <small>ยอดรวม {moneySign}{formatMoney(walletsTotal)} · จัดการกองเงินและแท็ก</small>
-          </button>
-          <button onClick={onOpenDebtors}>
-            <span>ลูกหนี้</span>
-            <small>ยอดรวม {moneySign}{formatMoney(totalDebt)} · จัดการรายชื่อและประวัติ</small>
-          </button>
-          <button onClick={onOpenBudgets}>
-            <span>งบประมาณ</span>
-            <small>ตั้งวงเงินต่อหมวดหมู่ต่อเดือน</small>
-          </button>
-          <button onClick={onOpenReport}>
-            <span>ส่งออกรีพอร์ท</span>
-            <small>ดาวน์โหลดสรุปรายเดือนหรือรายปีเป็นไฟล์ CSV สำหรับ Excel/Sheets</small>
-          </button>
+          <button onClick={onOpenProfile}><span>จัดการโปรไฟล์</span></button>
+          <button onClick={onOpenWallets}><span>กระเป๋าตังค์</span></button>
+          <button onClick={onOpenDebtors}><span>จัดการหนี้</span></button>
+          <button onClick={onOpenBudgets}><span>งบประมาณ</span></button>
+          <button onClick={onOpenReport}><span>ส่งออกรีพอร์ท</span></button>
         </nav>
 
         <button className="logout-button" onClick={onLogout}>ออกจากระบบ</button>
@@ -2842,7 +3034,7 @@ function WalletsView({
         {wallets.map((wallet) => (
           <article className="debtor-page-item" key={wallet.id}>
             <button className="debtor-main-button" onClick={() => onEdit(wallet)}>
-              <span className="debtor-avatar" style={{ background: nameColor(wallet.name) }}>{nameInitial(wallet.name)}</span>
+              <span className="debtor-avatar" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>{wallet.icon ?? nameInitial(wallet.name)}</span>
               <div>
                 <span>{wallet.name}</span>
                 <small>{walletTagLabels[wallet.tag]} · {moneySign}{formatMoney(wallet.balance)}</small>
@@ -2863,6 +3055,14 @@ function WalletsView({
   );
 }
 
+type WalletInput = {
+  name: string;
+  tag: WalletTag;
+  balance: number;
+  icon: string | null;
+  icon_color: string | null;
+};
+
 function WalletEditSheet({
   wallet,
   busy,
@@ -2873,17 +3073,20 @@ function WalletEditSheet({
   wallet: Wallet | null;
   busy: boolean;
   onClose: () => void;
-  onCreate: (name: string, tag: WalletTag, balance: number) => void;
-  onUpdate: (wallet: Wallet, patch: { name: string; tag: WalletTag; balance: number }) => void;
+  onCreate: (input: WalletInput) => void;
+  onUpdate: (wallet: Wallet, patch: WalletInput) => void;
 }) {
   const [name, setName] = useState(wallet?.name ?? "");
   const [tag, setTag] = useState<WalletTag>(wallet?.tag ?? "cash");
   const [balance, setBalance] = useState(wallet?.balance ?? 0);
+  const [icon, setIcon] = useState<string | null>(wallet?.icon ?? null);
+  const [iconColor, setIconColor] = useState<string | null>(wallet?.icon_color ?? null);
 
   const submit = () => {
     if (!name.trim()) return;
-    if (wallet) onUpdate(wallet, { name, tag, balance });
-    else onCreate(name, tag, balance);
+    const payload: WalletInput = { name, tag, balance, icon, icon_color: iconColor };
+    if (wallet) onUpdate(wallet, payload);
+    else onCreate(payload);
     onClose();
   };
 
@@ -2897,6 +3100,7 @@ function WalletEditSheet({
           </div>
           <button onClick={onClose}>×</button>
         </div>
+        <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
         <label>
           ชื่อกระเป๋า
           <input value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น กระเป๋าหลัก, ออมทรัพย์ SCB" />
