@@ -3,6 +3,27 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import {
+  Banknote,
+  Car,
+  CreditCard,
+  Gift,
+  GraduationCap,
+  HeartPulse,
+  Home as HomeIcon,
+  Lightbulb,
+  MoreHorizontal,
+  Music,
+  PiggyBank,
+  Plane,
+  Receipt,
+  ShoppingBag,
+  TrendingUp,
+  Users,
+  Utensils,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 
 type EntryKind = "expense" | "income";
 type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "debt_payment" | "gift";
@@ -116,15 +137,20 @@ const transactionKind: Record<TransactionType, EntryKind> = {
   gift: "expense",
 };
 
-const categoryIcon = (category: string) => {
-  if (category === "อาหาร") return "●";
-  if (category === "เดินทาง") return "◆";
-  if (category === "รายได้") return "฿";
-  if (category === "สุขภาพ") return "✚";
-  if (category === "บิลประจำ") return "▣";
-  if (category === "บันเทิง") return "♪";
-  return "▪";
+const categoryIconMap: Record<string, LucideIcon> = {
+  อาหาร: Utensils,
+  เดินทาง: Car,
+  ของใช้: ShoppingBag,
+  ที่อยู่อาศัย: HomeIcon,
+  สุขภาพ: HeartPulse,
+  บันเทิง: Music,
+  บิลประจำ: Receipt,
+  รายได้: Banknote,
 };
+function CategoryIcon({ category, size = 14 }: { category: string; size?: number }) {
+  const Icon = categoryIconMap[category] ?? MoreHorizontal;
+  return <Icon size={size} strokeWidth={2.25} aria-hidden="true" />;
+}
 
 // Categorical palette validated for CVD-safe adjacency + normal-vision separation
 // (dataviz skill, 7-slot subset of the default 8-hue order; brand green reserved for income).
@@ -1320,7 +1346,7 @@ export default function Home() {
                     onClick={() => applySuggestion(suggestion.text, suggestion.shortcut)}
                   >
                     <span className="cat-dot" style={{ background: suggestion.shortcut ? `${categoryColor(suggestion.shortcut.category)}22` : undefined }}>
-                      {suggestion.shortcut ? categoryIcon(suggestion.shortcut.category) : "✦"}
+                      {suggestion.shortcut ? <CategoryIcon category={suggestion.shortcut.category} /> : <Lightbulb size={14} strokeWidth={2.25} aria-hidden="true" />}
                     </span>
                     <span>
                       <b>{suggestion.label}</b>
@@ -1829,7 +1855,7 @@ function CategorySpotlight({
 
   return (
     <section className={`category-spotlight ${isOver ? "over" : ""}`}>
-      <span className="cat-dot" style={{ background: `${categoryColor(top.category)}22` }}>{categoryIcon(top.category)}</span>
+      <span className="cat-dot" style={{ background: `${categoryColor(top.category)}22` }}><CategoryIcon category={top.category} /></span>
       <div>
         <small>{budget > 0 ? "หมวดที่ต้องจับตา" : "หมวดใช้จ่ายเด่น"}</small>
         <b>{top.category}</b>
@@ -1894,7 +1920,7 @@ function MonthSummary({
             return (
               <div className="category-bar" key={item.category}>
                 <div>
-                  <span className="cat-dot" style={{ background: `${categoryColor(item.category)}22` }}>{categoryIcon(item.category)}</span>
+                  <span className="cat-dot" style={{ background: `${categoryColor(item.category)}22` }}><CategoryIcon category={item.category} /></span>
                   <b>{item.category}</b>
                   {overBudget && <span className="over-budget-chip">เกินงบ</span>}
                   <small>{hasBudget ? `${moneySign}${formatMoney(item.amount)} / ${moneySign}${formatMoney(budget)}` : `${percent.toFixed(0)}%`}</small>
@@ -2102,7 +2128,7 @@ function DraftRow({ draft, knownDebtors, onChange }: { draft: Draft; knownDebtor
 
   return (
     <div className={`draft draft-${draft.transaction_type}`}>
-      <span className="cat-icon" style={{ background: `${categoryColor(draft.category)}22` }}>{categoryIcon(draft.category)}</span>
+      <span className="cat-icon" style={{ background: `${categoryColor(draft.category)}22` }}><CategoryIcon category={draft.category} size={18} /></span>
       <div>
         <input value={draft.title} onChange={(event) => update({ title: event.target.value })} />
         <select value={draft.category} onChange={(event) => update({ category: event.target.value })}>
@@ -2183,7 +2209,7 @@ function EntryList({
               role={onEdit ? "button" : undefined}
               tabIndex={onEdit ? 0 : undefined}
             >
-              <span className="entry-icon" style={{ background: `${categoryColor(entry.category)}22` }}>{categoryIcon(entry.category)}</span>
+              <span className="entry-icon" style={{ background: `${categoryColor(entry.category)}22` }}><CategoryIcon category={entry.category} size={18} /></span>
               <div>
                 <b>{entry.title}</b>
                 <small>
@@ -2354,7 +2380,9 @@ function DebtorsView({
       <div className="view debtor-view">
         <div className="add-title">
           <button onClick={onBack}>‹</button>
-          <span className="debtor-avatar" style={{ background: selectedDebtor.icon_color ?? nameColor(selectedDebtor.name) }}>{selectedDebtor.icon ?? nameInitial(selectedDebtor.name)}</span>
+          <span className="debtor-avatar" style={{ background: selectedDebtor.icon_color ?? nameColor(selectedDebtor.name) }}>
+            <WalletAvatarGlyph iconKey={selectedDebtor.icon} fallbackName={selectedDebtor.name} size={20} />
+          </span>
           <div>
             <p className="eyebrow">{selectedDebtor.kind === "own" ? "หนี้ที่ฉันผ่อน" : "ประวัติลูกหนี้"}</p>
             <h2>{selectedDebtor.name}</h2>
@@ -2410,7 +2438,9 @@ function DebtorsView({
           return (
             <article className="debtor-page-item" key={debtor.id}>
               <button className="debtor-main-button" onClick={() => onSelect(debtor)}>
-                <span className="debtor-avatar" style={{ background: debtor.icon_color ?? nameColor(debtor.name) }}>{debtor.icon ?? nameInitial(debtor.name)}</span>
+                <span className="debtor-avatar" style={{ background: debtor.icon_color ?? nameColor(debtor.name) }}>
+                  <WalletAvatarGlyph iconKey={debtor.icon} fallbackName={debtor.name} />
+                </span>
                 <div>
                   <span>{debtor.name}</span>
                   {debtor.kind === "own" && debtor.monthly_installment ? (
@@ -2423,7 +2453,7 @@ function DebtorsView({
                   )}
                 </div>
               </button>
-              <details className="kebab-menu">
+              <details className="kebab-menu" name="debtor-kebab">
                 <summary>⋮</summary>
                 <menu>
                   <button onClick={() => onEdit(debtor)}>แก้ไข</button>
@@ -2467,7 +2497,30 @@ function DebtorStatementSummary({ entries, kind }: { entries: Entry[]; kind: Deb
   );
 }
 
-const iconGlyphs = ["●", "◆", "฿", "✚", "▣", "♪", "▪", "✦", "✓", "⌂", "▲", "■"];
+const walletIconOptions: { key: string; label: string; Icon: LucideIcon }[] = [
+  { key: "wallet", label: "กระเป๋าเงิน", Icon: Wallet },
+  { key: "piggy-bank", label: "เงินออม", Icon: PiggyBank },
+  { key: "trending-up", label: "เงินลงทุน", Icon: TrendingUp },
+  { key: "banknote", label: "เงินสด", Icon: Banknote },
+  { key: "home", label: "บ้าน", Icon: HomeIcon },
+  { key: "car", label: "รถ", Icon: Car },
+  { key: "credit-card", label: "บัตรเครดิต", Icon: CreditCard },
+  { key: "shopping-bag", label: "ช้อปปิ้ง", Icon: ShoppingBag },
+  { key: "heart-pulse", label: "สุขภาพ", Icon: HeartPulse },
+  { key: "graduation-cap", label: "การศึกษา", Icon: GraduationCap },
+  { key: "plane", label: "ท่องเที่ยว", Icon: Plane },
+  { key: "gift", label: "ของขวัญ", Icon: Gift },
+  { key: "users", label: "ครอบครัว", Icon: Users },
+  { key: "more-horizontal", label: "อื่น ๆ", Icon: MoreHorizontal },
+];
+const walletIconMap: Record<string, LucideIcon> = Object.fromEntries(walletIconOptions.map((option) => [option.key, option.Icon]));
+
+function WalletAvatarGlyph({ iconKey, fallbackName, size = 18 }: { iconKey: string | null; fallbackName: string; size?: number }) {
+  const Icon = (iconKey && walletIconMap[iconKey]) || null;
+  if (!Icon) return <>{nameInitial(fallbackName)}</>;
+  return <Icon size={size} strokeWidth={2.25} aria-hidden="true" />;
+}
+
 const iconColorSwatches = [
   "#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#4a3aa7", "#e34948",
   "#145c45", "#14b889", "#898781",
@@ -2483,12 +2536,13 @@ function IconColorPicker({
   fallbackName: string;
 }) {
   const previewColor = value.color ?? nameColor(fallbackName);
-  const previewGlyph = value.icon ?? nameInitial(fallbackName);
 
   return (
     <div className="icon-color-picker">
       <div className="icon-color-picker-preview">
-        <span className="debtor-avatar" style={{ background: previewColor }}>{previewGlyph}</span>
+        <span className="debtor-avatar" style={{ background: previewColor }}>
+          <WalletAvatarGlyph iconKey={value.icon} fallbackName={fallbackName} size={20} />
+        </span>
         {(value.icon || value.color) && (
           <button type="button" className="icon-color-picker-reset" onClick={() => onChange({ icon: null, color: null })}>
             ใช้ค่าเริ่มต้น
@@ -2496,9 +2550,9 @@ function IconColorPicker({
         )}
       </div>
       <div className="icon-color-picker-glyphs" role="group" aria-label="เลือกไอคอน">
-        {iconGlyphs.map((glyph) => (
-          <button type="button" key={glyph} className={value.icon === glyph ? "active" : ""} onClick={() => onChange({ ...value, icon: glyph })}>
-            {glyph}
+        {walletIconOptions.map(({ key, label, Icon }) => (
+          <button type="button" key={key} className={value.icon === key ? "active" : ""} onClick={() => onChange({ ...value, icon: key })} aria-label={label} title={label}>
+            <Icon size={18} strokeWidth={2.25} aria-hidden="true" />
           </button>
         ))}
       </div>
@@ -2669,7 +2723,7 @@ function RecapSheet({
         </div>
         {topCategory && (
           <div className="recap-top-category">
-            <span className="cat-dot" style={{ background: `${categoryColor(topCategory.category)}33` }}>{categoryIcon(topCategory.category)}</span>
+            <span className="cat-dot" style={{ background: `${categoryColor(topCategory.category)}33` }}><CategoryIcon category={topCategory.category} /></span>
             <div>
               <small>ใช้จ่ายเยอะสุด</small>
               <b>{topCategory.category} · {moneySign}{formatMoney(topCategory.amount)}</b>
@@ -2721,7 +2775,7 @@ function BudgetSheet({
         <p className="budget-hint">ตั้งวงเงินต่อหมวดหมู่ เว้นว่างไว้ถ้าไม่ต้องการจำกัด บันทึกเฉพาะในเครื่องนี้เท่านั้น</p>
         {expenseCategories.map((category) => (
           <label key={category} className="budget-row">
-            <span className="cat-dot" style={{ background: `${categoryColor(category)}22` }}>{categoryIcon(category)}</span>
+            <span className="cat-dot" style={{ background: `${categoryColor(category)}22` }}><CategoryIcon category={category} /></span>
             {category}
             <input
               inputMode="decimal"
@@ -3045,13 +3099,15 @@ function WalletsView({
         {wallets.map((wallet) => (
           <article className="debtor-page-item" key={wallet.id}>
             <button className="debtor-main-button" onClick={() => onEdit(wallet)}>
-              <span className="debtor-avatar" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>{wallet.icon ?? nameInitial(wallet.name)}</span>
+              <span className="debtor-avatar" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>
+                <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} />
+              </span>
               <div>
                 <span>{wallet.name}</span>
                 <small>{walletTagLabels[wallet.tag]} · {moneySign}{formatMoney(wallet.balance)}</small>
               </div>
             </button>
-            <details className="kebab-menu">
+            <details className="kebab-menu" name="wallet-kebab">
               <summary>⋮</summary>
               <menu>
                 <button onClick={() => onEdit(wallet)}>แก้ไข</button>
