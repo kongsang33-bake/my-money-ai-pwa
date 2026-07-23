@@ -2712,12 +2712,8 @@ function SideMenu({
         </div>
 
         <div className="theme-toggle" role="group" aria-label="ธีมสีของแอพ">
-          <button className={theme === "light" ? "active" : ""} onClick={() => onSetTheme("light")}>
-            <span aria-hidden="true">☀️</span> สว่าง
-          </button>
-          <button className={theme === "dark" ? "active" : ""} onClick={() => onSetTheme("dark")}>
-            <span aria-hidden="true">🌙</span> มืด
-          </button>
+          <button className={theme === "light" ? "active" : ""} onClick={() => onSetTheme("light")}>สว่าง</button>
+          <button className={theme === "dark" ? "active" : ""} onClick={() => onSetTheme("dark")}>มืด</button>
         </div>
 
         <nav className="side-menu-list">
