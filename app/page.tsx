@@ -1,19 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import type { CSSProperties } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
 type EntryKind = "expense" | "income";
 type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "gift";
 type Tab = "home" | "add" | "history" | "debtors" | "wallets";
+type Theme = "light" | "dark";
 type MascotMood = "idle" | "thinking" | "happy" | "sleepy" | "oops";
-type MascotVariant = "whale";
-const defaultMascotVariant: MascotVariant = "whale";
-const mascotOptions: { id: MascotVariant; name: string; detail: string }[] = [
-  { id: "whale", name: "น้องวาฬเงิน", detail: "โทนฟ้าประจำแอพ" },
-];
 
 type Entry = {
   id: string;
@@ -235,11 +230,6 @@ function computeStreak(entries: Entry[]) {
     cursor -= 86400000;
   }
   return streak;
-}
-
-function daysSinceLastEntry(entries: Entry[]) {
-  if (!entries.length) return null;
-  return Math.max(0, Math.floor((Date.now() - new Date(entries[0].occurred_at).getTime()) / 86400000));
 }
 
 function daysRemainingInCycle(end: Date) {
@@ -568,10 +558,9 @@ export default function Home() {
   const [budgetSheetOpen, setBudgetSheetOpen] = useState(false);
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
-  const [mascotSheetOpen, setMascotSheetOpen] = useState(false);
-  const [mascotVariant, setMascotVariant] = useState<MascotVariant>(defaultMascotVariant);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [savePulse, setSavePulse] = useState(0);
+  const [theme, setTheme] = useState<Theme>("light");
   const displayName = profile?.nickname?.trim() || user?.user_metadata?.full_name || user?.user_metadata?.name || "เงินของฉัน";
   const displayIcon = profile?.app_icon?.trim() || user?.email?.[0]?.toUpperCase() || "฿";
   const displayIconImage = profile?.app_icon_image?.trim() || "";
@@ -596,19 +585,21 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [savePulse]);
 
+  const themeLoadedRef = useRef(false);
+
   useEffect(() => {
-    if (!user) return;
     const timer = window.setTimeout(() => {
-      const saved = window.localStorage.getItem(`money-mascot-${user.id}`);
-      if (isMascotVariant(saved)) setMascotVariant(saved);
+      const saved = window.localStorage.getItem("money-ai-theme");
+      if (saved === "light" || saved === "dark") setTheme(saved);
+      themeLoadedRef.current = true;
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [user]);
+  }, []);
 
-  function chooseMascot(next: MascotVariant) {
-    setMascotVariant(next);
-    if (user) window.localStorage.setItem(`money-mascot-${user.id}`, next);
-  }
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    if (themeLoadedRef.current) window.localStorage.setItem("money-ai-theme", theme);
+  }, [theme]);
 
   const loadEntries = useCallback(async () => {
     if (!supabase) return;
@@ -726,7 +717,6 @@ export default function Home() {
     !!walletSheetMode ||
     budgetSheetOpen ||
     reportSheetOpen ||
-    mascotSheetOpen ||
     recapOpen ||
     logoutOpen;
   useEffect(() => {
@@ -755,30 +745,6 @@ export default function Home() {
     [entries, walletTotals.cash],
   );
   const streak = useMemo(() => computeStreak(entries), [entries]);
-  const petCycle = useMemo(() => cycleBounds(monthKey(new Date()), monthStartDay), [monthStartDay]);
-  const petEntries = useMemo(() => {
-    const { start, end } = petCycle;
-    return entries.filter((entry) => {
-      const occurred = new Date(entry.occurred_at);
-      return occurred >= start && occurred < end;
-    });
-  }, [entries, petCycle]);
-  const petBalance = useMemo(
-    () => totalWallet(petEntries, "income") - Math.abs(totalWallet(petEntries, "expense")),
-    [petEntries],
-  );
-  const petOverBudgetCount = useMemo(() => {
-    const spend = new Map<string, number>();
-    for (const entry of petEntries) {
-      if (entry.wallet_impact >= 0) continue;
-      spend.set(entry.category, (spend.get(entry.category) ?? 0) + Math.abs(entry.wallet_impact));
-    }
-    let count = 0;
-    for (const [category, limit] of Object.entries(budgets)) {
-      if (limit > 0 && (spend.get(category) ?? 0) > limit) count += 1;
-    }
-    return count;
-  }, [petEntries, budgets]);
   const quickShortcuts = useMemo(() => deriveQuickShortcuts(entries), [entries]);
   const debtorSummary = useMemo(() => {
     const map = new Map<string, number>();
@@ -1191,7 +1157,7 @@ export default function Home() {
 
   return (
     <main className="shell">
-      <section className={`phone tab-${tab} mascot-${mascotVariant}`}>
+      <section className={`phone tab-${tab}`}>
         <header className="topbar">
           <div className="home-identity">
             <span className="home-profile-icon" style={displayIconImage ? { backgroundImage: `url(${displayIconImage})` } : undefined}>
@@ -1231,18 +1197,10 @@ export default function Home() {
               </section>
             )}
 
+            {!dataLoading && <RecentActivityTimeline entries={entries} onEdit={setEditing} />}
+
             {error && <ErrorActions onRetry={retrySync} onDismiss={() => setError("")} />}
             {error && <StateCard tone="error" title="มีบางอย่างไม่สำเร็จ" detail={error} />}
-
-            {!overlayOpen && (
-              <MascotYard
-                entries={entries}
-                streak={streak}
-                monthlyBalance={petBalance}
-                overBudgetCount={petOverBudgetCount}
-                onLogEntry={openAddTab}
-              />
-            )}
           </div>
         )}
 
@@ -1432,7 +1390,8 @@ export default function Home() {
             onOpenDebtors={() => { setMenuOpen(false); setSelectedDebtor(null); setTab("debtors"); }}
             onOpenBudgets={() => { setMenuOpen(false); setBudgetSheetOpen(true); }}
             onOpenReport={() => { setMenuOpen(false); setReportSheetOpen(true); }}
-            onOpenMascots={() => { setMenuOpen(false); setMascotSheetOpen(true); }}
+            theme={theme}
+            onSetTheme={setTheme}
           />
         )}
         {profileSheetOpen && (
@@ -1449,7 +1408,6 @@ export default function Home() {
             onClose={() => setReportSheetOpen(false)}
           />
         )}
-        {mascotSheetOpen && <MascotSheet selected={mascotVariant} onSelect={chooseMascot} onClose={() => setMascotSheetOpen(false)} />}
         {recapOpen && (
           <RecapSheet
             selectedMonth={selectedMonth}
@@ -1917,150 +1875,7 @@ function StateCard({
   );
 }
 
-function isDaytime(hour: number) {
-  return hour >= 6 && hour < 18;
-}
-
-function MascotYard({
-  entries,
-  streak,
-  monthlyBalance,
-  overBudgetCount,
-  onLogEntry,
-}: {
-  entries: Entry[];
-  streak: number;
-  monthlyBalance: number;
-  overBudgetCount: number;
-  onLogEntry: () => void;
-}) {
-  const [daytime, setDaytime] = useState(() => isDaytime(new Date().getHours()));
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setDaytime(isDaytime(new Date().getHours())), 5 * 60 * 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  return (
-    <div className={`mascot-yard ${daytime ? "day" : "night"}`}>
-      <div className="yard-sky">
-        <span className="yard-sun-moon" />
-        <span className="yard-cloud one" />
-        <span className="yard-cloud two" />
-        <span className="yard-star one" />
-        <span className="yard-star two" />
-        <span className="yard-star three" />
-        <span className="yard-star four" />
-      </div>
-      <div className="yard-grass" />
-      <LivingMascot entries={entries} streak={streak} monthlyBalance={monthlyBalance} overBudgetCount={overBudgetCount} onLogEntry={onLogEntry} />
-    </div>
-  );
-}
-
-function LivingMascot({
-  entries,
-  streak,
-  monthlyBalance,
-  overBudgetCount,
-  onLogEntry,
-}: {
-  entries: Entry[];
-  streak: number;
-  monthlyBalance: number;
-  overBudgetCount: number;
-  onLogEntry: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [x, setX] = useState(50);
-  const [facing, setFacing] = useState<"left" | "right">("right");
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setX((current) => {
-        const next = Math.round(14 + Math.random() * 72);
-        setFacing(next >= current ? "right" : "left");
-        return next;
-      });
-    }, 6200);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const daysSince = useMemo(() => daysSinceLastEntry(entries), [entries]);
-
-  const happiness = clampStat(
-    45 + streak * 9 - overBudgetCount * 14 + (monthlyBalance >= 0 ? 8 : -14) - (daysSince ?? 4) * 6,
-  );
-  const energy = clampStat(92 - (daysSince ?? 6) * 26);
-  const mood: MascotMood = energy < 24 ? "sleepy" : happiness < 28 ? "oops" : happiness > 82 ? "happy" : open ? "thinking" : "idle";
-  const safeX = Math.max(10, Math.min(90, x));
-
-  const message =
-    daysSince === null
-      ? "ยังไม่มีรายการเลย เริ่มจดกันเถอะ!"
-      : daysSince >= 2
-        ? `ไม่ได้จดมา ${daysSince} วันแล้วนะ กลับมาบันทึกกันเถอะ`
-        : overBudgetCount > 0
-          ? `เดือนนี้เกินงบไปแล้ว ${overBudgetCount} หมวด ลองดูสรุปเดือนนี้กัน`
-          : monthlyBalance < 0
-            ? "เดือนนี้ใช้เกินรายรับนะ ลองทบทวนดูอีกนิด"
-            : streak >= 3
-              ? `เก่งมาก! จดต่อเนื่อง ${streak} วันแล้ว`
-              : "วันนี้จดรายการหรือยังนะ?";
-
-  return (
-    <>
-      <aside className={`living-mascot ${open ? "open" : ""} facing-${facing}`} style={{ "--pet-left": `${safeX}%` } as CSSProperties} aria-label="มาสคอตผู้ช่วย">
-        <button className="pet-stage" onClick={() => setOpen((value) => !value)} aria-label={open ? "ปิดมาสคอต" : "เปิดมาสคอต"}>
-          <MoneyMascot mood={mood} />
-          <span className="pet-shadow-line" />
-        </button>
-      </aside>
-      {open && (
-        <div className="dialog-backdrop" onClick={() => setOpen(false)}>
-          <section className="pet-panel" onClick={(event) => event.stopPropagation()}>
-            <div className="pet-panel-head">
-              <b>น้องบันทึกเงิน</b>
-              <button onClick={() => setOpen(false)} aria-label="ปิดมาสคอต">×</button>
-            </div>
-            <p>{message}</p>
-            <div className="pet-facts">
-              <div>
-                <span>จดต่อเนื่อง</span>
-                <b>{streak} วัน</b>
-              </div>
-              <div>
-                <span>จดล่าสุด</span>
-                <b>{daysSince === null ? "ยังไม่เคย" : daysSince === 0 ? "วันนี้" : `${daysSince} วันก่อน`}</b>
-              </div>
-              <div>
-                <span>เดือนนี้</span>
-                <b className={monthlyBalance >= 0 ? "income" : "expense"}>{formatSignedMoney(monthlyBalance)}</b>
-              </div>
-              {overBudgetCount > 0 && (
-                <div>
-                  <span>เกินงบ</span>
-                  <b className="expense">{overBudgetCount} หมวด</b>
-                </div>
-              )}
-            </div>
-            <button className="pet-cta" onClick={() => { setOpen(false); onLogEntry(); }}>จดรายการเลย</button>
-          </section>
-        </div>
-      )}
-    </>
-  );
-}
-
-function clampStat(value: number) {
-  return Math.max(0, Math.min(100, value));
-}
-
-function isMascotVariant(value: string | null): value is MascotVariant {
-  return mascotOptions.some((option) => option.id === value);
-}
-
-function MoneyMascot({ mood = "idle", tiny = false, variant }: { mood?: MascotMood; tiny?: boolean; variant?: MascotVariant }) {
+function MoneyMascot({ mood = "idle", tiny = false }: { mood?: MascotMood; tiny?: boolean }) {
   const gradientId = `mascot-body-${useId().replace(/:/g, "")}`;
 
   const eyes =
@@ -2097,7 +1912,7 @@ function MoneyMascot({ mood = "idle", tiny = false, variant }: { mood?: MascotMo
     );
 
   return (
-    <span className={`money-mascot ${tiny ? "tiny" : ""} ${mood} ${variant ? `variant-${variant}` : ""}`} aria-hidden="true">
+    <span className={`money-mascot ${tiny ? "tiny" : ""} ${mood}`} aria-hidden="true">
       <span className="mascot-shadow" />
       <span className="mascot-body">
         <svg className="mascot-svg" viewBox="0 0 100 100">
@@ -2294,6 +2109,33 @@ function EntryList({
       ))}
       {!entries.length && <EmptyNote glyph="▪" action={emptyAction}>ยังไม่มีรายการในช่วงนี้</EmptyNote>}
     </div>
+  );
+}
+
+function RecentActivityTimeline({ entries, onEdit }: { entries: Entry[]; onEdit: (entry: Entry) => void }) {
+  const recent = entries.slice(0, 4);
+  if (!recent.length) return null;
+
+  return (
+    <section className="activity-timeline">
+      <p className="activity-timeline-title">รายการล่าสุด</p>
+      <div className="activity-timeline-list">
+        {recent.map((entry) => (
+          <button className="activity-timeline-row" key={entry.id} onClick={() => onEdit(entry)}>
+            <span className="activity-timeline-node-col">
+              <span className="activity-timeline-node" style={{ background: categoryColor(entry.category) }} />
+            </span>
+            <span className="activity-timeline-info">
+              <b>{entry.title}</b>
+              <small>{entry.category} · {formatDateTime(entry.occurred_at)}</small>
+            </span>
+            <span className={`activity-timeline-amount ${entry.wallet_impact >= 0 ? "income" : "expense"}`}>
+              {formatSignedMoney(entry.wallet_impact)}
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -2818,7 +2660,8 @@ function SideMenu({
   onOpenDebtors,
   onOpenBudgets,
   onOpenReport,
-  onOpenMascots,
+  theme,
+  onSetTheme,
 }: {
   user: User;
   profile: Profile | null;
@@ -2831,7 +2674,8 @@ function SideMenu({
   onOpenDebtors: () => void;
   onOpenBudgets: () => void;
   onOpenReport: () => void;
-  onOpenMascots: () => void;
+  theme: Theme;
+  onSetTheme: (theme: Theme) => void;
 }) {
   const metadata = user.user_metadata ?? {};
   const name = profile?.nickname || metadata.full_name || metadata.name || "ผู้ใช้";
@@ -2867,6 +2711,15 @@ function SideMenu({
           <b>{user.created_at ? new Date(user.created_at).toLocaleDateString("th-TH") : "—"}</b>
         </div>
 
+        <div className="theme-toggle" role="group" aria-label="ธีมสีของแอพ">
+          <button className={theme === "light" ? "active" : ""} onClick={() => onSetTheme("light")}>
+            <span aria-hidden="true">☀️</span> สว่าง
+          </button>
+          <button className={theme === "dark" ? "active" : ""} onClick={() => onSetTheme("dark")}>
+            <span aria-hidden="true">🌙</span> มืด
+          </button>
+        </div>
+
         <nav className="side-menu-list">
           <button onClick={onOpenProfile}>
             <span>จัดการโปรไฟล์</span>
@@ -2884,10 +2737,6 @@ function SideMenu({
             <span>งบประมาณ</span>
             <small>ตั้งวงเงินต่อหมวดหมู่ต่อเดือน</small>
           </button>
-          <button onClick={onOpenMascots}>
-            <span>มาสคอต</span>
-            <small>เลือกเพื่อนเดินในแอพ และเปลี่ยนบุคลิกตัวช่วย</small>
-          </button>
           <button onClick={onOpenReport}>
             <span>ส่งออกรีพอร์ท</span>
             <small>ดาวน์โหลดสรุปรายเดือนหรือรายปีเป็นไฟล์ CSV สำหรับ Excel/Sheets</small>
@@ -2896,48 +2745,6 @@ function SideMenu({
 
         <button className="logout-button" onClick={onLogout}>ออกจากระบบ</button>
       </aside>
-    </div>
-  );
-}
-
-function MascotSheet({
-  selected,
-  onSelect,
-  onClose,
-}: {
-  selected: MascotVariant;
-  onSelect: (variant: MascotVariant) => void;
-  onClose: () => void;
-}) {
-  return (
-    <div className="sheet-backdrop">
-      <section className="edit-sheet mascot-sheet">
-        <div className="sheet-head">
-          <div>
-            <p className="eyebrow">Tamagotchi Buddy</p>
-            <h2>เลือกมาสคอต</h2>
-          </div>
-          <button onClick={onClose}>×</button>
-        </div>
-        <p className="budget-hint">เลือกตัวละครที่อยากให้เดินเล่นในแอพ ตอนนี้เป็นชุดในตัวแอพก่อน ถ้ามีไฟล์ PNG/Sprite โปร่งใสจริงค่อยเพิ่มเป็นชุด custom ได้ต่อเลย</p>
-        <div className="mascot-picker-grid">
-          {mascotOptions.map((option) => (
-            <button
-              key={option.id}
-              className={`mascot-choice ${selected === option.id ? "active" : ""}`}
-              onClick={() => onSelect(option.id)}
-            >
-              <MoneyMascot mood={selected === option.id ? "happy" : "idle"} variant={option.id} />
-              <span>
-                <b>{option.name}</b>
-                <small>{option.detail}</small>
-              </span>
-              {selected === option.id && <em>ใช้อยู่</em>}
-            </button>
-          ))}
-        </div>
-        <button className="save" onClick={onClose}>เสร็จแล้ว</button>
-      </section>
     </div>
   );
 }
