@@ -158,7 +158,18 @@ const formatMoney = (value: number) => value.toLocaleString("th-TH", { maximumFr
 const formatSignedMoney = (value: number) => `${value >= 0 ? "+" : "−"}${moneySign}${formatMoney(Math.abs(value))}`;
 const formatDateTime = (value: string) => new Date(value).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
 const toDateInput = (value: string) => new Date(value).toISOString().slice(0, 10);
-const fromDateInput = (value: string) => `${value}T12:00:00`;
+function withDate(dateInput: string, hours: number, minutes: number, seconds: number) {
+  const [year, month, day] = dateInput.split("-").map(Number);
+  return new Date(year, month - 1, day, hours, minutes, seconds).toISOString();
+}
+const fromDateInput = (value: string) => {
+  const now = new Date();
+  return withDate(value, now.getHours(), now.getMinutes(), now.getSeconds());
+};
+const withDateKeepingTime = (value: string, referenceIso: string) => {
+  const reference = new Date(referenceIso);
+  return withDate(value, reference.getHours(), reference.getMinutes(), reference.getSeconds());
+};
 const todayDateInput = () => new Date().toISOString().slice(0, 10);
 
 function startOfDay(date: Date) {
@@ -2129,7 +2140,7 @@ function DraftRow({ draft, knownDebtors, onChange }: { draft: Draft; knownDebtor
           {isNewDebtor && <small>{relevantKind === "own" ? "หนี้ใหม่" : "ลูกหนี้ใหม่"} · จะสร้างให้อัตโนมัติเมื่อบันทึก</small>}
         </div>
       )}
-      <input className="draft-date" type="date" value={toDateInput(draft.occurred_at)} onChange={(event) => update({ occurred_at: fromDateInput(event.target.value) })} />
+      <input className="draft-date" type="date" value={toDateInput(draft.occurred_at)} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, draft.occurred_at) })} />
     </div>
   );
 }
@@ -2286,7 +2297,7 @@ function EditSheet({
         )}
         <label>
           วันที่
-          <input type="date" value={toDateInput(entry.occurred_at)} onChange={(event) => update({ occurred_at: fromDateInput(event.target.value) })} />
+          <input type="date" value={toDateInput(entry.occurred_at)} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, entry.occurred_at) })} />
         </label>
 
         <div className="draft-impact">
