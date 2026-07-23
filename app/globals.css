@@ -15,10 +15,10 @@
   --green-darker: #0a2e23;
 
   /* asset cards: savings (amber), investment (indigo), other (slate) */
-  --savings-light: #a67c27;
-  --savings-dark: #6b4f16;
-  --investment-light: #2f5aa8;
-  --investment-dark: #16305c;
+  --savings-light: #f2a93c;
+  --savings-dark: #c97a12;
+  --investment-light: #4f7fe0;
+  --investment-dark: #2c52b0;
   --other-light: #6b7280;
   --other-dark: #3f4650;
 
@@ -122,10 +122,10 @@
   --green-dark: #0f8f68;
   --green-darker: #0a6b4d;
 
-  --savings-light: #e0a83f;
-  --savings-dark: #8a651f;
-  --investment-light: #5a86d6;
-  --investment-dark: #2c4a8a;
+  --savings-light: #ffc25c;
+  --savings-dark: #d98b1a;
+  --investment-light: #5f8fff;
+  --investment-dark: #3560d6;
   --other-light: #8b95a3;
   --other-dark: #545e6b;
 
