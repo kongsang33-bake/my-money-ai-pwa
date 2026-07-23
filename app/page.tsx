@@ -27,7 +27,7 @@ import {
 
 type EntryKind = "expense" | "income";
 type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "debt_payment" | "gift";
-type Tab = "home" | "add" | "history" | "debtors" | "wallets";
+type Tab = "home" | "add" | "history" | "debtors" | "wallets" | "recurring";
 type Theme = "light" | "dark";
 type MascotMood = "idle" | "thinking" | "happy" | "sleepy" | "oops";
 
@@ -74,6 +74,15 @@ type Wallet = {
   name: string;
   tag: WalletTag;
   balance: number;
+  icon: string | null;
+  icon_color: string | null;
+};
+type RecurringExpense = {
+  id: string;
+  user_id: string;
+  name: string;
+  amount: number;
+  billing_day: number;
   icon: string | null;
   icon_color: string | null;
 };
@@ -609,6 +618,7 @@ export default function Home() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [text, setText] = useState("");
   const [slipImages, setSlipImages] = useState<SlipImage[]>([]);
@@ -623,6 +633,8 @@ export default function Home() {
   const [debtorKindTab, setDebtorKindTab] = useState<DebtorKind>("lend");
   const [walletSheetMode, setWalletSheetMode] = useState<"create" | "edit" | null>(null);
   const [editingWallet, setEditingWallet] = useState<Wallet | null>(null);
+  const [recurringSheetMode, setRecurringSheetMode] = useState<"create" | "edit" | null>(null);
+  const [editingRecurringExpense, setEditingRecurringExpense] = useState<RecurringExpense | null>(null);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -755,16 +767,30 @@ export default function Home() {
     setWallets((data ?? []).map((row) => ({ ...row, balance: Number(row.balance) || 0 })) as Wallet[]);
   }, []);
 
+  const loadRecurringExpenses = useCallback(async () => {
+    if (!supabase) return;
+
+    const { data, error } = await supabase
+      .from("recurring_expenses")
+      .select("id,user_id,name,amount,billing_day,icon,icon_color")
+      .order("billing_day", { ascending: true });
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setRecurringExpenses((data ?? []).map((row) => ({ ...row, amount: Number(row.amount) || 0, billing_day: Number(row.billing_day) || 1 })) as RecurringExpense[]);
+  }, []);
+
   const loadUserData = useCallback(async (userId: string) => {
     setDataLoading(true);
     setError("");
     try {
-      await Promise.all([loadEntries(), loadProfile(), loadDebtors(), loadWallets()]);
+      await Promise.all([loadEntries(), loadProfile(), loadDebtors(), loadWallets(), loadRecurringExpenses()]);
       setBudgets(loadBudgets(userId));
     } finally {
       setDataLoading(false);
     }
-  }, [loadDebtors, loadEntries, loadProfile, loadWallets]);
+  }, [loadDebtors, loadEntries, loadProfile, loadWallets, loadRecurringExpenses]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -786,6 +812,7 @@ export default function Home() {
         setProfile(null);
         setDebtors([]);
         setWallets([]);
+        setRecurringExpenses([]);
         setBudgets({});
         setDataLoading(false);
       }
@@ -838,6 +865,38 @@ export default function Home() {
     () => buildDebtSummary(debtors, entries, "own", ["debt_payment"]),
     [debtors, entries],
   );
+
+  const dueSoonRecurring = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return recurringExpenses
+      .map((item) => {
+        const daysInThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        let billingDate = new Date(now.getFullYear(), now.getMonth(), Math.min(item.billing_day, daysInThisMonth));
+        if (billingDate < startOfToday) {
+          const daysInNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0).getDate();
+          billingDate = new Date(now.getFullYear(), now.getMonth() + 1, Math.min(item.billing_day, daysInNextMonth));
+        }
+        const daysUntil = Math.round((billingDate.getTime() - startOfToday.getTime()) / 86400000);
+        return { item, billingDate, daysUntil };
+      })
+      .filter(({ daysUntil }) => daysUntil >= 0 && daysUntil <= 3)
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+  }, [recurringExpenses]);
+
+  useEffect(() => {
+    if (!user || !dueSoonRecurring.length) return;
+    const key = `money-ai-recurring-reminded:${user.id}:${todayDateInput()}`;
+    if (window.localStorage.getItem(key)) return;
+    const timer = window.setTimeout(() => {
+      const detail = dueSoonRecurring
+        .map(({ item, billingDate }) => `${item.name} ${moneySign}${formatMoney(item.amount)} (${billingDate.getDate()}/${billingDate.getMonth() + 1})`)
+        .join(", ");
+      notify({ tone: "info", title: "ใกล้ถึงกำหนดตัดเงิน", detail });
+      window.localStorage.setItem(key, "1");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [dueSoonRecurring, user, notify]);
 
   const cycleRange = useMemo(() => cycleBounds(selectedMonth, monthStartDay), [selectedMonth, monthStartDay]);
   const monthlyEntries = useMemo(() => {
@@ -1256,6 +1315,54 @@ export default function Home() {
     setBusy(false);
   }
 
+  async function createRecurringExpense(input: RecurringExpenseInput) {
+    if (!supabase || !user || !input.name.trim()) return;
+    setBusy(true);
+    setError("");
+    const { error } = await supabase.from("recurring_expenses").insert({
+      user_id: user.id,
+      name: input.name.trim(),
+      amount: Number(input.amount) || 0,
+      billing_day: Number(input.billing_day) || 1,
+      icon: input.icon,
+      icon_color: input.icon_color,
+    });
+    if (error) setError(error.message);
+    else await loadRecurringExpenses();
+    setBusy(false);
+  }
+
+  async function updateRecurringExpense(item: RecurringExpense, patch: RecurringExpenseInput) {
+    if (!supabase) return;
+    setBusy(true);
+    setError("");
+    const { error } = await supabase
+      .from("recurring_expenses")
+      .update({
+        name: patch.name.trim(),
+        amount: Number(patch.amount) || 0,
+        billing_day: Number(patch.billing_day) || 1,
+        icon: patch.icon,
+        icon_color: patch.icon_color,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", item.id);
+    if (error) setError(error.message);
+    else await loadRecurringExpenses();
+    setBusy(false);
+  }
+
+  async function deleteRecurringExpense(item: RecurringExpense) {
+    if (!supabase) return;
+    if (!window.confirm(`ลบรายจ่ายประจำ "${item.name}" ใช่ไหม?`)) return;
+    setBusy(true);
+    setError("");
+    const { error } = await supabase.from("recurring_expenses").delete().eq("id", item.id);
+    if (error) setError(error.message);
+    else await loadRecurringExpenses();
+    setBusy(false);
+  }
+
   if (!ready) {
     return (
       <main className="shell">
@@ -1475,6 +1582,16 @@ export default function Home() {
           />
         )}
 
+        {tab === "recurring" && (
+          <RecurringExpensesView
+            items={recurringExpenses}
+            onBack={() => setTab("home")}
+            onAdd={() => { setEditingRecurringExpense(null); setRecurringSheetMode("create"); }}
+            onEdit={(item) => { setEditingRecurringExpense(item); setRecurringSheetMode("edit"); }}
+            onDelete={deleteRecurringExpense}
+          />
+        )}
+
         {editing && <EditSheet entry={editing} busy={busy} onChange={setEditing} onClose={() => setEditing(null)} onSave={updateEntry} />}
         {debtorSheetMode && (
           <DebtorEditSheet
@@ -1495,6 +1612,15 @@ export default function Home() {
             onUpdate={updateWallet}
           />
         )}
+        {recurringSheetMode && (
+          <RecurringExpenseEditSheet
+            item={recurringSheetMode === "edit" ? editingRecurringExpense : null}
+            busy={busy}
+            onClose={() => { setRecurringSheetMode(null); setEditingRecurringExpense(null); }}
+            onCreate={createRecurringExpense}
+            onUpdate={updateRecurringExpense}
+          />
+        )}
         {menuOpen && (
           <SideMenu
             user={user}
@@ -1504,6 +1630,7 @@ export default function Home() {
             onOpenProfile={() => { setMenuOpen(false); setProfileSheetOpen(true); }}
             onOpenWallets={() => { setMenuOpen(false); setTab("wallets"); }}
             onOpenDebtors={() => { setMenuOpen(false); setSelectedDebtor(null); setTab("debtors"); }}
+            onOpenRecurring={() => { setMenuOpen(false); setTab("recurring"); }}
             onOpenBudgets={() => { setMenuOpen(false); setBudgetSheetOpen(true); }}
             onOpenReport={() => { setMenuOpen(false); setReportSheetOpen(true); }}
             theme={theme}
@@ -2933,6 +3060,7 @@ function SideMenu({
   onOpenProfile,
   onOpenWallets,
   onOpenDebtors,
+  onOpenRecurring,
   onOpenBudgets,
   onOpenReport,
   theme,
@@ -2945,6 +3073,7 @@ function SideMenu({
   onOpenProfile: () => void;
   onOpenWallets: () => void;
   onOpenDebtors: () => void;
+  onOpenRecurring: () => void;
   onOpenBudgets: () => void;
   onOpenReport: () => void;
   theme: Theme;
@@ -2987,6 +3116,7 @@ function SideMenu({
           <button onClick={onOpenProfile}><span>จัดการโปรไฟล์</span></button>
           <button onClick={onOpenWallets}><span>กระเป๋าตังค์</span></button>
           <button onClick={onOpenDebtors}><span>จัดการหนี้</span></button>
+          <button onClick={onOpenRecurring}><span>รายจ่ายประจำ</span></button>
           <button onClick={onOpenBudgets}><span>งบประมาณ</span></button>
           <button onClick={onOpenReport}><span>ส่งออกรีพอร์ท</span></button>
         </nav>
@@ -3184,6 +3314,132 @@ function WalletEditSheet({
         <label>
           ยอดเงิน
           <input inputMode="decimal" value={balance} onChange={(event) => setBalance(Number(event.target.value) || 0)} />
+        </label>
+        <button className="save" onClick={submit} disabled={busy || !name.trim()}>
+          บันทึก
+        </button>
+      </section>
+    </div>
+  );
+}
+
+function RecurringExpensesView({
+  items,
+  onBack,
+  onAdd,
+  onEdit,
+  onDelete,
+}: {
+  items: RecurringExpense[];
+  onBack: () => void;
+  onAdd: () => void;
+  onEdit: (item: RecurringExpense) => void;
+  onDelete: (item: RecurringExpense) => void;
+}) {
+  const total = items.reduce((sum, item) => sum + item.amount, 0);
+
+  return (
+    <div className="view debtor-view">
+      <div className="add-title">
+        <button onClick={onBack}>‹</button>
+        <div>
+          <p className="eyebrow">รายจ่ายประจำ</p>
+          <h2>ค่าใช้จ่ายรายเดือน</h2>
+        </div>
+        <button className="header-add-button" onClick={onAdd}>เพิ่ม</button>
+      </div>
+      <section className="debtor-detail-card">
+        <span>ยอดรวมต่อเดือน</span>
+        <strong>{moneySign}{formatMoney(total)}</strong>
+      </section>
+      <div className="debtor-page-list">
+        {items.map((item) => (
+          <article className="debtor-page-item" key={item.id}>
+            <button className="debtor-main-button" onClick={() => onEdit(item)}>
+              <span className="debtor-avatar" style={{ background: item.icon_color ?? nameColor(item.name) }}>
+                <WalletAvatarGlyph iconKey={item.icon} fallbackName={item.name} />
+              </span>
+              <div>
+                <span>{item.name}</span>
+                <small>ตัดเงินทุกวันที่ {item.billing_day} · {moneySign}{formatMoney(item.amount)}</small>
+              </div>
+            </button>
+            <details className="kebab-menu" name="recurring-kebab">
+              <summary>⋮</summary>
+              <menu>
+                <button onClick={() => onEdit(item)}>แก้ไข</button>
+                <button onClick={() => onDelete(item)}>ลบ</button>
+              </menu>
+            </details>
+          </article>
+        ))}
+        {!items.length && <EmptyNote glyph="↻" action={{ label: "เพิ่มรายจ่ายประจำ", onClick: onAdd }}>ยังไม่มีรายจ่ายประจำ ลองเพิ่มค่าสมัครสมาชิกที่จ่ายทุกเดือน เช่น Netflix, Claude Pro</EmptyNote>}
+      </div>
+    </div>
+  );
+}
+
+type RecurringExpenseInput = {
+  name: string;
+  amount: number;
+  billing_day: number;
+  icon: string | null;
+  icon_color: string | null;
+};
+
+function RecurringExpenseEditSheet({
+  item,
+  busy,
+  onClose,
+  onCreate,
+  onUpdate,
+}: {
+  item: RecurringExpense | null;
+  busy: boolean;
+  onClose: () => void;
+  onCreate: (input: RecurringExpenseInput) => void;
+  onUpdate: (item: RecurringExpense, patch: RecurringExpenseInput) => void;
+}) {
+  const [name, setName] = useState(item?.name ?? "");
+  const [amount, setAmount] = useState(item?.amount ?? 0);
+  const [billingDay, setBillingDay] = useState(item?.billing_day ?? 1);
+  const [icon, setIcon] = useState<string | null>(item?.icon ?? null);
+  const [iconColor, setIconColor] = useState<string | null>(item?.icon_color ?? null);
+
+  const submit = () => {
+    if (!name.trim()) return;
+    const payload: RecurringExpenseInput = { name, amount, billing_day: billingDay, icon, icon_color: iconColor };
+    if (item) onUpdate(item, payload);
+    else onCreate(payload);
+    onClose();
+  };
+
+  return (
+    <div className="sheet-backdrop">
+      <section className="edit-sheet">
+        <div className="sheet-head">
+          <div>
+            <p className="eyebrow">{item ? "แก้ไขรายจ่ายประจำ" : "เพิ่มรายจ่ายประจำ"}</p>
+            <h2>{item ? item.name : "รายการใหม่"}</h2>
+          </div>
+          <button onClick={onClose}>×</button>
+        </div>
+        <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
+        <label>
+          ชื่อรายการ
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น Netflix, Claude Pro, YouTube Premium" />
+        </label>
+        <label>
+          ยอดต่อเดือน
+          <input inputMode="decimal" value={amount} onChange={(event) => setAmount(Number(event.target.value) || 0)} />
+        </label>
+        <label>
+          ตัดเงินทุกวันที่
+          <select value={billingDay} onChange={(event) => setBillingDay(Number(event.target.value))}>
+            {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+              <option key={day} value={day}>{day}</option>
+            ))}
+          </select>
         </label>
         <button className="save" onClick={submit} disabled={busy || !name.trim()}>
           บันทึก
