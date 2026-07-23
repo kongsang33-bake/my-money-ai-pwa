@@ -1210,21 +1210,10 @@ export default function Home() {
               </section>
             )}
 
-            <MonthSummary
-              selectedMonth={selectedMonth}
-              setSelectedMonth={(value) => { setSelectedMonth(value); setSelectedDay(null); }}
-              income={monthlyIncome}
-              outflow={monthlyOutflow}
-              debtChange={monthlyDebtChange}
-              balance={monthlyBalance}
-              categories={categorySummary}
-              monthStartDay={monthStartDay}
-              budgets={budgets}
-              trend={sevenDayOutflow}
-            />
-
             {error && <ErrorActions onRetry={retrySync} onDismiss={() => setError("")} />}
             {error && <StateCard tone="error" title="มีบางอย่างไม่สำเร็จ" detail={error} />}
+
+            {!overlayOpen && <MascotYard storageKey={`money-pet-${user.id}`} />}
           </div>
         )}
 
@@ -1456,8 +1445,6 @@ export default function Home() {
         )}
         {logoutOpen && <ConfirmLogout onCancel={() => setLogoutOpen(false)} onConfirm={() => supabase?.auth.signOut()} />}
         <ToastHost toasts={toasts} onDismiss={(id) => setToasts((items) => items.filter((toast) => toast.id !== id))} />
-
-        {!overlayOpen && tab === "home" && <LivingMascot storageKey={`money-pet-${user.id}`} />}
 
         {!overlayOpen && (
           <nav className="bottom-nav">
@@ -1912,9 +1899,38 @@ function StateCard({
   );
 }
 
+function isDaytime(hour: number) {
+  return hour >= 6 && hour < 18;
+}
+
+function MascotYard({ storageKey }: { storageKey: string }) {
+  const [daytime, setDaytime] = useState(() => isDaytime(new Date().getHours()));
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setDaytime(isDaytime(new Date().getHours())), 5 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <div className={`mascot-yard ${daytime ? "day" : "night"}`}>
+      <div className="yard-sky">
+        <span className="yard-sun-moon" />
+        <span className="yard-cloud one" />
+        <span className="yard-cloud two" />
+        <span className="yard-star one" />
+        <span className="yard-star two" />
+        <span className="yard-star three" />
+        <span className="yard-star four" />
+      </div>
+      <div className="yard-grass" />
+      <LivingMascot storageKey={storageKey} />
+    </div>
+  );
+}
+
 function LivingMascot({ storageKey }: { storageKey: string }) {
   const [open, setOpen] = useState(false);
-  const [x, setX] = useState(82);
+  const [x, setX] = useState(50);
   const [facing, setFacing] = useState<"left" | "right">("right");
   const [stats, setStats] = useState<PetStats>(defaultPetStats);
 
@@ -1947,7 +1963,7 @@ function LivingMascot({ storageKey }: { storageKey: string }) {
   useEffect(() => {
     const timer = window.setInterval(() => {
       setX((current) => {
-        const next = Math.round(76 + Math.random() * 12);
+        const next = Math.round(14 + Math.random() * 72);
         setFacing(next >= current ? "right" : "left");
         return next;
       });
@@ -1962,7 +1978,7 @@ function LivingMascot({ storageKey }: { storageKey: string }) {
   }, []);
 
   const mood: MascotMood = stats.energy < 24 ? "sleepy" : stats.happiness < 28 ? "oops" : stats.happiness > 82 ? "happy" : open ? "thinking" : "idle";
-  const safeX = Math.max(76, Math.min(88, x));
+  const safeX = Math.max(10, Math.min(90, x));
 
   function nudge(message: string, patch: Partial<Pick<PetStats, "happiness" | "energy" | "treats">>) {
     setStats((current) => ({
@@ -1999,29 +2015,33 @@ function LivingMascot({ storageKey }: { storageKey: string }) {
   }
 
   return (
-    <aside className={`living-mascot safe-mode ${open ? "open" : ""} facing-${facing}`} style={{ "--pet-left": `${safeX}%` } as CSSProperties} aria-label="มาสคอตผู้ช่วย">
+    <>
+      <aside className={`living-mascot ${open ? "open" : ""} facing-${facing}`} style={{ "--pet-left": `${safeX}%` } as CSSProperties} aria-label="มาสคอตผู้ช่วย">
+        <button className="pet-stage" onClick={() => setOpen((value) => !value)} aria-label={open ? "ปิดมาสคอต" : "เปิดมาสคอต"}>
+          <MoneyMascot mood={mood} />
+          <span className="pet-shadow-line" />
+        </button>
+      </aside>
       {open && (
-        <section className="pet-panel">
-          <div className="pet-panel-head">
-            <b>น้องบันทึกเงิน</b>
-            <button onClick={() => setOpen(false)} aria-label="ปิดมาสคอต">×</button>
-          </div>
-          <p>{stats.message}</p>
-          <PetMeter label="สุข" value={stats.happiness} />
-          <PetMeter label="พลัง" value={stats.energy} />
-          <div className="pet-actions">
-            <button onClick={play} disabled={stats.energy < 10}>เล่น</button>
-            <button onClick={feed}>ให้อาหาร</button>
-            <button onClick={rest}>พัก</button>
-          </div>
-          <small>ขนมเหรียญ {stats.treats} ชิ้น · รอบนี้จำในเครื่องนี้ก่อน</small>
-        </section>
+        <div className="dialog-backdrop" onClick={() => setOpen(false)}>
+          <section className="pet-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="pet-panel-head">
+              <b>น้องบันทึกเงิน</b>
+              <button onClick={() => setOpen(false)} aria-label="ปิดมาสคอต">×</button>
+            </div>
+            <p>{stats.message}</p>
+            <PetMeter label="สุข" value={stats.happiness} />
+            <PetMeter label="พลัง" value={stats.energy} />
+            <div className="pet-actions">
+              <button onClick={play} disabled={stats.energy < 10}>เล่น</button>
+              <button onClick={feed}>ให้อาหาร</button>
+              <button onClick={rest}>พัก</button>
+            </div>
+            <small>ขนมเหรียญ {stats.treats} ชิ้น · รอบนี้จำในเครื่องนี้ก่อน</small>
+          </section>
+        </div>
       )}
-      <button className="pet-stage" onClick={() => setOpen((value) => !value)} aria-label={open ? "ปิดมาสคอต" : "เปิดมาสคอต"}>
-        <MoneyMascot mood={mood} />
-        <span className="pet-shadow-line" />
-      </button>
-    </aside>
+    </>
   );
 }
 

@@ -4560,12 +4560,12 @@ select:focus {
   margin-top: 2px;
 }
 
-/* Living companion: a tiny Tamagotchi-like layer that stays clear of core finance UI. */
+/* Living companion: a tiny Tamagotchi-like layer that lives in its own yard on the home tab. */
 .living-mascot {
   position: absolute;
-  left: var(--pet-left, 18%);
-  top: max(92px, calc(72px + env(safe-area-inset-top)));
-  z-index: 6;
+  left: var(--pet-left, 50%);
+  bottom: 18%;
+  z-index: 2;
   width: 92px;
   transform: translateX(-50%);
   pointer-events: none;
@@ -4608,11 +4608,9 @@ select:focus {
 }
 
 .pet-panel {
-  position: absolute;
-  left: 50%;
-  top: 86px;
-  width: 246px;
-  padding: 13px;
+  width: 100%;
+  max-width: 300px;
+  padding: 18px;
   border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: 24px;
   background:
@@ -4622,22 +4620,7 @@ select:focus {
   backdrop-filter: blur(16px) saturate(1.18);
   -webkit-backdrop-filter: blur(16px) saturate(1.18);
   color: var(--ink);
-  pointer-events: auto;
-  transform: translateX(-50%);
   animation: pet-panel-pop 240ms var(--ease-spring-soft) both;
-}
-
-.pet-panel::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: -8px;
-  width: 18px;
-  height: 18px;
-  background: rgba(238, 248, 236, 0.94);
-  border-left: 1px solid rgba(255, 255, 255, 0.72);
-  border-top: 1px solid rgba(255, 255, 255, 0.72);
-  transform: translateX(-50%) rotate(45deg);
 }
 
 .pet-panel-head {
@@ -4733,32 +4716,161 @@ select:focus {
 }
 
 .living-mascot.open {
-  z-index: 8;
+  z-index: 3;
 }
 
 .living-mascot.open .pet-stage {
   animation-duration: 1.35s;
 }
 
+.phone.tab-home {
+  display: flex;
+  flex-direction: column;
+}
+
+.phone.tab-home > .topbar {
+  flex: 0 0 auto;
+}
+
 .phone.tab-home > .view {
-  padding-top: 54px;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.living-mascot.safe-mode {
-  top: max(80px, calc(60px + env(safe-area-inset-top)));
+/* Yard: the mascot's own patch of sky and grass, filling whatever room is left on the home tab. */
+.mascot-yard {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 120px;
+  margin: 12px -20px -24px;
+  overflow: hidden;
 }
 
-.living-mascot.safe-mode .pet-panel {
-  left: auto;
-  right: -10px;
-  top: 90px;
-  transform: none;
+.yard-sky {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #8ed2f4 0%, #d7f0f8 100%);
+  transition: background 900ms ease;
 }
 
-.living-mascot.safe-mode .pet-panel::after {
-  left: auto;
-  right: 38px;
-  transform: rotate(45deg);
+.mascot-yard.night .yard-sky {
+  background: linear-gradient(180deg, #17223f 0%, #334268 100%);
+}
+
+.yard-sun-moon {
+  position: absolute;
+  top: 16px;
+  right: 26px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #fff6d6, #ffd35c 68%, #ffbf3d);
+  box-shadow: 0 0 22px 6px rgba(255, 208, 92, 0.5);
+  transition: background 900ms ease, box-shadow 900ms ease;
+}
+
+.mascot-yard.night .yard-sun-moon {
+  background: radial-gradient(circle at 34% 30%, #ffffff, #dee5f4 70%, #b9c4dd);
+  box-shadow: 0 0 14px 4px rgba(210, 220, 245, 0.4);
+}
+
+.yard-cloud {
+  position: absolute;
+  width: 40px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  opacity: 1;
+  transition: opacity 700ms ease;
+}
+
+.yard-cloud::before,
+.yard-cloud::after {
+  content: "";
+  position: absolute;
+  background: inherit;
+  border-radius: 50%;
+}
+
+.yard-cloud::before {
+  width: 18px;
+  height: 18px;
+  top: -7px;
+  left: 4px;
+}
+
+.yard-cloud::after {
+  width: 14px;
+  height: 14px;
+  top: -5px;
+  right: 6px;
+}
+
+.yard-cloud.one {
+  top: 18px;
+  left: 12%;
+}
+
+.yard-cloud.two {
+  top: 34px;
+  left: 52%;
+  width: 30px;
+  height: 11px;
+}
+
+.mascot-yard.night .yard-cloud {
+  opacity: 0;
+}
+
+.yard-star {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0;
+  transition: opacity 900ms ease;
+}
+
+.yard-star.one {
+  top: 14px;
+  left: 24%;
+}
+
+.yard-star.two {
+  top: 30px;
+  left: 42%;
+}
+
+.yard-star.three {
+  top: 10px;
+  left: 66%;
+}
+
+.yard-star.four {
+  top: 24px;
+  left: 78%;
+}
+
+.mascot-yard.night .yard-star {
+  opacity: 0.85;
+}
+
+.yard-grass {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 42%;
+  background: linear-gradient(180deg, #8fd48a 0%, #5fae67 100%);
+  border-radius: 50% 50% 0 0 / 16px 16px 0 0;
+  transition: background 900ms ease;
+}
+
+.mascot-yard.night .yard-grass {
+  background: linear-gradient(180deg, #3f6350 0%, #2b4a3b 100%);
 }
 
 @keyframes pet-walk-bob {
@@ -4774,35 +4886,11 @@ select:focus {
 @keyframes pet-panel-pop {
   0% {
     opacity: 0;
-    transform: translateX(-50%) translateY(-10px) scale(0.94);
+    transform: translateY(-10px) scale(0.94);
   }
   100% {
     opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
-  }
-}
-
-@media (min-width: 900px) {
-  .living-mascot.safe-mode {
-    top: 92px;
-  }
-
-  .pet-panel {
-    width: 268px;
-  }
-}
-
-@media (max-width: 420px) {
-  .phone.tab-home > .view {
-    padding-top: 50px;
-  }
-
-  .living-mascot.safe-mode {
-    top: max(76px, calc(56px + env(safe-area-inset-top)));
-  }
-
-  .pet-panel {
-    width: min(232px, calc(100vw - 28px));
+    transform: translateY(0) scale(1);
   }
 }
 
