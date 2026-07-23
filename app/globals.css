@@ -4741,33 +4741,27 @@ select:focus {
 }
 
 .phone.tab-home > .view {
-  padding-top: 36px;
+  padding-top: 54px;
 }
 
 .living-mascot.safe-mode {
   top: max(80px, calc(60px + env(safe-area-inset-top)));
-  width: 74px;
+  width: 92px;
 }
 
 .living-mascot.safe-mode .pet-stage {
-  width: 74px;
-  height: 74px;
+  width: 92px;
+  height: 92px;
 }
 
 .living-mascot.safe-mode .pet-stage .money-mascot {
-  --mascot-size: 60px;
-}
-
-.living-mascot.safe-mode .pet-shadow-line {
-  left: 18px;
-  right: 18px;
-  bottom: 8px;
+  --mascot-size: 76px;
 }
 
 .living-mascot.safe-mode .pet-panel {
   left: auto;
   right: -10px;
-  top: 72px;
+  top: 90px;
   transform: none;
 }
 
@@ -4814,7 +4808,7 @@ select:focus {
 
 @media (max-width: 420px) {
   .phone.tab-home > .view {
-    padding-top: 32px;
+    padding-top: 50px;
   }
 
   .living-mascot {
