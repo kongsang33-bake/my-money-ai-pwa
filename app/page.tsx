@@ -2983,11 +2983,6 @@ function SideMenu({
           <b>{user.created_at ? new Date(user.created_at).toLocaleDateString("th-TH") : "—"}</b>
         </div>
 
-        <div className="theme-toggle" role="group" aria-label="ธีมสีของแอพ">
-          <button className={theme === "light" ? "active" : ""} onClick={() => onSetTheme("light")}>สว่าง</button>
-          <button className={theme === "dark" ? "active" : ""} onClick={() => onSetTheme("dark")}>มืด</button>
-        </div>
-
         <nav className="side-menu-list">
           <button onClick={onOpenProfile}><span>จัดการโปรไฟล์</span></button>
           <button onClick={onOpenWallets}><span>กระเป๋าตังค์</span></button>
@@ -2996,7 +2991,13 @@ function SideMenu({
           <button onClick={onOpenReport}><span>ส่งออกรีพอร์ท</span></button>
         </nav>
 
-        <button className="logout-button" onClick={onLogout}>ออกจากระบบ</button>
+        <div className="side-menu-footer">
+          <div className="theme-toggle" role="group" aria-label="ธีมสีของแอพ">
+            <button className={theme === "light" ? "active" : ""} onClick={() => onSetTheme("light")}>สว่าง</button>
+            <button className={theme === "dark" ? "active" : ""} onClick={() => onSetTheme("dark")}>มืด</button>
+          </div>
+          <button className="logout-button" onClick={onLogout}>ออกจากระบบ</button>
+        </div>
       </aside>
     </div>
   );
