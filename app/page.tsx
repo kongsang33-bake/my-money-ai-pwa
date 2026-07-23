@@ -1250,24 +1250,16 @@ export default function Home() {
           <div className="view add-view">
             {dataLoading && <SkeletonList rows={3} />}
             {dataLoading && <StateCard tone="loading" title="กำลังเตรียมข้อมูล" detail="กำลังโหลดรายชื่อ ลูกหนี้ และรายการล่าสุดเพื่อช่วย AI วิเคราะห์" />}
-            <div className="add-title">
+            <div className="add-title add-title-compact">
               <button onClick={() => setTab("home")}>‹</button>
+              <MoneyMascot mood={busy ? "thinking" : drafts.length ? "happy" : "idle"} tiny />
               <div>
                 <p className="eyebrow">AI Chat</p>
-                <h2>วันนี้มีรายการอะไรบ้าง?</h2>
+                <h2>{busy ? "กำลังอ่านให้แบบตั้งใจสุด ๆ" : drafts.length ? "แยกข้อมูลให้แล้ว ลองตรวจอีกนิด" : "วันนี้มีรายการอะไรบ้าง?"}</h2>
               </div>
             </div>
 
-            <section className="mascot-hero" aria-label="AI assistant mascot">
-              <MoneyMascot mood={busy ? "thinking" : drafts.length ? "happy" : "idle"} />
-              <div>
-                <p className="eyebrow">AI Buddy</p>
-                <h3>{busy ? "กำลังอ่านให้แบบตั้งใจสุด ๆ" : drafts.length ? "แยกข้อมูลให้แล้ว ลองตรวจอีกนิด" : "เล่าแบบภาษาคนได้เลย"}</h3>
-                <small>พิมพ์รายการหรือแนบสลิป เดี๋ยวช่วยแยกยอด หมวดหมู่ วันที่ และลูกหนี้ให้</small>
-              </div>
-            </section>
-
-            <label className="entry-date-picker">
+            <label className="entry-date-picker compact">
               <span>บันทึกของวันที่</span>
               <input type="date" value={entryDate} max={todayDateInput()} onChange={(event) => setEntryDate(event.target.value)} />
             </label>
@@ -1297,9 +1289,6 @@ export default function Home() {
               <div className="assistant-rail" aria-hidden="true">
                 <span>AI</span>
                 <i />
-              </div>
-              <div className="chat-bubble assistant">
-                พิมพ์รายการแบบธรรมชาติ หรือแนบรูปสลิปได้เลย ผมจะแยกยอด หมวดหมู่ วันที่ และลูกหนี้ให้ตรวจสอบก่อนบันทึก
               </div>
               <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="เช่น กินข้าว 120 บาท, ออกให้เพื่อนเอก่อน 500, เพื่อนเอโอนคืน 200" />
 
