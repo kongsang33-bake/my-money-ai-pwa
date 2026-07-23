@@ -1457,7 +1457,7 @@ export default function Home() {
         {logoutOpen && <ConfirmLogout onCancel={() => setLogoutOpen(false)} onConfirm={() => supabase?.auth.signOut()} />}
         <ToastHost toasts={toasts} onDismiss={(id) => setToasts((items) => items.filter((toast) => toast.id !== id))} />
 
-        {!overlayOpen && <LivingMascot storageKey={`money-pet-${user.id}`} safeMode={tab === "home"} />}
+        {!overlayOpen && tab === "home" && <LivingMascot storageKey={`money-pet-${user.id}`} />}
 
         {!overlayOpen && (
           <nav className="bottom-nav">
@@ -1912,9 +1912,9 @@ function StateCard({
   );
 }
 
-function LivingMascot({ storageKey, safeMode }: { storageKey: string; safeMode?: boolean }) {
+function LivingMascot({ storageKey }: { storageKey: string }) {
   const [open, setOpen] = useState(false);
-  const [x, setX] = useState(safeMode ? 82 : 18);
+  const [x, setX] = useState(82);
   const [facing, setFacing] = useState<"left" | "right">("right");
   const [stats, setStats] = useState<PetStats>(defaultPetStats);
 
@@ -1947,7 +1947,7 @@ function LivingMascot({ storageKey, safeMode }: { storageKey: string; safeMode?:
   useEffect(() => {
     const timer = window.setInterval(() => {
       setX((current) => {
-        const next = safeMode ? Math.round(76 + Math.random() * 12) : Math.round(10 + Math.random() * 76);
+        const next = Math.round(76 + Math.random() * 12);
         setFacing(next >= current ? "right" : "left");
         return next;
       });
@@ -1959,10 +1959,10 @@ function LivingMascot({ storageKey, safeMode }: { storageKey: string; safeMode?:
       }));
     }, 6200);
     return () => window.clearInterval(timer);
-  }, [safeMode]);
+  }, []);
 
   const mood: MascotMood = stats.energy < 24 ? "sleepy" : stats.happiness < 28 ? "oops" : stats.happiness > 82 ? "happy" : open ? "thinking" : "idle";
-  const safeX = safeMode ? Math.max(76, Math.min(88, x)) : x;
+  const safeX = Math.max(76, Math.min(88, x));
 
   function nudge(message: string, patch: Partial<Pick<PetStats, "happiness" | "energy" | "treats">>) {
     setStats((current) => ({
@@ -1999,7 +1999,7 @@ function LivingMascot({ storageKey, safeMode }: { storageKey: string; safeMode?:
   }
 
   return (
-    <aside className={`living-mascot ${safeMode ? "safe-mode" : ""} ${open ? "open" : ""} facing-${facing}`} style={{ "--pet-left": `${safeX}%` } as CSSProperties} aria-label="มาสคอตผู้ช่วย">
+    <aside className={`living-mascot safe-mode ${open ? "open" : ""} facing-${facing}`} style={{ "--pet-left": `${safeX}%` } as CSSProperties} aria-label="มาสคอตผู้ช่วย">
       {open && (
         <section className="pet-panel">
           <div className="pet-panel-head">

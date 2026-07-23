@@ -4746,16 +4746,6 @@ select:focus {
 
 .living-mascot.safe-mode {
   top: max(80px, calc(60px + env(safe-area-inset-top)));
-  width: 92px;
-}
-
-.living-mascot.safe-mode .pet-stage {
-  width: 92px;
-  height: 92px;
-}
-
-.living-mascot.safe-mode .pet-stage .money-mascot {
-  --mascot-size: 76px;
 }
 
 .living-mascot.safe-mode .pet-panel {
@@ -4793,10 +4783,6 @@ select:focus {
 }
 
 @media (min-width: 900px) {
-  .living-mascot {
-    top: 112px;
-  }
-
   .living-mascot.safe-mode {
     top: 92px;
   }
@@ -4811,22 +4797,8 @@ select:focus {
     padding-top: 50px;
   }
 
-  .living-mascot {
-    width: 76px;
-    top: max(84px, calc(64px + env(safe-area-inset-top)));
-  }
-
   .living-mascot.safe-mode {
     top: max(76px, calc(56px + env(safe-area-inset-top)));
-  }
-
-  .pet-stage {
-    width: 76px;
-    height: 76px;
-  }
-
-  .pet-stage .money-mascot {
-    --mascot-size: 64px;
   }
 
   .pet-panel {
