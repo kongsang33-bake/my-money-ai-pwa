@@ -10,14 +10,6 @@ type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "
 type Tab = "home" | "add" | "history" | "debtors" | "wallets";
 type MascotMood = "idle" | "thinking" | "happy" | "sleepy" | "oops";
 type MascotVariant = "whale";
-type PetStats = { happiness: number; energy: number; treats: number; lastSeen: number; message: string };
-const defaultPetStats: PetStats = {
-  happiness: 72,
-  energy: 68,
-  treats: 0,
-  lastSeen: 0,
-  message: "แตะมาเล่นกันได้นะ",
-};
 const defaultMascotVariant: MascotVariant = "whale";
 const mascotOptions: { id: MascotVariant; name: string; detail: string }[] = [
   { id: "whale", name: "น้องวาฬเงิน", detail: "โทนฟ้าประจำแอพ" },
@@ -243,6 +235,11 @@ function computeStreak(entries: Entry[]) {
     cursor -= 86400000;
   }
   return streak;
+}
+
+function daysSinceLastEntry(entries: Entry[]) {
+  if (!entries.length) return null;
+  return Math.max(0, Math.floor((Date.now() - new Date(entries[0].occurred_at).getTime()) / 86400000));
 }
 
 function daysRemainingInCycle(end: Date) {
@@ -758,6 +755,30 @@ export default function Home() {
     [entries, walletTotals.cash],
   );
   const streak = useMemo(() => computeStreak(entries), [entries]);
+  const petCycle = useMemo(() => cycleBounds(monthKey(new Date()), monthStartDay), [monthStartDay]);
+  const petEntries = useMemo(() => {
+    const { start, end } = petCycle;
+    return entries.filter((entry) => {
+      const occurred = new Date(entry.occurred_at);
+      return occurred >= start && occurred < end;
+    });
+  }, [entries, petCycle]);
+  const petBalance = useMemo(
+    () => totalWallet(petEntries, "income") - Math.abs(totalWallet(petEntries, "expense")),
+    [petEntries],
+  );
+  const petOverBudgetCount = useMemo(() => {
+    const spend = new Map<string, number>();
+    for (const entry of petEntries) {
+      if (entry.wallet_impact >= 0) continue;
+      spend.set(entry.category, (spend.get(entry.category) ?? 0) + Math.abs(entry.wallet_impact));
+    }
+    let count = 0;
+    for (const [category, limit] of Object.entries(budgets)) {
+      if (limit > 0 && (spend.get(category) ?? 0) > limit) count += 1;
+    }
+    return count;
+  }, [petEntries, budgets]);
   const quickShortcuts = useMemo(() => deriveQuickShortcuts(entries), [entries]);
   const debtorSummary = useMemo(() => {
     const map = new Map<string, number>();
@@ -1213,7 +1234,15 @@ export default function Home() {
             {error && <ErrorActions onRetry={retrySync} onDismiss={() => setError("")} />}
             {error && <StateCard tone="error" title="มีบางอย่างไม่สำเร็จ" detail={error} />}
 
-            {!overlayOpen && <MascotYard storageKey={`money-pet-${user.id}`} />}
+            {!overlayOpen && (
+              <MascotYard
+                entries={entries}
+                streak={streak}
+                monthlyBalance={petBalance}
+                overBudgetCount={petOverBudgetCount}
+                onLogEntry={openAddTab}
+              />
+            )}
           </div>
         )}
 
@@ -1903,7 +1932,19 @@ function isDaytime(hour: number) {
   return hour >= 6 && hour < 18;
 }
 
-function MascotYard({ storageKey }: { storageKey: string }) {
+function MascotYard({
+  entries,
+  streak,
+  monthlyBalance,
+  overBudgetCount,
+  onLogEntry,
+}: {
+  entries: Entry[];
+  streak: number;
+  monthlyBalance: number;
+  overBudgetCount: number;
+  onLogEntry: () => void;
+}) {
   const [daytime, setDaytime] = useState(() => isDaytime(new Date().getHours()));
 
   useEffect(() => {
@@ -1923,42 +1964,27 @@ function MascotYard({ storageKey }: { storageKey: string }) {
         <span className="yard-star four" />
       </div>
       <div className="yard-grass" />
-      <LivingMascot storageKey={storageKey} />
+      <LivingMascot entries={entries} streak={streak} monthlyBalance={monthlyBalance} overBudgetCount={overBudgetCount} onLogEntry={onLogEntry} />
     </div>
   );
 }
 
-function LivingMascot({ storageKey }: { storageKey: string }) {
+function LivingMascot({
+  entries,
+  streak,
+  monthlyBalance,
+  overBudgetCount,
+  onLogEntry,
+}: {
+  entries: Entry[];
+  streak: number;
+  monthlyBalance: number;
+  overBudgetCount: number;
+  onLogEntry: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [x, setX] = useState(50);
   const [facing, setFacing] = useState<"left" | "right">("right");
-  const [stats, setStats] = useState<PetStats>(defaultPetStats);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      try {
-        const raw = window.localStorage.getItem(storageKey);
-        if (!raw) return;
-        const saved = JSON.parse(raw) as Partial<PetStats>;
-        const now = Date.now();
-        const hoursAway = Math.max(0, (now - Number(saved.lastSeen || now)) / 36e5);
-        setStats({
-          happiness: clampStat(Number(saved.happiness ?? defaultPetStats.happiness) - hoursAway * 2.2),
-          energy: clampStat(Number(saved.energy ?? defaultPetStats.energy) - hoursAway * 1.4),
-          treats: Math.max(0, Math.floor(Number(saved.treats ?? 0))),
-          lastSeen: now,
-          message: hoursAway > 3 ? "คิดถึงเลย กลับมาแล้ว!" : saved.message || defaultPetStats.message,
-        });
-      } catch {
-        window.localStorage.removeItem(storageKey);
-      }
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [storageKey]);
-
-  useEffect(() => {
-    window.localStorage.setItem(storageKey, JSON.stringify({ ...stats, lastSeen: Date.now() }));
-  }, [stats, storageKey]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1967,52 +1993,31 @@ function LivingMascot({ storageKey }: { storageKey: string }) {
         setFacing(next >= current ? "right" : "left");
         return next;
       });
-      setStats((current) => ({
-        ...current,
-        happiness: clampStat(current.happiness - 0.8),
-        energy: clampStat(current.energy - 0.6),
-        lastSeen: Date.now(),
-      }));
     }, 6200);
     return () => window.clearInterval(timer);
   }, []);
 
-  const mood: MascotMood = stats.energy < 24 ? "sleepy" : stats.happiness < 28 ? "oops" : stats.happiness > 82 ? "happy" : open ? "thinking" : "idle";
+  const daysSince = useMemo(() => daysSinceLastEntry(entries), [entries]);
+
+  const happiness = clampStat(
+    45 + streak * 9 - overBudgetCount * 14 + (monthlyBalance >= 0 ? 8 : -14) - (daysSince ?? 4) * 6,
+  );
+  const energy = clampStat(92 - (daysSince ?? 6) * 26);
+  const mood: MascotMood = energy < 24 ? "sleepy" : happiness < 28 ? "oops" : happiness > 82 ? "happy" : open ? "thinking" : "idle";
   const safeX = Math.max(10, Math.min(90, x));
 
-  function nudge(message: string, patch: Partial<Pick<PetStats, "happiness" | "energy" | "treats">>) {
-    setStats((current) => ({
-      happiness: clampStat(patch.happiness ?? current.happiness),
-      energy: clampStat(patch.energy ?? current.energy),
-      treats: Math.max(0, Math.floor(patch.treats ?? current.treats)),
-      lastSeen: Date.now(),
-      message,
-    }));
-  }
-
-  function play() {
-    nudge("เย้! ได้เล่นแล้ว สดชื่นขึ้นเยอะ", {
-      happiness: stats.happiness + 18,
-      energy: stats.energy - 10,
-      treats: stats.treats,
-    });
-  }
-
-  function feed() {
-    nudge("งั่ม ๆ เหรียญอร่อยมาก", {
-      happiness: stats.happiness + 7,
-      energy: stats.energy + 16,
-      treats: stats.treats + 1,
-    });
-  }
-
-  function rest() {
-    nudge("ขอชาร์จพลังแป๊บนึงนะ", {
-      happiness: stats.happiness + 3,
-      energy: stats.energy + 24,
-      treats: stats.treats,
-    });
-  }
+  const message =
+    daysSince === null
+      ? "ยังไม่มีรายการเลย เริ่มจดกันเถอะ!"
+      : daysSince >= 2
+        ? `ไม่ได้จดมา ${daysSince} วันแล้วนะ กลับมาบันทึกกันเถอะ`
+        : overBudgetCount > 0
+          ? `เดือนนี้เกินงบไปแล้ว ${overBudgetCount} หมวด ลองดูสรุปเดือนนี้กัน`
+          : monthlyBalance < 0
+            ? "เดือนนี้ใช้เกินรายรับนะ ลองทบทวนดูอีกนิด"
+            : streak >= 3
+              ? `เก่งมาก! จดต่อเนื่อง ${streak} วันแล้ว`
+              : "วันนี้จดรายการหรือยังนะ?";
 
   return (
     <>
@@ -2029,31 +2034,32 @@ function LivingMascot({ storageKey }: { storageKey: string }) {
               <b>น้องบันทึกเงิน</b>
               <button onClick={() => setOpen(false)} aria-label="ปิดมาสคอต">×</button>
             </div>
-            <p>{stats.message}</p>
-            <PetMeter label="สุข" value={stats.happiness} />
-            <PetMeter label="พลัง" value={stats.energy} />
-            <div className="pet-actions">
-              <button onClick={play} disabled={stats.energy < 10}>เล่น</button>
-              <button onClick={feed}>ให้อาหาร</button>
-              <button onClick={rest}>พัก</button>
+            <p>{message}</p>
+            <div className="pet-facts">
+              <div>
+                <span>จดต่อเนื่อง</span>
+                <b>{streak} วัน</b>
+              </div>
+              <div>
+                <span>จดล่าสุด</span>
+                <b>{daysSince === null ? "ยังไม่เคย" : daysSince === 0 ? "วันนี้" : `${daysSince} วันก่อน`}</b>
+              </div>
+              <div>
+                <span>เดือนนี้</span>
+                <b className={monthlyBalance >= 0 ? "income" : "expense"}>{formatSignedMoney(monthlyBalance)}</b>
+              </div>
+              {overBudgetCount > 0 && (
+                <div>
+                  <span>เกินงบ</span>
+                  <b className="expense">{overBudgetCount} หมวด</b>
+                </div>
+              )}
             </div>
-            <small>ขนมเหรียญ {stats.treats} ชิ้น · รอบนี้จำในเครื่องนี้ก่อน</small>
+            <button className="pet-cta" onClick={() => { setOpen(false); onLogEntry(); }}>จดรายการเลย</button>
           </section>
         </div>
       )}
     </>
-  );
-}
-
-function PetMeter({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="pet-meter">
-      <span>{label}</span>
-      <i>
-        <em style={{ width: `${Math.round(value)}%` }} />
-      </i>
-      <b>{Math.round(value)}</b>
-    </div>
   );
 }
 

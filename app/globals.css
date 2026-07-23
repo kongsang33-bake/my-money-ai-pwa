@@ -4653,59 +4653,50 @@ select:focus {
   line-height: 1.45;
 }
 
-.pet-meter {
+.pet-facts {
   display: grid;
-  grid-template-columns: 34px 1fr 28px;
-  align-items: center;
-  gap: 7px;
-  margin: 7px 0;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 4px 0 14px;
+}
+
+.pet-facts div {
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.6);
+  padding: 8px 10px;
+}
+
+.pet-facts span {
+  display: block;
+  color: var(--muted);
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 700;
+}
+
+.pet-facts b {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+}
+
+.pet-facts b.income {
   color: var(--green);
 }
 
-.pet-meter i {
-  height: 9px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(198, 207, 199, 0.42);
-  box-shadow: inset 0 1px 3px rgba(26, 52, 40, 0.08);
+.pet-facts b.expense {
+  color: var(--danger);
 }
 
-.pet-meter em {
-  display: block;
-  height: 100%;
-  min-width: 8px;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #91d9a8, #ffd57c);
-  transition: width 260ms var(--ease-out-smooth);
-}
-
-.pet-meter b {
-  color: var(--muted);
-  text-align: right;
-}
-
-.pet-actions {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 7px;
-  margin: 11px 0 9px;
-}
-
-.pet-actions button {
+.pet-cta {
+  width: 100%;
   border: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
-  color: var(--green);
-  padding: 9px 7px;
-  font-size: 11px;
+  background: var(--green);
+  color: #fff;
+  padding: 12px;
+  font-size: 13px;
   font-weight: 900;
-  box-shadow: 0 8px 16px rgba(20, 92, 69, 0.1);
-}
-
-.pet-actions button:disabled {
-  opacity: 0.48;
+  box-shadow: 0 8px 16px rgba(20, 92, 69, 0.18);
 }
 
 .pet-panel small {
@@ -4898,8 +4889,7 @@ select:focus {
 @media (prefers-reduced-motion: reduce) {
   .living-mascot,
   .pet-stage,
-  .pet-panel,
-  .pet-meter em {
+  .pet-panel {
     animation: none !important;
     transition: none !important;
   }
