@@ -189,7 +189,7 @@ const profileImageMaxInputBytes = 10 * 1024 * 1024;
 const profileImageMaxStoredBytes = 1.5 * 1024 * 1024;
 const profileImageSize = 512;
 const monthKey = (date: Date) => date.toISOString().slice(0, 7);
-const formatMoney = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 0 });
+const formatMoney = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const formatSignedMoney = (value: number) => `${value >= 0 ? "+" : "−"}${moneySign}${formatMoney(Math.abs(value))}`;
 const formatDateTime = (value: string) => new Date(value).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
 const toDateInput = (value: string) => new Date(value).toISOString().slice(0, 10);
@@ -505,10 +505,10 @@ function normalizeEntry(input: EntryInput): Entry {
     amount: Number(input.amount) || 0,
     type: transactionKind[transaction_type],
     transaction_type,
-    wallet_impact: input.wallet_impact ?? impacts.wallet_impact,
-    debt_impact: input.debt_impact ?? impacts.debt_impact,
-    user_share: input.user_share ?? impacts.user_share,
-    partner_share: input.partner_share ?? impacts.partner_share,
+    wallet_impact: impacts.wallet_impact,
+    debt_impact: impacts.debt_impact,
+    user_share: impacts.user_share,
+    partner_share: impacts.partner_share,
     debtor_name: input.debtor_name?.trim() || unnamedDebtor,
   };
 }
@@ -2093,6 +2093,29 @@ function ToastHost({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: num
   );
 }
 
+const decimalInputPattern = /^\d*\.?\d*$/;
+
+function AmountInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const [text, setText] = useState(() => (value ? String(value) : ""));
+
+  if ((Number(text) || 0) !== value) {
+    setText(value ? String(value) : "");
+  }
+
+  return (
+    <input
+      inputMode="decimal"
+      value={text}
+      onChange={(event) => {
+        const next = event.target.value;
+        if (next !== "" && !decimalInputPattern.test(next)) return;
+        setText(next);
+        onChange(Number(next) || 0);
+      }}
+    />
+  );
+}
+
 function StateCard({
   tone,
   title,
@@ -2275,7 +2298,7 @@ function DraftRow({ draft, knownDebtors, onChange }: { draft: Draft; knownDebtor
         </select>
         <label>
           {moneySign}
-          <input inputMode="decimal" value={draft.amount} onChange={(event) => update({ amount: Number(event.target.value) })} />
+          <AmountInput value={draft.amount} onChange={(amount) => update({ amount })} />
         </label>
       </div>
       <div className="impact-row">
@@ -2440,7 +2463,7 @@ function EditSheet({
         </label>
         <label>
           จำนวนเงิน
-          <input inputMode="decimal" value={entry.amount} onChange={(event) => update({ amount: Number(event.target.value) })} />
+          <AmountInput value={entry.amount} onChange={(amount) => update({ amount })} />
         </label>
         {(["lend", "split_half", "debt_repayment", "debt_payment"] as TransactionType[]).includes(entry.transaction_type) && (
           <label>
@@ -2719,9 +2742,9 @@ function DebtorEditSheet({
 }) {
   const [name, setName] = useState(debtor?.name ?? "");
   const [note, setNote] = useState(debtor?.note ?? "");
-  const [openingBalance, setOpeningBalance] = useState(debtor?.opening_balance ?? 0);
+  const [openingBalanceText, setOpeningBalanceText] = useState(debtor?.opening_balance ? String(debtor.opening_balance) : "");
   const [kind, setKind] = useState<DebtorKind>(debtor?.kind ?? defaultKind);
-  const [monthlyInstallment, setMonthlyInstallment] = useState<number | "">(debtor?.monthly_installment ?? "");
+  const [monthlyInstallmentText, setMonthlyInstallmentText] = useState(debtor?.monthly_installment ? String(debtor.monthly_installment) : "");
   const [icon, setIcon] = useState<string | null>(debtor?.icon ?? null);
   const [iconColor, setIconColor] = useState<string | null>(debtor?.icon_color ?? null);
 
@@ -2730,9 +2753,9 @@ function DebtorEditSheet({
     const payload: DebtorInput = {
       name,
       note,
-      opening_balance: openingBalance,
+      opening_balance: Number(openingBalanceText) || 0,
       kind,
-      monthly_installment: kind === "own" && monthlyInstallment !== "" ? Number(monthlyInstallment) : null,
+      monthly_installment: kind === "own" && monthlyInstallmentText !== "" ? Number(monthlyInstallmentText) || 0 : null,
       icon,
       icon_color: iconColor,
     };
@@ -2768,12 +2791,12 @@ function DebtorEditSheet({
         )}
         <label>
           {kind === "own" ? "ยอดหนี้คงเหลือ" : "ยอดเริ่มต้น (ที่ค้างอยู่ก่อนเริ่มใช้แอพ)"}
-          <input inputMode="decimal" value={openingBalance} onChange={(event) => setOpeningBalance(Number(event.target.value) || 0)} />
+          <input inputMode="decimal" value={openingBalanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setOpeningBalanceText(event.target.value); }} />
         </label>
         {kind === "own" && (
           <label>
             ผ่อนต่อเดือน (ไม่บังคับ)
-            <input inputMode="decimal" value={monthlyInstallment} onChange={(event) => setMonthlyInstallment(event.target.value === "" ? "" : Number(event.target.value) || 0)} placeholder="เช่น 15000" />
+            <input inputMode="decimal" value={monthlyInstallmentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMonthlyInstallmentText(event.target.value); }} placeholder="เช่น 15000" />
           </label>
         )}
         <button className="save" onClick={submit} disabled={busy || !name.trim()}>
@@ -3276,13 +3299,13 @@ function WalletEditSheet({
 }) {
   const [name, setName] = useState(wallet?.name ?? "");
   const [tag, setTag] = useState<WalletTag>(wallet?.tag ?? "cash");
-  const [balance, setBalance] = useState(wallet?.balance ?? 0);
+  const [balanceText, setBalanceText] = useState(wallet?.balance ? String(wallet.balance) : "");
   const [icon, setIcon] = useState<string | null>(wallet?.icon ?? null);
   const [iconColor, setIconColor] = useState<string | null>(wallet?.icon_color ?? null);
 
   const submit = () => {
     if (!name.trim()) return;
-    const payload: WalletInput = { name, tag, balance, icon, icon_color: iconColor };
+    const payload: WalletInput = { name, tag, balance: Number(balanceText) || 0, icon, icon_color: iconColor };
     if (wallet) onUpdate(wallet, payload);
     else onCreate(payload);
     onClose();
@@ -3313,7 +3336,7 @@ function WalletEditSheet({
         </label>
         <label>
           ยอดเงิน
-          <input inputMode="decimal" value={balance} onChange={(event) => setBalance(Number(event.target.value) || 0)} />
+          <input inputMode="decimal" value={balanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setBalanceText(event.target.value); }} />
         </label>
         <button className="save" onClick={submit} disabled={busy || !name.trim()}>
           บันทึก
@@ -3401,14 +3424,14 @@ function RecurringExpenseEditSheet({
   onUpdate: (item: RecurringExpense, patch: RecurringExpenseInput) => void;
 }) {
   const [name, setName] = useState(item?.name ?? "");
-  const [amount, setAmount] = useState(item?.amount ?? 0);
+  const [amountText, setAmountText] = useState(item?.amount ? String(item.amount) : "");
   const [billingDay, setBillingDay] = useState(item?.billing_day ?? 1);
   const [icon, setIcon] = useState<string | null>(item?.icon ?? null);
   const [iconColor, setIconColor] = useState<string | null>(item?.icon_color ?? null);
 
   const submit = () => {
     if (!name.trim()) return;
-    const payload: RecurringExpenseInput = { name, amount, billing_day: billingDay, icon, icon_color: iconColor };
+    const payload: RecurringExpenseInput = { name, amount: Number(amountText) || 0, billing_day: billingDay, icon, icon_color: iconColor };
     if (item) onUpdate(item, payload);
     else onCreate(payload);
     onClose();
@@ -3431,7 +3454,7 @@ function RecurringExpenseEditSheet({
         </label>
         <label>
           ยอดต่อเดือน
-          <input inputMode="decimal" value={amount} onChange={(event) => setAmount(Number(event.target.value) || 0)} />
+          <input inputMode="decimal" value={amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setAmountText(event.target.value); }} />
         </label>
         <label>
           ตัดเงินทุกวันที่

@@ -10,7 +10,7 @@ const schema = {
     properties: {
       title: { type: "string", description: "ชื่อรายการสั้น กระชับ เป็นภาษาไทย" },
       category: { type: "string", enum: categories },
-      amount: { type: "number", minimum: 0, description: "ยอดเงินเต็มจำนวนที่จ่ายหรือรับจริง" },
+      amount: { type: "number", minimum: 0, description: "ยอดเงินที่จ่ายหรือรับจริง รวมเศษสตางค์ทศนิยมได้ถึง 2 ตำแหน่ง ห้ามปัดเศษ" },
       transaction_type: {
         type: "string",
         enum: transactionTypes,
