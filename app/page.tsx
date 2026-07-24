@@ -193,6 +193,16 @@ const formatMoney = (value: number) => value.toLocaleString("th-TH", { maximumFr
 const formatSignedMoney = (value: number) => `${value >= 0 ? "+" : "−"}${moneySign}${formatMoney(Math.abs(value))}`;
 const formatDateTime = (value: string) => new Date(value).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
 const toDateInput = (value: string) => new Date(value).toISOString().slice(0, 10);
+const toFiniteNumber = (value: unknown, fallback = 0) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+};
+const toMoneyAmount = (value: unknown) => Math.max(0, toFiniteNumber(value));
+const clampInteger = (value: unknown, min: number, max: number, fallback: number) => {
+  const number = Math.trunc(toFiniteNumber(value, fallback));
+  return Math.min(max, Math.max(min, number));
+};
+const normalizeBillingDay = (value: unknown) => clampInteger(value, 1, 31, 1);
 function withDate(dateInput: string, hours: number, minutes: number, seconds: number) {
   const [year, month, day] = dateInput.split("-").map(Number);
   return new Date(year, month - 1, day, hours, minutes, seconds).toISOString();
@@ -499,10 +509,11 @@ function calculateImpacts(amount: number, transactionType: TransactionType) {
 
 function normalizeEntry(input: EntryInput): Entry {
   const transaction_type = input.transaction_type ?? (input.type === "income" ? "income" : "personal_expense");
-  const impacts = calculateImpacts(Number(input.amount) || 0, transaction_type);
+  const amount = toMoneyAmount(input.amount);
+  const impacts = calculateImpacts(amount, transaction_type);
   return {
     ...input,
-    amount: Number(input.amount) || 0,
+    amount,
     type: transactionKind[transaction_type],
     transaction_type,
     wallet_impact: impacts.wallet_impact,
@@ -748,7 +759,7 @@ export default function Home() {
     }
     setDebtors((data ?? []).map((row) => ({
       ...row,
-      opening_balance: Number(row.opening_balance) || 0,
+      opening_balance: toMoneyAmount(row.opening_balance),
       monthly_installment: row.monthly_installment == null ? null : Number(row.monthly_installment),
     })) as Debtor[]);
   }, []);
@@ -764,7 +775,7 @@ export default function Home() {
       setError(error.message);
       return;
     }
-    setWallets((data ?? []).map((row) => ({ ...row, balance: Number(row.balance) || 0 })) as Wallet[]);
+    setWallets((data ?? []).map((row) => ({ ...row, balance: toFiniteNumber(row.balance) })) as Wallet[]);
   }, []);
 
   const loadRecurringExpenses = useCallback(async () => {
@@ -778,7 +789,7 @@ export default function Home() {
       setError(error.message);
       return;
     }
-    setRecurringExpenses((data ?? []).map((row) => ({ ...row, amount: Number(row.amount) || 0, billing_day: Number(row.billing_day) || 1 })) as RecurringExpense[]);
+    setRecurringExpenses((data ?? []).map((row) => ({ ...row, amount: toMoneyAmount(row.amount), billing_day: normalizeBillingDay(row.billing_day) })) as RecurringExpense[]);
   }, []);
 
   const loadUserData = useCallback(async (userId: string) => {
@@ -1068,19 +1079,19 @@ export default function Home() {
     const normalizedItems = items.map((item) => normalizeEntry(item));
 
     const payload = normalizedItems.map((normalized) => ({
-        user_id: user.id,
-        title: normalized.title.trim(),
-        category: normalized.category,
-        amount: normalized.amount,
-        kind: normalized.type,
-        transaction_type: normalized.transaction_type,
-        debtor_name: normalized.debtor_name,
-        wallet_impact: normalized.wallet_impact,
-        debt_impact: normalized.debt_impact,
-        user_share: normalized.user_share,
-        partner_share: normalized.partner_share,
-        occurred_at: normalized.occurred_at,
-        source_text: normalized.source_text,
+      user_id: user.id,
+      title: normalized.title.trim(),
+      category: normalized.category,
+      amount: normalized.amount,
+      kind: normalized.type,
+      transaction_type: normalized.transaction_type,
+      debtor_name: normalized.debtor_name,
+      wallet_impact: normalized.wallet_impact,
+      debt_impact: normalized.debt_impact,
+      user_share: normalized.user_share,
+      partner_share: normalized.partner_share,
+      occurred_at: normalized.occurred_at,
+      source_text: normalized.source_text,
     }));
 
     const { error } = await supabase.from("transactions").insert(payload);
@@ -1192,7 +1203,7 @@ export default function Home() {
       nickname: next.nickname.trim() || null,
       app_icon: next.app_icon.trim() || null,
       app_icon_image: next.app_icon_image.trim() || null,
-      month_start_day: Math.min(28, Math.max(1, Number(next.month_start_day) || 1)),
+      month_start_day: clampInteger(next.month_start_day, 1, 28, 1),
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await supabase
@@ -1214,7 +1225,7 @@ export default function Home() {
       user_id: user.id,
       name: input.name.trim(),
       note: input.note.trim() || null,
-      opening_balance: Number(input.opening_balance) || 0,
+      opening_balance: toMoneyAmount(input.opening_balance),
       kind: input.kind,
       monthly_installment: input.monthly_installment,
       icon: input.icon,
@@ -1229,7 +1240,7 @@ export default function Home() {
     if (!supabase) return;
     setBusy(true);
     setError("");
-    const openingBalance = Number(patch.opening_balance) || 0;
+    const openingBalance = toMoneyAmount(patch.opening_balance);
     const { error } = await supabase
       .from("debtors")
       .update({
@@ -1275,7 +1286,7 @@ export default function Home() {
       user_id: user.id,
       name: input.name.trim(),
       tag: input.tag,
-      balance: Number(input.balance) || 0,
+      balance: toFiniteNumber(input.balance),
       icon: input.icon,
       icon_color: input.icon_color,
     });
@@ -1293,7 +1304,7 @@ export default function Home() {
       .update({
         name: patch.name.trim(),
         tag: patch.tag,
-        balance: Number(patch.balance) || 0,
+        balance: toFiniteNumber(patch.balance),
         icon: patch.icon,
         icon_color: patch.icon_color,
         updated_at: new Date().toISOString(),
@@ -1322,8 +1333,8 @@ export default function Home() {
     const { error } = await supabase.from("recurring_expenses").insert({
       user_id: user.id,
       name: input.name.trim(),
-      amount: Number(input.amount) || 0,
-      billing_day: Number(input.billing_day) || 1,
+      amount: toMoneyAmount(input.amount),
+      billing_day: normalizeBillingDay(input.billing_day),
       icon: input.icon,
       icon_color: input.icon_color,
     });
@@ -1340,8 +1351,8 @@ export default function Home() {
       .from("recurring_expenses")
       .update({
         name: patch.name.trim(),
-        amount: Number(patch.amount) || 0,
-        billing_day: Number(patch.billing_day) || 1,
+        amount: toMoneyAmount(patch.amount),
+        billing_day: normalizeBillingDay(patch.billing_day),
         icon: patch.icon,
         icon_color: patch.icon_color,
         updated_at: new Date().toISOString(),
@@ -2753,9 +2764,9 @@ function DebtorEditSheet({
     const payload: DebtorInput = {
       name,
       note,
-      opening_balance: Number(openingBalanceText) || 0,
+      opening_balance: toMoneyAmount(openingBalanceText),
       kind,
-      monthly_installment: kind === "own" && monthlyInstallmentText !== "" ? Number(monthlyInstallmentText) || 0 : null,
+      monthly_installment: kind === "own" && monthlyInstallmentText !== "" ? toMoneyAmount(monthlyInstallmentText) : null,
       icon,
       icon_color: iconColor,
     };
@@ -2905,7 +2916,7 @@ function BudgetSheet({
   const submit = () => {
     const next: Record<string, number> = {};
     for (const category of expenseCategories) {
-      const value = Number(draft[category]);
+      const value = toMoneyAmount(draft[category]);
       if (draft[category]?.trim() && value > 0) next[category] = value;
     }
     onSave(next);
@@ -3210,7 +3221,7 @@ function ProfileEditSheet({
         {!!app_icon_image && <button className="side-ghost" onClick={() => setAppIconImage("")}>ลบรูปไอคอน</button>}
         <label>
           วันเริ่มรอบเดือน
-          <input type="number" min={1} max={28} value={month_start_day} onChange={(event) => setMonthStartDay(Number(event.target.value))} />
+          <input type="number" min={1} max={28} value={month_start_day} onChange={(event) => setMonthStartDay(clampInteger(event.target.value, 1, 28, 1))} />
         </label>
         <button className="save" onClick={submit} disabled={busy}>
           บันทึก
@@ -3305,7 +3316,7 @@ function WalletEditSheet({
 
   const submit = () => {
     if (!name.trim()) return;
-    const payload: WalletInput = { name, tag, balance: Number(balanceText) || 0, icon, icon_color: iconColor };
+    const payload: WalletInput = { name, tag, balance: toFiniteNumber(balanceText), icon, icon_color: iconColor };
     if (wallet) onUpdate(wallet, payload);
     else onCreate(payload);
     onClose();
@@ -3431,7 +3442,7 @@ function RecurringExpenseEditSheet({
 
   const submit = () => {
     if (!name.trim()) return;
-    const payload: RecurringExpenseInput = { name, amount: Number(amountText) || 0, billing_day: billingDay, icon, icon_color: iconColor };
+    const payload: RecurringExpenseInput = { name, amount: toMoneyAmount(amountText), billing_day: billingDay, icon, icon_color: iconColor };
     if (item) onUpdate(item, payload);
     else onCreate(payload);
     onClose();
@@ -3458,7 +3469,7 @@ function RecurringExpenseEditSheet({
         </label>
         <label>
           ตัดเงินทุกวันที่
-          <select value={billingDay} onChange={(event) => setBillingDay(Number(event.target.value))}>
+          <select value={billingDay} onChange={(event) => setBillingDay(normalizeBillingDay(event.target.value))}>
             {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
               <option key={day} value={day}>{day}</option>
             ))}
