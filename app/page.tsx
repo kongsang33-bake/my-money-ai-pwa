@@ -77,6 +77,10 @@ type Wallet = {
   icon: string | null;
   icon_color: string | null;
 };
+type WalletDisplay = Wallet & {
+  display_balance: number;
+  transaction_delta: number;
+};
 type RecurringExpense = {
   id: string;
   user_id: string;
@@ -530,6 +534,60 @@ function totalWallet(entries: Entry[], direction: EntryKind) {
     .reduce((sum, entry) => sum + entry.wallet_impact, 0);
 }
 
+function matchesAnyKeyword(value: string, keywords: string[]) {
+  return keywords.some((keyword) => value.includes(keyword));
+}
+
+function transferWalletTag(entry: Entry, wallets: Wallet[]): Exclude<WalletTag, "cash"> | null {
+  if (entry.wallet_impact >= 0 || entry.transaction_type !== "personal_expense") return null;
+
+  const text = `${entry.title} ${entry.category} ${entry.source_text ?? ""}`.trim().toLowerCase();
+  if (!text) return null;
+
+  for (const wallet of wallets) {
+    if (wallet.tag === "cash" || wallet.tag === "other") continue;
+    const walletName = wallet.name.trim().toLowerCase();
+    const walletLabel = walletTagLabels[wallet.tag].toLowerCase();
+    if ((walletName && text.includes(walletName)) || (walletLabel && text.includes(walletLabel))) return wallet.tag;
+  }
+
+  if (matchesAnyKeyword(text, ["\u0e2d\u0e2d\u0e21", "\u0e40\u0e01\u0e47\u0e1a\u0e40\u0e07\u0e34\u0e19", "\u0e40\u0e07\u0e34\u0e19\u0e40\u0e01\u0e47\u0e1a"])) return "savings";
+  if (matchesAnyKeyword(text, ["\u0e25\u0e07\u0e17\u0e38\u0e19", "\u0e01\u0e2d\u0e07\u0e17\u0e38\u0e19", "\u0e2b\u0e38\u0e49\u0e19", "\u0e04\u0e23\u0e34\u0e1b\u0e42\u0e15"])) return "investment";
+
+  return null;
+}
+
+function buildWalletLedger(wallets: Wallet[], entries: Entry[]) {
+  const totals: Record<WalletTag, number> = { cash: 0, savings: 0, investment: 0, other: 0 };
+  const tagDeltas: Record<WalletTag, number> = { cash: 0, savings: 0, investment: 0, other: 0 };
+  const firstWalletByTag = new Map<WalletTag, string>();
+
+  for (const wallet of wallets) {
+    totals[wallet.tag] += wallet.balance;
+    if (!firstWalletByTag.has(wallet.tag)) firstWalletByTag.set(wallet.tag, wallet.id);
+  }
+
+  for (const entry of entries) {
+    const transferTag = transferWalletTag(entry, wallets);
+    tagDeltas.cash += entry.wallet_impact;
+    if (transferTag) tagDeltas[transferTag] += Math.abs(entry.wallet_impact);
+  }
+
+  for (const tag of Object.keys(totals) as WalletTag[]) totals[tag] += tagDeltas[tag];
+
+  return {
+    totals,
+    wallets: wallets.map((wallet) => {
+      const transaction_delta = firstWalletByTag.get(wallet.tag) === wallet.id ? tagDeltas[wallet.tag] : 0;
+      return {
+        ...wallet,
+        transaction_delta,
+        display_balance: wallet.balance + transaction_delta,
+      };
+    }),
+  };
+}
+
 function buildDebtSummary(debtors: Debtor[], entries: Entry[], kind: DebtorKind, types: TransactionType[]) {
   const map = new Map<string, number>();
   for (const debtor of debtors) {
@@ -856,15 +914,13 @@ export default function Home() {
     };
   }, [overlayOpen]);
 
-  const walletTotals = useMemo(() => {
-    const totals: Record<WalletTag, number> = { cash: 0, savings: 0, investment: 0, other: 0 };
-    for (const wallet of wallets) totals[wallet.tag] += wallet.balance;
-    return totals;
-  }, [wallets]);
+  const walletLedger = useMemo(() => buildWalletLedger(wallets, entries), [wallets, entries]);
+  const walletTotals = walletLedger.totals;
+  const displayWallets = walletLedger.wallets;
 
   const mainWallet = useMemo(
-    () => walletTotals.cash + entries.reduce((sum, entry) => sum + entry.wallet_impact, 0),
-    [entries, walletTotals.cash],
+    () => walletTotals.cash,
+    [walletTotals.cash],
   );
   const streak = useMemo(() => computeStreak(entries), [entries]);
   const quickShortcuts = useMemo(() => deriveQuickShortcuts(entries), [entries]);
@@ -1585,7 +1641,7 @@ export default function Home() {
 
         {tab === "wallets" && (
           <WalletsView
-            wallets={wallets}
+            wallets={displayWallets}
             onBack={() => setTab("home")}
             onAdd={() => { setEditingWallet(null); setWalletSheetMode("create"); }}
             onEdit={(wallet) => { setEditingWallet(wallet); setWalletSheetMode("edit"); }}
@@ -3238,13 +3294,13 @@ function WalletsView({
   onEdit,
   onDelete,
 }: {
-  wallets: Wallet[];
+  wallets: WalletDisplay[];
   onBack: () => void;
   onAdd: () => void;
   onEdit: (wallet: Wallet) => void;
   onDelete: (wallet: Wallet) => void;
 }) {
-  const total = wallets.reduce((sum, wallet) => sum + wallet.balance, 0);
+  const total = wallets.reduce((sum, wallet) => sum + wallet.display_balance, 0);
 
   return (
     <div className="view debtor-view">
@@ -3269,7 +3325,7 @@ function WalletsView({
               </span>
               <div>
                 <span>{wallet.name}</span>
-                <small>{walletTagLabels[wallet.tag]} · {moneySign}{formatMoney(wallet.balance)}</small>
+                <small>{walletTagLabels[wallet.tag]} · {moneySign}{formatMoney(wallet.display_balance)}</small>
               </div>
             </button>
             <details className="kebab-menu" name="wallet-kebab">
