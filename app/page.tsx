@@ -1000,9 +1000,10 @@ export default function Home() {
     ];
     return [...fromHistory, ...defaults].slice(0, 4);
   }, [quickShortcuts]);
+  const activeDay = selectedDay ?? new Date().toDateString();
   const dayEntries = useMemo(
-    () => (selectedDay ? monthlyEntries.filter((entry) => new Date(entry.occurred_at).toDateString() === selectedDay) : monthlyEntries),
-    [monthlyEntries, selectedDay],
+    () => monthlyEntries.filter((entry) => new Date(entry.occurred_at).toDateString() === activeDay),
+    [activeDay, monthlyEntries],
   );
 
   const categorySummary = useMemo(() => {
@@ -1617,7 +1618,7 @@ export default function Home() {
               trend={sevenDayOutflow}
             />
             <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
-            <HistoryInsight entries={dayEntries} selectedDay={selectedDay} />
+            <HistoryInsight entries={dayEntries} selectedDay={activeDay} />
             <EntryList entries={dayEntries} onEdit={setEditing} onDelete={deleteEntry} emptyAction={{ label: "จดด้วย AI", onClick: openAddTab }} />
           </div>
         )}
