@@ -494,6 +494,149 @@ h2 {
 .confirm-dialog button { border: 1px solid var(--line); border-radius: 12px; padding: 11px; background: var(--surface); }
 .confirm-dialog .danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 
+.pin-shell {
+  min-height: 100dvh;
+}
+
+.pin-screen {
+  display: grid;
+  place-items: center;
+  padding: 28px;
+}
+
+.pin-card {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 32px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  padding: 24px;
+}
+
+.pin-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.pin-lock-mark {
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  background: var(--mint-surface-soft);
+  color: var(--green);
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.pin-card h1 {
+  margin: 4px 0 0;
+  font-size: 28px;
+}
+
+.pin-copy,
+.pin-hint,
+.pin-error,
+.pin-loading {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.pin-error {
+  color: var(--danger);
+  font-weight: 800;
+}
+
+.pin-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.pin-form,
+.pin-unlock {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.pin-form label,
+.pin-edit-sheet label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pin-form input,
+.pin-edit-sheet input {
+  width: 100%;
+  border: 1px solid var(--input-border);
+  border-radius: 18px;
+  background: var(--surface-alt);
+  color: var(--ink);
+  padding: 15px 16px;
+  font-size: 22px;
+  letter-spacing: 0.28em;
+  text-align: center;
+}
+
+.pin-dots {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 0 4px;
+}
+
+.pin-dots span {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--line);
+  box-shadow: inset 0 1px 2px var(--shadow-inset);
+}
+
+.pin-dots span.filled {
+  background: var(--green);
+}
+
+.pin-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.pin-keypad button {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--ink);
+  min-height: 56px;
+  font-size: 20px;
+  font-weight: 900;
+  box-shadow: var(--shadow-soft);
+}
+
+.pin-keypad button:disabled,
+.pin-form button:disabled,
+.pin-edit-sheet button:disabled {
+  opacity: 0.55;
+}
+
+.pin-link-button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+  padding: 8px;
+}
+
 .summary-panel,
 .entry-list {
   background: white;
