@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import {
@@ -29,7 +29,6 @@ type EntryKind = "expense" | "income";
 type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "debt_payment" | "gift";
 type Tab = "home" | "add" | "history" | "debtors" | "wallets" | "recurring";
 type Theme = "light" | "dark";
-type MascotMood = "idle" | "thinking" | "happy" | "sleepy" | "oops";
 
 type Entry = {
   id: string;
@@ -162,22 +161,27 @@ function CategoryIcon({ category, size = 14 }: { category: string; size?: number
 }
 
 // Categorical palette validated for CVD-safe adjacency + normal-vision separation
-// (dataviz skill, 7-slot subset of the default 8-hue order; brand green reserved for income).
-const categoryColors: Record<string, string> = {
-  เดินทาง: "#2a78d6",
-  อาหาร: "#eb6834",
-  บิลประจำ: "#1baf7a",
-  ที่อยู่อาศัย: "#eda100",
-  บันเทิง: "#e87ba4",
-  ของใช้: "#4a3aa7",
-  สุขภาพ: "#e34948",
+// (dataviz skill, 7-slot subset of the default 8-hue order; brand accent reserved for income).
+// Values live as CSS custom properties (--cat-*) so dark mode adapts them automatically —
+// see :root / :root[data-theme="dark"] in globals.css.
+const categoryColorVars: Record<string, string> = {
+  เดินทาง: "--cat-travel",
+  อาหาร: "--cat-food",
+  บิลประจำ: "--cat-bills",
+  ที่อยู่อาศัย: "--cat-home",
+  บันเทิง: "--cat-entertainment",
+  ของใช้: "--cat-goods",
+  สุขภาพ: "--cat-health",
 };
-const categoryColor = (category: string) => categoryColors[category] ?? "#898781";
+const categoryColorVar = (category: string) => categoryColorVars[category] ?? "--cat-other";
+const categoryColor = (category: string) => `var(${categoryColorVar(category)})`;
+const categoryTint = (category: string, alphaPercent: number) =>
+  `color-mix(in srgb, var(${categoryColorVar(category)}) ${alphaPercent}%, transparent)`;
 
-const avatarPalette = Object.values(categoryColors);
+const avatarPaletteVars = Object.values(categoryColorVars);
 function nameColor(name: string) {
   const sum = [...name.trim()].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  return avatarPalette[sum % avatarPalette.length];
+  return `var(${avatarPaletteVars[sum % avatarPaletteVars.length]})`;
 }
 function nameInitial(name: string) {
   return name.trim().slice(0, 1).toUpperCase() || "?";
@@ -1442,7 +1446,6 @@ export default function Home() {
             {dataLoading && <StateCard tone="loading" title="กำลังเตรียมข้อมูล" detail="กำลังโหลดรายชื่อ ลูกหนี้ และรายการล่าสุดเพื่อช่วย AI วิเคราะห์" />}
             <div className="add-title add-title-compact">
               <button onClick={() => setTab("home")}>‹</button>
-              <MoneyMascot mood={busy ? "thinking" : drafts.length ? "happy" : "idle"} tiny />
               <div>
                 <p className="eyebrow">AI Chat</p>
                 <h2>{busy ? "กำลังอ่านให้แบบตั้งใจสุด ๆ" : drafts.length ? "แยกข้อมูลให้แล้ว ลองตรวจอีกนิด" : "วันนี้มีรายการอะไรบ้าง?"}</h2>
@@ -1463,7 +1466,7 @@ export default function Home() {
                     className="quick-chip"
                     onClick={() => applySuggestion(suggestion.text, suggestion.shortcut)}
                   >
-                    <span className="cat-dot" style={{ background: suggestion.shortcut ? `${categoryColor(suggestion.shortcut.category)}22` : undefined }}>
+                    <span className="cat-dot" style={{ background: suggestion.shortcut ? categoryTint(suggestion.shortcut.category, 13) : undefined }}>
                       {suggestion.shortcut ? <CategoryIcon category={suggestion.shortcut.category} /> : <Lightbulb size={14} strokeWidth={2.25} aria-hidden="true" />}
                     </span>
                     <span>
@@ -1940,8 +1943,7 @@ function MiniTrend({ items }: { items: { key: string; label: string; amount: num
 function SuccessPulse({ count, onAddMore }: { count: number; onAddMore: () => void }) {
   return (
     <section className="success-pulse" role="status">
-      <MoneyMascot mood="happy" tiny />
-      <span aria-hidden="true">✓</span>
+      <span className="success-pulse-icon" aria-hidden="true">✓</span>
       <div>
         <b>บันทึกเรียบร้อย</b>
         <small>{count} รายการถูกซิงค์แล้ว พร้อมจดรายการถัดไปได้เลย</small>
@@ -1993,12 +1995,12 @@ function CategorySpotlight({
 
   return (
     <section className={`category-spotlight ${isOver ? "over" : ""}`}>
-      <span className="cat-dot" style={{ background: `${categoryColor(top.category)}22` }}><CategoryIcon category={top.category} /></span>
+      <span className="cat-dot" style={{ background: categoryTint(top.category, 13) }}><CategoryIcon category={top.category} /></span>
       <div>
         <small>{budget > 0 ? "หมวดที่ต้องจับตา" : "หมวดใช้จ่ายเด่น"}</small>
         <b>{top.category}</b>
         <i>
-          <em style={{ width: `${Math.max(6, Math.min(100, percent))}%`, background: isOver ? "#d03b3b" : categoryColor(top.category) }} />
+          <em style={{ width: `${Math.max(6, Math.min(100, percent))}%`, background: isOver ? "var(--danger)" : categoryColor(top.category) }} />
         </i>
       </div>
       <strong>{moneySign}{formatMoney(top.amount)}</strong>
@@ -2053,12 +2055,12 @@ function MonthSummary({
             const budget = budgets[item.category];
             const hasBudget = !!budget && budget > 0;
             const overBudget = hasBudget && item.amount > budget;
-            const color = overBudget ? "#d03b3b" : categoryColor(item.category);
+            const color = overBudget ? "var(--danger)" : categoryColor(item.category);
             const percent = hasBudget ? (item.amount / budget) * 100 : outflow > 0 ? (item.amount / outflow) * 100 : 0;
             return (
               <div className="category-bar" key={item.category}>
                 <div>
-                  <span className="cat-dot" style={{ background: `${categoryColor(item.category)}22` }}><CategoryIcon category={item.category} /></span>
+                  <span className="cat-dot" style={{ background: categoryTint(item.category, 13) }}><CategoryIcon category={item.category} /></span>
                   <b>{item.category}</b>
                   {overBudget && <span className="over-budget-chip">เกินงบ</span>}
                   <small>{hasBudget ? `${moneySign}${formatMoney(item.amount)} / ${moneySign}${formatMoney(budget)}` : `${percent.toFixed(0)}%`}</small>
@@ -2079,7 +2081,6 @@ function MonthSummary({
 function EmptyNote({ glyph, children, action }: { glyph: string; children: React.ReactNode; action?: EmptyAction }) {
   return (
     <div className="empty-note">
-      <MoneyMascot mood="sleepy" tiny />
       <span className="empty-glyph">{glyph}</span>
       <p>{children}</p>
       {action && <button onClick={action.onClick}>{action.label}</button>}
@@ -2140,7 +2141,6 @@ function StateCard({
 }) {
   return (
     <div className={`state-card ${tone}`} role={tone === "error" ? "alert" : "status"}>
-      <MoneyMascot mood={tone === "loading" ? "thinking" : tone === "error" ? "oops" : "sleepy"} tiny />
       <span className="state-orb" aria-hidden="true">
         {tone === "loading" ? <span className="loading-spinner mini" /> : tone === "error" ? "!" : "•"}
       </span>
@@ -2150,82 +2150,6 @@ function StateCard({
         {action && <button onClick={action.onClick}>{action.label}</button>}
       </div>
     </div>
-  );
-}
-
-function MoneyMascot({ mood = "idle", tiny = false }: { mood?: MascotMood; tiny?: boolean }) {
-  const gradientId = `mascot-body-${useId().replace(/:/g, "")}`;
-
-  const eyes =
-    mood === "sleepy" ? (
-      <>
-        <path d="M36 53 Q40 56 44 53" stroke="#18342b" strokeWidth={2.4} strokeLinecap="round" fill="none" />
-        <path d="M56 53 Q60 56 64 53" stroke="#18342b" strokeWidth={2.4} strokeLinecap="round" fill="none" />
-      </>
-    ) : mood === "oops" ? (
-      <>
-        <circle cx="40" cy="51" r="6.2" fill="#18342b" />
-        <circle cx="60" cy="51" r="6.2" fill="#18342b" />
-        <circle cx="42.4" cy="48.6" r="1.6" fill="#fff" />
-        <circle cx="62.4" cy="48.6" r="1.6" fill="#fff" />
-      </>
-    ) : (
-      <>
-        <ellipse className="mascot-eye" cx="40" cy="52" rx="4" ry="5" fill="#18342b" />
-        <ellipse className="mascot-eye" cx="60" cy="52" rx="4" ry="5" fill="#18342b" />
-      </>
-    );
-
-  const mouth =
-    mood === "happy" ? (
-      <path d="M38 64 Q50 79 62 64" stroke="#18342b" strokeWidth={3} strokeLinecap="round" fill="none" />
-    ) : mood === "thinking" ? (
-      <path d="M46 67 L54 67" stroke="#18342b" strokeWidth={2.4} strokeLinecap="round" />
-    ) : mood === "sleepy" ? (
-      <ellipse cx="50" cy="67" rx="3" ry="2.2" fill="#18342b" opacity={0.85} />
-    ) : mood === "oops" ? (
-      <ellipse cx="50" cy="68" rx="5" ry="6" fill="#18342b" />
-    ) : (
-      <path d="M45 66 Q50 71 55 66" stroke="#18342b" strokeWidth={2.4} strokeLinecap="round" fill="none" />
-    );
-
-  return (
-    <span className={`money-mascot ${tiny ? "tiny" : ""} ${mood}`} aria-hidden="true">
-      <span className="mascot-shadow" />
-      <span className="mascot-body">
-        <svg className="mascot-svg" viewBox="0 0 100 100">
-          <defs>
-            <linearGradient id={gradientId} x1="15%" y1="0%" x2="85%" y2="100%">
-              <stop offset="0%" style={{ stopColor: "var(--mascot-primary)" }} />
-              <stop offset="56%" style={{ stopColor: "var(--mascot-mid)" }} />
-              <stop offset="100%" style={{ stopColor: "var(--mascot-deep)" }} />
-            </linearGradient>
-          </defs>
-          <ellipse cx="50" cy="55" rx="40" ry="37" fill={`url(#${gradientId})`} stroke="rgba(255,255,255,0.7)" strokeWidth={2} />
-          <path d="M13 48 Q50 64 87 42" stroke="rgba(255,255,255,0.32)" strokeWidth={2} fill="none" />
-          <ellipse cx="33" cy="30" rx="10" ry="7" fill="#fff" opacity={0.5} transform="rotate(-15 33 30)" />
-          <g transform="rotate(-10 44 19)">
-            <ellipse cx="44" cy="23" rx="27" ry="7" fill="var(--mascot-accent)" stroke="rgba(255,255,255,0.6)" strokeWidth={1.4} />
-            <rect x="30" y="6" width="28" height="17" rx="8" fill="#f1e0b3" />
-            <rect x="30" y="15" width="28" height="5" fill="#4f9d6e" />
-          </g>
-          <ellipse cx="30" cy="61" rx="6" ry="4" fill="#ffb4c6" opacity={0.75} />
-          <ellipse cx="70" cy="61" rx="6" ry="4" fill="#ffb4c6" opacity={0.75} />
-          {eyes}
-          {mouth}
-          {mood === "sleepy" && (
-            <>
-              <text x="68" y="30" fontSize="9" fontWeight={800} fill="#5aa0d6">z</text>
-              <text x="76" y="20" fontSize="6" fontWeight={800} fill="#5aa0d6">z</text>
-            </>
-          )}
-          {mood === "oops" && <path d="M70 38 q3 5 0 8 q-3 -3 0 -8 Z" fill="#8fd0f0" opacity={0.85} />}
-        </svg>
-        <span className="mascot-coin">฿</span>
-      </span>
-      <span className="mascot-spark one" />
-      <span className="mascot-spark two" />
-    </span>
   );
 }
 
@@ -2289,7 +2213,7 @@ function DraftRow({ draft, knownDebtors, onChange }: { draft: Draft; knownDebtor
 
   return (
     <div className={`draft draft-${draft.transaction_type}`}>
-      <span className="cat-icon" style={{ background: `${categoryColor(draft.category)}22` }}><CategoryIcon category={draft.category} size={18} /></span>
+      <span className="cat-icon" style={{ background: categoryTint(draft.category, 13) }}><CategoryIcon category={draft.category} size={18} /></span>
       <div>
         <input value={draft.title} onChange={(event) => update({ title: event.target.value })} />
         <select value={draft.category} onChange={(event) => update({ category: event.target.value })}>
@@ -2370,7 +2294,7 @@ function EntryList({
               role={onEdit ? "button" : undefined}
               tabIndex={onEdit ? 0 : undefined}
             >
-              <span className="entry-icon" style={{ background: `${categoryColor(entry.category)}22` }}><CategoryIcon category={entry.category} size={18} /></span>
+              <span className="entry-icon" style={{ background: categoryTint(entry.category, 13) }}><CategoryIcon category={entry.category} size={18} /></span>
               <div>
                 <b>{entry.title}</b>
                 <small>
@@ -2684,7 +2608,7 @@ function WalletAvatarGlyph({ iconKey, fallbackName, size = 18 }: { iconKey: stri
 
 const iconColorSwatches = [
   "#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#4a3aa7", "#e34948",
-  "#145c45", "#14b889", "#898781",
+  "#14181c", "#c97a14", "#898781",
 ];
 
 function IconColorPicker({
@@ -2884,7 +2808,7 @@ function RecapSheet({
         </div>
         {topCategory && (
           <div className="recap-top-category">
-            <span className="cat-dot" style={{ background: `${categoryColor(topCategory.category)}33` }}><CategoryIcon category={topCategory.category} /></span>
+            <span className="cat-dot" style={{ background: categoryTint(topCategory.category, 20) }}><CategoryIcon category={topCategory.category} /></span>
             <div>
               <small>ใช้จ่ายเยอะสุด</small>
               <b>{topCategory.category} · {moneySign}{formatMoney(topCategory.amount)}</b>
@@ -2936,7 +2860,7 @@ function BudgetSheet({
         <p className="budget-hint">ตั้งวงเงินต่อหมวดหมู่ เว้นว่างไว้ถ้าไม่ต้องการจำกัด บันทึกเฉพาะในเครื่องนี้เท่านั้น</p>
         {expenseCategories.map((category) => (
           <label key={category} className="budget-row">
-            <span className="cat-dot" style={{ background: `${categoryColor(category)}22` }}><CategoryIcon category={category} /></span>
+            <span className="cat-dot" style={{ background: categoryTint(category, 13) }}><CategoryIcon category={category} /></span>
             {category}
             <input
               inputMode="decimal"
