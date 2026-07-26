@@ -2835,6 +2835,11 @@ a:focus-visible {
   animation: toast-in var(--t-2) var(--e-spring) both;
 }
 
+.toast.closing {
+  animation: toast-out var(--t-2) var(--e-out) both;
+  pointer-events: none;
+}
+
 .toast b {
   display: block;
   font-size: 13px;
@@ -3333,6 +3338,11 @@ a:focus-visible {
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(10px) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(10px) scale(0.97); }
 }
 
 @keyframes fade-out {

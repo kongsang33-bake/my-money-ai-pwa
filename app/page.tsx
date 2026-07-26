@@ -887,6 +887,7 @@ export default function Home() {
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [closingToastIds, setClosingToastIds] = useState<number[]>([]);
   const [savePulse, setSavePulse] = useState(0);
   const [theme, setTheme] = useState<Theme>("light");
   const [pinMode, setPinMode] = useState<PinMode>("checking");
@@ -903,6 +904,14 @@ export default function Home() {
     setToasts((items) => [...items.slice(-2), { id, ...toast }]);
   }, []);
 
+  const dismissToast = useCallback((id: number) => {
+    setClosingToastIds((current) => (current.includes(id) ? current : [...current, id]));
+    window.setTimeout(() => {
+      setToasts((items) => items.filter((toast) => toast.id !== id));
+      setClosingToastIds((ids) => ids.filter((closingId) => closingId !== id));
+    }, 200);
+  }, []);
+
   const requestConfirm = useCallback((dialog: Omit<ConfirmDialogState, "resolve">) => (
     new Promise<boolean>((resolve) => setConfirmDialog({ ...dialog, resolve }))
   ), []);
@@ -915,12 +924,11 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!toasts.length) return;
-    const timer = window.setTimeout(() => {
-      setToasts((items) => items.slice(1));
-    }, 3200);
+    const next = toasts.find((toast) => !closingToastIds.includes(toast.id));
+    if (!next) return;
+    const timer = window.setTimeout(() => dismissToast(next.id), 3200);
     return () => window.clearTimeout(timer);
-  }, [toasts]);
+  }, [toasts, closingToastIds, dismissToast]);
 
   useEffect(() => {
     if (!savePulse) return;
@@ -2429,7 +2437,7 @@ export default function Home() {
         {confirmDialogDismiss.mounted && confirmDialog && (
           <ConfirmDialog dialog={confirmDialog} onClose={confirmDialogDismiss.requestClose} closing={confirmDialogDismiss.closing} />
         )}
-        <ToastHost toasts={toasts} onDismiss={(id) => setToasts((items) => items.filter((toast) => toast.id !== id))} />
+        <ToastHost toasts={toasts} closingIds={closingToastIds} onDismiss={dismissToast} />
 
         {!overlayOpen && (
           <nav className="bottom-nav">
@@ -3351,7 +3359,7 @@ function EmptyNote({ glyph, children, action }: { glyph: string; children: React
   );
 }
 
-function ToastHost({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
+function ToastHost({ toasts, closingIds, onDismiss }: { toasts: Toast[]; closingIds: number[]; onDismiss: (id: number) => void }) {
   if (!toasts.length) return null;
   if (typeof document === "undefined") return null;
   return createPortal(
@@ -3359,7 +3367,7 @@ function ToastHost({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: num
       {toasts.map((toast) => (
         <button
           key={toast.id}
-          className={`toast ${toast.tone}`}
+          className={`toast ${toast.tone} ${closingIds.includes(toast.id) ? "closing" : ""}`}
           onClick={() => {
             toast.action?.onClick();
             onDismiss(toast.id);
@@ -3761,7 +3769,7 @@ function EditSheet({
 
       <label>
         ชื่อรายการ
-        <input value={entry.title} onChange={(event) => update({ title: event.target.value })} />
+        <input autoFocus value={entry.title} onChange={(event) => update({ title: event.target.value })} />
       </label>
       <label>
         หมวดหมู่
@@ -4116,7 +4124,7 @@ function DebtorEditSheet({
       <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
       <label>
         ชื่อ
-        <input value={name} onChange={(event) => setName(event.target.value)} placeholder={kind === "own" ? "เช่น ผ่อนบ้าน ผ่อนรถ" : "เช่น เพื่อนเอ"} />
+        <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder={kind === "own" ? "เช่น ผ่อนบ้าน ผ่อนรถ" : "เช่น เพื่อนเอ"} />
       </label>
       {kind === "lend" && (
         <label>
@@ -4599,7 +4607,7 @@ function ProfileEditSheet({
       </div>
       <label>
         ชื่อเล่น
-        <input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="เช่น ก้อง" />
+        <input autoFocus value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="เช่น ก้อง" />
       </label>
       <label>
         รูปไอคอนจากภายนอก
@@ -4768,7 +4776,7 @@ function WalletEditSheet({
       <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
       <label>
         ชื่อกระเป๋า
-        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น กระเป๋าหลัก, ออมทรัพย์ SCB" />
+        <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น กระเป๋าหลัก, ออมทรัพย์ SCB" />
       </label>
       <label>
         ประเภท
@@ -4899,7 +4907,7 @@ function RecurringExpenseEditSheet({
       <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
       <label>
         ชื่อรายการ
-        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น Netflix, Claude Pro, YouTube Premium" />
+        <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น Netflix, Claude Pro, YouTube Premium" />
       </label>
       <label>
         ยอดต่อเดือน
