@@ -1033,13 +1033,18 @@ export default function Home() {
     setDataLoading(false);
   }, []);
 
-  const preparePinGate = useCallback(async () => {
+  const preparePinGate = useCallback(async (userId: string) => {
     setPinMode("checking");
     setPinError("");
     clearPrivateState();
     const nextProfile = await loadProfile();
-    setPinMode(nextProfile?.pin_hash && nextProfile.pin_salt ? "locked" : "setup");
-  }, [clearPrivateState, loadProfile]);
+    if (nextProfile?.pin_hash && nextProfile.pin_salt) {
+      setPinMode("locked");
+    } else {
+      setPinMode("unlocked");
+      await loadUserData(userId);
+    }
+  }, [clearPrivateState, loadProfile, loadUserData]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -1048,14 +1053,14 @@ export default function Home() {
       setUser(data.user);
       setReady(true);
       if (data.user) {
-        void preparePinGate();
+        void preparePinGate(data.user.id);
       }
     });
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        void preparePinGate();
+        void preparePinGate(session.user.id);
       } else {
         setProfile(null);
         setPinMode("checking");
@@ -1627,8 +1632,9 @@ export default function Home() {
     setPinError("");
     const latestProfile = await loadProfile();
     if (!latestProfile?.pin_hash || !latestProfile.pin_salt) {
-      setPinMode("setup");
+      setPinMode("unlocked");
       setBusy(false);
+      if (user) await loadUserData(user.id);
       return false;
     }
     if (pinBlocked(latestProfile)) {

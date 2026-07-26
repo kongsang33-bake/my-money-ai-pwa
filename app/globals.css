@@ -2061,7 +2061,7 @@ a:focus-visible {
   min-width: 0;
 }
 
-.debtor-main-button span {
+.debtor-main-button > div span {
   display: block;
   font-size: 14px;
   font-weight: 700;
@@ -2625,6 +2625,7 @@ a:focus-visible {
 .confirm-dialog {
   width: min(90%, 340px);
   padding: var(--s-6);
+  text-align: center;
   animation: pop-in var(--t-2) var(--e-spring) both;
 }
 
