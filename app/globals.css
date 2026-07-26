@@ -618,6 +618,18 @@ a:focus-visible {
   transform: translateX(100%);
 }
 
+.pin-mode-toggle {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
+
+.pin-mode-toggle button {
+  padding: 10px 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 /* -------------------------------------------------------------------------
    Card surface — one shared treatment
    ------------------------------------------------------------------------- */
