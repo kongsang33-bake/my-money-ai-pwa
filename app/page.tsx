@@ -676,10 +676,11 @@ function calculateImpacts(amount: number, transactionType: TransactionType) {
   return { wallet_impact: -amount, debt_impact: 0, user_share: amount, partner_share: 0 };
 }
 
-function normalizeEntry(input: EntryInput): Entry {
+function normalizeEntry(input: EntryInput, applyDebtorDefault = true): Entry {
   const transaction_type = input.transaction_type ?? (input.type === "income" ? "income" : "personal_expense");
   const amount = toMoneyAmount(input.amount);
   const impacts = calculateImpacts(amount, transaction_type);
+  const trimmedDebtorName = input.debtor_name?.trim() ?? "";
   return {
     ...input,
     amount,
@@ -689,7 +690,7 @@ function normalizeEntry(input: EntryInput): Entry {
     debt_impact: impacts.debt_impact,
     user_share: impacts.user_share,
     partner_share: impacts.partner_share,
-    debtor_name: input.debtor_name?.trim() || unnamedDebtor,
+    debtor_name: trimmedDebtorName || (applyDebtorDefault ? unnamedDebtor : trimmedDebtorName),
     wallet_id: input.wallet_id ?? null,
     note: input.note?.trim() || null,
   };
@@ -1406,7 +1407,7 @@ export default function Home() {
         transaction_type: shortcut.transaction_type,
         occurred_at: fromDateInput(entryDate),
         source_text: "ทางลัด",
-      }),
+      }, false),
     ]);
     notify({ tone: "info", title: "เพิ่มรายการลัดแล้ว", detail: shortcut.title });
   }
@@ -1460,7 +1461,7 @@ export default function Home() {
             source_text: source,
             wallet_id: aiWalletId || defaultWalletId(wallets),
             note: item.note,
-            });
+            }, false);
           },
         ),
       );
@@ -3847,11 +3848,11 @@ function Metric({ label, value, tone }: { label: string; value: number; tone: "i
 }
 
 function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft: Draft; knownDebtors: Debtor[]; wallets: Wallet[]; onChange: (draft: Draft) => void; onRemove: () => void }) {
-  const update = (patch: Partial<Draft>) => onChange(normalizeEntry({ ...draft, ...patch }));
+  const update = (patch: Partial<Draft>) => onChange(normalizeEntry({ ...draft, ...patch }, false));
   const isDebtType = (["lend", "split_half", "debt_repayment", "debt_payment"] as TransactionType[]).includes(draft.transaction_type);
   const relevantKind: DebtorKind = draft.transaction_type === "debt_payment" ? "own" : "lend";
   const knownNames = knownDebtors.filter((debtor) => debtor.kind === relevantKind).map((debtor) => debtor.name);
-  const isNewDebtor = isDebtType && draft.debtor_name !== unnamedDebtor && !knownNames.some((name) => name.trim().toLowerCase() === draft.debtor_name.trim().toLowerCase());
+  const isNewDebtor = isDebtType && !!draft.debtor_name.trim() && draft.debtor_name !== unnamedDebtor && !knownNames.some((name) => name.trim().toLowerCase() === draft.debtor_name.trim().toLowerCase());
 
   return (
     <div className={`draft draft-${draft.transaction_type}`}>
@@ -4016,7 +4017,7 @@ function EditSheet({
   onSave: () => Promise<boolean>;
   closing?: boolean;
 }) {
-  const update = (patch: Partial<Entry>) => onChange(normalizeEntry({ ...entry, ...patch }));
+  const update = (patch: Partial<Entry>) => onChange(normalizeEntry({ ...entry, ...patch }, false));
   const submit = async () => {
     const saved = await onSave();
     if (saved) onClose();
