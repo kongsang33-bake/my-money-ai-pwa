@@ -776,16 +776,47 @@ a:focus-visible {
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-.home-insight-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-3);
+.home-insight-wrap {
   margin-bottom: var(--s-4);
+}
+
+.home-insight-grid {
+  display: flex;
+  gap: var(--s-3);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.home-insight-grid::-webkit-scrollbar {
+  display: none;
 }
 
 .home-insight-card {
   padding: var(--s-4);
   min-width: 0;
+  flex: 0 0 82%;
+  scroll-snap-align: center;
+}
+
+.home-insight-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: var(--s-3);
+}
+
+.home-insight-dots button {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--line);
+  pointer-events: auto;
+}
+
+.home-insight-dots button.active {
+  background: var(--ink-3);
 }
 
 .home-insight-icon {
@@ -3510,6 +3541,25 @@ a:focus-visible {
   }
 }
 
+/* Tablet and up: plenty of width for the insight tiles as a static 2x2
+   grid, so the mobile-only swipe carousel reverts here. */
+@media (min-width: 600px) {
+  .home-insight-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-x: visible;
+    scroll-snap-type: none;
+  }
+
+  .home-insight-card {
+    flex: unset;
+  }
+
+  .home-insight-dots {
+    display: none;
+  }
+}
+
 /* Tablet / landscape phone — a real breakpoint that used to fall through
    to the mobile stylesheet unchanged */
 @media (min-width: 600px) and (max-width: 899px) {
@@ -3579,7 +3629,7 @@ a:focus-visible {
   }
 
   .phone.tab-home .wallet-grid.single-wallet,
-  .phone.tab-home .home-insight-grid,
+  .phone.tab-home .home-insight-wrap,
   .phone.tab-home .first-run-card,
   .phone.tab-home .activity-timeline,
   .phone.tab-home .error-actions,

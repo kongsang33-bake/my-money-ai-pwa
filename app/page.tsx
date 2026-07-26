@@ -2920,32 +2920,62 @@ function HomeInsightGrid({
   payableTotal: number;
 }) {
   const savingsPositive = savingsRate >= 0;
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const cardCount = 4;
+
+  const handleScroll = () => {
+    const track = trackRef.current;
+    if (!track || !track.clientWidth) return;
+    const index = Math.round(track.scrollLeft / track.clientWidth);
+    setActiveIndex(Math.max(0, Math.min(cardCount - 1, index)));
+  };
+
+  const scrollToIndex = (index: number) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const reduceMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    track.scrollTo({ left: index * track.clientWidth, behavior: reduceMotion ? "auto" : "smooth" });
+  };
+
   return (
-    <section className="home-insight-grid" aria-label="ภาพรวมทรัพย์สิน">
-      <div className="home-insight-card net-worth">
-        <span><i className="home-insight-icon neutral"><Wallet size={13} strokeWidth={2.25} aria-hidden="true" /></i>มูลค่าสุทธิ</span>
-        <strong>{formatSignedMoney(netWorth)}</strong>
-        <small>กระเป๋า + ลูกหนี้ - หนี้ที่ต้องจ่าย</small>
+    <section className="home-insight-wrap">
+      <div className="home-insight-grid" ref={trackRef} onScroll={handleScroll} aria-label="ภาพรวมทรัพย์สิน">
+        <div className="home-insight-card net-worth">
+          <span><i className="home-insight-icon neutral"><Wallet size={13} strokeWidth={2.25} aria-hidden="true" /></i>มูลค่าสุทธิ</span>
+          <strong>{formatSignedMoney(netWorth)}</strong>
+          <small>กระเป๋า + ลูกหนี้ - หนี้ที่ต้องจ่าย</small>
+        </div>
+        <div className={`home-insight-card ${savingsPositive ? "income" : "expense"}`}>
+          <span>
+            <i className={`home-insight-icon ${savingsPositive ? "income" : "expense"}`}>
+              {savingsPositive ? <TrendingUp size={13} strokeWidth={2.25} aria-hidden="true" /> : <TrendingDown size={13} strokeWidth={2.25} aria-hidden="true" />}
+            </i>
+            อัตราเงินเหลือ
+          </span>
+          <strong>{Number.isFinite(savingsRate) ? `${Math.round(savingsRate)}%` : "0%"}</strong>
+          <small>เทียบกับรายรับในรอบนี้</small>
+        </div>
+        <div className="home-insight-card">
+          <span><i className="home-insight-icon neutral"><Users size={13} strokeWidth={2.25} aria-hidden="true" /></i>ลูกหนี้</span>
+          <strong>{moneySign}{formatMoney(receivableTotal)}</strong>
+          <small>ยอดที่ควรได้รับคืน</small>
+        </div>
+        <div className="home-insight-card">
+          <span><i className="home-insight-icon neutral"><CreditCard size={13} strokeWidth={2.25} aria-hidden="true" /></i>หนี้ผ่อน</span>
+          <strong>{moneySign}{formatMoney(payableTotal)}</strong>
+          <small>ยอดที่ยังต้องจ่าย</small>
+        </div>
       </div>
-      <div className={`home-insight-card ${savingsPositive ? "income" : "expense"}`}>
-        <span>
-          <i className={`home-insight-icon ${savingsPositive ? "income" : "expense"}`}>
-            {savingsPositive ? <TrendingUp size={13} strokeWidth={2.25} aria-hidden="true" /> : <TrendingDown size={13} strokeWidth={2.25} aria-hidden="true" />}
-          </i>
-          อัตราเงินเหลือ
-        </span>
-        <strong>{Number.isFinite(savingsRate) ? `${Math.round(savingsRate)}%` : "0%"}</strong>
-        <small>เทียบกับรายรับในรอบนี้</small>
-      </div>
-      <div className="home-insight-card">
-        <span><i className="home-insight-icon neutral"><Users size={13} strokeWidth={2.25} aria-hidden="true" /></i>ลูกหนี้</span>
-        <strong>{moneySign}{formatMoney(receivableTotal)}</strong>
-        <small>ยอดที่ควรได้รับคืน</small>
-      </div>
-      <div className="home-insight-card">
-        <span><i className="home-insight-icon neutral"><CreditCard size={13} strokeWidth={2.25} aria-hidden="true" /></i>หนี้ผ่อน</span>
-        <strong>{moneySign}{formatMoney(payableTotal)}</strong>
-        <small>ยอดที่ยังต้องจ่าย</small>
+      <div className="home-insight-dots" aria-hidden="true">
+        {Array.from({ length: cardCount }, (_, index) => (
+          <button
+            key={index}
+            className={index === activeIndex ? "active" : ""}
+            onClick={() => scrollToIndex(index)}
+            tabIndex={-1}
+          />
+        ))}
       </div>
     </section>
   );
