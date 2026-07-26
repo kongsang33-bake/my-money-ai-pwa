@@ -251,13 +251,16 @@ a:focus-visible {
 
 .phone {
   width: min(100%, 430px);
+  height: 100dvh;
   min-height: 100dvh;
   background: var(--bg);
   position: relative;
   border-radius: var(--r-xl);
   box-shadow: var(--sh-3);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  scroll-padding-top: 70px;
 }
 
 .view {
@@ -268,12 +271,12 @@ a:focus-visible {
 .topbar {
   position: sticky;
   top: 0;
-  z-index: 30;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s-3);
-  padding: max(var(--s-6), env(safe-area-inset-top)) var(--s-5) var(--s-5);
+  gap: var(--s-2);
+  padding: max(var(--s-3), env(safe-area-inset-top)) var(--s-4) var(--s-3);
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(18px);
   border-bottom: 1px solid var(--line-soft);
@@ -282,19 +285,19 @@ a:focus-visible {
 .home-identity {
   display: flex;
   align-items: center;
-  gap: var(--s-3);
+  gap: var(--s-2);
 }
 
 .home-profile-icon {
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   border-radius: var(--r-full);
   background: var(--accent-soft);
   color: var(--accent-strong);
   display: grid;
   place-items: center;
   font-weight: 700;
-  font-size: 18px;
+  font-size: 15px;
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -312,24 +315,24 @@ a:focus-visible {
 }
 
 .home-identity h1 {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
 }
 
 .menu-button {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   border-radius: var(--r-full);
   background: transparent;
   border: 0;
   display: grid;
   place-items: center;
-  gap: 3px;
+  gap: 2px;
 }
 
 .menu-button span {
   display: block;
-  width: 14px;
+  width: 12px;
   height: 2px;
   border-radius: 2px;
   background: var(--ink-2);
@@ -339,9 +342,9 @@ a:focus-visible {
 .phone.tab-home .topbar {
   background: var(--header-bg);
   color: var(--header-text);
-  border-radius: 0 0 var(--r-xl) var(--r-xl);
-  padding-bottom: 52px;
-  margin-bottom: -28px;
+  border-radius: 0;
+  padding-bottom: var(--s-3);
+  margin-bottom: var(--s-3);
   border-bottom: 0;
 }
 
@@ -1024,8 +1027,9 @@ a:focus-visible {
   width: 28px;
   height: 28px;
   border-radius: var(--r-full);
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   color: var(--ink);
   line-height: 0;
@@ -1035,8 +1039,9 @@ a:focus-visible {
   width: 40px;
   height: 40px;
   border-radius: var(--r-md);
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   color: var(--ink);
   line-height: 0;
@@ -1052,8 +1057,9 @@ a:focus-visible {
   width: 44px;
   height: 44px;
   border-radius: var(--r-full);
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   color: #fff;
   font-weight: 700;
@@ -1066,6 +1072,7 @@ a:focus-visible {
   display: block;
   flex-shrink: 0;
   margin: auto;
+  transform: translateZ(0);
 }
 
 /* -------------------------------------------------------------------------
@@ -2277,10 +2284,11 @@ a:focus-visible {
   left: 50%;
   top: 50%;
   bottom: auto;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   width: min(100% - var(--s-5), 440px);
   max-height: min(82dvh, 680px);
   border-radius: var(--r-xl);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   animation: report-sheet-in var(--t-3) var(--e-out) both;
@@ -2288,7 +2296,12 @@ a:focus-visible {
 
 .report-sheet label input,
 .report-sheet label select {
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
+}
+
+.report-sheet *, .budget-sheet * {
   min-width: 0;
 }
 
@@ -3270,19 +3283,21 @@ a:focus-visible {
 
   .phone {
     width: min(1100px, calc(100vw - 64px));
+    height: calc(100vh - 64px);
     min-height: calc(100vh - 64px);
     border-radius: var(--r-xl);
     padding-bottom: var(--s-6);
-    overflow: visible;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .topbar {
-    padding: var(--s-6) var(--s-7) var(--s-5) calc(var(--s-7) + 88px);
+    padding: var(--s-4) var(--s-7) var(--s-3) calc(var(--s-7) + 88px);
   }
 
   .phone.tab-home .topbar {
-    padding-bottom: 64px;
-    margin-bottom: -32px;
+    padding-bottom: var(--s-3);
+    margin-bottom: var(--s-3);
   }
 
   .view {

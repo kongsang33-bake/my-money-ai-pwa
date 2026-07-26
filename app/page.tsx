@@ -1682,6 +1682,30 @@ export default function Home() {
     return true;
   }
 
+  async function disablePin(currentPin: string) {
+    if (!supabase || !user) return false;
+    const ok = await verifyPin(currentPin);
+    if (!ok) return false;
+    setBusy(true);
+    setPinError("");
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ pin_hash: null, pin_salt: null, pin_failed_attempts: 0, pin_blocked_until: null, updated_at: new Date().toISOString() })
+      .eq("user_id", user.id)
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until")
+      .single();
+    if (error) {
+      setPinError(error.message);
+      setBusy(false);
+      return false;
+    }
+    if (data) setProfile(data as Profile);
+    setPinMode("unlocked");
+    notify({ tone: "success", title: "ปิด PIN แล้ว", detail: "เข้าแอพได้โดยไม่ต้องกรอก PIN" });
+    setBusy(false);
+    return true;
+  }
+
   async function resetPinAndSignOut() {
     if (!supabase || !user) return;
     setBusy(true);
@@ -2350,12 +2374,21 @@ export default function Home() {
           />
         )}
         {pinSheetOpen && (
-          <PinChangeSheet
+          <PinSecuritySheet
+            pinEnabled={!!profile?.pin_hash && !!profile.pin_salt}
             busy={busy}
             error={pinError}
             onClose={() => { setPinSheetOpen(false); setPinError(""); }}
-            onSave={async (currentPin, nextPin) => {
+            onEnable={async (nextPin) => {
+              await savePin(nextPin, "unlocked");
+              setPinSheetOpen(false);
+            }}
+            onChange={async (currentPin, nextPin) => {
               const ok = await changePin(currentPin, nextPin);
+              if (ok) setPinSheetOpen(false);
+            }}
+            onDisable={async (currentPin) => {
+              const ok = await disablePin(currentPin);
               if (ok) setPinSheetOpen(false);
             }}
           />
@@ -2529,22 +2562,32 @@ function PinKeypad({ onDigit, onBackspace, disabled }: { onDigit: (digit: string
   );
 }
 
-function PinChangeSheet({
+function PinSecuritySheet({
+  pinEnabled,
   busy,
   error,
   onClose,
-  onSave,
+  onEnable,
+  onChange,
+  onDisable,
 }: {
+  pinEnabled: boolean;
   busy: boolean;
   error: string;
   onClose: () => void;
-  onSave: (currentPin: string, nextPin: string) => void;
+  onEnable: (nextPin: string) => void;
+  onChange: (currentPin: string, nextPin: string) => void;
+  onDisable: (currentPin: string) => void;
 }) {
+  const [mode, setMode] = useState<"change" | "disable">(pinEnabled ? "change" : "change");
   const [currentPin, setCurrentPin] = useState("");
   const [nextPin, setNextPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
-  const mismatch = confirmPin.length === pinLength && nextPin !== confirmPin;
+  const mismatch = mode === "change" && confirmPin.length === pinLength && nextPin !== confirmPin;
   const clean = (value: string) => value.replace(/\D/g, "").slice(0, pinLength);
+  const canSaveChange = pinEnabled
+    ? isSixDigitPin(currentPin) && isSixDigitPin(nextPin) && nextPin === confirmPin
+    : isSixDigitPin(nextPin) && nextPin === confirmPin;
 
   return (
     <div className="sheet-backdrop">
@@ -2552,26 +2595,48 @@ function PinChangeSheet({
         <div className="sheet-head">
           <div>
             <p className="eyebrow">ความปลอดภัย</p>
-            <h2>เปลี่ยนรหัส PIN</h2>
+            <h2>{pinEnabled ? "จัดการ PIN" : "เปิดใช้ PIN"}</h2>
           </div>
           <button onClick={onClose}>×</button>
         </div>
-        <label>
-          PIN ปัจจุบัน
-          <input inputMode="numeric" type="password" maxLength={pinLength} value={currentPin} onChange={(event) => setCurrentPin(clean(event.target.value))} />
-        </label>
-        <label>
-          PIN ใหม่
-          <input inputMode="numeric" type="password" maxLength={pinLength} value={nextPin} onChange={(event) => setNextPin(clean(event.target.value))} />
-        </label>
-        <label>
-          ยืนยัน PIN ใหม่
-          <input inputMode="numeric" type="password" maxLength={pinLength} value={confirmPin} onChange={(event) => setConfirmPin(clean(event.target.value))} />
-        </label>
-        {(mismatch || error) && <p className="pin-error">{mismatch ? "PIN ใหม่สองรอบไม่ตรงกัน" : error}</p>}
-        <button className="save" onClick={() => onSave(currentPin, nextPin)} disabled={busy || !isSixDigitPin(currentPin) || !isSixDigitPin(nextPin) || nextPin !== confirmPin}>
-          {busy ? "กำลังบันทึก" : "บันทึก PIN ใหม่"}
-        </button>
+        {pinEnabled && (
+          <div className="report-period-toggle pin-mode-toggle">
+            <button className={mode === "change" ? "active" : ""} onClick={() => setMode("change")}>เปลี่ยน PIN</button>
+            <button className={mode === "disable" ? "active" : ""} onClick={() => setMode("disable")}>ปิด PIN</button>
+          </div>
+        )}
+
+        {pinEnabled && (
+          <label>
+            PIN ปัจจุบัน
+            <input inputMode="numeric" type="password" maxLength={pinLength} value={currentPin} onChange={(event) => setCurrentPin(clean(event.target.value))} />
+          </label>
+        )}
+
+        {mode === "change" ? (
+          <>
+            <label>
+              PIN ใหม่
+              <input inputMode="numeric" type="password" maxLength={pinLength} value={nextPin} onChange={(event) => setNextPin(clean(event.target.value))} />
+            </label>
+            <label>
+              ยืนยัน PIN ใหม่
+              <input inputMode="numeric" type="password" maxLength={pinLength} value={confirmPin} onChange={(event) => setConfirmPin(clean(event.target.value))} />
+            </label>
+            {(mismatch || error) && <p className="pin-error">{mismatch ? "PIN ใหม่สองรอบไม่ตรงกัน" : error}</p>}
+            <button className="save" onClick={() => (pinEnabled ? onChange(currentPin, nextPin) : onEnable(nextPin))} disabled={busy || !canSaveChange}>
+              {busy ? "กำลังบันทึก" : pinEnabled ? "บันทึก PIN ใหม่" : "เปิดใช้ PIN"}
+            </button>
+          </>
+        ) : (
+          <>
+            {error && <p className="pin-error">{error}</p>}
+            <p className="pin-hint">ปิด PIN แล้วครั้งต่อไปจะเข้าแอพได้ทันทีโดยไม่ต้องกรอกรหัส</p>
+            <button className="danger pin-danger-button" onClick={() => onDisable(currentPin)} disabled={busy || !isSixDigitPin(currentPin)}>
+              {busy ? "กำลังปิด PIN" : "ปิดใช้งาน PIN"}
+            </button>
+          </>
+        )}
       </section>
     </div>
   );
