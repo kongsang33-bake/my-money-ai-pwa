@@ -21,12 +21,15 @@ import {
   PiggyBank,
   Plane,
   Receipt,
+  Search,
   ShoppingBag,
+  SlidersHorizontal,
   Sun,
   TrendingUp,
   Users,
   Utensils,
   Wallet,
+  X,
   type LucideIcon,
 } from "lucide-react";
 
@@ -3062,53 +3065,100 @@ function HistoryFilterBar({
   onChange: (filters: HistoryFilters) => void;
   onClear: () => void;
 }) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const update = (patch: Partial<HistoryFilters>) => onChange({ ...filters, ...patch });
-  const activeCount = [
-    filters.query,
-    filters.category,
-    filters.type !== "all" ? filters.type : "",
-    filters.minAmount,
-    filters.maxAmount,
-    filters.startDate,
-    filters.endDate,
-  ].filter(Boolean).length;
+  const activeFilters = [
+    filters.category && { key: "category" as const, label: `หมวด ${filters.category}` },
+    filters.type !== "all" && { key: "type" as const, label: transactionTypeLabels[filters.type as TransactionType] },
+    filters.minAmount && { key: "minAmount" as const, label: `ตั้งแต่ ${moneySign}${filters.minAmount}` },
+    filters.maxAmount && { key: "maxAmount" as const, label: `ไม่เกิน ${moneySign}${filters.maxAmount}` },
+    filters.startDate && { key: "startDate" as const, label: `จาก ${filters.startDate}` },
+    filters.endDate && { key: "endDate" as const, label: `ถึง ${filters.endDate}` },
+  ].filter(Boolean) as { key: keyof HistoryFilters; label: string }[];
+  const removeFilter = (key: keyof HistoryFilters) => update({ [key]: key === "type" ? "all" : "" } as Partial<HistoryFilters>);
+
   return (
-    <details className="history-filter-panel compact-disclosure">
-      <summary>
-        <span>
-          <b>ค้นหาและกรอง</b>
-          <small>{activeCount ? `ใช้ตัวกรอง ${activeCount} จุด` : "แตะเพื่อเปิดตัวกรอง"}</small>
-        </span>
-        <em>{activeCount ? "แก้ไข" : "เปิด"}</em>
-      </summary>
+    <section className="history-search-panel">
       <div className="history-search-row">
-        <input value={filters.query} onChange={(event) => update({ query: event.target.value })} placeholder="ค้นหาชื่อ หมวด ลูกหนี้ หรือหมายเหตุ" />
-        <button onClick={onClear}>ล้าง</button>
+        <span className="history-search-icon" aria-hidden="true"><Search size={16} strokeWidth={2.25} /></span>
+        <input
+          value={filters.query}
+          onChange={(event) => update({ query: event.target.value })}
+          placeholder="ค้นหาชื่อ หมวด ลูกหนี้ หรือหมายเหตุ"
+        />
+        {filters.query && (
+          <button className="history-search-clear" aria-label="ล้างคำค้นหา" onClick={() => update({ query: "" })}>
+            <X size={14} strokeWidth={2.5} />
+          </button>
+        )}
+        <button
+          className={`history-filter-toggle ${activeFilters.length ? "active" : ""}`}
+          onClick={() => setFiltersOpen((value) => !value)}
+          aria-expanded={filtersOpen}
+          aria-label="ตัวกรองเพิ่มเติม"
+        >
+          <SlidersHorizontal size={16} strokeWidth={2.25} />
+          {activeFilters.length > 0 && <span className="filter-count-badge">{activeFilters.length}</span>}
+        </button>
       </div>
-      <div className="history-filter-grid">
-        <select value={filters.category} onChange={(event) => update({ category: event.target.value })}>
-          <option value="">ทุกหมวด</option>
-          {categories.map((category) => (
-            <option key={category} value={category}>{category}</option>
+
+      {activeFilters.length > 0 && (
+        <div className="history-filter-chips">
+          {activeFilters.map((item) => (
+            <button key={item.key} className="filter-chip" onClick={() => removeFilter(item.key)}>
+              {item.label}
+              <X size={12} strokeWidth={2.5} />
+            </button>
           ))}
-        </select>
-        <select value={filters.type} onChange={(event) => update({ type: event.target.value as HistoryFilters["type"] })}>
-          <option value="all">ทุกชนิด</option>
-          {Object.entries(transactionTypeLabels).map(([value, label]) => (
-            <option key={value} value={value}>{label}</option>
-          ))}
-        </select>
-        <input inputMode="decimal" value={filters.minAmount} onChange={(event) => update({ minAmount: event.target.value })} placeholder="ยอดต่ำสุด" />
-        <input inputMode="decimal" value={filters.maxAmount} onChange={(event) => update({ maxAmount: event.target.value })} placeholder="ยอดสูงสุด" />
-        <input type="date" value={filters.startDate} onChange={(event) => update({ startDate: event.target.value })} />
-          <input type="date" value={filters.endDate} onChange={(event) => update({ endDate: event.target.value })} />
-      </div>
-    </details>
+          <button className="filter-chip clear" onClick={onClear}>ล้างทั้งหมด</button>
+        </div>
+      )}
+
+      {filtersOpen && (
+        <div className="history-filter-grid">
+          <label>
+            หมวด
+            <select value={filters.category} onChange={(event) => update({ category: event.target.value })}>
+              <option value="">ทุกหมวด</option>
+              {categories.map((category) => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            ประเภทรายการ
+            <select value={filters.type} onChange={(event) => update({ type: event.target.value as HistoryFilters["type"] })}>
+              <option value="all">ทุกชนิด</option>
+              {Object.entries(transactionTypeLabels).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            ยอดต่ำสุด
+            <input inputMode="decimal" value={filters.minAmount} onChange={(event) => update({ minAmount: event.target.value })} placeholder="0" />
+          </label>
+          <label>
+            ยอดสูงสุด
+            <input inputMode="decimal" value={filters.maxAmount} onChange={(event) => update({ maxAmount: event.target.value })} placeholder="ไม่จำกัด" />
+          </label>
+          <label>
+            ตั้งแต่วันที่
+            <input type="date" value={filters.startDate} onChange={(event) => update({ startDate: event.target.value })} />
+          </label>
+          <label>
+            ถึงวันที่
+            <input type="date" value={filters.endDate} onChange={(event) => update({ endDate: event.target.value })} />
+          </label>
+        </div>
+      )}
+    </section>
   );
 }
 
 function MonthlyTrendChart({ trend }: { trend: { key: string; label: string; income: number; outflow: number }[] }) {
   const max = Math.max(...trend.flatMap((item) => [item.income, item.outflow]), 1);
+  const currentKey = trend[trend.length - 1]?.key;
   return (
     <details className="monthly-trend-panel compact-disclosure">
       <summary>
@@ -3118,9 +3168,13 @@ function MonthlyTrendChart({ trend }: { trend: { key: string; label: string; inc
         </span>
         <em>เปิดกราฟ</em>
       </summary>
+      <div className="trend-legend">
+        <span><i className="income" />รายรับ</span>
+        <span><i className="expense" />รายจ่าย</span>
+      </div>
       <div className="monthly-trend-bars">
         {trend.map((item) => (
-          <div key={item.key}>
+          <div key={item.key} className={item.key === currentKey ? "current" : ""}>
             <span>
               <i className="income" style={{ height: `${Math.max(6, (item.income / max) * 100)}%` }} title={`รายรับ ${moneySign}${formatMoney(item.income)}`} />
               <i className="expense" style={{ height: `${Math.max(6, (item.outflow / max) * 100)}%` }} title={`รายจ่าย ${moneySign}${formatMoney(item.outflow)}`} />
@@ -3128,10 +3182,6 @@ function MonthlyTrendChart({ trend }: { trend: { key: string; label: string; inc
             <small>{item.label}</small>
           </div>
         ))}
-      </div>
-      <div className="trend-legend">
-        <span><i className="income" />รายรับ</span>
-        <span><i className="expense" />รายจ่าย</span>
       </div>
     </details>
   );

@@ -628,7 +628,7 @@ a:focus-visible {
 .metric, .confirm-dialog, .skeleton-card, .skeleton-list > span,
 .skeleton-panel, .activity-timeline, .ai-input-wrap, .quick-chip,
 .home-insight-card, .home-focus-card, .first-run-card,
-.history-filter-panel, .monthly-trend-panel, .income-breakdown-panel,
+.history-search-panel, .monthly-trend-panel, .income-breakdown-panel,
 .wallet-statement-panel {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -640,7 +640,7 @@ a:focus-visible {
 .state-card, .empty-note, .report-preview, .mini-trend, .history-insight,
 .debtor-statement, .category-spotlight, .success-pulse, .auth-card,
 .recap-card, .activity-timeline, .ai-input-wrap, .home-focus-card,
-.first-run-card, .history-filter-panel, .monthly-trend-panel,
+.first-run-card, .history-search-panel, .monthly-trend-panel,
 .income-breakdown-panel, .wallet-statement-panel {
   padding: var(--s-5);
   margin-bottom: var(--s-4);
@@ -1674,7 +1674,7 @@ a:focus-visible {
   margin-top: 2px;
 }
 
-.history-filter-panel {
+.history-search-panel {
   display: grid;
   gap: var(--s-3);
 }
@@ -1727,32 +1727,131 @@ a:focus-visible {
 }
 
 .history-search-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
+  display: flex;
+  align-items: center;
   gap: var(--s-2);
+  position: relative;
 }
 
-.history-search-row input, .history-filter-grid input,
-.history-filter-grid select {
+.history-search-icon {
+  position: absolute;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+.history-search-row input {
+  flex: 1;
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   background: var(--surface-2);
-  padding: 10px 12px;
+  padding: 11px 12px 11px 38px;
 }
 
-.history-search-row button {
-  padding: 0 14px;
+.history-search-clear {
+  position: absolute;
+  right: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-full);
+  background: var(--surface-3);
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+
+.history-filter-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
   border-radius: var(--r-md);
-  background: var(--primary);
-  color: var(--primary-text);
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
+.history-filter-toggle.active {
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--line));
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.filter-count-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  color: var(--ink);
+  font-size: 10px;
   font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.history-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.filter-chip.clear {
+  background: transparent;
+  color: var(--ink-3);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .history-filter-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-2);
+  gap: var(--s-3);
+  padding-top: var(--s-1);
+  border-top: 1px solid var(--line);
+}
+
+.history-filter-grid label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+
+.history-filter-grid input,
+.history-filter-grid select {
+  width: 100%;
+  min-width: 0;
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  padding: 10px 12px;
+  color: var(--ink);
 }
 
 .monthly-trend-head {
@@ -1814,10 +1913,22 @@ a:focus-visible {
   font-size: 11px;
 }
 
+.monthly-trend-bars > div.current small {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.monthly-trend-bars > div.current {
+  background: var(--surface-2);
+  border-radius: var(--r-md);
+  padding: var(--s-1) 2px 0;
+  margin: 0 -2px;
+}
+
 .trend-legend {
   display: flex;
   gap: var(--s-3);
-  margin-top: var(--s-3);
+  margin-bottom: var(--s-4);
   color: var(--ink-3);
   font-size: 12px;
   font-weight: 700;
