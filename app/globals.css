@@ -761,12 +761,19 @@ a:focus-visible {
 }
 
 .streak-badge {
-  font-size: 12px;
+  display: inline-block;
+  margin-top: var(--s-2);
+  font-size: 13px;
   font-weight: 700;
   padding: 4px 10px;
   border-radius: var(--r-full);
   background: rgba(255, 255, 255, 0.14);
   opacity: 1 !important;
+}
+
+.streak-badge.strong {
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .home-insight-grid {
@@ -779,6 +786,33 @@ a:focus-visible {
 .home-insight-card {
   padding: var(--s-4);
   min-width: 0;
+}
+
+.home-insight-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-right: var(--s-1);
+  border-radius: var(--r-full);
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.home-insight-icon.neutral {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink-2);
+}
+
+.home-insight-icon.income {
+  background: color-mix(in srgb, var(--income) 14%, transparent);
+  color: var(--income);
+}
+
+.home-insight-icon.expense {
+  background: color-mix(in srgb, var(--expense) 14%, transparent);
+  color: var(--expense);
 }
 
 .home-insight-card span, .home-focus-head span {
@@ -843,9 +877,13 @@ a:focus-visible {
 
 .due-soon-list > div {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto 1fr auto;
   gap: 2px var(--s-3);
   align-items: center;
+}
+
+.due-soon-list > div > i {
+  grid-row: 1 / span 2;
 }
 
 .due-soon-list span, .budget-glance-list span {
@@ -860,7 +898,7 @@ a:focus-visible {
 
 .due-soon-list b {
   grid-row: 1 / span 2;
-  grid-column: 2;
+  grid-column: 3;
   font-size: 13px;
 }
 
@@ -971,17 +1009,6 @@ a:focus-visible {
   opacity: 0.6;
 }
 
-.activity-timeline-node-col {
-  display: grid;
-  place-items: center;
-}
-
-.activity-timeline-node {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--r-full);
-}
-
 .activity-timeline-info {
   display: grid;
   text-align: left;
@@ -1065,6 +1092,13 @@ a:focus-visible {
   font-weight: 700;
   line-height: 1;
   overflow: hidden;
+}
+
+.debtor-avatar.sm {
+  display: flex;
+  width: 32px;
+  height: 32px;
+  margin-bottom: var(--s-2);
 }
 
 .debtor-avatar svg, .cat-icon svg, .cat-dot svg, .entry-icon svg,
@@ -3313,6 +3347,21 @@ a:focus-visible {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(var(--s-2)); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.phone.tab-home .view > * {
+  animation: card-in var(--t-2) var(--e-out) both;
+}
+
+.phone.tab-home .view > *:nth-child(1) { animation-delay: 0ms; }
+.phone.tab-home .view > *:nth-child(2) { animation-delay: 60ms; }
+.phone.tab-home .view > *:nth-child(3) { animation-delay: 120ms; }
+.phone.tab-home .view > *:nth-child(4) { animation-delay: 180ms; }
+.phone.tab-home .view > *:nth-child(5) { animation-delay: 240ms; }
 
 @keyframes fade-in {
   from { opacity: 0; }

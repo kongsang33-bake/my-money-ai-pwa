@@ -25,6 +25,7 @@ import {
   ShoppingBag,
   SlidersHorizontal,
   Sun,
+  TrendingDown,
   TrendingUp,
   Users,
   Utensils,
@@ -2130,12 +2131,20 @@ export default function Home() {
               <section className="wallet-grid">
                 {secondaryWalletTags
                   .filter((entry) => wallets.some((wallet) => wallet.tag === entry.tag))
-                  .map((entry) => (
-                    <button className={`wallet-card secondary-wallet-card ${entry.className}`} key={entry.tag} onClick={() => setTab("wallets")}>
-                      <span>{entry.label}</span>
-                      <strong>{moneySign}{formatMoney(walletTotals[entry.tag])}</strong>
-                    </button>
-                  ))}
+                  .map((entry) => {
+                    const wallet = wallets.find((item) => item.tag === entry.tag);
+                    return (
+                      <button className={`wallet-card secondary-wallet-card ${entry.className}`} key={entry.tag} onClick={() => setTab("wallets")}>
+                        {wallet && (
+                          <i className="debtor-avatar sm" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>
+                            <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} size={16} />
+                          </i>
+                        )}
+                        <span>{entry.label}</span>
+                        <strong>{moneySign}{formatMoney(walletTotals[entry.tag])}</strong>
+                      </button>
+                    );
+                  })}
               </section>
             )}
 
@@ -2885,13 +2894,15 @@ function HeroWalletCard({
         <span>เงินพร้อมใช้สุทธิ</span>
         <em>{insight.label}</em>
       </div>
+      {streak >= 2 && (
+        <small className={`streak-badge ${streak >= 7 ? "strong" : ""}`}>● {streak} วันติดต่อกัน</small>
+      )}
       <strong className="hero-amount">
         {balance < 0 ? "−" : ""}
         <CountUpMoney value={Math.abs(balance)} />
       </strong>
       <div className="hero-wallet-foot">
         <small>{insight.text}</small>
-        {streak >= 2 && <small className="streak-badge">{streak} วันติดต่อกัน</small>}
       </div>
     </div>
   );
@@ -2908,25 +2919,31 @@ function HomeInsightGrid({
   receivableTotal: number;
   payableTotal: number;
 }) {
+  const savingsPositive = savingsRate >= 0;
   return (
     <section className="home-insight-grid" aria-label="ภาพรวมทรัพย์สิน">
       <div className="home-insight-card net-worth">
-        <span>มูลค่าสุทธิ</span>
+        <span><i className="home-insight-icon neutral"><Wallet size={13} strokeWidth={2.25} aria-hidden="true" /></i>มูลค่าสุทธิ</span>
         <strong>{formatSignedMoney(netWorth)}</strong>
         <small>กระเป๋า + ลูกหนี้ - หนี้ที่ต้องจ่าย</small>
       </div>
-      <div className={`home-insight-card ${savingsRate >= 0 ? "income" : "expense"}`}>
-        <span>อัตราเงินเหลือ</span>
+      <div className={`home-insight-card ${savingsPositive ? "income" : "expense"}`}>
+        <span>
+          <i className={`home-insight-icon ${savingsPositive ? "income" : "expense"}`}>
+            {savingsPositive ? <TrendingUp size={13} strokeWidth={2.25} aria-hidden="true" /> : <TrendingDown size={13} strokeWidth={2.25} aria-hidden="true" />}
+          </i>
+          อัตราเงินเหลือ
+        </span>
         <strong>{Number.isFinite(savingsRate) ? `${Math.round(savingsRate)}%` : "0%"}</strong>
         <small>เทียบกับรายรับในรอบนี้</small>
       </div>
       <div className="home-insight-card">
-        <span>ลูกหนี้</span>
+        <span><i className="home-insight-icon neutral"><Users size={13} strokeWidth={2.25} aria-hidden="true" /></i>ลูกหนี้</span>
         <strong>{moneySign}{formatMoney(receivableTotal)}</strong>
         <small>ยอดที่ควรได้รับคืน</small>
       </div>
       <div className="home-insight-card">
-        <span>หนี้ผ่อน</span>
+        <span><i className="home-insight-icon neutral"><CreditCard size={13} strokeWidth={2.25} aria-hidden="true" /></i>หนี้ผ่อน</span>
         <strong>{moneySign}{formatMoney(payableTotal)}</strong>
         <small>ยอดที่ยังต้องจ่าย</small>
       </div>
@@ -2955,6 +2972,7 @@ function DueSoonCard({
         <div className="due-soon-list">
           {items.slice(0, 3).map(({ item, billingDate, daysUntil }) => (
             <div key={item.id}>
+              <i className="cat-dot" style={{ background: item.icon_color ?? nameColor(item.name) }}><WalletAvatarGlyph iconKey={item.icon} fallbackName={item.name} size={14} /></i>
               <span>{item.name}</span>
               <small>{daysUntil === 0 ? "วันนี้" : `อีก ${daysUntil} วัน`} · {billingDate.getDate()}/{billingDate.getMonth() + 1}</small>
               <b>{moneySign}{formatMoney(item.amount)}</b>
@@ -3719,9 +3737,7 @@ function RecentActivityTimeline({ entries, onEdit }: { entries: Entry[]; onEdit:
       <div className="activity-timeline-list">
         {recent.map((entry) => (
           <button className="activity-timeline-row" key={entry.id} onClick={() => onEdit(entry)}>
-            <span className="activity-timeline-node-col">
-              <span className="activity-timeline-node" style={{ background: categoryColor(entry.category) }} />
-            </span>
+            <i className="cat-dot" style={{ background: categoryTint(entry.category, 13) }}><CategoryIcon category={entry.category} size={14} /></i>
             <span className="activity-timeline-info">
               <b>{entry.title}</b>
               <small>{entry.category} · {formatDateTime(entry.occurred_at)}</small>
