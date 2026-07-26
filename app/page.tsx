@@ -21,6 +21,7 @@ import {
   PiggyBank,
   Plane,
   Receipt,
+  ScanFace,
   Search,
   ShoppingBag,
   SlidersHorizontal,
@@ -68,6 +69,8 @@ type Profile = {
   pin_salt: string | null;
   pin_failed_attempts: number;
   pin_blocked_until: string | null;
+  webauthn_credential_id: string | null;
+  webauthn_enabled: boolean;
 };
 type PinMode = "checking" | "setup" | "locked" | "unlocked";
 type DebtorKind = "lend" | "own";
@@ -296,6 +299,75 @@ function createPinSalt() {
 function pinBlocked(profile: Profile | null) {
   const blockedAt = profile?.pin_blocked_until ? new Date(profile.pin_blocked_until).getTime() : 0;
   return blockedAt > Date.now();
+}
+
+/**
+ * Face ID / Touch ID quick-unlock, layered on top of the PIN above — never
+ * a replacement. WebAuthn is the only way a web app can reach the
+ * platform's biometric prompt; the app never sees the biometric data,
+ * only whether the browser's promise resolved. Like the PIN, this is a
+ * client-side device gate, not server-verified remote authentication:
+ * treating a resolved navigator.credentials.get() as "unlocked" matches
+ * the same trust level as comparing the PIN hash in the browser, so no
+ * server-side WebAuthn signature verification is implemented here on
+ * purpose — that would be a different, heavier feature.
+ */
+function isWebAuthnSupported() {
+  return typeof window !== "undefined" && !!window.PublicKeyCredential && typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === "function";
+}
+async function isPlatformAuthenticatorAvailable() {
+  if (!isWebAuthnSupported()) return false;
+  try {
+    return await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  } catch {
+    return false;
+  }
+}
+function base64UrlToBytes(value: string) {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  return base64ToBytes(padded);
+}
+async function registerFaceId(user: User): Promise<string | null> {
+  if (!isWebAuthnSupported()) return null;
+  const challenge = new Uint8Array(32);
+  window.crypto.getRandomValues(challenge);
+  const userId = new TextEncoder().encode(user.id);
+  try {
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        rp: { name: "Monii", id: window.location.hostname },
+        user: { id: userId, name: user.email ?? user.id, displayName: user.email ?? "Monii" },
+        challenge,
+        pubKeyCredParams: [
+          { type: "public-key", alg: -7 },
+          { type: "public-key", alg: -257 },
+        ],
+        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+        timeout: 60000,
+      },
+    }) as PublicKeyCredential | null;
+    return credential?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+async function verifyFaceId(credentialId: string): Promise<boolean> {
+  if (!isWebAuthnSupported()) return false;
+  const challenge = new Uint8Array(32);
+  window.crypto.getRandomValues(challenge);
+  try {
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge,
+        allowCredentials: [{ id: base64UrlToBytes(credentialId), type: "public-key" }],
+        userVerification: "required",
+        timeout: 60000,
+      },
+    });
+    return !!assertion;
+  } catch {
+    return false;
+  }
 }
 function withDate(dateInput: string, hours: number, minutes: number, seconds: number) {
   const [year, month, day] = dateInput.split("-").map(Number);
@@ -969,7 +1041,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until")
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
       .maybeSingle();
     if (error) {
       setError(error.message);
@@ -1597,7 +1669,7 @@ export default function Home() {
     const { data, error } = await supabase
       .from("profiles")
       .upsert(payload, { onConflict: "user_id" })
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until")
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
       .single();
 
     if (error) {
@@ -1626,7 +1698,7 @@ export default function Home() {
         pin_blocked_until: null,
         updated_at: new Date().toISOString(),
       }, { onConflict: "user_id" })
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until")
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
       .single();
 
     if (error) {
@@ -1663,7 +1735,7 @@ export default function Home() {
         .from("profiles")
         .update({ pin_failed_attempts: 0, pin_blocked_until: null, updated_at: new Date().toISOString() })
         .eq("user_id", user.id)
-        .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until")
+        .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
         .single();
       if (error) {
         setPinError(error.message);
@@ -1683,7 +1755,7 @@ export default function Home() {
       .from("profiles")
       .update({ pin_failed_attempts: nextAttempts, pin_blocked_until: blockedUntil, updated_at: new Date().toISOString() })
       .eq("user_id", user.id)
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until")
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
       .single();
     if (data) setProfile(data as Profile);
     if (blockedUntil) {
@@ -1693,6 +1765,34 @@ export default function Home() {
     setPinError(error ? error.message : blockedUntil ? "ใส่ PIN ผิดครบ 5 ครั้ง บล็อกการเข้าใช้งาน 1 ชั่วโมง" : `PIN ไม่ถูกต้อง เหลือ ${pinMaxAttempts - nextAttempts} ครั้ง`);
     setBusy(false);
     return false;
+  }
+
+  async function unlockWithFaceId() {
+    if (!supabase || !user || !profile?.webauthn_enabled || !profile.webauthn_credential_id) return false;
+    if (pinBlocked(profile)) return false;
+    setBusy(true);
+    setPinError("");
+    const ok = await verifyFaceId(profile.webauthn_credential_id);
+    if (!ok) {
+      setBusy(false);
+      return false;
+    }
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ pin_failed_attempts: 0, pin_blocked_until: null, updated_at: new Date().toISOString() })
+      .eq("user_id", user.id)
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
+      .single();
+    if (error) {
+      setPinError(error.message);
+      setBusy(false);
+      return false;
+    }
+    if (data) setProfile(data as Profile);
+    setPinMode("unlocked");
+    await loadUserData(user.id);
+    setBusy(false);
+    return true;
   }
 
   async function changePin(currentPin: string, nextPin: string) {
@@ -1710,9 +1810,9 @@ export default function Home() {
     setPinError("");
     const { data, error } = await supabase
       .from("profiles")
-      .update({ pin_hash: null, pin_salt: null, pin_failed_attempts: 0, pin_blocked_until: null, updated_at: new Date().toISOString() })
+      .update({ pin_hash: null, pin_salt: null, pin_failed_attempts: 0, pin_blocked_until: null, webauthn_credential_id: null, webauthn_enabled: false, updated_at: new Date().toISOString() })
       .eq("user_id", user.id)
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until")
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
       .single();
     if (error) {
       setPinError(error.message);
@@ -1722,6 +1822,58 @@ export default function Home() {
     if (data) setProfile(data as Profile);
     setPinMode("unlocked");
     notify({ tone: "success", title: "ปิด PIN แล้ว", detail: "เข้าแอพได้โดยไม่ต้องกรอก PIN" });
+    setBusy(false);
+    return true;
+  }
+
+  async function enableFaceId(currentPin: string) {
+    if (!supabase || !user) return false;
+    const ok = await verifyPin(currentPin);
+    if (!ok) return false;
+    setBusy(true);
+    setPinError("");
+    const credentialId = await registerFaceId(user);
+    if (!credentialId) {
+      setPinError("เปิดใช้ Face ID ไม่สำเร็จ กรุณาลองใหม่");
+      setBusy(false);
+      return false;
+    }
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ webauthn_credential_id: credentialId, webauthn_enabled: true, updated_at: new Date().toISOString() })
+      .eq("user_id", user.id)
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
+      .single();
+    if (error) {
+      setPinError(error.message);
+      setBusy(false);
+      return false;
+    }
+    if (data) setProfile(data as Profile);
+    notify({ tone: "success", title: "เปิดใช้ Face ID แล้ว", detail: "ปลดล็อกแอพด้วย Face ID ได้ทันที" });
+    setBusy(false);
+    return true;
+  }
+
+  async function disableFaceId(currentPin: string) {
+    if (!supabase || !user) return false;
+    const ok = await verifyPin(currentPin);
+    if (!ok) return false;
+    setBusy(true);
+    setPinError("");
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ webauthn_credential_id: null, webauthn_enabled: false, updated_at: new Date().toISOString() })
+      .eq("user_id", user.id)
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
+      .single();
+    if (error) {
+      setPinError(error.message);
+      setBusy(false);
+      return false;
+    }
+    if (data) setProfile(data as Profile);
+    notify({ tone: "success", title: "ปิด Face ID แล้ว", detail: "ใช้ PIN เพื่อเข้าแอพต่อไป" });
     setBusy(false);
     return true;
   }
@@ -2068,6 +2220,7 @@ export default function Home() {
         error={pinError}
         onSetup={(pin) => savePin(pin)}
         onUnlock={verifyPin}
+        onFaceIdUnlock={unlockWithFaceId}
         onForgot={resetPinAndSignOut}
         onLogout={() => supabase?.auth.signOut()}
       />
@@ -2426,6 +2579,7 @@ export default function Home() {
         {pinSheetDismiss.mounted && (
           <PinSecuritySheet
             pinEnabled={!!profile?.pin_hash && !!profile.pin_salt}
+            webauthnEnabled={!!profile?.webauthn_enabled}
             busy={busy}
             error={pinError}
             onClose={pinSheetDismiss.requestClose}
@@ -2441,6 +2595,8 @@ export default function Home() {
               const ok = await disablePin(currentPin);
               if (ok) pinSheetDismiss.requestClose();
             }}
+            onEnableFaceId={enableFaceId}
+            onDisableFaceId={disableFaceId}
             closing={pinSheetDismiss.closing}
           />
         )}
@@ -2493,6 +2649,7 @@ function PinGate({
   error,
   onSetup,
   onUnlock,
+  onFaceIdUnlock,
   onForgot,
   onLogout,
 }: {
@@ -2503,24 +2660,33 @@ function PinGate({
   error: string;
   onSetup: (pin: string) => void;
   onUnlock: (pin: string) => Promise<boolean>;
+  onFaceIdUnlock: () => Promise<boolean>;
   onForgot: () => void;
   onLogout: () => void;
 }) {
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [tick, setTick] = useState(() => Date.now());
+  const faceIdTried = useRef(false);
   const blockedUntil = profile?.pin_blocked_until ? new Date(profile.pin_blocked_until).getTime() : 0;
   const blocked = blockedUntil > tick;
   const remainingMs = Math.max(0, blockedUntil - tick);
   const remainingMinutes = Math.ceil(remainingMs / 60000);
   const attempts = clampInteger(profile?.pin_failed_attempts ?? 0, 0, pinMaxAttempts, 0);
   const remainingAttempts = Math.max(0, pinMaxAttempts - attempts);
+  const faceIdAvailable = !!(profile?.webauthn_enabled && profile.webauthn_credential_id);
 
   useEffect(() => {
     if (!blocked) return;
     const timer = window.setInterval(() => setTick(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [blocked]);
+
+  useEffect(() => {
+    if (mode !== "locked" || !faceIdAvailable || blocked || faceIdTried.current) return;
+    faceIdTried.current = true;
+    void onFaceIdUnlock();
+  }, [mode, faceIdAvailable, blocked, onFaceIdUnlock]);
 
   const appendDigit = (digit: string) => {
     if (blocked || busy || pin.length >= pinLength) return;
@@ -2596,6 +2762,12 @@ function PinGate({
               <button className="save" onClick={submitUnlock} disabled={busy || blocked || !isSixDigitPin(pin)}>
                 {busy ? "กำลังตรวจสอบ" : "เข้าใช้งาน"}
               </button>
+              {faceIdAvailable && !blocked && (
+                <button className="pin-link-button pin-faceid-button" onClick={() => onFaceIdUnlock()} disabled={busy}>
+                  <ScanFace size={18} strokeWidth={2} aria-hidden="true" />
+                  ใช้ Face ID
+                </button>
+              )}
               <button className="pin-link-button" onClick={onForgot} disabled={busy}>ลืม PIN / ออกจากระบบเพื่อรีเซ็ต</button>
             </div>
           )}
@@ -2619,32 +2791,49 @@ function PinKeypad({ onDigit, onBackspace, disabled }: { onDigit: (digit: string
 
 function PinSecuritySheet({
   pinEnabled,
+  webauthnEnabled,
   busy,
   error,
   onClose,
   onEnable,
   onChange,
   onDisable,
+  onEnableFaceId,
+  onDisableFaceId,
   closing,
 }: {
   pinEnabled: boolean;
+  webauthnEnabled: boolean;
   busy: boolean;
   error: string;
   onClose: () => void;
   onEnable: (nextPin: string) => void;
   onChange: (currentPin: string, nextPin: string) => void;
   onDisable: (currentPin: string) => void;
+  onEnableFaceId: (currentPin: string) => Promise<boolean>;
+  onDisableFaceId: (currentPin: string) => Promise<boolean>;
   closing?: boolean;
 }) {
-  const [mode, setMode] = useState<"change" | "disable">(pinEnabled ? "change" : "change");
+  const [mode, setMode] = useState<"change" | "disable" | "faceid">(pinEnabled ? "change" : "change");
   const [currentPin, setCurrentPin] = useState("");
   const [nextPin, setNextPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
+  const [faceIdSupported, setFaceIdSupported] = useState(false);
   const mismatch = mode === "change" && confirmPin.length === pinLength && nextPin !== confirmPin;
   const clean = (value: string) => value.replace(/\D/g, "").slice(0, pinLength);
   const canSaveChange = pinEnabled
     ? isSixDigitPin(currentPin) && isSixDigitPin(nextPin) && nextPin === confirmPin
     : isSixDigitPin(nextPin) && nextPin === confirmPin;
+
+  useEffect(() => {
+    let cancelled = false;
+    isPlatformAuthenticatorAvailable().then((available) => {
+      if (!cancelled) setFaceIdSupported(available);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className={`sheet-backdrop ${closing ? "closing" : ""}`}>
@@ -2660,6 +2849,9 @@ function PinSecuritySheet({
           <div className="report-period-toggle pin-mode-toggle">
             <button className={mode === "change" ? "active" : ""} onClick={() => setMode("change")}>เปลี่ยน PIN</button>
             <button className={mode === "disable" ? "active" : ""} onClick={() => setMode("disable")}>ปิด PIN</button>
+            {faceIdSupported && (
+              <button className={mode === "faceid" ? "active" : ""} onClick={() => setMode("faceid")}>Face ID</button>
+            )}
           </div>
         )}
 
@@ -2670,7 +2862,7 @@ function PinSecuritySheet({
           </label>
         )}
 
-        {mode === "change" ? (
+        {mode === "change" && (
           <>
             <label>
               PIN ใหม่
@@ -2685,13 +2877,36 @@ function PinSecuritySheet({
               {busy ? "กำลังบันทึก" : pinEnabled ? "บันทึก PIN ใหม่" : "เปิดใช้ PIN"}
             </button>
           </>
-        ) : (
+        )}
+
+        {mode === "disable" && (
           <>
             {error && <p className="pin-error">{error}</p>}
             <p className="pin-hint">ปิด PIN แล้วครั้งต่อไปจะเข้าแอพได้ทันทีโดยไม่ต้องกรอกรหัส</p>
             <button className="danger pin-danger-button" onClick={() => onDisable(currentPin)} disabled={busy || !isSixDigitPin(currentPin)}>
               {busy ? "กำลังปิด PIN" : "ปิดใช้งาน PIN"}
             </button>
+          </>
+        )}
+
+        {mode === "faceid" && (
+          <>
+            {error && <p className="pin-error">{error}</p>}
+            {webauthnEnabled ? (
+              <>
+                <p className="pin-hint">เปิดใช้งานแล้วบนเครื่องนี้</p>
+                <button className="danger pin-danger-button" onClick={() => onDisableFaceId(currentPin)} disabled={busy || !isSixDigitPin(currentPin)}>
+                  {busy ? "กำลังปิด Face ID" : "ปิดใช้งาน Face ID"}
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="pin-hint">ใช้ Face ID ปลดล็อกแอพแทนการกรอก PIN ทุกครั้ง (ยังต้องมี PIN ไว้เป็นทางสำรอง)</p>
+                <button className="save" onClick={() => onEnableFaceId(currentPin)} disabled={busy || !isSixDigitPin(currentPin)}>
+                  {busy ? "กำลังเปิดใช้ Face ID" : "เปิดใช้ Face ID"}
+                </button>
+              </>
+            )}
           </>
         )}
       </section>

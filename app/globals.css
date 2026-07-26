@@ -3371,6 +3371,14 @@ a:focus-visible {
   padding: var(--s-2);
 }
 
+.pin-faceid-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  color: var(--ink-2);
+}
+
 /* =========================================================================
    Motion
    ========================================================================= */
