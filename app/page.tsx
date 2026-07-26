@@ -1123,6 +1123,10 @@ export default function Home() {
     [monthlyEntries],
   );
   const monthlyBalance = monthlyIncome - monthlyOutflow;
+  const receivableTotal = receivableSummary.reduce((sum, item) => sum + item.amount, 0);
+  const payableTotal = payableSummary.reduce((sum, item) => sum + item.amount, 0);
+  const netWorth = Object.values(walletTotals).reduce((sum, amount) => sum + amount, 0) + receivableTotal - payableTotal;
+  const savingsRate = monthlyIncome > 0 ? (monthlyBalance / monthlyIncome) * 100 : 0;
   const walletInsight = useMemo(() => buildWalletInsight(mainWallet, monthlyOutflow, cycleRange.end), [mainWallet, monthlyOutflow, cycleRange.end]);
   const sevenDayOutflow = useMemo(() => lastSevenDayOutflow(entries), [entries]);
   const aiSuggestions = useMemo<AiSuggestion[]>(() => {
@@ -1161,6 +1165,20 @@ export default function Home() {
     const missingBudgeted = sorted.filter((item) => !shownNames.has(item.category) && budgets[item.category] > 0);
     return [...shown, ...missingBudgeted];
   }, [monthlyEntries, budgets]);
+  const budgetGlance = useMemo(() => {
+    const budgeted = Object.entries(budgets)
+      .map(([category, budget]) => {
+        const spent = categorySummary.find((item) => item.category === category)?.amount ?? 0;
+        return { category, budget, spent, percent: budget > 0 ? (spent / budget) * 100 : 0 };
+      })
+      .filter((item) => item.budget > 0)
+      .sort((a, b) => b.percent - a.percent);
+    return {
+      items: budgeted.slice(0, 3),
+      totalBudget: budgeted.reduce((sum, item) => sum + item.budget, 0),
+      totalSpent: budgeted.reduce((sum, item) => sum + item.spent, 0),
+    };
+  }, [budgets, categorySummary]);
 
   async function addSlipFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -1875,19 +1893,41 @@ export default function Home() {
             {dataLoading && <SkeletonDashboard />}
             {dataLoading && <StateCard tone="loading" title="กำลังซิงค์ข้อมูล" detail="กำลังโหลดรายการ กระเป๋า และลูกหนี้ของคุณ" />}
             {!!savePulse && <SuccessPulse count={savePulse} onAddMore={openAddTab} />}
-            <section className="wallet-grid single-wallet">
-              <HeroWalletCard balance={mainWallet} insight={walletInsight} streak={streak} />
-            </section>
+            {!dataLoading && (
+              <>
+                <section className="wallet-grid single-wallet">
+                  <HeroWalletCard balance={mainWallet} insight={walletInsight} streak={streak} />
+                </section>
+                <HomeInsightGrid
+                  netWorth={netWorth}
+                  savingsRate={savingsRate}
+                  receivableTotal={receivableTotal}
+                  payableTotal={payableTotal}
+                />
+                <div className="home-focus-grid">
+                  <DueSoonCard items={dueSoonRecurring} onManage={() => setTab("recurring")} />
+                  <BudgetGlanceCard budgetGlance={budgetGlance} onManage={() => setBudgetSheetOpen(true)} />
+                </div>
+              </>
+            )}
 
-            {secondaryWalletTags.some((entry) => wallets.some((wallet) => wallet.tag === entry.tag)) && (
+            {!dataLoading && !wallets.length && !entries.length && !debtors.length && (
+              <FirstRunHomeState
+                onCreateWallet={() => { setEditingWallet(null); setWalletSheetMode("create"); }}
+                onSetBudget={() => setBudgetSheetOpen(true)}
+                onAddEntry={openAddTab}
+              />
+            )}
+
+            {!dataLoading && secondaryWalletTags.some((entry) => wallets.some((wallet) => wallet.tag === entry.tag)) && (
               <section className="wallet-grid">
                 {secondaryWalletTags
                   .filter((entry) => wallets.some((wallet) => wallet.tag === entry.tag))
                   .map((entry) => (
-                    <div className={`wallet-card ${entry.className}`} key={entry.tag}>
+                    <button className={`wallet-card secondary-wallet-card ${entry.className}`} key={entry.tag} onClick={() => setTab("wallets")}>
                       <span>{entry.label}</span>
                       <strong>{moneySign}{formatMoney(walletTotals[entry.tag])}</strong>
-                    </div>
+                    </button>
                   ))}
               </section>
             )}
@@ -2112,6 +2152,10 @@ export default function Home() {
             onOpenPin={() => { setMenuOpen(false); setPinSheetOpen(true); }}
             theme={theme}
             onSetTheme={setTheme}
+            walletTotal={Object.values(walletTotals).reduce((sum, amount) => sum + amount, 0)}
+            receivableTotal={receivableTotal}
+            payableTotal={payableTotal}
+            recurringTotal={recurringExpenses.reduce((sum, item) => sum + item.amount, 0)}
           />
         )}
         {profileSheetOpen && (
@@ -2572,6 +2616,146 @@ function HeroWalletCard({
         {streak >= 2 && <small className="streak-badge">{streak} วันติดต่อกัน</small>}
       </div>
     </div>
+  );
+}
+
+function HomeInsightGrid({
+  netWorth,
+  savingsRate,
+  receivableTotal,
+  payableTotal,
+}: {
+  netWorth: number;
+  savingsRate: number;
+  receivableTotal: number;
+  payableTotal: number;
+}) {
+  return (
+    <section className="home-insight-grid" aria-label="ภาพรวมทรัพย์สิน">
+      <div className="home-insight-card net-worth">
+        <span>มูลค่าสุทธิ</span>
+        <strong>{formatSignedMoney(netWorth)}</strong>
+        <small>กระเป๋า + ลูกหนี้ - หนี้ที่ต้องจ่าย</small>
+      </div>
+      <div className={`home-insight-card ${savingsRate >= 0 ? "income" : "expense"}`}>
+        <span>อัตราเงินเหลือ</span>
+        <strong>{Number.isFinite(savingsRate) ? `${Math.round(savingsRate)}%` : "0%"}</strong>
+        <small>เทียบกับรายรับในรอบนี้</small>
+      </div>
+      <div className="home-insight-card">
+        <span>ลูกหนี้</span>
+        <strong>{moneySign}{formatMoney(receivableTotal)}</strong>
+        <small>ยอดที่ควรได้รับคืน</small>
+      </div>
+      <div className="home-insight-card">
+        <span>หนี้ผ่อน</span>
+        <strong>{moneySign}{formatMoney(payableTotal)}</strong>
+        <small>ยอดที่ยังต้องจ่าย</small>
+      </div>
+    </section>
+  );
+}
+
+function DueSoonCard({
+  items,
+  onManage,
+}: {
+  items: { item: RecurringExpense; billingDate: Date; daysUntil: number }[];
+  onManage: () => void;
+}) {
+  const total = items.reduce((sum, { item }) => sum + item.amount, 0);
+  return (
+    <section className="home-focus-card due-soon-card">
+      <div className="home-focus-head">
+        <div>
+          <span>ใกล้ถึงกำหนด</span>
+          <strong>{items.length ? `${items.length} รายการ` : "ยังไม่มี"}</strong>
+        </div>
+        <button onClick={onManage}>จัดการ</button>
+      </div>
+      {items.length ? (
+        <div className="due-soon-list">
+          {items.slice(0, 3).map(({ item, billingDate, daysUntil }) => (
+            <div key={item.id}>
+              <span>{item.name}</span>
+              <small>{daysUntil === 0 ? "วันนี้" : `อีก ${daysUntil} วัน`} · {billingDate.getDate()}/{billingDate.getMonth() + 1}</small>
+              <b>{moneySign}{formatMoney(item.amount)}</b>
+            </div>
+          ))}
+          <p>รวม {moneySign}{formatMoney(total)}</p>
+        </div>
+      ) : (
+        <div className="home-compact-empty">
+          <span aria-hidden="true">↻</span>
+          <p>ยังไม่มีรายจ่ายประจำที่ใกล้ถึงกำหนด</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function BudgetGlanceCard({
+  budgetGlance,
+  onManage,
+}: {
+  budgetGlance: { items: { category: string; budget: number; spent: number; percent: number }[]; totalBudget: number; totalSpent: number };
+  onManage: () => void;
+}) {
+  const percent = budgetGlance.totalBudget > 0 ? (budgetGlance.totalSpent / budgetGlance.totalBudget) * 100 : 0;
+  return (
+    <section className="home-focus-card budget-glance-card">
+      <div className="home-focus-head">
+        <div>
+          <span>งบประมาณ</span>
+          <strong>{budgetGlance.totalBudget ? `${Math.round(percent)}%` : "ยังไม่ตั้ง"}</strong>
+        </div>
+        <button onClick={onManage}>{budgetGlance.totalBudget ? "ปรับงบ" : "ตั้งงบ"}</button>
+      </div>
+      {budgetGlance.items.length ? (
+        <div className="budget-glance-list">
+          {budgetGlance.items.map((item) => (
+            <div key={item.category}>
+              <span>
+                <i className="cat-dot" style={{ background: categoryTint(item.category, 13) }}><CategoryIcon category={item.category} /></i>
+                {item.category}
+              </span>
+              <b>{moneySign}{formatMoney(item.spent)} / {moneySign}{formatMoney(item.budget)}</b>
+              <em><small style={{ width: `${Math.max(4, Math.min(100, item.percent))}%`, background: item.percent > 100 ? "var(--danger)" : categoryColor(item.category) }} /></em>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="home-compact-empty">
+          <span aria-hidden="true">▣</span>
+          <p>ตั้งงบต่อหมวดเพื่อดูภาพรวมในหน้าแรก</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function FirstRunHomeState({
+  onCreateWallet,
+  onSetBudget,
+  onAddEntry,
+}: {
+  onCreateWallet: () => void;
+  onSetBudget: () => void;
+  onAddEntry: () => void;
+}) {
+  return (
+    <section className="first-run-card">
+      <span className="empty-glyph" aria-hidden="true">฿</span>
+      <div>
+        <b>เริ่มจัดการเงินก้อนแรก</b>
+        <small>สร้างกระเป๋า ใส่ยอดตั้งต้น แล้วลองจดรายการแรกเพื่อให้แดชบอร์ดมีข้อมูลจริง</small>
+      </div>
+      <div className="first-run-actions">
+        <button onClick={onCreateWallet}>สร้างกระเป๋า</button>
+        <button onClick={onSetBudget}>ตั้งงบ</button>
+        <button onClick={onAddEntry}>จดรายการแรก</button>
+      </div>
+    </section>
   );
 }
 
@@ -3741,6 +3925,10 @@ function SideMenu({
   onOpenPin,
   theme,
   onSetTheme,
+  walletTotal,
+  receivableTotal,
+  payableTotal,
+  recurringTotal,
 }: {
   user: User;
   profile: Profile | null;
@@ -3755,6 +3943,10 @@ function SideMenu({
   onOpenPin: () => void;
   theme: Theme;
   onSetTheme: (theme: Theme) => void;
+  walletTotal: number;
+  receivableTotal: number;
+  payableTotal: number;
+  recurringTotal: number;
 }) {
   const metadata = user.user_metadata ?? {};
   const name = profile?.nickname || metadata.full_name || metadata.name || "ผู้ใช้";
@@ -3790,13 +3982,46 @@ function SideMenu({
         </div>
 
         <nav className="side-menu-list">
-          <button onClick={onOpenProfile}><span>จัดการโปรไฟล์</span></button>
-          <button onClick={onOpenWallets}><span>กระเป๋าตังค์</span></button>
-          <button onClick={onOpenDebtors}><span>จัดการหนี้</span></button>
-          <button onClick={onOpenRecurring}><span>รายจ่ายประจำ</span></button>
-          <button onClick={onOpenBudgets}><span>งบประมาณ</span></button>
-          <button onClick={onOpenReport}><span>ส่งออกรีพอร์ท</span></button>
-          <button onClick={onOpenPin}><span>รหัส PIN</span></button>
+          <div className="side-menu-section">
+            <p>เงินและภาระ</p>
+            <button onClick={onOpenWallets}>
+              <Wallet size={16} strokeWidth={2.25} aria-hidden="true" />
+              <span>กระเป๋าตังค์</span>
+              <b>{moneySign}{formatMoney(walletTotal)}</b>
+            </button>
+            <button onClick={onOpenDebtors}>
+              <Users size={16} strokeWidth={2.25} aria-hidden="true" />
+              <span>จัดการหนี้</span>
+              <b>{moneySign}{formatMoney(receivableTotal - payableTotal)}</b>
+            </button>
+            <button onClick={onOpenRecurring}>
+              <Receipt size={16} strokeWidth={2.25} aria-hidden="true" />
+              <span>รายจ่ายประจำ</span>
+              <b>{moneySign}{formatMoney(recurringTotal)}</b>
+            </button>
+          </div>
+          <div className="side-menu-section">
+            <p>เครื่องมือ</p>
+            <button onClick={onOpenBudgets}>
+              <TrendingUp size={16} strokeWidth={2.25} aria-hidden="true" />
+              <span>งบประมาณ</span>
+            </button>
+            <button onClick={onOpenReport}>
+              <Receipt size={16} strokeWidth={2.25} aria-hidden="true" />
+              <span>ส่งออกรีพอร์ท</span>
+            </button>
+          </div>
+          <div className="side-menu-section">
+            <p>บัญชี</p>
+            <button onClick={onOpenProfile}>
+              <Users size={16} strokeWidth={2.25} aria-hidden="true" />
+              <span>จัดการโปรไฟล์</span>
+            </button>
+            <button onClick={onOpenPin}>
+              <Lock size={16} strokeWidth={2.25} aria-hidden="true" />
+              <span>รหัส PIN</span>
+            </button>
+          </div>
         </nav>
 
         <div className="side-menu-footer">

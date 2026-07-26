@@ -567,7 +567,8 @@ a:focus-visible {
 .mini-trend, .history-insight, .debtor-statement, .category-spotlight,
 .success-pulse, .report-summary-tiles > div, .auth-card, .recap-card,
 .metric, .confirm-dialog, .skeleton-card, .skeleton-list > span,
-.skeleton-panel, .activity-timeline, .ai-input-wrap, .quick-chip {
+.skeleton-panel, .activity-timeline, .ai-input-wrap, .quick-chip,
+.home-insight-card, .home-focus-card, .first-run-card {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
@@ -577,7 +578,8 @@ a:focus-visible {
 .wallet-card, .summary-panel, .entry-list, .heatmap-panel, .debtor-detail-card,
 .state-card, .empty-note, .report-preview, .mini-trend, .history-insight,
 .debtor-statement, .category-spotlight, .success-pulse, .auth-card,
-.recap-card, .activity-timeline, .ai-input-wrap {
+.recap-card, .activity-timeline, .ai-input-wrap, .home-focus-card,
+.first-run-card {
   padding: var(--s-5);
   margin-bottom: var(--s-4);
 }
@@ -594,7 +596,8 @@ a:focus-visible {
   }
 }
 
-.wallet-card, .debtor-page-item, .entry-tappable, .quick-chip {
+.wallet-card, .debtor-page-item, .entry-tappable, .quick-chip,
+.secondary-wallet-card {
   transition: box-shadow var(--t-2) var(--e-out), transform var(--t-2) var(--e-out);
 }
 
@@ -616,6 +619,10 @@ a:focus-visible {
 
 .wallet-card {
   margin-bottom: 0;
+}
+
+.secondary-wallet-card {
+  width: 100%;
 }
 
 .wallet-card span {
@@ -698,6 +705,179 @@ a:focus-visible {
   border-radius: var(--r-full);
   background: rgba(255, 255, 255, 0.14);
   opacity: 1 !important;
+}
+
+.home-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+
+.home-insight-card {
+  padding: var(--s-4);
+  min-width: 0;
+}
+
+.home-insight-card span, .home-focus-head span {
+  display: block;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.home-insight-card strong {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  margin: 2px 0;
+}
+
+.home-insight-card small {
+  display: block;
+  color: var(--ink-3);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.home-insight-card.income strong { color: var(--income); }
+.home-insight-card.expense strong { color: var(--expense); }
+
+.home-focus-grid {
+  display: grid;
+  gap: var(--s-4);
+  margin-bottom: var(--s-4);
+}
+
+.home-focus-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+
+.home-focus-head strong {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.home-focus-head button, .first-run-actions button {
+  padding: 8px 12px;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.due-soon-list, .budget-glance-list {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.due-soon-list > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px var(--s-3);
+  align-items: center;
+}
+
+.due-soon-list span, .budget-glance-list span {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.due-soon-list small {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+.due-soon-list b {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  font-size: 13px;
+}
+
+.due-soon-list p {
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.budget-glance-list > div {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.budget-glance-list span {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.budget-glance-list b {
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.budget-glance-list em {
+  display: block;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.budget-glance-list em small {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.first-run-card {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.first-run-card b {
+  display: block;
+  font-size: 15px;
+}
+
+.first-run-card small {
+  display: block;
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.first-run-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.home-compact-empty {
+  display: grid;
+  place-items: center;
+  gap: var(--s-2);
+  min-height: 120px;
+  text-align: center;
+  color: var(--ink-3);
+}
+
+.home-compact-empty span {
+  font-size: 24px;
+}
+
+.home-compact-empty p {
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 /* -------------------------------------------------------------------------
@@ -2020,16 +2200,41 @@ a:focus-visible {
 
 .side-menu-list {
   display: grid;
+  gap: var(--s-4);
+}
+
+.side-menu-section {
+  display: grid;
   gap: 6px;
 }
 
+.side-menu-section p {
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
 .side-menu-list button {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--s-2);
   padding: 12px 14px;
   border-radius: var(--r-md);
   background: var(--surface-2);
   font-weight: 700;
   font-size: 13px;
   text-align: left;
+}
+
+.side-menu-list button svg {
+  color: var(--ink-3);
+}
+
+.side-menu-list button b {
+  color: var(--ink-3);
+  font-size: 12px;
 }
 
 .side-menu-footer {
@@ -2676,6 +2881,10 @@ a:focus-visible {
   .summary-grid, .report-summary-tiles, .debtor-page-list {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .home-focus-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* Desktop */
@@ -2698,7 +2907,7 @@ a:focus-visible {
   }
 
   .topbar {
-    padding: var(--s-6) var(--s-7) var(--s-5);
+    padding: var(--s-6) var(--s-7) var(--s-5) calc(var(--s-7) + 88px);
   }
 
   .phone.tab-home .topbar {
@@ -2707,14 +2916,36 @@ a:focus-visible {
   }
 
   .view {
-    padding: 0 var(--s-7) var(--s-7);
+    padding: 0 var(--s-7) var(--s-7) calc(var(--s-7) + 88px);
   }
 
-  /* Home keeps a single centered column for now — composing a genuine
-     desktop dashboard (net worth, budgets-at-a-glance, etc.) is Phase 3. */
   .phone > .view:not(.add-view):not(.history-view):not(.debtor-view) {
-    width: min(640px, 100%);
-    margin: 0 auto;
+    width: 100%;
+  }
+
+  .phone.tab-home .view {
+    display: grid;
+    grid-template-columns: minmax(360px, 1fr) minmax(320px, 0.85fr);
+    gap: var(--s-4);
+    align-items: start;
+  }
+
+  .phone.tab-home .wallet-grid.single-wallet,
+  .phone.tab-home .home-insight-grid,
+  .phone.tab-home .first-run-card,
+  .phone.tab-home .activity-timeline,
+  .phone.tab-home .error-actions,
+  .phone.tab-home .state-card {
+    grid-column: 1;
+  }
+
+  .phone.tab-home .home-focus-grid,
+  .phone.tab-home .wallet-grid:not(.single-wallet) {
+    grid-column: 2;
+  }
+
+  .phone.tab-home .home-focus-grid {
+    grid-template-columns: 1fr;
   }
 
   .history-view {
@@ -2762,6 +2993,9 @@ a:focus-visible {
 
   .side-menu-backdrop {
     position: absolute;
+    inset: 0;
+    border-radius: var(--r-xl);
+    overflow: hidden;
   }
 
   .side-menu {
@@ -2769,10 +3003,38 @@ a:focus-visible {
   }
 
   .bottom-nav {
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(460px, calc(100% - 64px));
-    bottom: var(--s-5);
+    left: var(--s-7);
+    right: auto;
+    top: 112px;
+    bottom: auto;
+    width: 64px;
+    height: auto;
+    padding: var(--s-2);
+    border-radius: var(--r-lg);
+    grid-template-columns: 1fr;
+    grid-auto-rows: 62px;
+    gap: var(--s-2);
+    transform: none;
+  }
+
+  .bottom-nav button {
+    min-height: 58px;
+    border-radius: var(--r-md);
+  }
+
+  .bottom-nav button.active {
+    background: var(--surface-2);
+  }
+
+  .bottom-nav .add-button {
+    width: 48px;
+    height: 48px;
+    transform: none;
+    justify-self: center;
+  }
+
+  .bottom-nav .add-button:active {
+    transform: scale(0.94);
   }
 
   .toast-host {
@@ -2780,5 +3042,23 @@ a:focus-visible {
     right: var(--s-6);
     bottom: var(--s-6);
     align-items: flex-end;
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1040px) {
+  .phone.tab-home .view, .history-view {
+    grid-template-columns: 1fr;
+  }
+
+  .phone.tab-home .home-focus-grid,
+  .phone.tab-home .wallet-grid:not(.single-wallet),
+  .history-view > .entry-list,
+  .history-view > .add-title {
+    grid-column: 1;
+  }
+
+  .history-view > .entry-list {
+    grid-row: auto;
+    max-height: none;
   }
 }
