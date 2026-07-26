@@ -53,7 +53,12 @@ type Profile = {
   app_icon: string | null;
   app_icon_image: string | null;
   month_start_day: number;
+  pin_hash: string | null;
+  pin_salt: string | null;
+  pin_failed_attempts: number;
+  pin_blocked_until: string | null;
 };
+type PinMode = "checking" | "setup" | "locked" | "unlocked";
 type DebtorKind = "lend" | "own";
 type Debtor = {
   id: string;
@@ -75,6 +80,10 @@ type Wallet = {
   balance: number;
   icon: string | null;
   icon_color: string | null;
+};
+type WalletDisplay = Wallet & {
+  display_balance: number;
+  transaction_delta: number;
 };
 type RecurringExpense = {
   id: string;
@@ -192,6 +201,11 @@ const unnamedDebtor = "ไม่ระบุ";
 const profileImageMaxInputBytes = 10 * 1024 * 1024;
 const profileImageMaxStoredBytes = 1.5 * 1024 * 1024;
 const profileImageSize = 512;
+const pinLength = 6;
+const pinMaxAttempts = 5;
+const pinBlockMs = 60 * 60 * 1000;
+const pinBackgroundLockMs = 2 * 60 * 1000;
+const pinHashIterations = 150000;
 const monthKey = (date: Date) => date.toISOString().slice(0, 7);
 const formatMoney = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const formatSignedMoney = (value: number) => `${value >= 0 ? "+" : "−"}${moneySign}${formatMoney(Math.abs(value))}`;
@@ -207,6 +221,46 @@ const clampInteger = (value: unknown, min: number, max: number, fallback: number
   return Math.min(max, Math.max(min, number));
 };
 const normalizeBillingDay = (value: unknown) => clampInteger(value, 1, 31, 1);
+const isSixDigitPin = (value: string) => /^\d{6}$/.test(value);
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return window.btoa(binary);
+}
+function base64ToBytes(value: string) {
+  const binary = window.atob(value);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+function timingSafeEqual(a: string, b: string) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let index = 0; index < a.length; index += 1) diff |= a.charCodeAt(index) ^ b.charCodeAt(index);
+  return diff === 0;
+}
+async function hashPin(pin: string, salt: string) {
+  const encoder = new TextEncoder();
+  const key = await window.crypto.subtle.importKey("raw", encoder.encode(pin), "PBKDF2", false, ["deriveBits"]);
+  const bits = await window.crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: base64ToBytes(salt),
+      iterations: pinHashIterations,
+    },
+    key,
+    256,
+  );
+  return bytesToBase64(new Uint8Array(bits));
+}
+function createPinSalt() {
+  const bytes = new Uint8Array(16);
+  window.crypto.getRandomValues(bytes);
+  return bytesToBase64(bytes);
+}
+function pinBlocked(profile: Profile | null) {
+  const blockedAt = profile?.pin_blocked_until ? new Date(profile.pin_blocked_until).getTime() : 0;
+  return blockedAt > Date.now();
+}
 function withDate(dateInput: string, hours: number, minutes: number, seconds: number) {
   const [year, month, day] = dateInput.split("-").map(Number);
   return new Date(year, month - 1, day, hours, minutes, seconds).toISOString();
@@ -534,6 +588,60 @@ function totalWallet(entries: Entry[], direction: EntryKind) {
     .reduce((sum, entry) => sum + entry.wallet_impact, 0);
 }
 
+function matchesAnyKeyword(value: string, keywords: string[]) {
+  return keywords.some((keyword) => value.includes(keyword));
+}
+
+function transferWalletTag(entry: Entry, wallets: Wallet[]): Exclude<WalletTag, "cash"> | null {
+  if (entry.wallet_impact >= 0 || entry.transaction_type !== "personal_expense") return null;
+
+  const text = `${entry.title} ${entry.category} ${entry.source_text ?? ""}`.trim().toLowerCase();
+  if (!text) return null;
+
+  for (const wallet of wallets) {
+    if (wallet.tag === "cash" || wallet.tag === "other") continue;
+    const walletName = wallet.name.trim().toLowerCase();
+    const walletLabel = walletTagLabels[wallet.tag].toLowerCase();
+    if ((walletName && text.includes(walletName)) || (walletLabel && text.includes(walletLabel))) return wallet.tag;
+  }
+
+  if (matchesAnyKeyword(text, ["\u0e2d\u0e2d\u0e21", "\u0e40\u0e01\u0e47\u0e1a\u0e40\u0e07\u0e34\u0e19", "\u0e40\u0e07\u0e34\u0e19\u0e40\u0e01\u0e47\u0e1a"])) return "savings";
+  if (matchesAnyKeyword(text, ["\u0e25\u0e07\u0e17\u0e38\u0e19", "\u0e01\u0e2d\u0e07\u0e17\u0e38\u0e19", "\u0e2b\u0e38\u0e49\u0e19", "\u0e04\u0e23\u0e34\u0e1b\u0e42\u0e15"])) return "investment";
+
+  return null;
+}
+
+function buildWalletLedger(wallets: Wallet[], entries: Entry[]) {
+  const totals: Record<WalletTag, number> = { cash: 0, savings: 0, investment: 0, other: 0 };
+  const tagDeltas: Record<WalletTag, number> = { cash: 0, savings: 0, investment: 0, other: 0 };
+  const firstWalletByTag = new Map<WalletTag, string>();
+
+  for (const wallet of wallets) {
+    totals[wallet.tag] += wallet.balance;
+    if (!firstWalletByTag.has(wallet.tag)) firstWalletByTag.set(wallet.tag, wallet.id);
+  }
+
+  for (const entry of entries) {
+    const transferTag = transferWalletTag(entry, wallets);
+    tagDeltas.cash += entry.wallet_impact;
+    if (transferTag) tagDeltas[transferTag] += Math.abs(entry.wallet_impact);
+  }
+
+  for (const tag of Object.keys(totals) as WalletTag[]) totals[tag] += tagDeltas[tag];
+
+  return {
+    totals,
+    wallets: wallets.map((wallet) => {
+      const transaction_delta = firstWalletByTag.get(wallet.tag) === wallet.id ? tagDeltas[wallet.tag] : 0;
+      return {
+        ...wallet,
+        transaction_delta,
+        display_balance: wallet.balance + transaction_delta,
+      };
+    }),
+  };
+}
+
 function buildDebtSummary(debtors: Debtor[], entries: Entry[], kind: DebtorKind, types: TransactionType[]) {
   const map = new Map<string, number>();
   for (const debtor of debtors) {
@@ -662,6 +770,10 @@ export default function Home() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [savePulse, setSavePulse] = useState(0);
   const [theme, setTheme] = useState<Theme>("light");
+  const [pinMode, setPinMode] = useState<PinMode>("checking");
+  const [pinError, setPinError] = useState("");
+  const [pinSheetOpen, setPinSheetOpen] = useState(false);
+  const backgroundedAtRef = useRef<number | null>(null);
   const displayName = profile?.nickname?.trim() || user?.user_metadata?.full_name || user?.user_metadata?.name || "เงินของฉัน";
   const displayIcon = profile?.app_icon?.trim() || user?.email?.[0]?.toUpperCase() || "฿";
   const displayIconImage = profile?.app_icon_image?.trim() || "";
@@ -741,13 +853,21 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day")
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until")
       .maybeSingle();
     if (error) {
       setError(error.message);
-      return;
+      return null;
     }
-    setProfile(data ?? null);
+    const nextProfile = data
+      ? {
+          ...data,
+          month_start_day: clampInteger(data.month_start_day, 1, 28, 1),
+          pin_failed_attempts: clampInteger(data.pin_failed_attempts, 0, pinMaxAttempts, 0),
+        } as Profile
+      : null;
+    setProfile(nextProfile);
+    return nextProfile;
   }, []);
 
   const loadDebtors = useCallback(async () => {
@@ -800,12 +920,33 @@ export default function Home() {
     setDataLoading(true);
     setError("");
     try {
-      await Promise.all([loadEntries(), loadProfile(), loadDebtors(), loadWallets(), loadRecurringExpenses()]);
+      await Promise.all([loadEntries(), loadDebtors(), loadWallets(), loadRecurringExpenses()]);
       setBudgets(loadBudgets(userId));
     } finally {
       setDataLoading(false);
     }
-  }, [loadDebtors, loadEntries, loadProfile, loadWallets, loadRecurringExpenses]);
+  }, [loadDebtors, loadEntries, loadWallets, loadRecurringExpenses]);
+
+  const clearPrivateState = useCallback(() => {
+    setEntries([]);
+    setDebtors([]);
+    setWallets([]);
+    setRecurringExpenses([]);
+    setBudgets({});
+    setDrafts([]);
+    setText("");
+    setSlipImages([]);
+    setEditing(null);
+    setDataLoading(false);
+  }, []);
+
+  const preparePinGate = useCallback(async () => {
+    setPinMode("checking");
+    setPinError("");
+    clearPrivateState();
+    const nextProfile = await loadProfile();
+    setPinMode(nextProfile?.pin_hash && nextProfile.pin_salt ? "locked" : "setup");
+  }, [clearPrivateState, loadProfile]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -814,26 +955,23 @@ export default function Home() {
       setUser(data.user);
       setReady(true);
       if (data.user) {
-        void loadUserData(data.user.id);
+        void preparePinGate();
       }
     });
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        void loadUserData(session.user.id);
+        void preparePinGate();
       } else {
-        setEntries([]);
         setProfile(null);
-        setDebtors([]);
-        setWallets([]);
-        setRecurringExpenses([]);
-        setBudgets({});
-        setDataLoading(false);
+        setPinMode("checking");
+        setPinError("");
+        clearPrivateState();
       }
     });
     return () => data.subscription.unsubscribe();
-  }, [loadUserData]);
+  }, [clearPrivateState, preparePinGate]);
 
   const overlayOpen =
     menuOpen ||
@@ -844,6 +982,7 @@ export default function Home() {
     budgetSheetOpen ||
     reportSheetOpen ||
     recapOpen ||
+    pinSheetOpen ||
     logoutOpen;
   useEffect(() => {
     if (!overlayOpen) return;
@@ -860,15 +999,36 @@ export default function Home() {
     };
   }, [overlayOpen]);
 
-  const walletTotals = useMemo(() => {
-    const totals: Record<WalletTag, number> = { cash: 0, savings: 0, investment: 0, other: 0 };
-    for (const wallet of wallets) totals[wallet.tag] += wallet.balance;
-    return totals;
-  }, [wallets]);
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        backgroundedAtRef.current = Date.now();
+        return;
+      }
+      const backgroundedAt = backgroundedAtRef.current;
+      backgroundedAtRef.current = null;
+      if (!backgroundedAt || pinMode !== "unlocked" || !profile?.pin_hash) return;
+      if (Date.now() - backgroundedAt < pinBackgroundLockMs) return;
+      setMenuOpen(false);
+      setProfileSheetOpen(false);
+      setBudgetSheetOpen(false);
+      setReportSheetOpen(false);
+      setRecapOpen(false);
+      setPinSheetOpen(false);
+      setPinError("");
+      setPinMode("locked");
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [pinMode, profile?.pin_hash]);
+
+  const walletLedger = useMemo(() => buildWalletLedger(wallets, entries), [wallets, entries]);
+  const walletTotals = walletLedger.totals;
+  const displayWallets = walletLedger.wallets;
 
   const mainWallet = useMemo(
-    () => walletTotals.cash + entries.reduce((sum, entry) => sum + entry.wallet_impact, 0),
-    [entries, walletTotals.cash],
+    () => walletTotals.cash,
+    [walletTotals.cash],
   );
   const streak = useMemo(() => computeStreak(entries), [entries]);
   const quickShortcuts = useMemo(() => deriveQuickShortcuts(entries), [entries]);
@@ -948,9 +1108,10 @@ export default function Home() {
     ];
     return [...fromHistory, ...defaults].slice(0, 4);
   }, [quickShortcuts]);
+  const activeDay = selectedDay ?? new Date().toDateString();
   const dayEntries = useMemo(
-    () => (selectedDay ? monthlyEntries.filter((entry) => new Date(entry.occurred_at).toDateString() === selectedDay) : monthlyEntries),
-    [monthlyEntries, selectedDay],
+    () => monthlyEntries.filter((entry) => new Date(entry.occurred_at).toDateString() === activeDay),
+    [activeDay, monthlyEntries],
   );
 
   const categorySummary = useMemo(() => {
@@ -1213,11 +1374,113 @@ export default function Home() {
     const { data, error } = await supabase
       .from("profiles")
       .upsert(payload, { onConflict: "user_id" })
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day")
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until")
       .single();
 
     if (error) setError(error.message);
     else setProfile(data as Profile);
+    setBusy(false);
+  }
+
+  async function savePin(pin: string, nextMode: PinMode = "unlocked") {
+    if (!supabase || !user || !isSixDigitPin(pin)) return;
+    setBusy(true);
+    setPinError("");
+    const pin_salt = createPinSalt();
+    const pin_hash = await hashPin(pin, pin_salt);
+    const { data, error } = await supabase
+      .from("profiles")
+      .upsert({
+        user_id: user.id,
+        pin_hash,
+        pin_salt,
+        pin_failed_attempts: 0,
+        pin_blocked_until: null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id" })
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until")
+      .single();
+
+    if (error) {
+      setPinError(error.message);
+    } else {
+      setProfile(data as Profile);
+      setPinMode(nextMode);
+      if (nextMode === "unlocked") await loadUserData(user.id);
+      notify({ tone: "success", title: "ตั้งรหัส PIN แล้ว", detail: "บัญชีนี้จะถาม PIN ก่อนเข้าใช้งาน" });
+    }
+    setBusy(false);
+  }
+
+  async function verifyPin(pin: string) {
+    if (!supabase || !user || !isSixDigitPin(pin)) return false;
+    setBusy(true);
+    setPinError("");
+    const latestProfile = await loadProfile();
+    if (!latestProfile?.pin_hash || !latestProfile.pin_salt) {
+      setPinMode("setup");
+      setBusy(false);
+      return false;
+    }
+    if (pinBlocked(latestProfile)) {
+      setPinError("บัญชีถูกบล็อกชั่วคราว กรุณารอให้ครบ 1 ชั่วโมง");
+      setBusy(false);
+      return false;
+    }
+
+    const candidateHash = await hashPin(pin, latestProfile.pin_salt);
+    if (timingSafeEqual(candidateHash, latestProfile.pin_hash)) {
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({ pin_failed_attempts: 0, pin_blocked_until: null, updated_at: new Date().toISOString() })
+        .eq("user_id", user.id)
+        .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until")
+        .single();
+      if (error) {
+        setPinError(error.message);
+        setBusy(false);
+        return false;
+      }
+      setProfile(data as Profile);
+      setPinMode("unlocked");
+      await loadUserData(user.id);
+      setBusy(false);
+      return true;
+    }
+
+    const nextAttempts = clampInteger(latestProfile.pin_failed_attempts + 1, 0, pinMaxAttempts, 1);
+    const blockedUntil = nextAttempts >= pinMaxAttempts ? new Date(Date.now() + pinBlockMs).toISOString() : null;
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ pin_failed_attempts: nextAttempts, pin_blocked_until: blockedUntil, updated_at: new Date().toISOString() })
+      .eq("user_id", user.id)
+      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until")
+      .single();
+    if (data) setProfile(data as Profile);
+    if (blockedUntil) {
+      setPinSheetOpen(false);
+      setPinMode("locked");
+    }
+    setPinError(error ? error.message : blockedUntil ? "ใส่ PIN ผิดครบ 5 ครั้ง บล็อกการเข้าใช้งาน 1 ชั่วโมง" : `PIN ไม่ถูกต้อง เหลือ ${pinMaxAttempts - nextAttempts} ครั้ง`);
+    setBusy(false);
+    return false;
+  }
+
+  async function changePin(currentPin: string, nextPin: string) {
+    const ok = await verifyPin(currentPin);
+    if (!ok) return false;
+    await savePin(nextPin, "unlocked");
+    return true;
+  }
+
+  async function resetPinAndSignOut() {
+    if (!supabase || !user) return;
+    setBusy(true);
+    await supabase
+      .from("profiles")
+      .update({ pin_hash: null, pin_salt: null, pin_failed_attempts: 0, pin_blocked_until: null, updated_at: new Date().toISOString() })
+      .eq("user_id", user.id);
+    await supabase.auth.signOut();
     setBusy(false);
   }
 
@@ -1390,6 +1653,21 @@ export default function Home() {
   }
 
   if (!user) return <Auth />;
+  if (pinMode !== "unlocked") {
+    return (
+      <PinGate
+        mode={pinMode}
+        user={user}
+        profile={profile}
+        busy={busy}
+        error={pinError}
+        onSetup={(pin) => savePin(pin)}
+        onUnlock={verifyPin}
+        onForgot={resetPinAndSignOut}
+        onLogout={() => supabase?.auth.signOut()}
+      />
+    );
+  }
 
   return (
     <main className="shell">
@@ -1564,7 +1842,7 @@ export default function Home() {
               trend={sevenDayOutflow}
             />
             <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
-            <HistoryInsight entries={dayEntries} selectedDay={selectedDay} />
+            <HistoryInsight entries={dayEntries} selectedDay={activeDay} />
             <EntryList entries={dayEntries} onEdit={setEditing} onDelete={deleteEntry} emptyAction={{ label: "จดด้วย AI", onClick: openAddTab }} />
           </div>
         )}
@@ -1588,7 +1866,7 @@ export default function Home() {
 
         {tab === "wallets" && (
           <WalletsView
-            wallets={wallets}
+            wallets={displayWallets}
             onBack={() => setTab("home")}
             onAdd={() => { setEditingWallet(null); setWalletSheetMode("create"); }}
             onEdit={(wallet) => { setEditingWallet(wallet); setWalletSheetMode("edit"); }}
@@ -1647,6 +1925,7 @@ export default function Home() {
             onOpenRecurring={() => { setMenuOpen(false); setTab("recurring"); }}
             onOpenBudgets={() => { setMenuOpen(false); setBudgetSheetOpen(true); }}
             onOpenReport={() => { setMenuOpen(false); setReportSheetOpen(true); }}
+            onOpenPin={() => { setMenuOpen(false); setPinSheetOpen(true); }}
             theme={theme}
             onSetTheme={setTheme}
           />
@@ -1675,6 +1954,17 @@ export default function Home() {
             topCategory={categorySummary[0] ?? null}
             streak={streak}
             onClose={() => setRecapOpen(false)}
+          />
+        )}
+        {pinSheetOpen && (
+          <PinChangeSheet
+            busy={busy}
+            error={pinError}
+            onClose={() => { setPinSheetOpen(false); setPinError(""); }}
+            onSave={async (currentPin, nextPin) => {
+              const ok = await changePin(currentPin, nextPin);
+              if (ok) setPinSheetOpen(false);
+            }}
           />
         )}
         {logoutOpen && <ConfirmLogout onCancel={() => setLogoutOpen(false)} onConfirm={() => supabase?.auth.signOut()} />}
@@ -1710,6 +2000,186 @@ export default function Home() {
         )}
       </section>
     </main>
+  );
+}
+
+function PinGate({
+  mode,
+  user,
+  profile,
+  busy,
+  error,
+  onSetup,
+  onUnlock,
+  onForgot,
+  onLogout,
+}: {
+  mode: PinMode;
+  user: User;
+  profile: Profile | null;
+  busy: boolean;
+  error: string;
+  onSetup: (pin: string) => void;
+  onUnlock: (pin: string) => Promise<boolean>;
+  onForgot: () => void;
+  onLogout: () => void;
+}) {
+  const [pin, setPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [tick, setTick] = useState(() => Date.now());
+  const blockedUntil = profile?.pin_blocked_until ? new Date(profile.pin_blocked_until).getTime() : 0;
+  const blocked = blockedUntil > tick;
+  const remainingMs = Math.max(0, blockedUntil - tick);
+  const remainingMinutes = Math.ceil(remainingMs / 60000);
+  const attempts = clampInteger(profile?.pin_failed_attempts ?? 0, 0, pinMaxAttempts, 0);
+  const remainingAttempts = Math.max(0, pinMaxAttempts - attempts);
+
+  useEffect(() => {
+    if (!blocked) return;
+    const timer = window.setInterval(() => setTick(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [blocked]);
+
+  const appendDigit = (digit: string) => {
+    if (blocked || busy || pin.length >= pinLength) return;
+    setPin((current) => `${current}${digit}`.slice(0, pinLength));
+  };
+  const removeDigit = () => setPin((current) => current.slice(0, -1));
+  const submitUnlock = async () => {
+    if (!isSixDigitPin(pin) || blocked || busy) return;
+    const ok = await onUnlock(pin);
+    if (!ok) setPin("");
+  };
+  const submitSetup = () => {
+    if (!isSixDigitPin(pin)) return;
+    if (pin !== confirmPin) return;
+    onSetup(pin);
+  };
+  const setupError = mode === "setup" && confirmPin.length === pinLength && pin !== confirmPin ? "PIN สองรอบไม่ตรงกัน" : "";
+
+  return (
+    <main className="shell pin-shell">
+      <section className="phone pin-screen">
+        <div className="pin-card">
+          <div className="pin-brand">
+            <span className="pin-lock-mark" aria-hidden="true">▪</span>
+            <div>
+              <p className="eyebrow">{mode === "setup" ? "ตั้งค่าความเป็นส่วนตัว" : "ยืนยันตัวตน"}</p>
+              <h1>{mode === "setup" ? "ตั้งรหัส PIN 6 หลัก" : "ใส่รหัส PIN"}</h1>
+            </div>
+          </div>
+          <p className="pin-copy">
+            {mode === "setup"
+              ? "ตั้ง PIN สำหรับเข้าใช้งานแอพนี้บนทุกเครื่องที่ล็อกอินบัญชีเดียวกัน"
+              : `บัญชี ${user.email ?? ""} ต้องยืนยัน PIN ก่อนดูข้อมูลการเงิน`}
+          </p>
+
+          {mode === "checking" && (
+            <div className="pin-loading">
+              <span className="loading-spinner mini" />
+              <span>กำลังตรวจสอบสถานะ PIN</span>
+            </div>
+          )}
+
+          {mode === "setup" && (
+            <div className="pin-form">
+              <label>
+                PIN ใหม่
+                <input inputMode="numeric" type="password" maxLength={pinLength} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, pinLength))} />
+              </label>
+              <label>
+                ยืนยัน PIN
+                <input inputMode="numeric" type="password" maxLength={pinLength} value={confirmPin} onChange={(event) => setConfirmPin(event.target.value.replace(/\D/g, "").slice(0, pinLength))} />
+              </label>
+              {(setupError || error) && <p className="pin-error">{setupError || error}</p>}
+              <button className="save" onClick={submitSetup} disabled={busy || !isSixDigitPin(pin) || pin !== confirmPin}>
+                {busy ? "กำลังบันทึก" : "ตั้ง PIN"}
+              </button>
+              <button className="pin-link-button" onClick={onLogout}>ออกจากระบบ</button>
+            </div>
+          )}
+
+          {mode === "locked" && (
+            <div className="pin-unlock">
+              <div className="pin-dots" aria-label={`กรอกแล้ว ${pin.length} หลัก`}>
+                {Array.from({ length: pinLength }, (_, index) => <span key={index} className={index < pin.length ? "filled" : ""} />)}
+              </div>
+              {blocked ? (
+                <p className="pin-error">ใส่ผิดครบ 5 ครั้ง กรุณารอประมาณ {remainingMinutes} นาที</p>
+              ) : (
+                <p className="pin-hint">ใส่ผิดได้อีก {remainingAttempts} ครั้ง</p>
+              )}
+              {error && !blocked && <p className="pin-error">{error}</p>}
+              <PinKeypad onDigit={appendDigit} onBackspace={removeDigit} disabled={busy || blocked} />
+              <button className="save" onClick={submitUnlock} disabled={busy || blocked || !isSixDigitPin(pin)}>
+                {busy ? "กำลังตรวจสอบ" : "เข้าใช้งาน"}
+              </button>
+              <button className="pin-link-button" onClick={onForgot} disabled={busy}>ลืม PIN / ออกจากระบบเพื่อรีเซ็ต</button>
+            </div>
+          )}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function PinKeypad({ onDigit, onBackspace, disabled }: { onDigit: (digit: string) => void; onBackspace: () => void; disabled: boolean }) {
+  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+  return (
+    <div className="pin-keypad">
+      {keys.map((key) => <button key={key} onClick={() => onDigit(key)} disabled={disabled}>{key}</button>)}
+      <span />
+      <button onClick={() => onDigit("0")} disabled={disabled}>0</button>
+      <button onClick={onBackspace} disabled={disabled}>ลบ</button>
+    </div>
+  );
+}
+
+function PinChangeSheet({
+  busy,
+  error,
+  onClose,
+  onSave,
+}: {
+  busy: boolean;
+  error: string;
+  onClose: () => void;
+  onSave: (currentPin: string, nextPin: string) => void;
+}) {
+  const [currentPin, setCurrentPin] = useState("");
+  const [nextPin, setNextPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const mismatch = confirmPin.length === pinLength && nextPin !== confirmPin;
+  const clean = (value: string) => value.replace(/\D/g, "").slice(0, pinLength);
+
+  return (
+    <div className="sheet-backdrop">
+      <section className="edit-sheet pin-edit-sheet">
+        <div className="sheet-head">
+          <div>
+            <p className="eyebrow">ความปลอดภัย</p>
+            <h2>เปลี่ยนรหัส PIN</h2>
+          </div>
+          <button onClick={onClose}>×</button>
+        </div>
+        <label>
+          PIN ปัจจุบัน
+          <input inputMode="numeric" type="password" maxLength={pinLength} value={currentPin} onChange={(event) => setCurrentPin(clean(event.target.value))} />
+        </label>
+        <label>
+          PIN ใหม่
+          <input inputMode="numeric" type="password" maxLength={pinLength} value={nextPin} onChange={(event) => setNextPin(clean(event.target.value))} />
+        </label>
+        <label>
+          ยืนยัน PIN ใหม่
+          <input inputMode="numeric" type="password" maxLength={pinLength} value={confirmPin} onChange={(event) => setConfirmPin(clean(event.target.value))} />
+        </label>
+        {(mismatch || error) && <p className="pin-error">{mismatch ? "PIN ใหม่สองรอบไม่ตรงกัน" : error}</p>}
+        <button className="save" onClick={() => onSave(currentPin, nextPin)} disabled={busy || !isSixDigitPin(currentPin) || !isSixDigitPin(nextPin) || nextPin !== confirmPin}>
+          {busy ? "กำลังบันทึก" : "บันทึก PIN ใหม่"}
+        </button>
+      </section>
+    </div>
   );
 }
 
@@ -3021,6 +3491,7 @@ function SideMenu({
   onOpenRecurring,
   onOpenBudgets,
   onOpenReport,
+  onOpenPin,
   theme,
   onSetTheme,
 }: {
@@ -3034,6 +3505,7 @@ function SideMenu({
   onOpenRecurring: () => void;
   onOpenBudgets: () => void;
   onOpenReport: () => void;
+  onOpenPin: () => void;
   theme: Theme;
   onSetTheme: (theme: Theme) => void;
 }) {
@@ -3077,6 +3549,7 @@ function SideMenu({
           <button onClick={onOpenRecurring}><span>รายจ่ายประจำ</span></button>
           <button onClick={onOpenBudgets}><span>งบประมาณ</span></button>
           <button onClick={onOpenReport}><span>ส่งออกรีพอร์ท</span></button>
+          <button onClick={onOpenPin}><span>รหัส PIN</span></button>
         </nav>
 
         <div className="side-menu-footer">
@@ -3162,13 +3635,13 @@ function WalletsView({
   onEdit,
   onDelete,
 }: {
-  wallets: Wallet[];
+  wallets: WalletDisplay[];
   onBack: () => void;
   onAdd: () => void;
   onEdit: (wallet: Wallet) => void;
   onDelete: (wallet: Wallet) => void;
 }) {
-  const total = wallets.reduce((sum, wallet) => sum + wallet.balance, 0);
+  const total = wallets.reduce((sum, wallet) => sum + wallet.display_balance, 0);
 
   return (
     <div className="view debtor-view">
@@ -3193,7 +3666,7 @@ function WalletsView({
               </span>
               <div>
                 <span>{wallet.name}</span>
-                <small>{walletTagLabels[wallet.tag]} · {moneySign}{formatMoney(wallet.balance)}</small>
+                <small>{walletTagLabels[wallet.tag]} · {moneySign}{formatMoney(wallet.display_balance)}</small>
               </div>
             </button>
             <details className="kebab-menu" name="wallet-kebab">
