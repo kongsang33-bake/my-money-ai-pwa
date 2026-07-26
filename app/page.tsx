@@ -2206,7 +2206,10 @@ export default function Home() {
                     <h3>ตรวจสอบก่อนบันทึก</h3>
                     <p>พบ {drafts.length} รายการ แก้ข้อมูลได้ก่อนยืนยัน</p>
                   </div>
-                  <span>AI</span>
+                  <div className="review-head-actions">
+                    <span>AI</span>
+                    <button className="review-cancel-all" onClick={() => setDrafts([])}>ยกเลิกทั้งหมด</button>
+                  </div>
                 </div>
                 {drafts.map((draft, index) => (
                   <DraftRow
@@ -2215,6 +2218,7 @@ export default function Home() {
                     knownDebtors={debtors}
                     wallets={wallets}
                     onChange={(next) => setDrafts((items) => items.map((item, i) => (i === index ? next : item)))}
+                    onRemove={() => setDrafts((items) => items.filter((_, i) => i !== index))}
                   />
                 ))}
                 <DraftImpact items={drafts} />
@@ -3142,11 +3146,11 @@ function HistoryFilterBar({
             ยอดสูงสุด
             <input inputMode="decimal" value={filters.maxAmount} onChange={(event) => update({ maxAmount: event.target.value })} placeholder="ไม่จำกัด" />
           </label>
-          <label>
+          <label className="history-filter-date">
             ตั้งแต่วันที่
             <input type="date" value={filters.startDate} onChange={(event) => update({ startDate: event.target.value })} />
           </label>
-          <label>
+          <label className="history-filter-date">
             ถึงวันที่
             <input type="date" value={filters.endDate} onChange={(event) => update({ endDate: event.target.value })} />
           </label>
@@ -3497,7 +3501,7 @@ function Metric({ label, value, tone }: { label: string; value: number; tone: "i
   );
 }
 
-function DraftRow({ draft, knownDebtors, wallets, onChange }: { draft: Draft; knownDebtors: Debtor[]; wallets: Wallet[]; onChange: (draft: Draft) => void }) {
+function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft: Draft; knownDebtors: Debtor[]; wallets: Wallet[]; onChange: (draft: Draft) => void; onRemove: () => void }) {
   const update = (patch: Partial<Draft>) => onChange(normalizeEntry({ ...draft, ...patch }));
   const isDebtType = (["lend", "split_half", "debt_repayment", "debt_payment"] as TransactionType[]).includes(draft.transaction_type);
   const relevantKind: DebtorKind = draft.transaction_type === "debt_payment" ? "own" : "lend";
@@ -3506,6 +3510,9 @@ function DraftRow({ draft, knownDebtors, wallets, onChange }: { draft: Draft; kn
 
   return (
     <div className={`draft draft-${draft.transaction_type}`}>
+      <button className="draft-remove" onClick={onRemove} aria-label="ลบรายการนี้ออกจากรายการที่ตรวจสอบ">
+        <X size={14} strokeWidth={2.5} />
+      </button>
       <span className="cat-icon" style={{ background: categoryTint(draft.category, 13) }}><CategoryIcon category={draft.category} size={18} /></span>
       <div>
         <input value={draft.title} onChange={(event) => update({ title: event.target.value })} />

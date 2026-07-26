@@ -1257,13 +1257,29 @@ a:focus-visible {
   color: var(--ink-3);
 }
 
-.review-head > span {
+.review-head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-shrink: 0;
+}
+
+.review-head-actions > span {
   font-size: 11px;
   font-weight: 700;
   padding: 3px 8px;
   border-radius: var(--r-full);
   background: var(--accent-soft);
   color: var(--accent-strong);
+}
+
+.review-cancel-all {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-3);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
 }
 
 .privacy {
@@ -1282,6 +1298,21 @@ a:focus-visible {
   gap: var(--s-3);
   margin-bottom: var(--s-3);
   position: relative;
+}
+
+.draft-remove {
+  position: absolute;
+  top: var(--s-2);
+  right: var(--s-2);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--ink-3);
 }
 
 .draft::before {
@@ -1852,6 +1883,10 @@ a:focus-visible {
   background: var(--surface-2);
   padding: 10px 12px;
   color: var(--ink);
+}
+
+.history-filter-date {
+  grid-column: 1 / -1;
 }
 
 .monthly-trend-head {
