@@ -33,7 +33,7 @@ test("server-renders the app loading shell", async () => {
 
   const html = await response.text();
   assert.match(html, /<html lang="th">/i);
-  assert.match(html, /<title>เงินของฉัน — บันทึกรายรับรายจ่ายด้วย AI<\/title>/i);
+  assert.match(html, /<title>Monii — บันทึกรายรับรายจ่ายด้วย AI<\/title>/i);
   assert.match(html, /แอปบันทึกรายรับรายจ่ายที่ช่วยแยกรายการและจัดหมวดหมู่ด้วย AI/);
   assert.match(html, /<main class="shell">/);
   assert.match(html, /<section class="phone auth-screen">กำลังเตรียมบัญชี…<\/section>/);

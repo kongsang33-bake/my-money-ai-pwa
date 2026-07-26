@@ -1,5 +1,5 @@
 /* ==========================================================================
-   เงินของฉัน — Ink & Amber design system
+   Monii — Ink & Amber design system
    One definition per selector. All color comes from tokens below; dark mode
    is achieved purely by re-pointing tokens in :root[data-theme="dark"] — no
    component rule should ever need a [data-theme="dark"] override of its own.
