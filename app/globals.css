@@ -2112,6 +2112,14 @@ a:focus-visible {
   opacity: 0.72;
 }
 
+.toast .toast-action {
+  margin-top: 4px;
+  font-weight: 700;
+  opacity: 0.92;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .toast.error {
   background: var(--danger);
 }

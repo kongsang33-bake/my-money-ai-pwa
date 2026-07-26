@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import {
@@ -96,7 +97,14 @@ type RecurringExpense = {
   icon_color: string | null;
 };
 type ReportPeriod = "month" | "year";
-type Toast = { id: number; tone: "success" | "info" | "error"; title: string; detail?: string };
+type Toast = { id: number; tone: "success" | "info" | "error"; title: string; detail?: string; action?: { label: string; onClick: () => void } };
+type ConfirmDialogState = {
+  title: string;
+  detail: string;
+  confirmLabel: string;
+  tone?: "danger" | "default";
+  resolve: (confirmed: boolean) => void;
+};
 type EmptyAction = { label: string; onClick: () => void };
 const walletTagLabels: Record<WalletTag, string> = {
   cash: "เงินสด",
@@ -207,11 +215,17 @@ const pinMaxAttempts = 5;
 const pinBlockMs = 60 * 60 * 1000;
 const pinBackgroundLockMs = 2 * 60 * 1000;
 const pinHashIterations = 150000;
-const monthKey = (date: Date) => date.toISOString().slice(0, 7);
+const localDateInput = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+const monthKey = (date: Date) => localDateInput(date).slice(0, 7);
 const formatMoney = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const formatSignedMoney = (value: number) => `${value >= 0 ? "+" : "−"}${moneySign}${formatMoney(Math.abs(value))}`;
 const formatDateTime = (value: string) => new Date(value).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
-const toDateInput = (value: string) => new Date(value).toISOString().slice(0, 10);
+const toDateInput = (value: string) => localDateInput(new Date(value));
 const toFiniteNumber = (value: unknown, fallback = 0) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -274,7 +288,7 @@ const withDateKeepingTime = (value: string, referenceIso: string) => {
   const reference = new Date(referenceIso);
   return withDate(value, reference.getHours(), reference.getMinutes(), reference.getSeconds());
 };
-const todayDateInput = () => new Date().toISOString().slice(0, 10);
+const todayDateInput = () => localDateInput(new Date());
 
 function startOfDay(date: Date) {
   const copy = new Date(date);
@@ -762,6 +776,7 @@ export default function Home() {
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(monthKey(new Date()));
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [budgets, setBudgets] = useState<Record<string, number>>({});
@@ -783,6 +798,17 @@ export default function Home() {
   const notify = useCallback((toast: Omit<Toast, "id">) => {
     const id = Date.now() + Math.random();
     setToasts((items) => [...items.slice(-2), { id, ...toast }]);
+  }, []);
+
+  const requestConfirm = useCallback((dialog: Omit<ConfirmDialogState, "resolve">) => (
+    new Promise<boolean>((resolve) => setConfirmDialog({ ...dialog, resolve }))
+  ), []);
+
+  const closeConfirmDialog = useCallback((confirmed: boolean) => {
+    setConfirmDialog((dialog) => {
+      dialog?.resolve(confirmed);
+      return null;
+    });
   }, []);
 
   useEffect(() => {
@@ -980,6 +1006,7 @@ export default function Home() {
     !!editing ||
     !!debtorSheetMode ||
     !!walletSheetMode ||
+    !!recurringSheetMode ||
     budgetSheetOpen ||
     reportSheetOpen ||
     recapOpen ||
@@ -1015,7 +1042,11 @@ export default function Home() {
       setBudgetSheetOpen(false);
       setReportSheetOpen(false);
       setRecapOpen(false);
+      setDebtorSheetMode(null);
+      setWalletSheetMode(null);
+      setRecurringSheetMode(null);
       setPinSheetOpen(false);
+      setConfirmDialog(null);
       setPinError("");
       setPinMode("locked");
     };
@@ -1301,7 +1332,7 @@ export default function Home() {
   }
 
   async function updateEntry() {
-    if (!supabase || !editing) return;
+    if (!supabase || !editing) return false;
 
     const normalized = normalizeEntry(editing);
     setBusy(true);
@@ -1326,26 +1357,72 @@ export default function Home() {
 
     if (error) {
       setError(error.message);
+      setBusy(false);
+      return false;
     } else {
-      setEditing(null);
       await loadEntries();
     }
 
     setBusy(false);
+    return true;
   }
 
   async function deleteEntry(entry: Entry) {
     if (!supabase) return;
-    if (!window.confirm(`ลบรายการ "${entry.title}" ใช่ไหม?`)) return;
+    const confirmed = await requestConfirm({
+      title: "ลบรายการนี้?",
+      detail: `ลบ "${entry.title}" ออกจากประวัติ`,
+      confirmLabel: "ลบรายการ",
+      tone: "danger",
+    });
+    if (!confirmed) return;
 
     setBusy(true);
     setError("");
 
     const { error } = await supabase.from("transactions").delete().eq("id", entry.id);
     if (error) setError(error.message);
-    else setEntries((current) => current.filter((item) => item.id !== entry.id));
+    else {
+      setEntries((current) => current.filter((item) => item.id !== entry.id));
+      notify({
+        tone: "info",
+        title: "ลบรายการแล้ว",
+        detail: entry.title,
+        action: {
+          label: "ย้อนคืน",
+          onClick: () => { void restoreEntry(entry); },
+        },
+      });
+    }
 
     setBusy(false);
+  }
+
+  async function restoreEntry(entry: Entry) {
+    if (!supabase || !user) return;
+    const { error } = await supabase.from("transactions").insert({
+      id: entry.id,
+      user_id: user.id,
+      title: entry.title,
+      category: entry.category,
+      amount: entry.amount,
+      kind: entry.type,
+      transaction_type: entry.transaction_type,
+      debtor_name: entry.debtor_name,
+      wallet_impact: entry.wallet_impact,
+      debt_impact: entry.debt_impact,
+      user_share: entry.user_share,
+      partner_share: entry.partner_share,
+      occurred_at: entry.occurred_at,
+      source_text: entry.source_text,
+    });
+    if (error) {
+      setError(error.message);
+      notify({ tone: "error", title: "ย้อนคืนรายการไม่สำเร็จ", detail: error.message });
+      return;
+    }
+    await loadEntries();
+    notify({ tone: "success", title: "ย้อนคืนรายการแล้ว", detail: entry.title });
   }
 
   function updateBudgets(next: Record<string, number>) {
@@ -1360,7 +1437,7 @@ export default function Home() {
     app_icon_image: string;
     month_start_day: number;
   }) {
-    if (!supabase || !user) return;
+    if (!supabase || !user) return false;
     setBusy(true);
     setError("");
 
@@ -1378,9 +1455,14 @@ export default function Home() {
       .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until")
       .single();
 
-    if (error) setError(error.message);
-    else setProfile(data as Profile);
+    if (error) {
+      setError(error.message);
+      setBusy(false);
+      return false;
+    }
+    setProfile(data as Profile);
     setBusy(false);
+    return true;
   }
 
   async function savePin(pin: string, nextMode: PinMode = "unlocked") {
@@ -1486,7 +1568,7 @@ export default function Home() {
   }
 
   async function createDebtor(input: DebtorInput) {
-    if (!supabase || !user || !input.name.trim()) return;
+    if (!supabase || !user || !input.name.trim()) return false;
     setBusy(true);
     setError("");
     const { error } = await supabase.from("debtors").insert({
@@ -1499,13 +1581,17 @@ export default function Home() {
       icon: input.icon,
       icon_color: input.icon_color,
     });
-    if (error) setError(error.code === "23505" ? "มีชื่อนี้อยู่แล้ว" : error.message);
-    else await loadDebtors();
+    if (error) {
+      setError(error.code === "23505" ? "มีชื่อนี้อยู่แล้ว" : error.message);
+      setBusy(false);
+      return false;
+    }
+    await loadDebtors();
     setBusy(false);
+    return true;
   }
-
   async function updateDebtor(debtor: Debtor, patch: DebtorInput) {
-    if (!supabase) return;
+    if (!supabase) return false;
     setBusy(true);
     setError("");
     const openingBalance = toMoneyAmount(patch.opening_balance);
@@ -1522,19 +1608,27 @@ export default function Home() {
         updated_at: new Date().toISOString(),
       })
       .eq("id", debtor.id);
-    if (error) setError(error.code === "23505" ? "มีชื่อนี้อยู่แล้ว" : error.message);
-    else {
-      if (selectedDebtor?.id === debtor.id) {
-        setSelectedDebtor({ ...debtor, ...patch, name: patch.name.trim(), note: patch.note.trim() || null, opening_balance: openingBalance });
-      }
-      await loadDebtors();
+    if (error) {
+      setError(error.code === "23505" ? "มีชื่อนี้อยู่แล้ว" : error.message);
+      setBusy(false);
+      return false;
     }
+    if (selectedDebtor?.id === debtor.id) {
+      setSelectedDebtor({ ...debtor, ...patch, name: patch.name.trim(), note: patch.note.trim() || null, opening_balance: openingBalance });
+    }
+    await loadDebtors();
     setBusy(false);
+    return true;
   }
-
   async function deleteDebtor(debtor: Debtor) {
     if (!supabase) return;
-    if (!window.confirm(`ลบลูกหนี้ "${debtor.name}" ออกจากรายชื่อใช่ไหม? รายการเก่าจะไม่ถูกลบ`)) return;
+    const confirmed = await requestConfirm({
+      title: "ลบรายชื่อนี้?",
+      detail: `ลบ "${debtor.name}" ออกจากรายชื่อ รายการเก่าจะไม่ถูกลบ`,
+      confirmLabel: "ลบรายชื่อ",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setBusy(true);
     setError("");
     const { error } = await supabase.from("debtors").delete().eq("id", debtor.id);
@@ -1542,12 +1636,30 @@ export default function Home() {
     else {
       if (selectedDebtor?.id === debtor.id) setSelectedDebtor(null);
       await loadDebtors();
+      notify({
+        tone: "info",
+        title: "ลบรายชื่อแล้ว",
+        detail: debtor.name,
+        action: { label: "ย้อนคืน", onClick: () => { void restoreDebtor(debtor); } },
+      });
     }
     setBusy(false);
   }
 
+  async function restoreDebtor(debtor: Debtor) {
+    if (!supabase) return;
+    const { error } = await supabase.from("debtors").insert(debtor);
+    if (error) {
+      setError(error.message);
+      notify({ tone: "error", title: "ย้อนคืนรายชื่อไม่สำเร็จ", detail: error.message });
+      return;
+    }
+    await loadDebtors();
+    notify({ tone: "success", title: "ย้อนคืนรายชื่อแล้ว", detail: debtor.name });
+  }
+
   async function createWallet(input: WalletInput) {
-    if (!supabase || !user || !input.name.trim()) return;
+    if (!supabase || !user || !input.name.trim()) return false;
     setBusy(true);
     setError("");
     const { error } = await supabase.from("wallets").insert({
@@ -1558,13 +1670,17 @@ export default function Home() {
       icon: input.icon,
       icon_color: input.icon_color,
     });
-    if (error) setError(error.message);
-    else await loadWallets();
+    if (error) {
+      setError(error.message);
+      setBusy(false);
+      return false;
+    }
+    await loadWallets();
     setBusy(false);
+    return true;
   }
-
   async function updateWallet(wallet: Wallet, patch: WalletInput) {
-    if (!supabase) return;
+    if (!supabase) return false;
     setBusy(true);
     setError("");
     const { error } = await supabase
@@ -1578,24 +1694,54 @@ export default function Home() {
         updated_at: new Date().toISOString(),
       })
       .eq("id", wallet.id);
-    if (error) setError(error.message);
-    else await loadWallets();
+    if (error) {
+      setError(error.message);
+      setBusy(false);
+      return false;
+    }
+    await loadWallets();
     setBusy(false);
+    return true;
   }
-
   async function deleteWallet(wallet: Wallet) {
     if (!supabase) return;
-    if (!window.confirm(`ลบกระเป๋าตังค์ "${wallet.name}" ใช่ไหม?`)) return;
+    const confirmed = await requestConfirm({
+      title: "ลบกระเป๋านี้?",
+      detail: `ลบ "${wallet.name}" ออกจากกระเป๋าตังค์`,
+      confirmLabel: "ลบกระเป๋า",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setBusy(true);
     setError("");
     const { error } = await supabase.from("wallets").delete().eq("id", wallet.id);
     if (error) setError(error.message);
-    else await loadWallets();
+    else {
+      await loadWallets();
+      notify({
+        tone: "info",
+        title: "ลบกระเป๋าแล้ว",
+        detail: wallet.name,
+        action: { label: "ย้อนคืน", onClick: () => { void restoreWallet(wallet); } },
+      });
+    }
     setBusy(false);
   }
 
+  async function restoreWallet(wallet: Wallet) {
+    if (!supabase) return;
+    const { error } = await supabase.from("wallets").insert(wallet);
+    if (error) {
+      setError(error.message);
+      notify({ tone: "error", title: "ย้อนคืนกระเป๋าไม่สำเร็จ", detail: error.message });
+      return;
+    }
+    await loadWallets();
+    notify({ tone: "success", title: "ย้อนคืนกระเป๋าแล้ว", detail: wallet.name });
+  }
+
   async function createRecurringExpense(input: RecurringExpenseInput) {
-    if (!supabase || !user || !input.name.trim()) return;
+    if (!supabase || !user || !input.name.trim()) return false;
     setBusy(true);
     setError("");
     const { error } = await supabase.from("recurring_expenses").insert({
@@ -1606,13 +1752,17 @@ export default function Home() {
       icon: input.icon,
       icon_color: input.icon_color,
     });
-    if (error) setError(error.message);
-    else await loadRecurringExpenses();
+    if (error) {
+      setError(error.message);
+      setBusy(false);
+      return false;
+    }
+    await loadRecurringExpenses();
     setBusy(false);
+    return true;
   }
-
   async function updateRecurringExpense(item: RecurringExpense, patch: RecurringExpenseInput) {
-    if (!supabase) return;
+    if (!supabase) return false;
     setBusy(true);
     setError("");
     const { error } = await supabase
@@ -1626,20 +1776,50 @@ export default function Home() {
         updated_at: new Date().toISOString(),
       })
       .eq("id", item.id);
-    if (error) setError(error.message);
-    else await loadRecurringExpenses();
+    if (error) {
+      setError(error.message);
+      setBusy(false);
+      return false;
+    }
+    await loadRecurringExpenses();
     setBusy(false);
+    return true;
   }
-
   async function deleteRecurringExpense(item: RecurringExpense) {
     if (!supabase) return;
-    if (!window.confirm(`ลบรายจ่ายประจำ "${item.name}" ใช่ไหม?`)) return;
+    const confirmed = await requestConfirm({
+      title: "ลบรายจ่ายประจำ?",
+      detail: `ลบ "${item.name}" ออกจากรายการประจำ`,
+      confirmLabel: "ลบรายการ",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setBusy(true);
     setError("");
     const { error } = await supabase.from("recurring_expenses").delete().eq("id", item.id);
     if (error) setError(error.message);
-    else await loadRecurringExpenses();
+    else {
+      await loadRecurringExpenses();
+      notify({
+        tone: "info",
+        title: "ลบรายจ่ายประจำแล้ว",
+        detail: item.name,
+        action: { label: "ย้อนคืน", onClick: () => { void restoreRecurringExpense(item); } },
+      });
+    }
     setBusy(false);
+  }
+
+  async function restoreRecurringExpense(item: RecurringExpense) {
+    if (!supabase) return;
+    const { error } = await supabase.from("recurring_expenses").insert(item);
+    if (error) {
+      setError(error.message);
+      notify({ tone: "error", title: "ย้อนคืนรายจ่ายประจำไม่สำเร็จ", detail: error.message });
+      return;
+    }
+    await loadRecurringExpenses();
+    notify({ tone: "success", title: "ย้อนคืนรายจ่ายประจำแล้ว", detail: item.name });
   }
 
   if (!ready) {
@@ -1885,11 +2065,12 @@ export default function Home() {
           />
         )}
 
-        {editing && <EditSheet entry={editing} busy={busy} onChange={setEditing} onClose={() => setEditing(null)} onSave={updateEntry} />}
+        {editing && <EditSheet entry={editing} busy={busy} error={error} onChange={setEditing} onClose={() => setEditing(null)} onSave={updateEntry} />}
         {debtorSheetMode && (
           <DebtorEditSheet
             debtor={debtorSheetMode === "edit" ? editingDebtor : null}
             busy={busy}
+            error={error}
             defaultKind={debtorKindTab}
             onClose={() => { setDebtorSheetMode(null); setEditingDebtor(null); }}
             onCreate={createDebtor}
@@ -1900,6 +2081,7 @@ export default function Home() {
           <WalletEditSheet
             wallet={walletSheetMode === "edit" ? editingWallet : null}
             busy={busy}
+            error={error}
             onClose={() => { setWalletSheetMode(null); setEditingWallet(null); }}
             onCreate={createWallet}
             onUpdate={updateWallet}
@@ -1909,6 +2091,7 @@ export default function Home() {
           <RecurringExpenseEditSheet
             item={recurringSheetMode === "edit" ? editingRecurringExpense : null}
             busy={busy}
+            error={error}
             onClose={() => { setRecurringSheetMode(null); setEditingRecurringExpense(null); }}
             onCreate={createRecurringExpense}
             onUpdate={updateRecurringExpense}
@@ -1932,7 +2115,7 @@ export default function Home() {
           />
         )}
         {profileSheetOpen && (
-          <ProfileEditSheet profile={profile} busy={busy} onClose={() => setProfileSheetOpen(false)} onSave={saveProfile} />
+          <ProfileEditSheet profile={profile} busy={busy} error={error} onClose={() => setProfileSheetOpen(false)} onSave={saveProfile} />
         )}
         {budgetSheetOpen && <BudgetSheet budgets={budgets} onClose={() => setBudgetSheetOpen(false)} onSave={updateBudgets} />}
         {reportSheetOpen && (
@@ -1969,6 +2152,7 @@ export default function Home() {
           />
         )}
         {logoutOpen && <ConfirmLogout onCancel={() => setLogoutOpen(false)} onConfirm={() => supabase?.auth.signOut()} />}
+        {confirmDialog && <ConfirmDialog dialog={confirmDialog} onClose={closeConfirmDialog} />}
         <ToastHost toasts={toasts} onDismiss={(id) => setToasts((items) => items.filter((toast) => toast.id !== id))} />
 
         {!overlayOpen && (
@@ -2561,17 +2745,74 @@ function EmptyNote({ glyph, children, action }: { glyph: string; children: React
 
 function ToastHost({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
   if (!toasts.length) return null;
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div className="toast-host" aria-live="polite">
       {toasts.map((toast) => (
-        <button key={toast.id} className={`toast ${toast.tone}`} onClick={() => onDismiss(toast.id)}>
+        <button
+          key={toast.id}
+          className={`toast ${toast.tone}`}
+          onClick={() => {
+            toast.action?.onClick();
+            onDismiss(toast.id);
+          }}
+        >
           <span aria-hidden="true">{toast.tone === "success" ? "✓" : toast.tone === "error" ? "!" : "✦"}</span>
           <span>
             <b>{toast.title}</b>
             {toast.detail && <small>{toast.detail}</small>}
+            {toast.action && (
+              <small className="toast-action">
+                {toast.action.label}
+              </small>
+            )}
           </span>
         </button>
       ))}
+    </div>,
+    document.body,
+  );
+}
+
+function SheetFrame({ children, onClose, className = "edit-sheet" }: { children: React.ReactNode; onClose: () => void; className?: string }) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="sheet-backdrop" onMouseDown={onClose}>
+      <section className={className} onMouseDown={(event) => event.stopPropagation()}>
+        {children}
+      </section>
+    </div>
+  );
+}
+
+function ConfirmDialog({ dialog, onClose }: { dialog: ConfirmDialogState; onClose: (confirmed: boolean) => void }) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="dialog-backdrop" onMouseDown={() => onClose(false)}>
+      <section className="confirm-dialog" onMouseDown={(event) => event.stopPropagation()}>
+        <h2>{dialog.title}</h2>
+        <p>{dialog.detail}</p>
+        <div>
+          <button onClick={() => onClose(false)}>ยกเลิก</button>
+          <button className={dialog.tone === "danger" ? "danger" : undefined} onClick={() => onClose(true)}>
+            {dialog.confirmLabel}
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -2822,79 +3063,83 @@ function RecentActivityTimeline({ entries, onEdit }: { entries: Entry[]; onEdit:
 function EditSheet({
   entry,
   busy,
+  error,
   onChange,
   onClose,
   onSave,
 }: {
   entry: Entry;
   busy: boolean;
+  error: string;
   onChange: (entry: Entry) => void;
   onClose: () => void;
-  onSave: () => void;
+  onSave: () => Promise<boolean>;
 }) {
   const update = (patch: Partial<Entry>) => onChange(normalizeEntry({ ...entry, ...patch }));
+  const submit = async () => {
+    const saved = await onSave();
+    if (saved) onClose();
+  };
 
   return (
-    <div className="sheet-backdrop">
-      <section className="edit-sheet">
-        <div className="sheet-head">
-          <div>
-            <p className="eyebrow">แก้ไขรายการ</p>
-            <h2>{entry.title || "รายการ"}</h2>
-          </div>
-          <button onClick={onClose}>×</button>
+    <SheetFrame onClose={onClose}>
+      <div className="sheet-head">
+        <div>
+          <p className="eyebrow">แก้ไขรายการ</p>
+          <h2>{entry.title || "รายการ"}</h2>
         </div>
+        <button onClick={onClose}>x</button>
+      </div>
 
+      <label>
+        ชื่อรายการ
+        <input value={entry.title} onChange={(event) => update({ title: event.target.value })} />
+      </label>
+      <label>
+        หมวดหมู่
+        <select value={entry.category} onChange={(event) => update({ category: event.target.value })}>
+          {categories.map((category) => (
+            <option key={category}>{category}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        ชนิดรายการ
+        <select value={entry.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
+          {Object.entries(transactionTypeLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        จำนวนเงิน
+        <AmountInput value={entry.amount} onChange={(amount) => update({ amount })} />
+      </label>
+      {(["lend", "split_half", "debt_repayment", "debt_payment"] as TransactionType[]).includes(entry.transaction_type) && (
         <label>
-          ชื่อรายการ
-          <input value={entry.title} onChange={(event) => update({ title: event.target.value })} />
+          ชื่อผู้เกี่ยวข้อง
+          <input type="text" placeholder="เช่น เพื่อนเอ" value={entry.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
         </label>
-        <label>
-          หมวดหมู่
-          <select value={entry.category} onChange={(event) => update({ category: event.target.value })}>
-            {categories.map((category) => (
-              <option key={category}>{category}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          ชนิดรายการ
-          <select value={entry.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
-            {Object.entries(transactionTypeLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          จำนวนเงิน
-          <AmountInput value={entry.amount} onChange={(amount) => update({ amount })} />
-        </label>
-        {(["lend", "split_half", "debt_repayment", "debt_payment"] as TransactionType[]).includes(entry.transaction_type) && (
-          <label>
-            ชื่อผู้เกี่ยวข้อง
-            <input type="text" placeholder="เช่น เพื่อนเอ" value={entry.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
-          </label>
-        )}
-        <label>
-          วันที่
-          <input type="date" value={toDateInput(entry.occurred_at)} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, entry.occurred_at) })} />
-        </label>
+      )}
+      <label>
+        วันที่
+        <input type="date" value={toDateInput(entry.occurred_at)} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, entry.occurred_at) })} />
+      </label>
 
-        <div className="draft-impact">
-          <span>กระเป๋า {formatSignedMoney(entry.wallet_impact)}</span>
-          <span>หนี้ {formatSignedMoney(entry.debt_impact)}</span>
-        </div>
+      <div className="draft-impact">
+        <span>กระเป๋า {formatSignedMoney(entry.wallet_impact)}</span>
+        <span>หนี้ {formatSignedMoney(entry.debt_impact)}</span>
+      </div>
 
-        <button className="save" onClick={onSave} disabled={busy || !entry.title.trim() || entry.amount < 0}>
-          บันทึกการแก้ไข
-        </button>
-      </section>
-    </div>
+      {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
+      <button className="save" onClick={submit} disabled={busy || !entry.title.trim() || entry.amount < 0}>
+        {busy ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
+      </button>
+    </SheetFrame>
   );
 }
-
 function DebtorsView({
   debtors,
   entries,
@@ -3134,6 +3379,7 @@ type DebtorInput = {
 function DebtorEditSheet({
   debtor,
   busy,
+  error,
   defaultKind,
   onClose,
   onCreate,
@@ -3141,10 +3387,11 @@ function DebtorEditSheet({
 }: {
   debtor: Debtor | null;
   busy: boolean;
+  error: string;
   defaultKind: DebtorKind;
   onClose: () => void;
-  onCreate: (input: DebtorInput) => void;
-  onUpdate: (debtor: Debtor, patch: DebtorInput) => void;
+  onCreate: (input: DebtorInput) => Promise<boolean>;
+  onUpdate: (debtor: Debtor, patch: DebtorInput) => Promise<boolean>;
 }) {
   const [name, setName] = useState(debtor?.name ?? "");
   const [note, setNote] = useState(debtor?.note ?? "");
@@ -3154,7 +3401,7 @@ function DebtorEditSheet({
   const [icon, setIcon] = useState<string | null>(debtor?.icon ?? null);
   const [iconColor, setIconColor] = useState<string | null>(debtor?.icon_color ?? null);
 
-  const submit = () => {
+  const submit = async () => {
     if (!name.trim()) return;
     const payload: DebtorInput = {
       name,
@@ -3165,54 +3412,51 @@ function DebtorEditSheet({
       icon,
       icon_color: iconColor,
     };
-    if (debtor) onUpdate(debtor, payload);
-    else onCreate(payload);
-    onClose();
+    const saved = debtor ? await onUpdate(debtor, payload) : await onCreate(payload);
+    if (saved) onClose();
   };
 
   return (
-    <div className="sheet-backdrop">
-      <section className="edit-sheet">
-        <div className="sheet-head">
-          <div>
-            <p className="eyebrow">{debtor ? "แก้ไขรายการหนี้" : "เพิ่มรายการหนี้"}</p>
-            <h2>{debtor ? debtor.name : "รายการใหม่"}</h2>
-          </div>
-          <button onClick={onClose}>×</button>
+    <SheetFrame onClose={onClose}>
+      <div className="sheet-head">
+        <div>
+          <p className="eyebrow">{debtor ? "แก้ไขรายการหนี้" : "เพิ่มรายการหนี้"}</p>
+          <h2>{debtor ? debtor.name : "รายการใหม่"}</h2>
         </div>
-        <div className="report-period-toggle">
-          <button type="button" className={kind === "lend" ? "active" : ""} onClick={() => setKind("lend")}>ยืมเรา</button>
-          <button type="button" className={kind === "own" ? "active" : ""} onClick={() => setKind("own")}>หนี้ของฉัน</button>
-        </div>
-        <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
+        <button onClick={onClose}>x</button>
+      </div>
+      <div className="report-period-toggle">
+        <button type="button" className={kind === "lend" ? "active" : ""} onClick={() => setKind("lend")}>ยืมเรา</button>
+        <button type="button" className={kind === "own" ? "active" : ""} onClick={() => setKind("own")}>หนี้ของฉัน</button>
+      </div>
+      <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
+      <label>
+        ชื่อ
+        <input value={name} onChange={(event) => setName(event.target.value)} placeholder={kind === "own" ? "เช่น ผ่อนบ้าน ผ่อนรถ" : "เช่น เพื่อนเอ"} />
+      </label>
+      {kind === "lend" && (
         <label>
-          ชื่อ
-          <input value={name} onChange={(event) => setName(event.target.value)} placeholder={kind === "own" ? "เช่น ผ่อนบ้าน ผ่อนรถ" : "เช่น เพื่อนเอ"} />
+          หมายเหตุ
+          <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="เช่น เพื่อนร่วมงาน" />
         </label>
-        {kind === "lend" && (
-          <label>
-            หมายเหตุ
-            <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="เช่น เพื่อนร่วมงาน" />
-          </label>
-        )}
+      )}
+      <label>
+        {kind === "own" ? "ยอดหนี้คงเหลือ" : "ยอดเริ่มต้น"}
+        <input inputMode="decimal" value={openingBalanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setOpeningBalanceText(event.target.value); }} />
+      </label>
+      {kind === "own" && (
         <label>
-          {kind === "own" ? "ยอดหนี้คงเหลือ" : "ยอดเริ่มต้น (ที่ค้างอยู่ก่อนเริ่มใช้แอพ)"}
-          <input inputMode="decimal" value={openingBalanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setOpeningBalanceText(event.target.value); }} />
+          ผ่อนต่อเดือน
+          <input inputMode="decimal" value={monthlyInstallmentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMonthlyInstallmentText(event.target.value); }} placeholder="เช่น 15000" />
         </label>
-        {kind === "own" && (
-          <label>
-            ผ่อนต่อเดือน (ไม่บังคับ)
-            <input inputMode="decimal" value={monthlyInstallmentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMonthlyInstallmentText(event.target.value); }} placeholder="เช่น 15000" />
-          </label>
-        )}
-        <button className="save" onClick={submit} disabled={busy || !name.trim()}>
-          บันทึก
-        </button>
-      </section>
-    </div>
+      )}
+      {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
+      <button className="save" onClick={submit} disabled={busy || !name.trim()}>
+        {busy ? "กำลังบันทึก..." : "บันทึก"}
+      </button>
+    </SheetFrame>
   );
 }
-
 function RecapSheet({
   selectedMonth,
   income,
@@ -3232,6 +3476,7 @@ function RecapSheet({
 }) {
   const monthLabel = new Date(`${selectedMonth}-01T00:00:00`).toLocaleDateString("th-TH", { month: "long", year: "numeric" });
   const closingLine = balance >= 0 ? "เดือนนี้ยังมีเงินเหลือเก็บ" : "เดือนหน้าลองคุมงบดูอีกนิด";
+  const [shareMessage, setShareMessage] = useState("");
 
   async function share() {
     const text = [
@@ -3255,9 +3500,9 @@ function RecapSheet({
     }
     try {
       await navigator.clipboard.writeText(text);
-      window.alert("คัดลอกสรุปเดือนนี้แล้ว");
+      setShareMessage("คัดลอกสรุปเดือนนี้แล้ว");
     } catch {
-      window.alert(text);
+      setShareMessage(text);
     }
   }
 
@@ -3288,6 +3533,7 @@ function RecapSheet({
         )}
         {streak >= 2 && <p className="recap-streak">จดต่อเนื่อง {streak} วัน</p>}
         <p className="recap-line">{closingLine}</p>
+        {shareMessage && <p className="recap-line">{shareMessage}</p>}
         <button className="recap-share" onClick={share}>แชร์สรุปเดือนนี้</button>
       </section>
     </div>
@@ -3568,67 +3814,69 @@ function SideMenu({
 function ProfileEditSheet({
   profile,
   busy,
+  error,
   onClose,
   onSave,
 }: {
   profile: Profile | null;
   busy: boolean;
+  error: string;
   onClose: () => void;
-  onSave: (next: { nickname: string; app_icon: string; app_icon_image: string; month_start_day: number }) => void;
+  onSave: (next: { nickname: string; app_icon: string; app_icon_image: string; month_start_day: number }) => Promise<boolean>;
 }) {
   const [nickname, setNickname] = useState(profile?.nickname ?? "");
   const app_icon = profile?.app_icon ?? "";
   const [app_icon_image, setAppIconImage] = useState(profile?.app_icon_image ?? "");
   const [month_start_day, setMonthStartDay] = useState(profile?.month_start_day ?? 1);
+  const [localError, setLocalError] = useState("");
 
   async function chooseProfileImage(files: FileList | null) {
     const file = files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) return;
+    setLocalError("");
     try {
       setAppIconImage(await compressProfileImage(file));
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "เลือกรูปไม่สำเร็จ");
+      setLocalError(error instanceof Error ? error.message : "เลือกรูปไม่สำเร็จ");
     }
   }
 
-  const submit = () => {
-    onSave({ nickname, app_icon, app_icon_image, month_start_day });
-    onClose();
+  const submit = async () => {
+    const saved = await onSave({ nickname, app_icon, app_icon_image, month_start_day });
+    if (saved) onClose();
   };
 
   return (
-    <div className="sheet-backdrop">
-      <section className="edit-sheet">
-        <div className="sheet-head">
-          <div>
-            <p className="eyebrow">ตั้งค่า</p>
-            <h2>จัดการโปรไฟล์</h2>
-          </div>
-          <button onClick={onClose}>×</button>
+    <SheetFrame onClose={onClose}>
+      <div className="sheet-head">
+        <div>
+          <p className="eyebrow">ตั้งค่า</p>
+          <h2>จัดการโปรไฟล์</h2>
         </div>
-        <label>
-          ชื่อเล่น
-          <input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="เช่น ก้อง" />
-        </label>
-        <label>
-          รูปไอคอนจากภายนอก
-          <input type="file" accept="image/*" onChange={(event) => { void chooseProfileImage(event.target.files); event.currentTarget.value = ""; }} />
-          <small>รองรับรูปจากมือถือได้ถึง 10MB ระบบจะย่อเป็นไอคอนให้อัตโนมัติ</small>
-        </label>
-        {!!app_icon_image && <button className="side-ghost" onClick={() => setAppIconImage("")}>ลบรูปไอคอน</button>}
-        <label>
-          วันเริ่มรอบเดือน
-          <input type="number" min={1} max={28} value={month_start_day} onChange={(event) => setMonthStartDay(clampInteger(event.target.value, 1, 28, 1))} />
-        </label>
-        <button className="save" onClick={submit} disabled={busy}>
-          บันทึก
-        </button>
-      </section>
-    </div>
+        <button onClick={onClose}>x</button>
+      </div>
+      <label>
+        ชื่อเล่น
+        <input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="เช่น ก้อง" />
+      </label>
+      <label>
+        รูปไอคอนจากภายนอก
+        <input type="file" accept="image/*" onChange={(event) => { void chooseProfileImage(event.target.files); event.currentTarget.value = ""; }} />
+        <small>รองรับรูปจากมือถือได้ถึง 10MB ระบบจะย่อเป็นไอคอนให้อัตโนมัติ</small>
+      </label>
+      {!!app_icon_image && <button className="side-ghost" onClick={() => setAppIconImage("")}>ลบรูปไอคอน</button>}
+      <label>
+        วันเริ่มรอบเดือน
+        <input type="number" min={1} max={28} value={month_start_day} onChange={(event) => setMonthStartDay(clampInteger(event.target.value, 1, 28, 1))} />
+      </label>
+      {(localError || error) && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={localError || error} />}
+      <button className="save" onClick={submit} disabled={busy}>
+        {busy ? "กำลังบันทึก..." : "บันทึก"}
+      </button>
+    </SheetFrame>
   );
 }
-
 function WalletsView({
   wallets,
   onBack,
@@ -3696,15 +3944,17 @@ type WalletInput = {
 function WalletEditSheet({
   wallet,
   busy,
+  error,
   onClose,
   onCreate,
   onUpdate,
 }: {
   wallet: Wallet | null;
   busy: boolean;
+  error: string;
   onClose: () => void;
-  onCreate: (input: WalletInput) => void;
-  onUpdate: (wallet: Wallet, patch: WalletInput) => void;
+  onCreate: (input: WalletInput) => Promise<boolean>;
+  onUpdate: (wallet: Wallet, patch: WalletInput) => Promise<boolean>;
 }) {
   const [name, setName] = useState(wallet?.name ?? "");
   const [tag, setTag] = useState<WalletTag>(wallet?.tag ?? "cash");
@@ -3712,49 +3962,46 @@ function WalletEditSheet({
   const [icon, setIcon] = useState<string | null>(wallet?.icon ?? null);
   const [iconColor, setIconColor] = useState<string | null>(wallet?.icon_color ?? null);
 
-  const submit = () => {
+  const submit = async () => {
     if (!name.trim()) return;
     const payload: WalletInput = { name, tag, balance: toFiniteNumber(balanceText), icon, icon_color: iconColor };
-    if (wallet) onUpdate(wallet, payload);
-    else onCreate(payload);
-    onClose();
+    const saved = wallet ? await onUpdate(wallet, payload) : await onCreate(payload);
+    if (saved) onClose();
   };
 
   return (
-    <div className="sheet-backdrop">
-      <section className="edit-sheet">
-        <div className="sheet-head">
-          <div>
-            <p className="eyebrow">{wallet ? "แก้ไขกระเป๋าตังค์" : "เพิ่มกระเป๋าตังค์"}</p>
-            <h2>{wallet ? wallet.name : "กระเป๋าใหม่"}</h2>
-          </div>
-          <button onClick={onClose}>×</button>
+    <SheetFrame onClose={onClose}>
+      <div className="sheet-head">
+        <div>
+          <p className="eyebrow">{wallet ? "แก้ไขกระเป๋าตังค์" : "เพิ่มกระเป๋าตังค์"}</p>
+          <h2>{wallet ? wallet.name : "กระเป๋าใหม่"}</h2>
         </div>
-        <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
-        <label>
-          ชื่อกระเป๋า
-          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น กระเป๋าหลัก, ออมทรัพย์ SCB" />
-        </label>
-        <label>
-          ประเภท
-          <select value={tag} onChange={(event) => setTag(event.target.value as WalletTag)}>
-            {(Object.keys(walletTagLabels) as WalletTag[]).map((key) => (
-              <option key={key} value={key}>{walletTagLabels[key]}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          ยอดเงิน
-          <input inputMode="decimal" value={balanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setBalanceText(event.target.value); }} />
-        </label>
-        <button className="save" onClick={submit} disabled={busy || !name.trim()}>
-          บันทึก
-        </button>
-      </section>
-    </div>
+        <button onClick={onClose}>x</button>
+      </div>
+      <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
+      <label>
+        ชื่อกระเป๋า
+        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น กระเป๋าหลัก, ออมทรัพย์ SCB" />
+      </label>
+      <label>
+        ประเภท
+        <select value={tag} onChange={(event) => setTag(event.target.value as WalletTag)}>
+          {(Object.keys(walletTagLabels) as WalletTag[]).map((key) => (
+            <option key={key} value={key}>{walletTagLabels[key]}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        ยอดเงิน
+        <input inputMode="decimal" value={balanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setBalanceText(event.target.value); }} />
+      </label>
+      {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
+      <button className="save" onClick={submit} disabled={busy || !name.trim()}>
+        {busy ? "กำลังบันทึก..." : "บันทึก"}
+      </button>
+    </SheetFrame>
   );
 }
-
 function RecurringExpensesView({
   items,
   onBack,
@@ -3822,15 +4069,17 @@ type RecurringExpenseInput = {
 function RecurringExpenseEditSheet({
   item,
   busy,
+  error,
   onClose,
   onCreate,
   onUpdate,
 }: {
   item: RecurringExpense | null;
   busy: boolean;
+  error: string;
   onClose: () => void;
-  onCreate: (input: RecurringExpenseInput) => void;
-  onUpdate: (item: RecurringExpense, patch: RecurringExpenseInput) => void;
+  onCreate: (input: RecurringExpenseInput) => Promise<boolean>;
+  onUpdate: (item: RecurringExpense, patch: RecurringExpenseInput) => Promise<boolean>;
 }) {
   const [name, setName] = useState(item?.name ?? "");
   const [amountText, setAmountText] = useState(item?.amount ? String(item.amount) : "");
@@ -3838,49 +4087,46 @@ function RecurringExpenseEditSheet({
   const [icon, setIcon] = useState<string | null>(item?.icon ?? null);
   const [iconColor, setIconColor] = useState<string | null>(item?.icon_color ?? null);
 
-  const submit = () => {
+  const submit = async () => {
     if (!name.trim()) return;
     const payload: RecurringExpenseInput = { name, amount: toMoneyAmount(amountText), billing_day: billingDay, icon, icon_color: iconColor };
-    if (item) onUpdate(item, payload);
-    else onCreate(payload);
-    onClose();
+    const saved = item ? await onUpdate(item, payload) : await onCreate(payload);
+    if (saved) onClose();
   };
 
   return (
-    <div className="sheet-backdrop">
-      <section className="edit-sheet">
-        <div className="sheet-head">
-          <div>
-            <p className="eyebrow">{item ? "แก้ไขรายจ่ายประจำ" : "เพิ่มรายจ่ายประจำ"}</p>
-            <h2>{item ? item.name : "รายการใหม่"}</h2>
-          </div>
-          <button onClick={onClose}>×</button>
+    <SheetFrame onClose={onClose}>
+      <div className="sheet-head">
+        <div>
+          <p className="eyebrow">{item ? "แก้ไขรายจ่ายประจำ" : "เพิ่มรายจ่ายประจำ"}</p>
+          <h2>{item ? item.name : "รายการใหม่"}</h2>
         </div>
-        <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
-        <label>
-          ชื่อรายการ
-          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น Netflix, Claude Pro, YouTube Premium" />
-        </label>
-        <label>
-          ยอดต่อเดือน
-          <input inputMode="decimal" value={amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setAmountText(event.target.value); }} />
-        </label>
-        <label>
-          ตัดเงินทุกวันที่
-          <select value={billingDay} onChange={(event) => setBillingDay(normalizeBillingDay(event.target.value))}>
-            {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-              <option key={day} value={day}>{day}</option>
-            ))}
-          </select>
-        </label>
-        <button className="save" onClick={submit} disabled={busy || !name.trim()}>
-          บันทึก
-        </button>
-      </section>
-    </div>
+        <button onClick={onClose}>x</button>
+      </div>
+      <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
+      <label>
+        ชื่อรายการ
+        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น Netflix, Claude Pro, YouTube Premium" />
+      </label>
+      <label>
+        ยอดต่อเดือน
+        <input inputMode="decimal" value={amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setAmountText(event.target.value); }} />
+      </label>
+      <label>
+        ตัดเงินทุกวันที่
+        <select value={billingDay} onChange={(event) => setBillingDay(normalizeBillingDay(event.target.value))}>
+          {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+            <option key={day} value={day}>{day}</option>
+          ))}
+        </select>
+      </label>
+      {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
+      <button className="save" onClick={submit} disabled={busy || !name.trim()}>
+        {busy ? "กำลังบันทึก..." : "บันทึก"}
+      </button>
+    </SheetFrame>
   );
 }
-
 function ConfirmLogout({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
   return (
     <div className="dialog-backdrop">
