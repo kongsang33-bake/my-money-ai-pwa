@@ -930,11 +930,6 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [toasts, closingToastIds, dismissToast]);
 
-  useEffect(() => {
-    if (!savePulse) return;
-    const timer = window.setTimeout(() => setSavePulse(0), 4200);
-    return () => window.clearTimeout(timer);
-  }, [savePulse]);
 
   const themeLoadedRef = useRef(false);
 
@@ -2040,6 +2035,15 @@ export default function Home() {
   const pinSheetDismiss = useDismiss(pinSheetOpen, () => { setPinSheetOpen(false); setPinError(""); });
   const logoutDismiss = useDismiss<[boolean]>(logoutOpen, (confirmed) => { setLogoutOpen(false); if (confirmed) void supabase?.auth.signOut(); });
   const confirmDialogDismiss = useDismiss<[boolean]>(!!confirmDialog, (confirmed) => closeConfirmDialog(confirmed));
+  const clearSavePulse = useCallback(() => setSavePulse(0), []);
+  const savePulseDismiss = useDismiss(!!savePulse, clearSavePulse, 200);
+  const { requestClose: closeSavePulse } = savePulseDismiss;
+
+  useEffect(() => {
+    if (!savePulse) return;
+    const timer = window.setTimeout(() => closeSavePulse(), 4200);
+    return () => window.clearTimeout(timer);
+  }, [savePulse, closeSavePulse]);
 
   if (!ready) {
     return (
@@ -2093,7 +2097,7 @@ export default function Home() {
         {tab === "home" && (
           <div className="view">
             {dataLoading && <SkeletonDashboard />}
-            {!!savePulse && <SuccessPulse count={savePulse} onAddMore={openAddTab} />}
+            {savePulseDismiss.mounted && <SuccessPulse count={savePulse} onAddMore={openAddTab} closing={savePulseDismiss.closing} />}
             {!dataLoading && (
               <>
                 <section className="wallet-grid single-wallet">
@@ -3053,9 +3057,9 @@ function MiniTrend({ items }: { items: { key: string; label: string; amount: num
   );
 }
 
-function SuccessPulse({ count, onAddMore }: { count: number; onAddMore: () => void }) {
+function SuccessPulse({ count, onAddMore, closing }: { count: number; onAddMore: () => void; closing?: boolean }) {
   return (
-    <section className="success-pulse" role="status">
+    <section className={`success-pulse ${closing ? "closing" : ""}`} role="status">
       <span className="success-pulse-icon" aria-hidden="true">✓</span>
       <div>
         <b>บันทึกเรียบร้อย</b>
