@@ -622,6 +622,42 @@ function normalizeEntry(input: EntryInput): Entry {
   };
 }
 
+function mapTransactionRow(row: {
+  id: string;
+  title: string;
+  category: string;
+  amount: number | string;
+  kind: string;
+  transaction_type: string | null;
+  wallet_impact: number | string | null;
+  debt_impact: number | string | null;
+  user_share: number | string | null;
+  partner_share: number | string | null;
+  debtor_name: string | null;
+  occurred_at: string;
+  source_text: string | null;
+  wallet_id: string | null;
+  note: string | null;
+}): Entry {
+  return normalizeEntry({
+    id: row.id,
+    title: row.title,
+    category: row.category,
+    amount: Number(row.amount),
+    type: row.kind as EntryKind,
+    transaction_type: (row.transaction_type as TransactionType | null) ?? undefined,
+    wallet_impact: row.wallet_impact == null ? undefined : Number(row.wallet_impact),
+    debt_impact: row.debt_impact == null ? undefined : Number(row.debt_impact),
+    user_share: row.user_share == null ? undefined : Number(row.user_share),
+    partner_share: row.partner_share == null ? undefined : Number(row.partner_share),
+    debtor_name: row.debtor_name,
+    occurred_at: row.occurred_at,
+    source_text: row.source_text,
+    wallet_id: row.wallet_id,
+    note: row.note,
+  });
+}
+
 function defaultWalletId(wallets: Wallet[]) {
   return wallets.find((wallet) => wallet.is_default)?.id ?? wallets.find((wallet) => wallet.tag === "cash")?.id ?? wallets[0]?.id ?? null;
 }
@@ -921,27 +957,7 @@ export default function Home() {
       return;
     }
 
-    setEntries(
-      (data ?? []).map((row) =>
-        normalizeEntry({
-          id: row.id,
-          title: row.title,
-          category: row.category,
-          amount: Number(row.amount),
-          type: row.kind as EntryKind,
-          transaction_type: row.transaction_type as TransactionType | undefined,
-          wallet_impact: row.wallet_impact == null ? undefined : Number(row.wallet_impact),
-          debt_impact: row.debt_impact == null ? undefined : Number(row.debt_impact),
-          user_share: row.user_share == null ? undefined : Number(row.user_share),
-          partner_share: row.partner_share == null ? undefined : Number(row.partner_share),
-          debtor_name: row.debtor_name,
-          occurred_at: row.occurred_at,
-          source_text: row.source_text,
-          wallet_id: row.wallet_id,
-          note: row.note,
-        }),
-      ),
-    );
+    setEntries((data ?? []).map(mapTransactionRow));
   }, []);
 
   const loadProfile = useCallback(async () => {
@@ -1383,13 +1399,6 @@ export default function Home() {
 
   async function saveEntries(items: Draft[]) {
     if (!supabase || !user || !items.length) return;
-    const confirmed = await requestConfirm({
-      title: "บันทึกรายการเหล่านี้?",
-      detail: `ตรวจแล้วและต้องการบันทึก ${items.length} รายการลงประวัติ`,
-      confirmLabel: "บันทึก",
-      tone: "default",
-    });
-    if (!confirmed) return;
 
     setBusy(true);
     setError("");
@@ -1413,17 +1422,21 @@ export default function Home() {
       note: normalized.note,
     }));
 
-    const { error } = await supabase.from("transactions").insert(payload);
+    const { data, error } = await supabase
+      .from("transactions")
+      .insert(payload)
+      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note");
 
     if (error) {
       setError(error.message);
     } else {
       await createMissingDebtors(normalizedItems);
+      const inserted = (data ?? []).map(mapTransactionRow);
+      setEntries((current) => [...inserted, ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
       setDrafts([]);
       setText("");
       setSlipImages([]);
       setTab("home");
-      await loadEntries();
       setSavePulse(normalizedItems.length);
       notify({ tone: "success", title: "บันทึกรายการแล้ว", detail: `${normalizedItems.length} รายการถูกซิงค์เรียบร้อย` });
     }
@@ -1457,13 +1470,7 @@ export default function Home() {
     if (!supabase || !editing) return false;
 
     const normalized = normalizeEntry(editing);
-    const confirmed = await requestConfirm({
-      title: "บันทึกการแก้ไข?",
-      detail: `อัปเดตรายการ "${normalized.title}" ด้วยข้อมูลล่าสุด`,
-      confirmLabel: "บันทึก",
-      tone: "default",
-    });
-    if (!confirmed) return false;
+    const resolvedWalletId = normalized.wallet_id ?? defaultWalletId(wallets);
 
     setBusy(true);
     setError("");
@@ -1482,7 +1489,7 @@ export default function Home() {
         user_share: normalized.user_share,
         partner_share: normalized.partner_share,
         occurred_at: normalized.occurred_at,
-        wallet_id: normalized.wallet_id ?? defaultWalletId(wallets),
+        wallet_id: resolvedWalletId,
         note: normalized.note,
       })
       .eq("id", normalized.id);
@@ -1491,10 +1498,10 @@ export default function Home() {
       setError(error.message);
       setBusy(false);
       return false;
-    } else {
-      await loadEntries();
     }
 
+    const savedEntry = { ...normalized, wallet_id: resolvedWalletId };
+    setEntries((current) => current.map((item) => (item.id === savedEntry.id ? savedEntry : item)));
     setBusy(false);
     return true;
   }
@@ -1728,13 +1735,6 @@ export default function Home() {
 
   async function createDebtor(input: DebtorInput) {
     if (!supabase || !user || !input.name.trim()) return false;
-    const confirmed = await requestConfirm({
-      title: "เพิ่มรายการหนี้?",
-      detail: `สร้าง "${input.name.trim()}" ในหน้าจัดการหนี้`,
-      confirmLabel: "เพิ่ม",
-      tone: "default",
-    });
-    if (!confirmed) return false;
     setBusy(true);
     setError("");
     const { error } = await supabase.from("debtors").insert({
@@ -1758,13 +1758,6 @@ export default function Home() {
   }
   async function updateDebtor(debtor: Debtor, patch: DebtorInput) {
     if (!supabase) return false;
-    const confirmed = await requestConfirm({
-      title: "บันทึกการแก้ไขหนี้?",
-      detail: `อัปเดต "${debtor.name}" เป็นข้อมูลล่าสุด`,
-      confirmLabel: "บันทึก",
-      tone: "default",
-    });
-    if (!confirmed) return false;
     setBusy(true);
     setError("");
     const openingBalance = toMoneyAmount(patch.opening_balance);
@@ -1833,13 +1826,6 @@ export default function Home() {
 
   async function createWallet(input: WalletInput) {
     if (!supabase || !user || !input.name.trim()) return false;
-    const confirmed = await requestConfirm({
-      title: "เพิ่มกระเป๋า?",
-      detail: `สร้างกระเป๋า "${input.name.trim()}" พร้อมยอดตั้งต้น ${moneySign}${formatMoney(input.balance)}`,
-      confirmLabel: "เพิ่ม",
-      tone: "default",
-    });
-    if (!confirmed) return false;
     setBusy(true);
     setError("");
     if (input.is_default) await supabase.from("wallets").update({ is_default: false, updated_at: new Date().toISOString() }).eq("user_id", user.id);
@@ -1863,13 +1849,6 @@ export default function Home() {
   }
   async function updateWallet(wallet: Wallet, patch: WalletInput) {
     if (!supabase) return false;
-    const confirmed = await requestConfirm({
-      title: "บันทึกกระเป๋า?",
-      detail: `อัปเดต "${wallet.name}" เป็นข้อมูลล่าสุด`,
-      confirmLabel: "บันทึก",
-      tone: "default",
-    });
-    if (!confirmed) return false;
     setBusy(true);
     setError("");
     if (patch.is_default) await supabase.from("wallets").update({ is_default: false, updated_at: new Date().toISOString() }).eq("user_id", wallet.user_id).neq("id", wallet.id);
@@ -1933,13 +1912,6 @@ export default function Home() {
 
   async function createRecurringExpense(input: RecurringExpenseInput) {
     if (!supabase || !user || !input.name.trim()) return false;
-    const confirmed = await requestConfirm({
-      title: "เพิ่มรายจ่ายประจำ?",
-      detail: `บันทึก "${input.name.trim()}" เป็นรายจ่ายประจำทุกเดือน`,
-      confirmLabel: "เพิ่ม",
-      tone: "default",
-    });
-    if (!confirmed) return false;
     setBusy(true);
     setError("");
     const { error } = await supabase.from("recurring_expenses").insert({
@@ -1961,13 +1933,6 @@ export default function Home() {
   }
   async function updateRecurringExpense(item: RecurringExpense, patch: RecurringExpenseInput) {
     if (!supabase) return false;
-    const confirmed = await requestConfirm({
-      title: "บันทึกรายจ่ายประจำ?",
-      detail: `อัปเดต "${item.name}" เป็นข้อมูลล่าสุด`,
-      confirmLabel: "บันทึก",
-      tone: "default",
-    });
-    if (!confirmed) return false;
     setBusy(true);
     setError("");
     const { error } = await supabase
