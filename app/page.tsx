@@ -1562,7 +1562,7 @@ export default function Home() {
       notify({ tone: "error", title: "ย้อนคืนรายการไม่สำเร็จ", detail: error.message });
       return;
     }
-    await loadEntries();
+    setEntries((current) => [entry, ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
     notify({ tone: "success", title: "ย้อนคืนรายการแล้ว", detail: entry.title });
   }
 
@@ -1737,22 +1737,27 @@ export default function Home() {
     if (!supabase || !user || !input.name.trim()) return false;
     setBusy(true);
     setError("");
-    const { error } = await supabase.from("debtors").insert({
-      user_id: user.id,
-      name: input.name.trim(),
-      note: input.note.trim() || null,
-      opening_balance: toMoneyAmount(input.opening_balance),
-      kind: input.kind,
-      monthly_installment: input.monthly_installment,
-      icon: input.icon,
-      icon_color: input.icon_color,
-    });
+    const { data, error } = await supabase
+      .from("debtors")
+      .insert({
+        user_id: user.id,
+        name: input.name.trim(),
+        note: input.note.trim() || null,
+        opening_balance: toMoneyAmount(input.opening_balance),
+        kind: input.kind,
+        monthly_installment: input.monthly_installment,
+        icon: input.icon,
+        icon_color: input.icon_color,
+      })
+      .select("id,user_id,name,note,opening_balance,kind,monthly_installment,icon,icon_color")
+      .single();
     if (error) {
       setError(error.code === "23505" ? "มีชื่อนี้อยู่แล้ว" : error.message);
       setBusy(false);
       return false;
     }
-    await loadDebtors();
+    const created = { ...data, opening_balance: toMoneyAmount(data.opening_balance) } as Debtor;
+    setDebtors((current) => [...current, created].sort((a, b) => a.name.localeCompare(b.name)));
     setBusy(false);
     return true;
   }
@@ -1779,10 +1784,9 @@ export default function Home() {
       setBusy(false);
       return false;
     }
-    if (selectedDebtor?.id === debtor.id) {
-      setSelectedDebtor({ ...debtor, ...patch, name: patch.name.trim(), note: patch.note.trim() || null, opening_balance: openingBalance });
-    }
-    await loadDebtors();
+    const updated: Debtor = { ...debtor, ...patch, name: patch.name.trim(), note: patch.note.trim() || null, opening_balance: openingBalance };
+    if (selectedDebtor?.id === debtor.id) setSelectedDebtor(updated);
+    setDebtors((current) => current.map((item) => (item.id === debtor.id ? updated : item)).sort((a, b) => a.name.localeCompare(b.name)));
     setBusy(false);
     return true;
   }
@@ -1801,7 +1805,7 @@ export default function Home() {
     if (error) setError(error.message);
     else {
       if (selectedDebtor?.id === debtor.id) setSelectedDebtor(null);
-      await loadDebtors();
+      setDebtors((current) => current.filter((item) => item.id !== debtor.id));
       notify({
         tone: "info",
         title: "ลบรายชื่อแล้ว",
@@ -1820,7 +1824,7 @@ export default function Home() {
       notify({ tone: "error", title: "ย้อนคืนรายชื่อไม่สำเร็จ", detail: error.message });
       return;
     }
-    await loadDebtors();
+    setDebtors((current) => [...current, debtor].sort((a, b) => a.name.localeCompare(b.name)));
     notify({ tone: "success", title: "ย้อนคืนรายชื่อแล้ว", detail: debtor.name });
   }
 
@@ -1829,21 +1833,29 @@ export default function Home() {
     setBusy(true);
     setError("");
     if (input.is_default) await supabase.from("wallets").update({ is_default: false, updated_at: new Date().toISOString() }).eq("user_id", user.id);
-    const { error } = await supabase.from("wallets").insert({
-      user_id: user.id,
-      name: input.name.trim(),
-      tag: input.tag,
-      balance: toFiniteNumber(input.balance),
-      icon: input.icon,
-      icon_color: input.icon_color,
-      is_default: input.is_default,
-    });
+    const { data, error } = await supabase
+      .from("wallets")
+      .insert({
+        user_id: user.id,
+        name: input.name.trim(),
+        tag: input.tag,
+        balance: toFiniteNumber(input.balance),
+        icon: input.icon,
+        icon_color: input.icon_color,
+        is_default: input.is_default,
+      })
+      .select("id,user_id,name,tag,balance,icon,icon_color,is_default")
+      .single();
     if (error) {
       setError(error.message);
       setBusy(false);
       return false;
     }
-    await loadWallets();
+    const created = { ...data, balance: toFiniteNumber(data.balance), is_default: !!data.is_default } as Wallet;
+    setWallets((current) => [
+      ...(created.is_default ? current.map((item) => ({ ...item, is_default: false })) : current),
+      created,
+    ]);
     setBusy(false);
     return true;
   }
@@ -1869,7 +1881,13 @@ export default function Home() {
       setBusy(false);
       return false;
     }
-    await loadWallets();
+    const updated: Wallet = { ...wallet, ...patch, name: patch.name.trim(), balance: toFiniteNumber(patch.balance) };
+    setWallets((current) =>
+      current.map((item) => {
+        if (item.id === wallet.id) return updated;
+        return updated.is_default ? { ...item, is_default: false } : item;
+      }),
+    );
     setBusy(false);
     return true;
   }
@@ -1887,7 +1905,7 @@ export default function Home() {
     const { error } = await supabase.from("wallets").delete().eq("id", wallet.id);
     if (error) setError(error.message);
     else {
-      await loadWallets();
+      setWallets((current) => current.filter((item) => item.id !== wallet.id));
       notify({
         tone: "info",
         title: "ลบกระเป๋าแล้ว",
@@ -1906,7 +1924,10 @@ export default function Home() {
       notify({ tone: "error", title: "ย้อนคืนกระเป๋าไม่สำเร็จ", detail: error.message });
       return;
     }
-    await loadWallets();
+    setWallets((current) => [
+      ...(wallet.is_default ? current.map((item) => ({ ...item, is_default: false })) : current),
+      wallet,
+    ]);
     notify({ tone: "success", title: "ย้อนคืนกระเป๋าแล้ว", detail: wallet.name });
   }
 
@@ -1914,20 +1935,25 @@ export default function Home() {
     if (!supabase || !user || !input.name.trim()) return false;
     setBusy(true);
     setError("");
-    const { error } = await supabase.from("recurring_expenses").insert({
-      user_id: user.id,
-      name: input.name.trim(),
-      amount: toMoneyAmount(input.amount),
-      billing_day: normalizeBillingDay(input.billing_day),
-      icon: input.icon,
-      icon_color: input.icon_color,
-    });
+    const { data, error } = await supabase
+      .from("recurring_expenses")
+      .insert({
+        user_id: user.id,
+        name: input.name.trim(),
+        amount: toMoneyAmount(input.amount),
+        billing_day: normalizeBillingDay(input.billing_day),
+        icon: input.icon,
+        icon_color: input.icon_color,
+      })
+      .select("id,user_id,name,amount,billing_day,icon,icon_color")
+      .single();
     if (error) {
       setError(error.message);
       setBusy(false);
       return false;
     }
-    await loadRecurringExpenses();
+    const created = { ...data, amount: toMoneyAmount(data.amount), billing_day: normalizeBillingDay(data.billing_day) } as RecurringExpense;
+    setRecurringExpenses((current) => [...current, created].sort((a, b) => a.billing_day - b.billing_day));
     setBusy(false);
     return true;
   }
@@ -1935,12 +1961,13 @@ export default function Home() {
     if (!supabase) return false;
     setBusy(true);
     setError("");
+    const billingDay = normalizeBillingDay(patch.billing_day);
     const { error } = await supabase
       .from("recurring_expenses")
       .update({
         name: patch.name.trim(),
         amount: toMoneyAmount(patch.amount),
-        billing_day: normalizeBillingDay(patch.billing_day),
+        billing_day: billingDay,
         icon: patch.icon,
         icon_color: patch.icon_color,
         updated_at: new Date().toISOString(),
@@ -1951,7 +1978,8 @@ export default function Home() {
       setBusy(false);
       return false;
     }
-    await loadRecurringExpenses();
+    const updated: RecurringExpense = { ...item, ...patch, name: patch.name.trim(), amount: toMoneyAmount(patch.amount), billing_day: billingDay };
+    setRecurringExpenses((current) => current.map((row) => (row.id === item.id ? updated : row)).sort((a, b) => a.billing_day - b.billing_day));
     setBusy(false);
     return true;
   }
@@ -1969,7 +1997,7 @@ export default function Home() {
     const { error } = await supabase.from("recurring_expenses").delete().eq("id", item.id);
     if (error) setError(error.message);
     else {
-      await loadRecurringExpenses();
+      setRecurringExpenses((current) => current.filter((row) => row.id !== item.id));
       notify({
         tone: "info",
         title: "ลบรายจ่ายประจำแล้ว",
@@ -1988,7 +2016,7 @@ export default function Home() {
       notify({ tone: "error", title: "ย้อนคืนรายจ่ายประจำไม่สำเร็จ", detail: error.message });
       return;
     }
-    await loadRecurringExpenses();
+    setRecurringExpenses((current) => [...current, item].sort((a, b) => a.billing_day - b.billing_day));
     notify({ tone: "success", title: "ย้อนคืนรายจ่ายประจำแล้ว", detail: item.name });
   }
 
