@@ -14,12 +14,14 @@ import {
   Home as HomeIcon,
   Lightbulb,
   Lock,
+  Moon,
   MoreHorizontal,
   Music,
   PiggyBank,
   Plane,
   Receipt,
   ShoppingBag,
+  Sun,
   TrendingUp,
   Users,
   Utensils,
@@ -1372,6 +1374,13 @@ export default function Home() {
 
   async function saveEntries(items: Draft[]) {
     if (!supabase || !user || !items.length) return;
+    const confirmed = await requestConfirm({
+      title: "บันทึกรายการเหล่านี้?",
+      detail: `ตรวจแล้วและต้องการบันทึก ${items.length} รายการลงประวัติ`,
+      confirmLabel: "บันทึก",
+      tone: "default",
+    });
+    if (!confirmed) return;
 
     setBusy(true);
     setError("");
@@ -1439,6 +1448,14 @@ export default function Home() {
     if (!supabase || !editing) return false;
 
     const normalized = normalizeEntry(editing);
+    const confirmed = await requestConfirm({
+      title: "บันทึกการแก้ไข?",
+      detail: `อัปเดตรายการ "${normalized.title}" ด้วยข้อมูลล่าสุด`,
+      confirmLabel: "บันทึก",
+      tone: "default",
+    });
+    if (!confirmed) return false;
+
     setBusy(true);
     setError("");
 
@@ -1677,6 +1694,13 @@ export default function Home() {
 
   async function createDebtor(input: DebtorInput) {
     if (!supabase || !user || !input.name.trim()) return false;
+    const confirmed = await requestConfirm({
+      title: "เพิ่มรายการหนี้?",
+      detail: `สร้าง "${input.name.trim()}" ในหน้าจัดการหนี้`,
+      confirmLabel: "เพิ่ม",
+      tone: "default",
+    });
+    if (!confirmed) return false;
     setBusy(true);
     setError("");
     const { error } = await supabase.from("debtors").insert({
@@ -1700,6 +1724,13 @@ export default function Home() {
   }
   async function updateDebtor(debtor: Debtor, patch: DebtorInput) {
     if (!supabase) return false;
+    const confirmed = await requestConfirm({
+      title: "บันทึกการแก้ไขหนี้?",
+      detail: `อัปเดต "${debtor.name}" เป็นข้อมูลล่าสุด`,
+      confirmLabel: "บันทึก",
+      tone: "default",
+    });
+    if (!confirmed) return false;
     setBusy(true);
     setError("");
     const openingBalance = toMoneyAmount(patch.opening_balance);
@@ -1768,6 +1799,13 @@ export default function Home() {
 
   async function createWallet(input: WalletInput) {
     if (!supabase || !user || !input.name.trim()) return false;
+    const confirmed = await requestConfirm({
+      title: "เพิ่มกระเป๋า?",
+      detail: `สร้างกระเป๋า "${input.name.trim()}" พร้อมยอดตั้งต้น ${moneySign}${formatMoney(input.balance)}`,
+      confirmLabel: "เพิ่ม",
+      tone: "default",
+    });
+    if (!confirmed) return false;
     setBusy(true);
     setError("");
     if (input.is_default) await supabase.from("wallets").update({ is_default: false, updated_at: new Date().toISOString() }).eq("user_id", user.id);
@@ -1791,6 +1829,13 @@ export default function Home() {
   }
   async function updateWallet(wallet: Wallet, patch: WalletInput) {
     if (!supabase) return false;
+    const confirmed = await requestConfirm({
+      title: "บันทึกกระเป๋า?",
+      detail: `อัปเดต "${wallet.name}" เป็นข้อมูลล่าสุด`,
+      confirmLabel: "บันทึก",
+      tone: "default",
+    });
+    if (!confirmed) return false;
     setBusy(true);
     setError("");
     if (patch.is_default) await supabase.from("wallets").update({ is_default: false, updated_at: new Date().toISOString() }).eq("user_id", wallet.user_id).neq("id", wallet.id);
@@ -1854,6 +1899,13 @@ export default function Home() {
 
   async function createRecurringExpense(input: RecurringExpenseInput) {
     if (!supabase || !user || !input.name.trim()) return false;
+    const confirmed = await requestConfirm({
+      title: "เพิ่มรายจ่ายประจำ?",
+      detail: `บันทึก "${input.name.trim()}" เป็นรายจ่ายประจำทุกเดือน`,
+      confirmLabel: "เพิ่ม",
+      tone: "default",
+    });
+    if (!confirmed) return false;
     setBusy(true);
     setError("");
     const { error } = await supabase.from("recurring_expenses").insert({
@@ -1875,6 +1927,13 @@ export default function Home() {
   }
   async function updateRecurringExpense(item: RecurringExpense, patch: RecurringExpenseInput) {
     if (!supabase) return false;
+    const confirmed = await requestConfirm({
+      title: "บันทึกรายจ่ายประจำ?",
+      detail: `อัปเดต "${item.name}" เป็นข้อมูลล่าสุด`,
+      confirmLabel: "บันทึก",
+      tone: "default",
+    });
+    if (!confirmed) return false;
     setBusy(true);
     setError("");
     const { error } = await supabase
@@ -1985,7 +2044,6 @@ export default function Home() {
         {tab === "home" && (
           <div className="view">
             {dataLoading && <SkeletonDashboard />}
-            {dataLoading && <StateCard tone="loading" title="กำลังซิงค์ข้อมูล" detail="กำลังโหลดรายการ กระเป๋า และลูกหนี้ของคุณ" />}
             {!!savePulse && <SuccessPulse count={savePulse} onAddMore={openAddTab} />}
             {!dataLoading && (
               <>
@@ -1998,10 +2056,12 @@ export default function Home() {
                   receivableTotal={receivableTotal}
                   payableTotal={payableTotal}
                 />
-                <div className="home-focus-grid">
-                  <DueSoonCard items={dueSoonRecurring} onManage={() => setTab("recurring")} />
-                  <BudgetGlanceCard budgetGlance={budgetGlance} onManage={() => setBudgetSheetOpen(true)} />
-                </div>
+                {(dueSoonRecurring.length > 0 || budgetGlance.totalBudget > 0) && (
+                  <div className="home-focus-grid">
+                    {dueSoonRecurring.length > 0 && <DueSoonCard items={dueSoonRecurring} onManage={() => setTab("recurring")} />}
+                    {budgetGlance.totalBudget > 0 && <BudgetGlanceCard budgetGlance={budgetGlance} onManage={() => setBudgetSheetOpen(true)} />}
+                  </div>
+                )}
               </>
             )}
 
@@ -2036,7 +2096,6 @@ export default function Home() {
         {tab === "add" && (
           <div className="view add-view">
             {dataLoading && <SkeletonList rows={3} />}
-            {dataLoading && <StateCard tone="loading" title="กำลังเตรียมข้อมูล" detail="กำลังโหลดรายชื่อ ลูกหนี้ และรายการล่าสุดเพื่อช่วย AI วิเคราะห์" />}
             <div className="add-title add-title-compact">
               <button onClick={() => setTab("home")}>‹</button>
               <div>
@@ -2102,7 +2161,7 @@ export default function Home() {
             <button className="primary" onClick={analyze} disabled={busy || (!text.trim() && !slipImages.length)}>
               {busy ? "กำลังวิเคราะห์..." : "ให้ AI แยกรายการ"}
             </button>
-            {busy && <StateCard tone="loading" title="AI กำลังอ่านข้อมูล" detail="กำลังแยกยอดเงิน หมวดหมู่ วันที่ และชื่อผู้เกี่ยวข้อง" />}
+            {busy && <SkeletonList rows={2} />}
             {error && <StateCard tone="error" title="AI ยังทำรายการนี้ไม่ได้" detail={error} />}
 
             {!!drafts.length && (
@@ -2136,7 +2195,6 @@ export default function Home() {
         {tab === "history" && (
           <div className="view history-view">
             {dataLoading && <SkeletonList rows={5} />}
-            {dataLoading && <StateCard tone="loading" title="กำลังโหลดประวัติ" detail="กำลังซิงค์รายการจาก Supabase" />}
             <div className="add-title">
               <button onClick={() => setTab("home")}>‹</button>
               <div>
@@ -3402,12 +3460,9 @@ function EntryList({
                 <b>{entry.title}</b>
                 <small>
                   {transactionTypeLabels[entry.transaction_type]} · {entry.category} · {formatDateTime(entry.occurred_at)}
+                  {entry.debt_impact !== 0 ? ` · ${entry.debtor_name}` : ""}
                 </small>
-                <small>
-                  กระเป๋า {formatSignedMoney(entry.wallet_impact)}
-                  {entry.debt_impact !== 0 ? ` · ${entry.debtor_name}: ${formatSignedMoney(entry.debt_impact)}` : ""}
-                </small>
-                {entry.note && <small>{entry.note}</small>}
+                {entry.note && <small className="entry-note" title={entry.note}>{entry.note}</small>}
               </div>
               <strong className={entry.wallet_impact >= 0 ? "income" : "expense"}>{formatSignedMoney(entry.wallet_impact)}</strong>
               {(onEdit || onDelete) && (
@@ -4249,9 +4304,14 @@ function SideMenu({
         </nav>
 
         <div className="side-menu-footer">
-          <div className="theme-toggle" role="group" aria-label="ธีมสีของแอพ">
-            <button className={theme === "light" ? "active" : ""} onClick={() => onSetTheme("light")}>สว่าง</button>
-            <button className={theme === "dark" ? "active" : ""} onClick={() => onSetTheme("dark")}>มืด</button>
+          <div className={`theme-toggle theme-toggle-${theme}`} role="group" aria-label="ธีมสีของแอพ">
+            <span className="theme-toggle-thumb" aria-hidden="true" />
+            <button className={theme === "light" ? "active" : ""} onClick={() => onSetTheme("light")} aria-label="ธีมสว่าง" title="ธีมสว่าง">
+              <Sun size={16} strokeWidth={2.25} aria-hidden="true" />
+            </button>
+            <button className={theme === "dark" ? "active" : ""} onClick={() => onSetTheme("dark")} aria-label="ธีมมืด" title="ธีมมืด">
+              <Moon size={16} strokeWidth={2.25} aria-hidden="true" />
+            </button>
           </div>
           <button className="logout-button" onClick={onLogout}>ออกจากระบบ</button>
         </div>
@@ -4342,6 +4402,7 @@ function WalletsView({
   onDelete: (wallet: Wallet) => void;
 }) {
   const total = wallets.reduce((sum, wallet) => sum + wallet.display_balance, 0);
+  const [openWalletId, setOpenWalletId] = useState<string | null>(null);
   const entriesByWallet = useMemo(() => {
     const map = new Map<string, Entry[]>();
     for (const entry of entries) {
@@ -4350,8 +4411,11 @@ function WalletsView({
       list.push(entry);
       map.set(entry.wallet_id, list);
     }
+    for (const list of map.values()) list.sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
     return map;
   }, [entries]);
+  const selectedWallet = wallets.find((wallet) => wallet.id === openWalletId) ?? null;
+  const selectedWalletEntries = selectedWallet ? (entriesByWallet.get(selectedWallet.id) ?? []).slice(0, 8) : [];
 
   return (
     <div className="view debtor-view">
@@ -4369,8 +4433,8 @@ function WalletsView({
       </section>
       <div className="debtor-page-list">
         {wallets.map((wallet) => (
-          <article className="debtor-page-item" key={wallet.id}>
-            <button className="debtor-main-button" onClick={() => onEdit(wallet)}>
+          <article className={`debtor-page-item ${openWalletId === wallet.id ? "active" : ""}`} key={wallet.id}>
+            <button className="debtor-main-button" onClick={() => setOpenWalletId((current) => current === wallet.id ? null : wallet.id)}>
               <span className="debtor-avatar" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>
                 <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} />
               </span>
@@ -4393,32 +4457,27 @@ function WalletsView({
         ))}
         {!wallets.length && <EmptyNote glyph="▣" action={{ label: "เพิ่มกระเป๋า", onClick: onAdd }}>ยังไม่มีกระเป๋าตังค์ สร้างกองเงินแรกของคุณได้เลย</EmptyNote>}
       </div>
-      <section className="wallet-statement-panel">
-        <div className="section-title">
-          <h2>รายการตามกระเป๋า</h2>
-        </div>
-        {wallets.map((wallet) => {
-          const walletEntries = (entriesByWallet.get(wallet.id) ?? []).slice(0, 4);
-          return (
-            <div className="wallet-statement" key={wallet.id}>
-              <div>
-                <b>{wallet.name}</b>
-                <small>{walletEntries.length} รายการล่าสุด</small>
-              </div>
-              {walletEntries.length ? (
-                walletEntries.map((entry) => (
-                  <div className="wallet-statement-row" key={entry.id}>
-                    <span>{entry.title}</span>
-                    <b className={entry.wallet_impact >= 0 ? "income" : "expense"}>{formatSignedMoney(entry.wallet_impact)}</b>
-                  </div>
-                ))
-              ) : (
-                <p>ยังไม่มีรายการในกระเป๋านี้</p>
-              )}
-            </div>
-          );
-        })}
-      </section>
+      {selectedWallet && (
+        <section className="wallet-statement-panel">
+          <div className="section-title">
+            <h2>รายการใน {selectedWallet.name}</h2>
+            <button onClick={() => onEdit(selectedWallet)}>แก้ไขกระเป๋า</button>
+          </div>
+          <div className="wallet-statement">
+            {selectedWalletEntries.length ? (
+              selectedWalletEntries.map((entry) => (
+                <div className="wallet-statement-row" key={entry.id}>
+                  <span>{entry.title}</span>
+                  <small>{formatDateTime(entry.occurred_at)}</small>
+                  <b className={entry.wallet_impact >= 0 ? "income" : "expense"}>{formatSignedMoney(entry.wallet_impact)}</b>
+                </div>
+              ))
+            ) : (
+              <p>ยังไม่มีรายการในกระเป๋านี้</p>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
