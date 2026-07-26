@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import NextImage from "next/image";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import {
@@ -2026,7 +2027,8 @@ export default function Home() {
       <section className={`phone tab-${tab}`}>
         <header className="topbar">
           <div className="home-identity">
-            <span className="home-profile-icon" style={displayIconImage ? { backgroundImage: `url(${displayIconImage})` } : undefined}>
+            <span className={`home-profile-icon ${displayIconImage ? "has-image" : ""}`}>
+              {displayIconImage && <NextImage className="profile-image" src={displayIconImage} alt="" width={42} height={42} unoptimized />}
               {!displayIconImage && displayIcon}
             </span>
             <div>
@@ -2990,8 +2992,24 @@ function HistoryFilterBar({
   onClear: () => void;
 }) {
   const update = (patch: Partial<HistoryFilters>) => onChange({ ...filters, ...patch });
+  const activeCount = [
+    filters.query,
+    filters.category,
+    filters.type !== "all" ? filters.type : "",
+    filters.minAmount,
+    filters.maxAmount,
+    filters.startDate,
+    filters.endDate,
+  ].filter(Boolean).length;
   return (
-    <section className="history-filter-panel">
+    <details className="history-filter-panel compact-disclosure">
+      <summary>
+        <span>
+          <b>ค้นหาและกรอง</b>
+          <small>{activeCount ? `ใช้ตัวกรอง ${activeCount} จุด` : "แตะเพื่อเปิดตัวกรอง"}</small>
+        </span>
+        <em>{activeCount ? "แก้ไข" : "เปิด"}</em>
+      </summary>
       <div className="history-search-row">
         <input value={filters.query} onChange={(event) => update({ query: event.target.value })} placeholder="ค้นหาชื่อ หมวด ลูกหนี้ หรือหมายเหตุ" />
         <button onClick={onClear}>ล้าง</button>
@@ -3012,22 +3030,23 @@ function HistoryFilterBar({
         <input inputMode="decimal" value={filters.minAmount} onChange={(event) => update({ minAmount: event.target.value })} placeholder="ยอดต่ำสุด" />
         <input inputMode="decimal" value={filters.maxAmount} onChange={(event) => update({ maxAmount: event.target.value })} placeholder="ยอดสูงสุด" />
         <input type="date" value={filters.startDate} onChange={(event) => update({ startDate: event.target.value })} />
-        <input type="date" value={filters.endDate} onChange={(event) => update({ endDate: event.target.value })} />
+          <input type="date" value={filters.endDate} onChange={(event) => update({ endDate: event.target.value })} />
       </div>
-    </section>
+    </details>
   );
 }
 
 function MonthlyTrendChart({ trend }: { trend: { key: string; label: string; income: number; outflow: number }[] }) {
   const max = Math.max(...trend.flatMap((item) => [item.income, item.outflow]), 1);
   return (
-    <section className="monthly-trend-panel">
-      <div className="monthly-trend-head">
-        <div>
+    <details className="monthly-trend-panel compact-disclosure">
+      <summary>
+        <span>
           <p className="eyebrow">แนวโน้ม</p>
           <h2>รายรับเทียบรายจ่าย 6 เดือน</h2>
-        </div>
-      </div>
+        </span>
+        <em>เปิดกราฟ</em>
+      </summary>
       <div className="monthly-trend-bars">
         {trend.map((item) => (
           <div key={item.key}>
@@ -3043,7 +3062,7 @@ function MonthlyTrendChart({ trend }: { trend: { key: string; label: string; inc
         <span><i className="income" />รายรับ</span>
         <span><i className="expense" />รายจ่าย</span>
       </div>
-    </section>
+    </details>
   );
 }
 
@@ -4245,7 +4264,8 @@ function SideMenu({
         </div>
 
         <div className="profile-head">
-          <div className="avatar profile-avatar profile-avatar-image" style={appIconImage ? { backgroundImage: `url(${appIconImage})` } : undefined}>
+          <div className={`avatar profile-avatar profile-avatar-image ${appIconImage ? "has-image" : ""}`}>
+            {appIconImage && <NextImage className="profile-image" src={appIconImage} alt="" width={44} height={44} unoptimized />}
             {!appIconImage && appIcon}
           </div>
           <div>

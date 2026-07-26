@@ -266,11 +266,17 @@ a:focus-visible {
 }
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
   padding: max(var(--s-6), env(safe-area-inset-top)) var(--s-5) var(--s-5);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .home-identity {
@@ -289,10 +295,20 @@ a:focus-visible {
   place-items: center;
   font-weight: 700;
   font-size: 18px;
-  background-size: contain;
-  background-position: center;
-  background-repeat: no-repeat;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.profile-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.home-profile-icon.has-image, .avatar.has-image {
+  background: var(--surface-2);
+  padding: 3px;
 }
 
 .home-identity h1 {
@@ -303,9 +319,9 @@ a:focus-visible {
 .menu-button {
   width: 36px;
   height: 36px;
-  border-radius: 14px;
-  background: var(--surface);
-  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: transparent;
+  border: 0;
   display: grid;
   place-items: center;
   gap: 3px;
@@ -326,6 +342,7 @@ a:focus-visible {
   border-radius: 0 0 var(--r-xl) var(--r-xl);
   padding-bottom: 52px;
   margin-bottom: -28px;
+  border-bottom: 0;
 }
 
 .phone.tab-home .topbar .eyebrow {
@@ -338,8 +355,8 @@ a:focus-visible {
 }
 
 .phone.tab-home .topbar .menu-button {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: transparent;
+  border-color: transparent;
 }
 
 .phone.tab-home .topbar .menu-button span {
@@ -1048,6 +1065,7 @@ a:focus-visible {
 .icon-color-picker-glyphs svg, .home-profile-icon svg {
   display: block;
   flex-shrink: 0;
+  margin: auto;
 }
 
 /* -------------------------------------------------------------------------
@@ -1654,6 +1672,53 @@ a:focus-visible {
   gap: var(--s-3);
 }
 
+.compact-disclosure {
+  display: block;
+}
+
+.compact-disclosure summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  cursor: pointer;
+}
+
+.compact-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.compact-disclosure summary span {
+  display: grid;
+  gap: 2px;
+}
+
+.compact-disclosure summary b,
+.compact-disclosure summary h2 {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.compact-disclosure summary small,
+.compact-disclosure summary em {
+  color: var(--ink-3);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.compact-disclosure summary em {
+  padding: 7px 10px;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+
+.compact-disclosure[open] summary {
+  margin-bottom: var(--s-3);
+}
+
 .history-search-row {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -2210,10 +2275,11 @@ a:focus-visible {
 .report-sheet {
   position: fixed;
   left: 50%;
-  bottom: max(var(--s-4), env(safe-area-inset-bottom));
+  top: 50%;
+  bottom: auto;
   transform: translateX(-50%);
   width: min(100% - var(--s-5), 440px);
-  max-height: min(82vh, 680px);
+  max-height: min(82dvh, 680px);
   border-radius: var(--r-xl);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -3086,8 +3152,8 @@ a:focus-visible {
 }
 
 @keyframes report-sheet-in {
-  from { opacity: 0.4; transform: translateX(-50%) translateY(18px) scale(0.98); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  from { opacity: 0.4; transform: translate(-50%, calc(-50% + 18px)) scale(0.98); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
 @keyframes drawer-in {
