@@ -568,7 +568,9 @@ a:focus-visible {
 .success-pulse, .report-summary-tiles > div, .auth-card, .recap-card,
 .metric, .confirm-dialog, .skeleton-card, .skeleton-list > span,
 .skeleton-panel, .activity-timeline, .ai-input-wrap, .quick-chip,
-.home-insight-card, .home-focus-card, .first-run-card {
+.home-insight-card, .home-focus-card, .first-run-card,
+.history-filter-panel, .monthly-trend-panel, .income-breakdown-panel,
+.wallet-statement-panel {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
@@ -579,7 +581,8 @@ a:focus-visible {
 .state-card, .empty-note, .report-preview, .mini-trend, .history-insight,
 .debtor-statement, .category-spotlight, .success-pulse, .auth-card,
 .recap-card, .activity-timeline, .ai-input-wrap, .home-focus-card,
-.first-run-card {
+.first-run-card, .history-filter-panel, .monthly-trend-panel,
+.income-breakdown-panel, .wallet-statement-panel {
   padding: var(--s-5);
   margin-bottom: var(--s-4);
 }
@@ -1591,6 +1594,180 @@ a:focus-visible {
   margin-top: 2px;
 }
 
+.history-filter-panel {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.history-search-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--s-2);
+}
+
+.history-search-row input, .history-filter-grid input,
+.history-filter-grid select {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  padding: 10px 12px;
+}
+
+.history-search-row button {
+  padding: 0 14px;
+  border-radius: var(--r-md);
+  background: var(--primary);
+  color: var(--primary-text);
+  font-weight: 700;
+}
+
+.history-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+.monthly-trend-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+
+.monthly-trend-head h2 {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.monthly-trend-head strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.monthly-trend-bars {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--s-2);
+  min-height: 150px;
+  align-items: end;
+}
+
+.monthly-trend-bars > div {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.monthly-trend-bars span {
+  height: 118px;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  gap: 3px;
+}
+
+.monthly-trend-bars i {
+  width: 10px;
+  min-height: 6px;
+  border-radius: var(--r-full) var(--r-full) 0 0;
+}
+
+.monthly-trend-bars i.income, .trend-legend i.income {
+  background: var(--income);
+}
+
+.monthly-trend-bars i.expense, .trend-legend i.expense {
+  background: var(--expense);
+}
+
+.monthly-trend-bars small {
+  text-align: center;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.trend-legend {
+  display: flex;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.trend-legend span {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+
+.trend-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-full);
+}
+
+.income-breakdown-list {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.income-breakdown-list > div {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.income-breakdown-list b {
+  font-size: 13px;
+}
+
+.income-breakdown-list strong {
+  color: var(--income);
+  font-size: 13px;
+}
+
+.wallet-statement-panel {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.wallet-statement {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+.wallet-statement > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.wallet-statement small, .wallet-statement p {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+.wallet-statement-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--s-2);
+  font-size: 13px;
+}
+
+.wallet-statement-row b.income {
+  color: var(--income);
+}
+
+.wallet-statement-row b.expense {
+  color: var(--expense);
+}
+
 /* -------------------------------------------------------------------------
    Entry list
    ------------------------------------------------------------------------- */
@@ -1940,13 +2117,29 @@ a:focus-visible {
 }
 
 .edit-sheet label input, .edit-sheet label select,
-.auth-screen form input, .budget-row input {
+.edit-sheet label textarea, .auth-screen form input, .budget-row input {
   width: 100%;
   margin-top: 6px;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   padding: 12px 14px;
   background: var(--surface-2);
+}
+
+.edit-sheet label textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.edit-sheet .sheet-check-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.edit-sheet .sheet-check-row input {
+  width: auto;
+  margin: 0;
 }
 
 .recap-card {

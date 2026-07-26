@@ -46,6 +46,8 @@ type Entry = {
   debtor_name: string;
   occurred_at: string;
   source_text?: string | null;
+  wallet_id?: string | null;
+  note?: string | null;
 };
 
 type Draft = Omit<Entry, "id"> & { id: string };
@@ -82,6 +84,7 @@ type Wallet = {
   balance: number;
   icon: string | null;
   icon_color: string | null;
+  is_default: boolean;
 };
 type WalletDisplay = Wallet & {
   display_balance: number;
@@ -97,6 +100,15 @@ type RecurringExpense = {
   icon_color: string | null;
 };
 type ReportPeriod = "month" | "year";
+type HistoryFilters = {
+  query: string;
+  category: string;
+  type: "all" | TransactionType;
+  minAmount: string;
+  maxAmount: string;
+  startDate: string;
+  endDate: string;
+};
 type Toast = { id: number; tone: "success" | "info" | "error"; title: string; detail?: string; action?: { label: string; onClick: () => void } };
 type ConfirmDialogState = {
   title: string;
@@ -131,6 +143,8 @@ type EntryInput = {
   debtor_name?: string | null;
   occurred_at: string;
   source_text?: string | null;
+  wallet_id?: string | null;
+  note?: string | null;
 };
 
 type SlipImage = {
@@ -411,8 +425,8 @@ function buildWalletInsight(balance: number, outflow: number, cycleEnd: Date) {
   };
 }
 
-function lastSevenDayOutflow(entries: Entry[]) {
-  const today = startOfDay(new Date());
+function lastSevenDayOutflow(entries: Entry[], anchorDate: Date) {
+  const today = startOfDay(anchorDate);
   return Array.from({ length: 7 }, (_, index) => {
     const time = today - (6 - index) * 86400000;
     const amount = entries
@@ -488,6 +502,7 @@ function buildReportCsv({
 }) {
   const range = reportBounds(period, selectedMonth, selectedYear, monthStartDay);
   const reportEntries = entriesInRange(entries, range.start, range.end).sort((a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime());
+  const walletNameById = new Map(wallets.map((wallet) => [wallet.id, wallet.name]));
   const income = totalWallet(reportEntries, "income");
   const outflow = Math.abs(totalWallet(reportEntries, "expense"));
   const balance = income - outflow;
@@ -526,21 +541,23 @@ function buildReportCsv({
     ...payableSummary.map((debtor) => csvRow([debtor.name, debtor.amount])),
     csvRow([""]),
     csvRow(["กระเป๋า/กองเงิน"]),
-    csvRow(["ชื่อ", "ประเภท", "ยอดตั้งต้น"]),
-    ...wallets.map((wallet) => csvRow([wallet.name, walletTagLabels[wallet.tag], wallet.balance])),
+    csvRow(["ชื่อ", "ประเภท", "ยอดตั้งต้น", "กระเป๋าหลัก"]),
+    ...wallets.map((wallet) => csvRow([wallet.name, walletTagLabels[wallet.tag], wallet.balance, wallet.is_default ? "yes" : ""])),
     csvRow([""]),
     csvRow(["รายการละเอียด"]),
-    csvRow(["วันที่", "ชื่อรายการ", "หมวดหมู่", "ประเภท", "จำนวน", "ผลต่อกระเป๋า", "ผลต่อลูกหนี้", "ชื่อผู้เกี่ยวข้อง", "ข้อความต้นทาง"]),
+    csvRow(["วันที่", "ชื่อรายการ", "หมวดหมู่", "ประเภท", "กระเป๋า", "จำนวน", "ผลต่อกระเป๋า", "ผลต่อลูกหนี้", "ชื่อผู้เกี่ยวข้อง", "หมายเหตุ", "ข้อความต้นทาง"]),
     ...reportEntries.map((entry) =>
       csvRow([
         formatDateTime(entry.occurred_at),
         entry.title,
         entry.category,
         transactionTypeLabels[entry.transaction_type],
+        entry.wallet_id ? walletNameById.get(entry.wallet_id) ?? entry.wallet_id : "",
         entry.amount,
         entry.wallet_impact,
         entry.debt_impact,
         entry.debtor_name,
+        entry.note ?? "",
         entry.source_text ?? "",
       ]),
     ),
@@ -594,13 +611,56 @@ function normalizeEntry(input: EntryInput): Entry {
     user_share: impacts.user_share,
     partner_share: impacts.partner_share,
     debtor_name: input.debtor_name?.trim() || unnamedDebtor,
+    wallet_id: input.wallet_id ?? null,
+    note: input.note?.trim() || null,
   };
+}
+
+function defaultWalletId(wallets: Wallet[]) {
+  return wallets.find((wallet) => wallet.is_default)?.id ?? wallets.find((wallet) => wallet.tag === "cash")?.id ?? wallets[0]?.id ?? null;
 }
 
 function totalWallet(entries: Entry[], direction: EntryKind) {
   return entries
     .filter((entry) => (direction === "income" ? entry.wallet_impact > 0 : entry.wallet_impact < 0))
     .reduce((sum, entry) => sum + entry.wallet_impact, 0);
+}
+
+function filterEntries(entries: Entry[], filters: HistoryFilters) {
+  const query = filters.query.trim().toLowerCase();
+  const minAmount = filters.minAmount === "" ? null : toFiniteNumber(filters.minAmount, NaN);
+  const maxAmount = filters.maxAmount === "" ? null : toFiniteNumber(filters.maxAmount, NaN);
+  const start = filters.startDate ? new Date(`${filters.startDate}T00:00:00`) : null;
+  const end = filters.endDate ? new Date(`${filters.endDate}T23:59:59.999`) : null;
+
+  return entries.filter((entry) => {
+    const amount = Math.abs(entry.wallet_impact);
+    const occurred = new Date(entry.occurred_at);
+    if (query && !`${entry.title} ${entry.category} ${entry.debtor_name} ${entry.note ?? ""}`.toLowerCase().includes(query)) return false;
+    if (filters.category && entry.category !== filters.category) return false;
+    if (filters.type !== "all" && entry.transaction_type !== filters.type) return false;
+    if (minAmount !== null && Number.isFinite(minAmount) && amount < minAmount) return false;
+    if (maxAmount !== null && Number.isFinite(maxAmount) && amount > maxAmount) return false;
+    if (start && occurred < start) return false;
+    if (end && occurred > end) return false;
+    return true;
+  });
+}
+
+function shiftMonthKey(key: string, delta: number) {
+  const [year, month] = key.split("-").map(Number);
+  return monthKey(new Date(year, month - 1 + delta, 1));
+}
+
+function buildMonthlyTrend(entries: Entry[], selectedMonth: string, monthStartDay: number, months = 6) {
+  return Array.from({ length: months }, (_, index) => {
+    const key = shiftMonthKey(selectedMonth, index - months + 1);
+    const range = cycleBounds(key, monthStartDay);
+    const monthEntries = entriesInRange(entries, range.start, range.end);
+    const income = totalWallet(monthEntries, "income");
+    const outflow = Math.abs(totalWallet(monthEntries, "expense"));
+    return { key, label: new Date(`${key}-01T00:00:00`).toLocaleDateString("th-TH", { month: "short" }), income, outflow };
+  });
 }
 
 function matchesAnyKeyword(value: string, keywords: string[]) {
@@ -628,33 +688,33 @@ function transferWalletTag(entry: Entry, wallets: Wallet[]): Exclude<WalletTag, 
 
 function buildWalletLedger(wallets: Wallet[], entries: Entry[]) {
   const totals: Record<WalletTag, number> = { cash: 0, savings: 0, investment: 0, other: 0 };
-  const tagDeltas: Record<WalletTag, number> = { cash: 0, savings: 0, investment: 0, other: 0 };
-  const firstWalletByTag = new Map<WalletTag, string>();
+  const walletDeltas = new Map<string, number>();
+  const fallbackWalletId = defaultWalletId(wallets);
 
   for (const wallet of wallets) {
     totals[wallet.tag] += wallet.balance;
-    if (!firstWalletByTag.has(wallet.tag)) firstWalletByTag.set(wallet.tag, wallet.id);
+    walletDeltas.set(wallet.id, 0);
   }
 
   for (const entry of entries) {
     const transferTag = transferWalletTag(entry, wallets);
-    tagDeltas.cash += entry.wallet_impact;
-    if (transferTag) tagDeltas[transferTag] += Math.abs(entry.wallet_impact);
+    const walletId = entry.wallet_id ?? (transferTag ? wallets.find((wallet) => wallet.tag === transferTag)?.id : fallbackWalletId);
+    if (walletId) walletDeltas.set(walletId, (walletDeltas.get(walletId) ?? 0) + entry.wallet_impact);
   }
 
-  for (const tag of Object.keys(totals) as WalletTag[]) totals[tag] += tagDeltas[tag];
-
-  return {
-    totals,
-    wallets: wallets.map((wallet) => {
-      const transaction_delta = firstWalletByTag.get(wallet.tag) === wallet.id ? tagDeltas[wallet.tag] : 0;
+  const displayWallets = wallets.map((wallet) => {
+      const transaction_delta = walletDeltas.get(wallet.id) ?? 0;
       return {
         ...wallet,
         transaction_delta,
         display_balance: wallet.balance + transaction_delta,
       };
-    }),
-  };
+    });
+
+  const nextTotals: Record<WalletTag, number> = { cash: 0, savings: 0, investment: 0, other: 0 };
+  for (const wallet of displayWallets) nextTotals[wallet.tag] += wallet.display_balance;
+
+  return { totals: nextTotals, wallets: displayWallets };
 }
 
 function buildDebtSummary(debtors: Debtor[], entries: Entry[], kind: DebtorKind, types: TransactionType[]) {
@@ -779,6 +839,7 @@ export default function Home() {
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(monthKey(new Date()));
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [historyFilters, setHistoryFilters] = useState<HistoryFilters>({ query: "", category: "", type: "all", minAmount: "", maxAmount: "", startDate: "", endDate: "" });
   const [budgets, setBudgets] = useState<Record<string, number>>({});
   const [budgetSheetOpen, setBudgetSheetOpen] = useState(false);
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
@@ -846,7 +907,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("transactions")
-      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text")
+      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note")
       .order("occurred_at", { ascending: false });
 
     if (error) {
@@ -870,6 +931,8 @@ export default function Home() {
           debtor_name: row.debtor_name,
           occurred_at: row.occurred_at,
           source_text: row.source_text,
+          wallet_id: row.wallet_id,
+          note: row.note,
         }),
       ),
     );
@@ -920,13 +983,13 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("wallets")
-      .select("id,user_id,name,tag,balance,icon,icon_color")
+      .select("id,user_id,name,tag,balance,icon,icon_color,is_default")
       .order("created_at", { ascending: true });
     if (error) {
       setError(error.message);
       return;
     }
-    setWallets((data ?? []).map((row) => ({ ...row, balance: toFiniteNumber(row.balance) })) as Wallet[]);
+    setWallets((data ?? []).map((row) => ({ ...row, balance: toFiniteNumber(row.balance), is_default: !!row.is_default })) as Wallet[]);
   }, []);
 
   const loadRecurringExpenses = useCallback(async () => {
@@ -1113,6 +1176,7 @@ export default function Home() {
       return occurred >= start && occurred < end;
     });
   }, [entries, cycleRange]);
+  const filteredMonthlyEntries = useMemo(() => filterEntries(monthlyEntries, historyFilters), [monthlyEntries, historyFilters]);
   const monthlyIncome = useMemo(() => totalWallet(monthlyEntries, "income"), [monthlyEntries]);
   const monthlyOutflow = useMemo(() => Math.abs(totalWallet(monthlyEntries, "expense")), [monthlyEntries]);
   const monthlyDebtChange = useMemo(
@@ -1128,7 +1192,13 @@ export default function Home() {
   const netWorth = Object.values(walletTotals).reduce((sum, amount) => sum + amount, 0) + receivableTotal - payableTotal;
   const savingsRate = monthlyIncome > 0 ? (monthlyBalance / monthlyIncome) * 100 : 0;
   const walletInsight = useMemo(() => buildWalletInsight(mainWallet, monthlyOutflow, cycleRange.end), [mainWallet, monthlyOutflow, cycleRange.end]);
-  const sevenDayOutflow = useMemo(() => lastSevenDayOutflow(entries), [entries]);
+  const sevenDayAnchor = useMemo(() => {
+    const today = startOfDay(new Date());
+    const cycleLastDay = startOfDay(new Date(cycleRange.end.getTime() - 1));
+    return today >= startOfDay(cycleRange.start) && today <= cycleLastDay ? new Date(today) : new Date(cycleLastDay);
+  }, [cycleRange]);
+  const sevenDayOutflow = useMemo(() => lastSevenDayOutflow(monthlyEntries, sevenDayAnchor), [monthlyEntries, sevenDayAnchor]);
+  const monthlyTrend = useMemo(() => buildMonthlyTrend(entries, selectedMonth, monthStartDay, 6), [entries, selectedMonth, monthStartDay]);
   const aiSuggestions = useMemo<AiSuggestion[]>(() => {
     const fromHistory = quickShortcuts.map((shortcut) => ({
       label: shortcut.title,
@@ -1144,10 +1214,10 @@ export default function Home() {
     ];
     return [...fromHistory, ...defaults].slice(0, 4);
   }, [quickShortcuts]);
-  const activeDay = selectedDay ?? new Date().toDateString();
+  const activeDay = selectedDay;
   const dayEntries = useMemo(
-    () => monthlyEntries.filter((entry) => new Date(entry.occurred_at).toDateString() === activeDay),
-    [activeDay, monthlyEntries],
+    () => activeDay ? filteredMonthlyEntries.filter((entry) => new Date(entry.occurred_at).toDateString() === activeDay) : filteredMonthlyEntries,
+    [activeDay, filteredMonthlyEntries],
   );
 
   const categorySummary = useMemo(() => {
@@ -1165,6 +1235,14 @@ export default function Home() {
     const missingBudgeted = sorted.filter((item) => !shownNames.has(item.category) && budgets[item.category] > 0);
     return [...shown, ...missingBudgeted];
   }, [monthlyEntries, budgets]);
+  const incomeSummary = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const entry of monthlyEntries) {
+      if (entry.wallet_impact <= 0) continue;
+      map.set(entry.category, (map.get(entry.category) ?? 0) + entry.wallet_impact);
+    }
+    return [...map.entries()].map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount).slice(0, 4);
+  }, [monthlyEntries]);
   const budgetGlance = useMemo(() => {
     const budgeted = Object.entries(budgets)
       .map(([category, budget]) => {
@@ -1257,6 +1335,7 @@ export default function Home() {
           defaultDate: entryDate,
           images: slipImages.map(({ data, mimeType, name }) => ({ data, mimeType, name })),
           debtors: debtors.map((debtor) => ({ name: debtor.name, kind: debtor.kind })),
+          wallets: wallets.map((wallet) => ({ id: wallet.id, name: wallet.name, tag: wallet.tag, is_default: wallet.is_default })),
         }),
       });
       const data = await response.json();
@@ -1264,8 +1343,10 @@ export default function Home() {
 
       const source = [text.trim(), slipImages.length ? `แนบรูปสลิป ${slipImages.length} รูป` : ""].filter(Boolean).join(" | ");
       setDrafts(
-        data.items.map((item: { title: string; category: string; amount: number; transaction_type: TransactionType; debtor_name?: string; date: string }, index: number) =>
-          normalizeEntry({
+        data.items.map((item: { title: string; category: string; amount: number; transaction_type: TransactionType; debtor_name?: string; date: string; note?: string; wallet_id?: string | null }, index: number) =>
+          {
+            const aiWalletId = item.wallet_id && wallets.some((wallet) => wallet.id === item.wallet_id) ? item.wallet_id : null;
+            return normalizeEntry({
             id: `${Date.now()}-${index}`,
             title: item.title,
             category: item.category,
@@ -1274,7 +1355,10 @@ export default function Home() {
             debtor_name: item.debtor_name,
             occurred_at: fromDateInput(item.date),
             source_text: source,
-          }),
+            wallet_id: aiWalletId || defaultWalletId(wallets),
+            note: item.note,
+            });
+          },
         ),
       );
       notify({ tone: "success", title: "AI แยกรายการแล้ว", detail: `พบ ${data.items.length} รายการให้ตรวจสอบ` });
@@ -1307,6 +1391,8 @@ export default function Home() {
       partner_share: normalized.partner_share,
       occurred_at: normalized.occurred_at,
       source_text: normalized.source_text,
+      wallet_id: normalized.wallet_id ?? defaultWalletId(wallets),
+      note: normalized.note,
     }));
 
     const { error } = await supabase.from("transactions").insert(payload);
@@ -1370,6 +1456,8 @@ export default function Home() {
         user_share: normalized.user_share,
         partner_share: normalized.partner_share,
         occurred_at: normalized.occurred_at,
+        wallet_id: normalized.wallet_id ?? defaultWalletId(wallets),
+        note: normalized.note,
       })
       .eq("id", normalized.id);
 
@@ -1433,6 +1521,8 @@ export default function Home() {
       partner_share: entry.partner_share,
       occurred_at: entry.occurred_at,
       source_text: entry.source_text,
+      wallet_id: entry.wallet_id ?? defaultWalletId(wallets),
+      note: entry.note,
     });
     if (error) {
       setError(error.message);
@@ -1680,6 +1770,7 @@ export default function Home() {
     if (!supabase || !user || !input.name.trim()) return false;
     setBusy(true);
     setError("");
+    if (input.is_default) await supabase.from("wallets").update({ is_default: false, updated_at: new Date().toISOString() }).eq("user_id", user.id);
     const { error } = await supabase.from("wallets").insert({
       user_id: user.id,
       name: input.name.trim(),
@@ -1687,6 +1778,7 @@ export default function Home() {
       balance: toFiniteNumber(input.balance),
       icon: input.icon,
       icon_color: input.icon_color,
+      is_default: input.is_default,
     });
     if (error) {
       setError(error.message);
@@ -1701,6 +1793,7 @@ export default function Home() {
     if (!supabase) return false;
     setBusy(true);
     setError("");
+    if (patch.is_default) await supabase.from("wallets").update({ is_default: false, updated_at: new Date().toISOString() }).eq("user_id", wallet.user_id).neq("id", wallet.id);
     const { error } = await supabase
       .from("wallets")
       .update({
@@ -1709,6 +1802,7 @@ export default function Home() {
         balance: toFiniteNumber(patch.balance),
         icon: patch.icon,
         icon_color: patch.icon_color,
+        is_default: patch.is_default,
         updated_at: new Date().toISOString(),
       })
       .eq("id", wallet.id);
@@ -2025,6 +2119,7 @@ export default function Home() {
                     key={draft.id}
                     draft={draft}
                     knownDebtors={debtors}
+                    wallets={wallets}
                     onChange={(next) => setDrafts((items) => items.map((item, i) => (i === index ? next : item)))}
                   />
                 ))}
@@ -2061,7 +2156,15 @@ export default function Home() {
               monthStartDay={monthStartDay}
               budgets={budgets}
               trend={sevenDayOutflow}
+              onCategorySelect={(category) => { setHistoryFilters((current) => ({ ...current, category })); setSelectedDay(null); }}
             />
+            <HistoryFilterBar
+              filters={historyFilters}
+              onChange={setHistoryFilters}
+              onClear={() => setHistoryFilters({ query: "", category: "", type: "all", minAmount: "", maxAmount: "", startDate: "", endDate: "" })}
+            />
+            <MonthlyTrendChart trend={monthlyTrend} />
+            <IncomeBreakdown items={incomeSummary} />
             <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
             <HistoryInsight entries={dayEntries} selectedDay={activeDay} />
             <EntryList entries={dayEntries} onEdit={setEditing} onDelete={deleteEntry} emptyAction={{ label: "จดด้วย AI", onClick: openAddTab }} />
@@ -2088,6 +2191,7 @@ export default function Home() {
         {tab === "wallets" && (
           <WalletsView
             wallets={displayWallets}
+            entries={entries}
             onBack={() => setTab("home")}
             onAdd={() => { setEditingWallet(null); setWalletSheetMode("create"); }}
             onEdit={(wallet) => { setEditingWallet(wallet); setWalletSheetMode("edit"); }}
@@ -2105,7 +2209,7 @@ export default function Home() {
           />
         )}
 
-        {editing && <EditSheet entry={editing} busy={busy} error={error} onChange={setEditing} onClose={() => setEditing(null)} onSave={updateEntry} />}
+        {editing && <EditSheet entry={editing} wallets={wallets} busy={busy} error={error} onChange={setEditing} onClose={() => setEditing(null)} onSave={updateEntry} />}
         {debtorSheetMode && (
           <DebtorEditSheet
             debtor={debtorSheetMode === "edit" ? editingDebtor : null}
@@ -2125,6 +2229,7 @@ export default function Home() {
             onClose={() => { setWalletSheetMode(null); setEditingWallet(null); }}
             onCreate={createWallet}
             onUpdate={updateWallet}
+            existingWallets={wallets}
           />
         )}
         {recurringSheetMode && (
@@ -2817,6 +2922,98 @@ function HistoryInsight({ entries, selectedDay }: { entries: Entry[]; selectedDa
   );
 }
 
+function HistoryFilterBar({
+  filters,
+  onChange,
+  onClear,
+}: {
+  filters: HistoryFilters;
+  onChange: (filters: HistoryFilters) => void;
+  onClear: () => void;
+}) {
+  const update = (patch: Partial<HistoryFilters>) => onChange({ ...filters, ...patch });
+  return (
+    <section className="history-filter-panel">
+      <div className="history-search-row">
+        <input value={filters.query} onChange={(event) => update({ query: event.target.value })} placeholder="ค้นหาชื่อ หมวด ลูกหนี้ หรือหมายเหตุ" />
+        <button onClick={onClear}>ล้าง</button>
+      </div>
+      <div className="history-filter-grid">
+        <select value={filters.category} onChange={(event) => update({ category: event.target.value })}>
+          <option value="">ทุกหมวด</option>
+          {categories.map((category) => (
+            <option key={category} value={category}>{category}</option>
+          ))}
+        </select>
+        <select value={filters.type} onChange={(event) => update({ type: event.target.value as HistoryFilters["type"] })}>
+          <option value="all">ทุกชนิด</option>
+          {Object.entries(transactionTypeLabels).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+        <input inputMode="decimal" value={filters.minAmount} onChange={(event) => update({ minAmount: event.target.value })} placeholder="ยอดต่ำสุด" />
+        <input inputMode="decimal" value={filters.maxAmount} onChange={(event) => update({ maxAmount: event.target.value })} placeholder="ยอดสูงสุด" />
+        <input type="date" value={filters.startDate} onChange={(event) => update({ startDate: event.target.value })} />
+        <input type="date" value={filters.endDate} onChange={(event) => update({ endDate: event.target.value })} />
+      </div>
+    </section>
+  );
+}
+
+function MonthlyTrendChart({ trend }: { trend: { key: string; label: string; income: number; outflow: number }[] }) {
+  const max = Math.max(...trend.flatMap((item) => [item.income, item.outflow]), 1);
+  return (
+    <section className="monthly-trend-panel">
+      <div className="monthly-trend-head">
+        <div>
+          <p className="eyebrow">แนวโน้ม</p>
+          <h2>รายรับเทียบรายจ่าย 6 เดือน</h2>
+        </div>
+      </div>
+      <div className="monthly-trend-bars">
+        {trend.map((item) => (
+          <div key={item.key}>
+            <span>
+              <i className="income" style={{ height: `${Math.max(6, (item.income / max) * 100)}%` }} title={`รายรับ ${moneySign}${formatMoney(item.income)}`} />
+              <i className="expense" style={{ height: `${Math.max(6, (item.outflow / max) * 100)}%` }} title={`รายจ่าย ${moneySign}${formatMoney(item.outflow)}`} />
+            </span>
+            <small>{item.label}</small>
+          </div>
+        ))}
+      </div>
+      <div className="trend-legend">
+        <span><i className="income" />รายรับ</span>
+        <span><i className="expense" />รายจ่าย</span>
+      </div>
+    </section>
+  );
+}
+
+function IncomeBreakdown({ items }: { items: { category: string; amount: number }[] }) {
+  if (!items.length) return null;
+  const total = items.reduce((sum, item) => sum + item.amount, 0);
+  return (
+    <section className="income-breakdown-panel">
+      <div className="monthly-trend-head">
+        <div>
+          <p className="eyebrow">รายรับ</p>
+          <h2>แหล่งเงินเข้า</h2>
+        </div>
+        <strong>{moneySign}{formatMoney(total)}</strong>
+      </div>
+      <div className="income-breakdown-list">
+        {items.map((item) => (
+          <div key={item.category}>
+            <span className="cat-dot" style={{ background: categoryTint(item.category, 13) }}><CategoryIcon category={item.category} /></span>
+            <b>{item.category}</b>
+            <strong>{moneySign}{formatMoney(item.amount)}</strong>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function CategorySpotlight({
   categories: categoryItems,
   outflow,
@@ -2858,6 +3055,7 @@ function MonthSummary({
   monthStartDay,
   budgets,
   trend,
+  onCategorySelect,
 }: {
   selectedMonth: string;
   setSelectedMonth: (value: string) => void;
@@ -2869,6 +3067,7 @@ function MonthSummary({
   monthStartDay: number;
   budgets: Record<string, number>;
   trend: { key: string; label: string; amount: number }[];
+  onCategorySelect: (category: string) => void;
 }) {
   return (
     <section className="summary-panel">
@@ -2897,7 +3096,7 @@ function MonthSummary({
             const color = overBudget ? "var(--danger)" : categoryColor(item.category);
             const percent = hasBudget ? (item.amount / budget) * 100 : outflow > 0 ? (item.amount / outflow) * 100 : 0;
             return (
-              <div className="category-bar" key={item.category}>
+              <button className="category-bar" key={item.category} onClick={() => onCategorySelect(item.category)}>
                 <div>
                   <span className="cat-dot" style={{ background: categoryTint(item.category, 13) }}><CategoryIcon category={item.category} /></span>
                   <b>{item.category}</b>
@@ -2906,7 +3105,7 @@ function MonthSummary({
                 </div>
                 {!hasBudget && <strong>{moneySign}{formatMoney(item.amount)}</strong>}
                 <i style={{ width: `${Math.max(4, Math.min(100, percent))}%`, background: color }} />
-              </div>
+              </button>
             );
           })
         ) : (
@@ -3100,7 +3299,7 @@ function Metric({ label, value, tone }: { label: string; value: number; tone: "i
   );
 }
 
-function DraftRow({ draft, knownDebtors, onChange }: { draft: Draft; knownDebtors: Debtor[]; onChange: (draft: Draft) => void }) {
+function DraftRow({ draft, knownDebtors, wallets, onChange }: { draft: Draft; knownDebtors: Debtor[]; wallets: Wallet[]; onChange: (draft: Draft) => void }) {
   const update = (patch: Partial<Draft>) => onChange(normalizeEntry({ ...draft, ...patch }));
   const isDebtType = (["lend", "split_half", "debt_repayment", "debt_payment"] as TransactionType[]).includes(draft.transaction_type);
   const relevantKind: DebtorKind = draft.transaction_type === "debt_payment" ? "own" : "lend";
@@ -3148,6 +3347,14 @@ function DraftRow({ draft, knownDebtors, onChange }: { draft: Draft; knownDebtor
         </div>
       )}
       <input className="draft-date" type="date" value={toDateInput(draft.occurred_at)} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, draft.occurred_at) })} />
+      {!!wallets.length && (
+        <select className="draft-date" value={draft.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
+          {wallets.map((wallet) => (
+            <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
+          ))}
+        </select>
+      )}
+      <input className="draft-date" value={draft.note ?? ""} onChange={(event) => update({ note: event.target.value })} placeholder="หมายเหตุ" />
     </div>
   );
 }
@@ -3200,6 +3407,7 @@ function EntryList({
                   กระเป๋า {formatSignedMoney(entry.wallet_impact)}
                   {entry.debt_impact !== 0 ? ` · ${entry.debtor_name}: ${formatSignedMoney(entry.debt_impact)}` : ""}
                 </small>
+                {entry.note && <small>{entry.note}</small>}
               </div>
               <strong className={entry.wallet_impact >= 0 ? "income" : "expense"}>{formatSignedMoney(entry.wallet_impact)}</strong>
               {(onEdit || onDelete) && (
@@ -3246,6 +3454,7 @@ function RecentActivityTimeline({ entries, onEdit }: { entries: Entry[]; onEdit:
 
 function EditSheet({
   entry,
+  wallets,
   busy,
   error,
   onChange,
@@ -3253,6 +3462,7 @@ function EditSheet({
   onSave,
 }: {
   entry: Entry;
+  wallets: Wallet[];
   busy: boolean;
   error: string;
   onChange: (entry: Entry) => void;
@@ -3310,6 +3520,20 @@ function EditSheet({
       <label>
         วันที่
         <input type="date" value={toDateInput(entry.occurred_at)} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, entry.occurred_at) })} />
+      </label>
+      {!!wallets.length && (
+        <label>
+          กระเป๋า
+          <select value={entry.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
+            {wallets.map((wallet) => (
+              <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label>
+        หมายเหตุ
+        <textarea value={entry.note ?? ""} onChange={(event) => update({ note: event.target.value })} placeholder="รายละเอียดเพิ่มเติมของรายการนี้" />
       </label>
 
       <div className="draft-impact">
@@ -4104,18 +4328,30 @@ function ProfileEditSheet({
 }
 function WalletsView({
   wallets,
+  entries,
   onBack,
   onAdd,
   onEdit,
   onDelete,
 }: {
   wallets: WalletDisplay[];
+  entries: Entry[];
   onBack: () => void;
   onAdd: () => void;
   onEdit: (wallet: Wallet) => void;
   onDelete: (wallet: Wallet) => void;
 }) {
   const total = wallets.reduce((sum, wallet) => sum + wallet.display_balance, 0);
+  const entriesByWallet = useMemo(() => {
+    const map = new Map<string, Entry[]>();
+    for (const entry of entries) {
+      if (!entry.wallet_id) continue;
+      const list = map.get(entry.wallet_id) ?? [];
+      list.push(entry);
+      map.set(entry.wallet_id, list);
+    }
+    return map;
+  }, [entries]);
 
   return (
     <div className="view debtor-view">
@@ -4140,7 +4376,10 @@ function WalletsView({
               </span>
               <div>
                 <span>{wallet.name}</span>
-                <small>{walletTagLabels[wallet.tag]} · {moneySign}{formatMoney(wallet.display_balance)}</small>
+                <small>
+                  {walletTagLabels[wallet.tag]} · {moneySign}{formatMoney(wallet.display_balance)}
+                  {wallet.is_default ? " · กระเป๋าหลัก" : ""}
+                </small>
               </div>
             </button>
             <details className="kebab-menu" name="wallet-kebab">
@@ -4154,6 +4393,32 @@ function WalletsView({
         ))}
         {!wallets.length && <EmptyNote glyph="▣" action={{ label: "เพิ่มกระเป๋า", onClick: onAdd }}>ยังไม่มีกระเป๋าตังค์ สร้างกองเงินแรกของคุณได้เลย</EmptyNote>}
       </div>
+      <section className="wallet-statement-panel">
+        <div className="section-title">
+          <h2>รายการตามกระเป๋า</h2>
+        </div>
+        {wallets.map((wallet) => {
+          const walletEntries = (entriesByWallet.get(wallet.id) ?? []).slice(0, 4);
+          return (
+            <div className="wallet-statement" key={wallet.id}>
+              <div>
+                <b>{wallet.name}</b>
+                <small>{walletEntries.length} รายการล่าสุด</small>
+              </div>
+              {walletEntries.length ? (
+                walletEntries.map((entry) => (
+                  <div className="wallet-statement-row" key={entry.id}>
+                    <span>{entry.title}</span>
+                    <b className={entry.wallet_impact >= 0 ? "income" : "expense"}>{formatSignedMoney(entry.wallet_impact)}</b>
+                  </div>
+                ))
+              ) : (
+                <p>ยังไม่มีรายการในกระเป๋านี้</p>
+              )}
+            </div>
+          );
+        })}
+      </section>
     </div>
   );
 }
@@ -4164,6 +4429,7 @@ type WalletInput = {
   balance: number;
   icon: string | null;
   icon_color: string | null;
+  is_default: boolean;
 };
 
 function WalletEditSheet({
@@ -4173,6 +4439,7 @@ function WalletEditSheet({
   onClose,
   onCreate,
   onUpdate,
+  existingWallets,
 }: {
   wallet: Wallet | null;
   busy: boolean;
@@ -4180,16 +4447,18 @@ function WalletEditSheet({
   onClose: () => void;
   onCreate: (input: WalletInput) => Promise<boolean>;
   onUpdate: (wallet: Wallet, patch: WalletInput) => Promise<boolean>;
+  existingWallets: Wallet[];
 }) {
   const [name, setName] = useState(wallet?.name ?? "");
   const [tag, setTag] = useState<WalletTag>(wallet?.tag ?? "cash");
   const [balanceText, setBalanceText] = useState(wallet?.balance ? String(wallet.balance) : "");
   const [icon, setIcon] = useState<string | null>(wallet?.icon ?? null);
   const [iconColor, setIconColor] = useState<string | null>(wallet?.icon_color ?? null);
+  const [isDefault, setIsDefault] = useState(wallet?.is_default ?? !existingWallets.length);
 
   const submit = async () => {
     if (!name.trim()) return;
-    const payload: WalletInput = { name, tag, balance: toFiniteNumber(balanceText), icon, icon_color: iconColor };
+    const payload: WalletInput = { name, tag, balance: toFiniteNumber(balanceText), icon, icon_color: iconColor, is_default: isDefault };
     const saved = wallet ? await onUpdate(wallet, payload) : await onCreate(payload);
     if (saved) onClose();
   };
@@ -4219,6 +4488,10 @@ function WalletEditSheet({
       <label>
         ยอดเงิน
         <input inputMode="decimal" value={balanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setBalanceText(event.target.value); }} />
+      </label>
+      <label className="sheet-check-row">
+        <input type="checkbox" checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} />
+        ใช้เป็นกระเป๋าหลัก
       </label>
       {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
       <button className="save" onClick={submit} disabled={busy || !name.trim()}>

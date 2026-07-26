@@ -22,8 +22,9 @@ const schema = {
       },
       date: { type: "string", description: "วันที่รูปแบบ YYYY-MM-DD" },
       note: { type: "string", description: "คำอธิบายสั้น ๆ ถ้ามีบริบทสำคัญ" },
+      wallet_id: { type: "string", description: "id ของกระเป๋าที่เหมาะที่สุด ถ้าระบุไม่ได้ให้ส่งค่าว่าง" },
     },
-    required: ["title", "category", "amount", "transaction_type", "debtor_name", "date", "note"],
+    required: ["title", "category", "amount", "transaction_type", "debtor_name", "date", "note", "wallet_id"],
     additionalProperties: false,
   },
 };
@@ -39,12 +40,20 @@ type AnalyzeDebtor = {
   kind: "lend" | "own";
 };
 
+type AnalyzeWallet = {
+  id: string;
+  name: string;
+  tag: "cash" | "savings" | "investment" | "other";
+  is_default?: boolean;
+};
+
 type AnalyzeBody = {
   text?: string;
   timezone?: string;
   defaultDate?: string;
   images?: AnalyzeImage[];
   debtors?: AnalyzeDebtor[];
+  wallets?: AnalyzeWallet[];
 };
 
 const dateInputPattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -55,11 +64,14 @@ function imageBytes(base64: string) {
   return Math.floor((base64.length * 3) / 4);
 }
 
-function buildPrompt(input: string, today: string, hasImages: boolean, debtors: AnalyzeDebtor[]) {
+function buildPrompt(input: string, today: string, hasImages: boolean, debtors: AnalyzeDebtor[], wallets: AnalyzeWallet[]) {
   const lendNames = debtors.filter((debtor) => debtor.kind === "lend").map((debtor) => debtor.name);
   const ownNames = debtors.filter((debtor) => debtor.kind === "own").map((debtor) => debtor.name);
   const knownDebtors = lendNames.length ? lendNames.join(", ") : "ยังไม่มีรายชื่อลูกหนี้ที่บันทึกไว้";
   const knownOwnDebts = ownNames.length ? ownNames.join(", ") : "ยังไม่มีรายการหนี้ของฉันที่บันทึกไว้";
+  const knownWallets = wallets.length
+    ? wallets.map((wallet) => `${wallet.id} = ${wallet.name} (${wallet.tag}${wallet.is_default ? ", default" : ""})`).join(", ")
+    : "ยังไม่มีกระเป๋าที่บันทึกไว้";
   return [
     `วันที่กำลังบันทึกรายการนี้คือ ${today}`,
     "แยกรายรับรายจ่ายจากข้อความและ/หรือรูปสลิปเป็น JSON เท่านั้น ห้ามสร้างรายการที่ไม่มีหลักฐานในข้อความหรือรูป",
@@ -98,6 +110,12 @@ function buildPrompt(input: string, today: string, hasImages: boolean, debtors: 
     "- ถ้าไม่พบชื่อ ให้ใช้ ไม่ระบุ",
     "- รายรับ/รายจ่ายส่วนตัวให้ใช้ ไม่ระบุ",
     "",
+    "กติกา wallet_id:",
+    `- รายชื่อกระเป๋าที่มีอยู่ในระบบ: ${knownWallets}`,
+    "- ถ้าข้อความระบุว่าจ่ายด้วยบัตร/เครดิต/บัตรเครดิต ให้เลือกกระเป๋าที่ชื่อหรือประเภทใกล้เคียงที่สุด",
+    "- ถ้าระบุบัญชี/ธนาคาร/กระเป๋าชัดเจน ให้ใช้ id ของกระเป๋านั้น",
+    "- ถ้าไม่แน่ใจ ให้ใช้กระเป๋าที่เป็น default ถ้ามี ไม่เช่นนั้นส่งค่าว่าง",
+    "",
     "กติกา debtor_name สำหรับ debt_payment:",
     "- ใช้ debtor_name เป็นชื่อก้อนหนี้ของฉันเอง (เช่น บ้าน, รถ, บัตรเครดิต) ไม่ใช่ชื่อคน",
     `- รายชื่อหนี้ของฉันที่มีอยู่ในระบบ: ${knownOwnDebts}`,
@@ -123,6 +141,10 @@ export async function POST(request: Request) {
       return true;
     })
     .slice(0, 100);
+  const wallets = (body.wallets ?? [])
+    .map((wallet) => ({ id: wallet.id?.trim() ?? "", name: wallet.name?.trim() ?? "", tag: wallet.tag, is_default: !!wallet.is_default }))
+    .filter((wallet) => wallet.id && wallet.name)
+    .slice(0, 50);
 
   if (!input && images.length === 0) return Response.json({ error: "กรุณาพิมพ์ข้อความหรือแนบรูปสลิปก่อน" }, { status: 400 });
   if (input.length > 2000) return Response.json({ error: "ข้อความยาวเกินไป" }, { status: 400 });
@@ -137,7 +159,7 @@ export async function POST(request: Request) {
     body.defaultDate && dateInputPattern.test(body.defaultDate)
       ? body.defaultDate
       : new Intl.DateTimeFormat("en-CA", { timeZone: body.timezone || "Asia/Bangkok" }).format(new Date());
-  const prompt = buildPrompt(input, today, images.length > 0, debtors);
+  const prompt = buildPrompt(input, today, images.length > 0, debtors, wallets);
 
   let response;
   try {
