@@ -2640,6 +2640,15 @@ a:focus-visible {
     border-radius: 0;
     box-shadow: none;
   }
+
+  /* .phone is edge-to-edge here, so the nav can pin to the actual
+     viewport instead of drifting to the bottom of the scrollable
+     content when a view (e.g. History) is taller than one screen. */
+  .bottom-nav {
+    position: fixed;
+    left: var(--s-4);
+    right: var(--s-4);
+  }
 }
 
 /* Tablet / landscape phone — a real breakpoint that used to fall through
