@@ -3335,6 +3335,55 @@ a:focus-visible {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes sheet-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(24px); }
+}
+
+@keyframes report-sheet-out {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, calc(-50% + 18px)) scale(0.98); }
+}
+
+@keyframes drawer-out {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(24px); }
+}
+
+@keyframes pop-out {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to { opacity: 0; transform: scale(0.94) translateY(6px); }
+}
+
+/* Exit-animation counterparts — a closing overlay gets this instead of
+   its "-in" animation so it doesn't just vanish; see the Dismissable
+   helper in app/page.tsx, which keeps the overlay mounted until the
+   animation finishes. */
+.sheet-backdrop.closing, .dialog-backdrop.closing, .side-menu-backdrop.closing {
+  animation: fade-out var(--t-2) ease both;
+}
+
+.edit-sheet.closing, .recap-card.closing {
+  animation: sheet-out var(--t-3) var(--e-out) both;
+}
+
+.report-sheet.closing {
+  animation: report-sheet-out var(--t-3) var(--e-out) both;
+}
+
+.side-menu.closing {
+  animation: drawer-out var(--t-3) var(--e-out) both;
+}
+
+.confirm-dialog.closing {
+  animation: pop-out var(--t-2) var(--e-out) both;
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }

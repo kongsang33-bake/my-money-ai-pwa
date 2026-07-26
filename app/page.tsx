@@ -2020,6 +2020,19 @@ export default function Home() {
     notify({ tone: "success", title: "ย้อนคืนรายจ่ายประจำแล้ว", detail: item.name });
   }
 
+  const editingDismiss = useDismiss(!!editing, () => setEditing(null));
+  const debtorSheetDismiss = useDismiss(!!debtorSheetMode, () => { setDebtorSheetMode(null); setEditingDebtor(null); });
+  const walletSheetDismiss = useDismiss(!!walletSheetMode, () => { setWalletSheetMode(null); setEditingWallet(null); });
+  const recurringSheetDismiss = useDismiss(!!recurringSheetMode, () => { setRecurringSheetMode(null); setEditingRecurringExpense(null); });
+  const menuDismiss = useDismiss(menuOpen, () => setMenuOpen(false));
+  const profileSheetDismiss = useDismiss(profileSheetOpen, () => setProfileSheetOpen(false));
+  const budgetSheetDismiss = useDismiss(budgetSheetOpen, () => setBudgetSheetOpen(false));
+  const reportSheetDismiss = useDismiss(reportSheetOpen, () => setReportSheetOpen(false));
+  const recapDismiss = useDismiss(recapOpen, () => setRecapOpen(false));
+  const pinSheetDismiss = useDismiss(pinSheetOpen, () => { setPinSheetOpen(false); setPinError(""); });
+  const logoutDismiss = useDismiss<[boolean]>(logoutOpen, (confirmed) => { setLogoutOpen(false); if (confirmed) void supabase?.auth.signOut(); });
+  const confirmDialogDismiss = useDismiss<[boolean]>(!!confirmDialog, (confirmed) => closeConfirmDialog(confirmed));
+
   if (!ready) {
     return (
       <main className="shell">
@@ -2299,65 +2312,73 @@ export default function Home() {
           />
         )}
 
-        {editing && <EditSheet entry={editing} wallets={wallets} busy={busy} error={error} onChange={setEditing} onClose={() => setEditing(null)} onSave={updateEntry} />}
-        {debtorSheetMode && (
+        {editingDismiss.mounted && editing && (
+          <EditSheet entry={editing} wallets={wallets} busy={busy} error={error} onChange={setEditing} onClose={editingDismiss.requestClose} onSave={updateEntry} closing={editingDismiss.closing} />
+        )}
+        {debtorSheetDismiss.mounted && debtorSheetMode && (
           <DebtorEditSheet
             debtor={debtorSheetMode === "edit" ? editingDebtor : null}
             busy={busy}
             error={error}
             defaultKind={debtorKindTab}
-            onClose={() => { setDebtorSheetMode(null); setEditingDebtor(null); }}
+            onClose={debtorSheetDismiss.requestClose}
             onCreate={createDebtor}
             onUpdate={updateDebtor}
+            closing={debtorSheetDismiss.closing}
           />
         )}
-        {walletSheetMode && (
+        {walletSheetDismiss.mounted && walletSheetMode && (
           <WalletEditSheet
             wallet={walletSheetMode === "edit" ? editingWallet : null}
             busy={busy}
             error={error}
-            onClose={() => { setWalletSheetMode(null); setEditingWallet(null); }}
+            onClose={walletSheetDismiss.requestClose}
             onCreate={createWallet}
             onUpdate={updateWallet}
             existingWallets={wallets}
+            closing={walletSheetDismiss.closing}
           />
         )}
-        {recurringSheetMode && (
+        {recurringSheetDismiss.mounted && recurringSheetMode && (
           <RecurringExpenseEditSheet
             item={recurringSheetMode === "edit" ? editingRecurringExpense : null}
             busy={busy}
             error={error}
-            onClose={() => { setRecurringSheetMode(null); setEditingRecurringExpense(null); }}
+            onClose={recurringSheetDismiss.requestClose}
             onCreate={createRecurringExpense}
             onUpdate={updateRecurringExpense}
+            closing={recurringSheetDismiss.closing}
           />
         )}
-        {menuOpen && (
+        {menuDismiss.mounted && (
           <SideMenu
             user={user}
             profile={profile}
-            onClose={() => setMenuOpen(false)}
-            onLogout={() => { setMenuOpen(false); setLogoutOpen(true); }}
-            onOpenProfile={() => { setMenuOpen(false); setProfileSheetOpen(true); }}
-            onOpenWallets={() => { setMenuOpen(false); setTab("wallets"); }}
-            onOpenDebtors={() => { setMenuOpen(false); setSelectedDebtor(null); setTab("debtors"); }}
-            onOpenRecurring={() => { setMenuOpen(false); setTab("recurring"); }}
-            onOpenBudgets={() => { setMenuOpen(false); setBudgetSheetOpen(true); }}
-            onOpenReport={() => { setMenuOpen(false); setReportSheetOpen(true); }}
-            onOpenPin={() => { setMenuOpen(false); setPinSheetOpen(true); }}
+            onClose={menuDismiss.requestClose}
+            onLogout={() => { menuDismiss.requestClose(); setLogoutOpen(true); }}
+            onOpenProfile={() => { menuDismiss.requestClose(); setProfileSheetOpen(true); }}
+            onOpenWallets={() => { menuDismiss.requestClose(); setTab("wallets"); }}
+            onOpenDebtors={() => { menuDismiss.requestClose(); setSelectedDebtor(null); setTab("debtors"); }}
+            onOpenRecurring={() => { menuDismiss.requestClose(); setTab("recurring"); }}
+            onOpenBudgets={() => { menuDismiss.requestClose(); setBudgetSheetOpen(true); }}
+            onOpenReport={() => { menuDismiss.requestClose(); setReportSheetOpen(true); }}
+            onOpenPin={() => { menuDismiss.requestClose(); setPinSheetOpen(true); }}
             theme={theme}
             onSetTheme={setTheme}
             walletTotal={Object.values(walletTotals).reduce((sum, amount) => sum + amount, 0)}
             receivableTotal={receivableTotal}
             payableTotal={payableTotal}
             recurringTotal={recurringExpenses.reduce((sum, item) => sum + item.amount, 0)}
+            closing={menuDismiss.closing}
           />
         )}
-        {profileSheetOpen && (
-          <ProfileEditSheet profile={profile} busy={busy} error={error} onClose={() => setProfileSheetOpen(false)} onSave={saveProfile} />
+        {profileSheetDismiss.mounted && (
+          <ProfileEditSheet profile={profile} busy={busy} error={error} onClose={profileSheetDismiss.requestClose} onSave={saveProfile} closing={profileSheetDismiss.closing} />
         )}
-        {budgetSheetOpen && <BudgetSheet budgets={budgets} onClose={() => setBudgetSheetOpen(false)} onSave={updateBudgets} />}
-        {reportSheetOpen && (
+        {budgetSheetDismiss.mounted && (
+          <BudgetSheet budgets={budgets} onClose={budgetSheetDismiss.requestClose} onSave={updateBudgets} closing={budgetSheetDismiss.closing} />
+        )}
+        {reportSheetDismiss.mounted && (
           <ReportExportSheet
             entries={entries}
             wallets={wallets}
@@ -2365,10 +2386,11 @@ export default function Home() {
             payableSummary={payableSummary}
             selectedMonth={selectedMonth}
             monthStartDay={monthStartDay}
-            onClose={() => setReportSheetOpen(false)}
+            onClose={reportSheetDismiss.requestClose}
+            closing={reportSheetDismiss.closing}
           />
         )}
-        {recapOpen && (
+        {recapDismiss.mounted && (
           <RecapSheet
             selectedMonth={selectedMonth}
             income={monthlyIncome}
@@ -2376,31 +2398,37 @@ export default function Home() {
             balance={monthlyBalance}
             topCategory={categorySummary[0] ?? null}
             streak={streak}
-            onClose={() => setRecapOpen(false)}
+            onClose={recapDismiss.requestClose}
+            closing={recapDismiss.closing}
           />
         )}
-        {pinSheetOpen && (
+        {pinSheetDismiss.mounted && (
           <PinSecuritySheet
             pinEnabled={!!profile?.pin_hash && !!profile.pin_salt}
             busy={busy}
             error={pinError}
-            onClose={() => { setPinSheetOpen(false); setPinError(""); }}
+            onClose={pinSheetDismiss.requestClose}
             onEnable={async (nextPin) => {
               await savePin(nextPin, "unlocked");
-              setPinSheetOpen(false);
+              pinSheetDismiss.requestClose();
             }}
             onChange={async (currentPin, nextPin) => {
               const ok = await changePin(currentPin, nextPin);
-              if (ok) setPinSheetOpen(false);
+              if (ok) pinSheetDismiss.requestClose();
             }}
             onDisable={async (currentPin) => {
               const ok = await disablePin(currentPin);
-              if (ok) setPinSheetOpen(false);
+              if (ok) pinSheetDismiss.requestClose();
             }}
+            closing={pinSheetDismiss.closing}
           />
         )}
-        {logoutOpen && <ConfirmLogout onCancel={() => setLogoutOpen(false)} onConfirm={() => supabase?.auth.signOut()} />}
-        {confirmDialog && <ConfirmDialog dialog={confirmDialog} onClose={closeConfirmDialog} />}
+        {logoutDismiss.mounted && (
+          <ConfirmLogout onCancel={() => logoutDismiss.requestClose(false)} onConfirm={() => logoutDismiss.requestClose(true)} closing={logoutDismiss.closing} />
+        )}
+        {confirmDialogDismiss.mounted && confirmDialog && (
+          <ConfirmDialog dialog={confirmDialog} onClose={confirmDialogDismiss.requestClose} closing={confirmDialogDismiss.closing} />
+        )}
         <ToastHost toasts={toasts} onDismiss={(id) => setToasts((items) => items.filter((toast) => toast.id !== id))} />
 
         {!overlayOpen && (
@@ -2576,6 +2604,7 @@ function PinSecuritySheet({
   onEnable,
   onChange,
   onDisable,
+  closing,
 }: {
   pinEnabled: boolean;
   busy: boolean;
@@ -2584,6 +2613,7 @@ function PinSecuritySheet({
   onEnable: (nextPin: string) => void;
   onChange: (currentPin: string, nextPin: string) => void;
   onDisable: (currentPin: string) => void;
+  closing?: boolean;
 }) {
   const [mode, setMode] = useState<"change" | "disable">(pinEnabled ? "change" : "change");
   const [currentPin, setCurrentPin] = useState("");
@@ -2596,8 +2626,8 @@ function PinSecuritySheet({
     : isSixDigitPin(nextPin) && nextPin === confirmPin;
 
   return (
-    <div className="sheet-backdrop">
-      <section className="edit-sheet pin-edit-sheet">
+    <div className={`sheet-backdrop ${closing ? "closing" : ""}`}>
+      <section className={`edit-sheet pin-edit-sheet ${closing ? "closing" : ""}`}>
         <div className="sheet-head">
           <div>
             <p className="eyebrow">ความปลอดภัย</p>
@@ -3352,7 +3382,7 @@ function ToastHost({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: num
   );
 }
 
-function SheetFrame({ children, onClose, className = "edit-sheet" }: { children: React.ReactNode; onClose: () => void; className?: string }) {
+function SheetFrame({ children, onClose, className = "edit-sheet", closing = false }: { children: React.ReactNode; onClose: () => void; className?: string; closing?: boolean }) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -3362,15 +3392,62 @@ function SheetFrame({ children, onClose, className = "edit-sheet" }: { children:
   }, [onClose]);
 
   return (
-    <div className="sheet-backdrop" onMouseDown={onClose}>
-      <section className={className} onMouseDown={(event) => event.stopPropagation()}>
+    <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
+      <section className={`${className} ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
         {children}
       </section>
     </div>
   );
 }
 
-function ConfirmDialog({ dialog, onClose }: { dialog: ConfirmDialogState; onClose: (confirmed: boolean) => void }) {
+/**
+ * Keeps an overlay mounted for `duration` after `active` goes false so its
+ * CSS exit animation (the `.closing` class) can finish instead of the
+ * overlay just vanishing. `onExited` fires once the animation completes —
+ * that's when the caller should actually clear its own state.
+ */
+function useDismiss<A extends unknown[] = []>(active: boolean, onExited: (...args: A) => void, duration = 320) {
+  const [mounted, setMounted] = useState(active);
+  const [closing, setClosing] = useState(false);
+  const [prevActive, setPrevActive] = useState(active);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reopening while still "closing" (or after having fully closed) needs to
+  // reset synchronously so the sheet doesn't flash away mid re-open. This is
+  // React's documented pattern for adjusting state when a prop changes.
+  if (active !== prevActive) {
+    setPrevActive(active);
+    if (active) {
+      setMounted(true);
+      setClosing(false);
+    }
+  }
+
+  useEffect(() => {
+    if (active && timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  }, [active]);
+
+  useEffect(() => () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+  }, []);
+
+  const requestClose = useCallback((...args: A) => {
+    setClosing(true);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      setMounted(false);
+      setClosing(false);
+      onExited(...args);
+    }, duration);
+  }, [duration, onExited]);
+
+  return { mounted, closing, requestClose };
+}
+
+function ConfirmDialog({ dialog, onClose, closing = false }: { dialog: ConfirmDialogState; onClose: (confirmed: boolean) => void; closing?: boolean }) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose(false);
@@ -3380,8 +3457,8 @@ function ConfirmDialog({ dialog, onClose }: { dialog: ConfirmDialogState; onClos
   }, [onClose]);
 
   return (
-    <div className="dialog-backdrop" onMouseDown={() => onClose(false)}>
-      <section className="confirm-dialog" onMouseDown={(event) => event.stopPropagation()}>
+    <div className={`dialog-backdrop ${closing ? "closing" : ""}`} onMouseDown={() => onClose(false)}>
+      <section className={`confirm-dialog ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
         <h2>{dialog.title}</h2>
         <p>{dialog.detail}</p>
         <div>
@@ -3655,6 +3732,7 @@ function EditSheet({
   onChange,
   onClose,
   onSave,
+  closing,
 }: {
   entry: Entry;
   wallets: Wallet[];
@@ -3663,6 +3741,7 @@ function EditSheet({
   onChange: (entry: Entry) => void;
   onClose: () => void;
   onSave: () => Promise<boolean>;
+  closing?: boolean;
 }) {
   const update = (patch: Partial<Entry>) => onChange(normalizeEntry({ ...entry, ...patch }));
   const submit = async () => {
@@ -3671,7 +3750,7 @@ function EditSheet({
   };
 
   return (
-    <SheetFrame onClose={onClose}>
+    <SheetFrame onClose={onClose} closing={closing}>
       <div className="sheet-head">
         <div>
           <p className="eyebrow">แก้ไขรายการ</p>
@@ -3987,6 +4066,7 @@ function DebtorEditSheet({
   onClose,
   onCreate,
   onUpdate,
+  closing,
 }: {
   debtor: Debtor | null;
   busy: boolean;
@@ -3995,6 +4075,7 @@ function DebtorEditSheet({
   onClose: () => void;
   onCreate: (input: DebtorInput) => Promise<boolean>;
   onUpdate: (debtor: Debtor, patch: DebtorInput) => Promise<boolean>;
+  closing?: boolean;
 }) {
   const [name, setName] = useState(debtor?.name ?? "");
   const [note, setNote] = useState(debtor?.note ?? "");
@@ -4020,7 +4101,7 @@ function DebtorEditSheet({
   };
 
   return (
-    <SheetFrame onClose={onClose}>
+    <SheetFrame onClose={onClose} closing={closing}>
       <div className="sheet-head">
         <div>
           <p className="eyebrow">{debtor ? "แก้ไขรายการหนี้" : "เพิ่มรายการหนี้"}</p>
@@ -4068,6 +4149,7 @@ function RecapSheet({
   topCategory,
   streak,
   onClose,
+  closing,
 }: {
   selectedMonth: string;
   income: number;
@@ -4076,6 +4158,7 @@ function RecapSheet({
   topCategory: { category: string; amount: number } | null;
   streak: number;
   onClose: () => void;
+  closing?: boolean;
 }) {
   const monthLabel = new Date(`${selectedMonth}-01T00:00:00`).toLocaleDateString("th-TH", { month: "long", year: "numeric" });
   const closingLine = balance >= 0 ? "เดือนนี้ยังมีเงินเหลือเก็บ" : "เดือนหน้าลองคุมงบดูอีกนิด";
@@ -4110,8 +4193,8 @@ function RecapSheet({
   }
 
   return (
-    <div className="sheet-backdrop">
-      <section className="recap-card">
+    <div className={`sheet-backdrop ${closing ? "closing" : ""}`}>
+      <section className={`recap-card ${closing ? "closing" : ""}`}>
         <button className="recap-close" onClick={onClose}>×</button>
         <p className="recap-month">{monthLabel}</p>
         <strong className={`recap-balance ${balance >= 0 ? "income" : "expense"}`}>{formatSignedMoney(balance)}</strong>
@@ -4147,10 +4230,12 @@ function BudgetSheet({
   budgets,
   onClose,
   onSave,
+  closing,
 }: {
   budgets: Record<string, number>;
   onClose: () => void;
   onSave: (next: Record<string, number>) => void;
+  closing?: boolean;
 }) {
   const expenseCategories = categories.filter((category) => category !== "รายได้");
   const [draft, setDraft] = useState<Record<string, string>>(() =>
@@ -4168,8 +4253,8 @@ function BudgetSheet({
   };
 
   return (
-    <div className="sheet-backdrop">
-      <section className="edit-sheet budget-sheet">
+    <div className={`sheet-backdrop ${closing ? "closing" : ""}`}>
+      <section className={`edit-sheet budget-sheet ${closing ? "closing" : ""}`}>
         <div className="sheet-head">
           <div>
             <p className="eyebrow">ตั้งค่า</p>
@@ -4206,6 +4291,7 @@ function ReportExportSheet({
   selectedMonth,
   monthStartDay,
   onClose,
+  closing,
 }: {
   entries: Entry[];
   wallets: Wallet[];
@@ -4214,6 +4300,7 @@ function ReportExportSheet({
   selectedMonth: string;
   monthStartDay: number;
   onClose: () => void;
+  closing?: boolean;
 }) {
   const [period, setPeriod] = useState<ReportPeriod>("month");
   const [month, setMonth] = useState(selectedMonth);
@@ -4241,8 +4328,8 @@ function ReportExportSheet({
   }
 
   return (
-    <div className="sheet-backdrop">
-      <section className="edit-sheet report-sheet">
+    <div className={`sheet-backdrop ${closing ? "closing" : ""}`}>
+      <section className={`edit-sheet report-sheet ${closing ? "closing" : ""}`}>
         <div className="sheet-head">
           <div>
             <p className="eyebrow">ส่งออกข้อมูล</p>
@@ -4348,6 +4435,7 @@ function SideMenu({
   receivableTotal,
   payableTotal,
   recurringTotal,
+  closing,
 }: {
   user: User;
   profile: Profile | null;
@@ -4366,6 +4454,7 @@ function SideMenu({
   receivableTotal: number;
   payableTotal: number;
   recurringTotal: number;
+  closing?: boolean;
 }) {
   const metadata = user.user_metadata ?? {};
   const name = profile?.nickname || metadata.full_name || metadata.name || "ผู้ใช้";
@@ -4374,8 +4463,8 @@ function SideMenu({
   const provider = user.app_metadata?.provider ?? "Google";
 
   return (
-    <div className="side-menu-backdrop" onClick={onClose}>
-      <aside className="side-menu" onClick={(event) => event.stopPropagation()}>
+    <div className={`side-menu-backdrop ${closing ? "closing" : ""}`} onClick={onClose}>
+      <aside className={`side-menu ${closing ? "closing" : ""}`} onClick={(event) => event.stopPropagation()}>
         <div className="side-menu-head">
           <div>
             <p className="eyebrow">เมนู</p>
@@ -4467,12 +4556,14 @@ function ProfileEditSheet({
   error,
   onClose,
   onSave,
+  closing,
 }: {
   profile: Profile | null;
   busy: boolean;
   error: string;
   onClose: () => void;
   onSave: (next: { nickname: string; app_icon: string; app_icon_image: string; month_start_day: number }) => Promise<boolean>;
+  closing?: boolean;
 }) {
   const [nickname, setNickname] = useState(profile?.nickname ?? "");
   const app_icon = profile?.app_icon ?? "";
@@ -4498,7 +4589,7 @@ function ProfileEditSheet({
   };
 
   return (
-    <SheetFrame onClose={onClose}>
+    <SheetFrame onClose={onClose} closing={closing}>
       <div className="sheet-head">
         <div>
           <p className="eyebrow">ตั้งค่า</p>
@@ -4640,6 +4731,7 @@ function WalletEditSheet({
   onCreate,
   onUpdate,
   existingWallets,
+  closing,
 }: {
   wallet: Wallet | null;
   busy: boolean;
@@ -4648,6 +4740,7 @@ function WalletEditSheet({
   onCreate: (input: WalletInput) => Promise<boolean>;
   onUpdate: (wallet: Wallet, patch: WalletInput) => Promise<boolean>;
   existingWallets: Wallet[];
+  closing?: boolean;
 }) {
   const [name, setName] = useState(wallet?.name ?? "");
   const [tag, setTag] = useState<WalletTag>(wallet?.tag ?? "cash");
@@ -4664,7 +4757,7 @@ function WalletEditSheet({
   };
 
   return (
-    <SheetFrame onClose={onClose}>
+    <SheetFrame onClose={onClose} closing={closing}>
       <div className="sheet-head">
         <div>
           <p className="eyebrow">{wallet ? "แก้ไขกระเป๋าตังค์" : "เพิ่มกระเป๋าตังค์"}</p>
@@ -4771,6 +4864,7 @@ function RecurringExpenseEditSheet({
   onClose,
   onCreate,
   onUpdate,
+  closing,
 }: {
   item: RecurringExpense | null;
   busy: boolean;
@@ -4778,6 +4872,7 @@ function RecurringExpenseEditSheet({
   onClose: () => void;
   onCreate: (input: RecurringExpenseInput) => Promise<boolean>;
   onUpdate: (item: RecurringExpense, patch: RecurringExpenseInput) => Promise<boolean>;
+  closing?: boolean;
 }) {
   const [name, setName] = useState(item?.name ?? "");
   const [amountText, setAmountText] = useState(item?.amount ? String(item.amount) : "");
@@ -4793,7 +4888,7 @@ function RecurringExpenseEditSheet({
   };
 
   return (
-    <SheetFrame onClose={onClose}>
+    <SheetFrame onClose={onClose} closing={closing}>
       <div className="sheet-head">
         <div>
           <p className="eyebrow">{item ? "แก้ไขรายจ่ายประจำ" : "เพิ่มรายจ่ายประจำ"}</p>
@@ -4825,10 +4920,10 @@ function RecurringExpenseEditSheet({
     </SheetFrame>
   );
 }
-function ConfirmLogout({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
+function ConfirmLogout({ onCancel, onConfirm, closing }: { onCancel: () => void; onConfirm: () => void; closing?: boolean }) {
   return (
-    <div className="dialog-backdrop">
-      <section className="confirm-dialog">
+    <div className={`dialog-backdrop ${closing ? "closing" : ""}`}>
+      <section className={`confirm-dialog ${closing ? "closing" : ""}`}>
         <h2>ออกจากระบบ?</h2>
         <p>คุณสามารถกลับมาเข้าสู่ระบบและดูข้อมูลเดิมได้ทุกเมื่อ</p>
         <div>
