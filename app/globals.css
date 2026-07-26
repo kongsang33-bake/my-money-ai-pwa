@@ -277,7 +277,7 @@ a:focus-visible {
 .home-profile-icon {
   width: 46px;
   height: 46px;
-  border-radius: var(--r-lg);
+  border-radius: var(--r-full);
   background: var(--accent-soft);
   color: var(--accent-strong);
   display: grid;
@@ -2537,6 +2537,9 @@ a:focus-visible {
   border: 1px solid var(--line);
   font-size: 18px;
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: background var(--t-1) var(--e-out);
 }
 

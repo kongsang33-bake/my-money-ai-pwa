@@ -12,6 +12,7 @@ import {
   HeartPulse,
   Home as HomeIcon,
   Lightbulb,
+  Lock,
   MoreHorizontal,
   Music,
   PiggyBank,
@@ -2062,7 +2063,7 @@ function PinGate({
       <section className="phone pin-screen">
         <div className="pin-card">
           <div className="pin-brand">
-            <span className="pin-lock-mark" aria-hidden="true">▪</span>
+            <span className="pin-lock-mark" aria-hidden="true"><Lock size={22} strokeWidth={2.25} /></span>
             <div>
               <p className="eyebrow">{mode === "setup" ? "ตั้งค่าความเป็นส่วนตัว" : "ยืนยันตัวตน"}</p>
               <h1>{mode === "setup" ? "ตั้งรหัส PIN 6 หลัก" : "ใส่รหัส PIN"}</h1>
