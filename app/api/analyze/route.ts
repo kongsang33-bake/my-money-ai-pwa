@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 
-const transactionTypes = ["income", "personal_expense", "lend", "split_half", "debt_repayment", "debt_payment", "gift"] as const;
+const transactionTypes = ["income", "personal_expense", "lend", "split_half", "debt_repayment", "debt_payment", "gift", "transfer"] as const;
 const categories = ["อาหาร", "เดินทาง", "ของใช้", "ที่อยู่อาศัย", "สุขภาพ", "บันเทิง", "รายได้", "บิลประจำ", "อื่น ๆ"] as const;
 
 const schema = {
@@ -23,8 +23,9 @@ const schema = {
       date: { type: "string", description: "วันที่รูปแบบ YYYY-MM-DD" },
       note: { type: "string", description: "คำอธิบายสั้น ๆ ถ้ามีบริบทสำคัญ" },
       wallet_id: { type: "string", description: "id ของกระเป๋าที่เหมาะที่สุด ถ้าระบุไม่ได้ให้ส่งค่าว่าง" },
+      transfer_to_wallet_id: { type: "string", description: "id กระเป๋าปลายทาง ใช้เฉพาะ transaction_type เป็น transfer ถ้าไม่ใช่ให้ส่งค่าว่าง" },
     },
-    required: ["title", "category", "amount", "transaction_type", "debtor_name", "date", "note", "wallet_id"],
+    required: ["title", "category", "amount", "transaction_type", "debtor_name", "date", "note", "wallet_id", "transfer_to_wallet_id"],
     additionalProperties: false,
   },
 };
@@ -93,7 +94,8 @@ function buildPrompt(input: string, today: string, hasImages: boolean, debtors: 
         ]
       : []),
     "กติกา transaction_type:",
-    "- income = เงินเข้าบัญชี เช่น เงินเดือน รายรับ ตู้กดน้ำขายได้",
+    "- income = เงินเข้าจากภายนอกเท่านั้น เช่น เงินเดือน โบนัส รายรับ ขายของได้ ตู้กดน้ำขายได้ — เงินที่ย้ายจากกระเป๋าตัวเองไปอีกกระเป๋าไม่ใช่ income",
+    "- transfer = โยกเงินระหว่างกระเป๋าของตัวเองเอง เช่น เก็บออม เก็บเงิน โอนเข้าเงินออม แบ่งไปลงทุน ไม่ใช่รายรับใหม่และไม่ใช่รายจ่าย",
     "- personal_expense = จ่ายเองส่วนตัว 100%",
     "- lend = ออกเงินให้บุคคลอื่นก่อน/ให้ยืม/จ่ายแทน 100%",
     "- split_half = หารกับบุคคลอื่น/หารครึ่ง/คนละครึ่ง ให้ amount เป็นยอดเต็มที่ผู้ใช้จ่ายจริง",
@@ -115,6 +117,7 @@ function buildPrompt(input: string, today: string, hasImages: boolean, debtors: 
     "- ถ้าข้อความระบุว่าจ่ายด้วยบัตร/เครดิต/บัตรเครดิต ให้เลือกกระเป๋าที่ชื่อหรือประเภทใกล้เคียงที่สุด",
     "- ถ้าระบุบัญชี/ธนาคาร/กระเป๋าชัดเจน ให้ใช้ id ของกระเป๋านั้น",
     "- ถ้าไม่แน่ใจ ให้ใช้กระเป๋าที่เป็น default ถ้ามี ไม่เช่นนั้นส่งค่าว่าง",
+    "- ถ้าเป็น transfer ให้ wallet_id = กระเป๋าต้นทาง และ transfer_to_wallet_id = กระเป๋าปลายทาง ถ้าไม่ระบุต้นทางให้ใช้กระเป๋า default ถ้าระบุไม่ได้ทั้งคู่ให้ส่งค่าว่าง",
     "",
     "กติกา debtor_name สำหรับ debt_payment:",
     "- ใช้ debtor_name เป็นชื่อก้อนหนี้ของฉันเอง (เช่น บ้าน, รถ, บัตรเครดิต) ไม่ใช่ชื่อคน",

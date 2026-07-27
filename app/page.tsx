@@ -60,6 +60,7 @@ type Entry = {
   wallet_id?: string | null;
   note?: string | null;
   transfer_group_id?: string | null;
+  transfer_to_wallet_id?: string | null;
 };
 
 type Draft = Omit<Entry, "id"> & { id: string };
@@ -163,6 +164,7 @@ type EntryInput = {
   wallet_id?: string | null;
   note?: string | null;
   transfer_group_id?: string | null;
+  transfer_to_wallet_id?: string | null;
 };
 
 type SlipImage = {
@@ -731,7 +733,34 @@ function normalizeEntry(input: EntryInput, applyDebtorDefault = true): Entry {
     wallet_id: input.wallet_id ?? null,
     note: input.note?.trim() || null,
     transfer_group_id: input.transfer_group_id ?? null,
+    transfer_to_wallet_id: input.transfer_to_wallet_id ?? null,
   };
+}
+
+// A transfer draft carries one wallet_impact but needs to land as two linked
+// rows (one negative leg on the source wallet, one positive on the
+// destination) sharing a transfer_group_id — this expands it right before
+// saving so both the AI-parsed path and manual entry can share the logic.
+function expandTransferDraft(draft: Draft, wallets: Wallet[]): Draft[] {
+  if (draft.transaction_type !== "transfer" || !draft.transfer_to_wallet_id) return [draft];
+
+  const sourceWallet = wallets.find((wallet) => wallet.id === draft.wallet_id);
+  const destWallet = wallets.find((wallet) => wallet.id === draft.transfer_to_wallet_id);
+  const groupId = crypto.randomUUID();
+  const title = draft.title.trim();
+
+  const sourceLeg = normalizeEntry({
+    id: `${groupId}-out`, title: title || `โอนไป${destWallet?.name ?? "กระเป๋าอื่น"}`, category: "อื่น ๆ",
+    amount: draft.amount, transaction_type: "transfer", debtor_name: "", occurred_at: draft.occurred_at,
+    wallet_id: draft.wallet_id, wallet_impact: -draft.amount, note: draft.note, transfer_group_id: groupId,
+  }, false);
+  const destLeg = normalizeEntry({
+    id: `${groupId}-in`, title: title || `โอนจาก${sourceWallet?.name ?? "กระเป๋าอื่น"}`, category: "อื่น ๆ",
+    amount: draft.amount, transaction_type: "transfer", debtor_name: "", occurred_at: draft.occurred_at,
+    wallet_id: draft.transfer_to_wallet_id, wallet_impact: draft.amount, note: draft.note, transfer_group_id: groupId,
+  }, false);
+
+  return [sourceLeg, destLeg];
 }
 
 function mapTransactionRow(row: {
@@ -1516,9 +1545,10 @@ export default function Home() {
 
       const source = [text.trim(), slipImages.length ? `แนบรูปสลิป ${slipImages.length} รูป` : ""].filter(Boolean).join(" | ");
       setDrafts(
-        data.items.map((item: { title: string; category: string; amount: number; transaction_type: TransactionType; debtor_name?: string; date: string; note?: string; wallet_id?: string | null }, index: number) =>
+        data.items.map((item: { title: string; category: string; amount: number; transaction_type: TransactionType; debtor_name?: string; date: string; note?: string; wallet_id?: string | null; transfer_to_wallet_id?: string | null }, index: number) =>
           {
             const aiWalletId = item.wallet_id && wallets.some((wallet) => wallet.id === item.wallet_id) ? item.wallet_id : null;
+            const aiDestWalletId = item.transfer_to_wallet_id && wallets.some((wallet) => wallet.id === item.transfer_to_wallet_id) ? item.transfer_to_wallet_id : null;
             return normalizeEntry({
             id: `${Date.now()}-${index}`,
             title: item.title,
@@ -1530,6 +1560,7 @@ export default function Home() {
             source_text: source,
             wallet_id: aiWalletId || defaultWalletId(wallets),
             note: item.note,
+            transfer_to_wallet_id: aiDestWalletId,
             }, false);
           },
         ),
@@ -1548,7 +1579,9 @@ export default function Home() {
 
     setBusy(true);
     setError("");
-    const normalizedItems = items.map((item) => normalizeEntry(item));
+    const normalizedItems = items
+      .flatMap((item) => expandTransferDraft(item, wallets))
+      .map((item) => normalizeEntry(item));
 
     const payload = normalizedItems.map((normalized) => ({
       user_id: user.id,
@@ -1613,14 +1646,91 @@ export default function Home() {
     if (nameKinds.size) await loadDebtors();
   }
 
-  async function updateEntry() {
-    if (!supabase || !editing) return false;
+  async function updateEntry(transferToWalletId?: string | null) {
+    if (!supabase || !editing || !user) return false;
 
-    const normalized = normalizeEntry(editing);
-    const resolvedWalletId = normalized.wallet_id ?? defaultWalletId(wallets);
+    const original = entries.find((item) => item.id === editing.id);
+    const convertingToTransfer = editing.transaction_type === "transfer" && original?.transaction_type !== "transfer";
 
     setBusy(true);
     setError("");
+
+    if (convertingToTransfer) {
+      if (!transferToWalletId || transferToWalletId === editing.wallet_id) {
+        setError("กรุณาเลือกกระเป๋าปลายทาง");
+        setBusy(false);
+        return false;
+      }
+      const sourceWalletId = editing.wallet_id ?? defaultWalletId(wallets);
+      const [sourceLeg, destLeg] = expandTransferDraft(
+        { ...editing, wallet_id: sourceWalletId, transfer_to_wallet_id: transferToWalletId },
+        wallets,
+      );
+
+      const { error: updateError } = await supabase
+        .from("transactions")
+        .update({
+          title: sourceLeg.title.trim(),
+          category: sourceLeg.category,
+          amount: sourceLeg.amount,
+          kind: sourceLeg.type,
+          transaction_type: sourceLeg.transaction_type,
+          debtor_name: sourceLeg.debtor_name,
+          wallet_impact: sourceLeg.wallet_impact,
+          debt_impact: sourceLeg.debt_impact,
+          user_share: sourceLeg.user_share,
+          partner_share: sourceLeg.partner_share,
+          occurred_at: sourceLeg.occurred_at,
+          wallet_id: sourceLeg.wallet_id,
+          note: sourceLeg.note,
+          transfer_group_id: sourceLeg.transfer_group_id,
+        })
+        .eq("id", editing.id);
+
+      if (updateError) {
+        setError(updateError.message);
+        setBusy(false);
+        return false;
+      }
+
+      const { data, error: insertError } = await supabase
+        .from("transactions")
+        .insert({
+          user_id: user.id,
+          title: destLeg.title.trim(),
+          category: destLeg.category,
+          amount: destLeg.amount,
+          kind: destLeg.type,
+          transaction_type: destLeg.transaction_type,
+          debtor_name: destLeg.debtor_name,
+          wallet_impact: destLeg.wallet_impact,
+          debt_impact: destLeg.debt_impact,
+          user_share: destLeg.user_share,
+          partner_share: destLeg.partner_share,
+          occurred_at: destLeg.occurred_at,
+          wallet_id: destLeg.wallet_id,
+          note: destLeg.note,
+          transfer_group_id: destLeg.transfer_group_id,
+        })
+        .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id");
+
+      if (insertError) {
+        setError(insertError.message);
+        setBusy(false);
+        return false;
+      }
+
+      const savedSource = { ...sourceLeg, id: editing.id };
+      const savedDest = data?.[0] ? mapTransactionRow(data[0]) : destLeg;
+      setEntries((current) =>
+        [savedDest, ...current.map((item) => (item.id === savedSource.id ? savedSource : item))].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)),
+      );
+      setBusy(false);
+      return true;
+    }
+
+    const normalized = normalizeEntry(editing);
+    const resolvedWalletId = normalized.wallet_id ?? defaultWalletId(wallets);
 
     const { error } = await supabase
       .from("transactions")
@@ -2496,7 +2606,14 @@ export default function Home() {
                       />
                     ))}
                     <DraftImpact items={drafts} />
-                    <button className="save" onClick={() => saveEntries(drafts)} disabled={busy}>
+                    {drafts.some((draft) => draft.transaction_type === "transfer" && (!draft.transfer_to_wallet_id || draft.transfer_to_wallet_id === draft.wallet_id)) && (
+                      <p className="pin-hint">มีรายการโอนเงินที่ยังไม่ได้เลือกกระเป๋าปลายทาง</p>
+                    )}
+                    <button
+                      className="save"
+                      onClick={() => saveEntries(drafts)}
+                      disabled={busy || drafts.some((draft) => draft.transaction_type === "transfer" && (!draft.transfer_to_wallet_id || draft.transfer_to_wallet_id === draft.wallet_id))}
+                    >
                       บันทึก {drafts.length} รายการ
                     </button>
                     <p className="privacy">AI ช่วยอ่านและแยกข้อมูล แต่สูตรคำนวณกระเป๋า/ลูกหนี้ยังล็อกอยู่ในแอพ</p>
@@ -4044,6 +4161,8 @@ function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft:
   const relevantKind: DebtorKind = isOwnDebtType ? "own" : "lend";
   const knownNames = knownDebtors.filter((debtor) => debtor.kind === relevantKind).map((debtor) => debtor.name);
   const isNewDebtor = isDebtType && !!draft.debtor_name.trim() && draft.debtor_name !== unnamedDebtor && !knownNames.some((name) => name.trim().toLowerCase() === draft.debtor_name.trim().toLowerCase());
+  const isTransfer = draft.transaction_type === "transfer";
+  const transferInvalid = isTransfer && (!draft.transfer_to_wallet_id || draft.transfer_to_wallet_id === draft.wallet_id);
 
   return (
     <div className={`draft draft-${draft.transaction_type}`}>
@@ -4062,7 +4181,7 @@ function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft:
       <div className="draft-side">
         <span className="draft-type-badge">{transactionTypeLabels[draft.transaction_type]}</span>
         <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
-          {Object.entries(transactionTypeLabels).filter(([value]) => value !== "transfer").map(([value, label]) => (
+          {Object.entries(transactionTypeLabels).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
@@ -4073,10 +4192,17 @@ function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft:
           <AmountInput value={draft.amount} onChange={(amount) => update({ amount })} />
         </label>
       </div>
-      <div className="impact-row">
-        <span>กระเป๋า {formatSignedMoney(draft.wallet_impact)}</span>
-        <span>หนี้ {formatSignedMoney(draft.debt_impact)}</span>
-      </div>
+      {isTransfer ? (
+        <div className="impact-row">
+          <span>โอนออก {formatSignedMoney(-draft.amount)}</span>
+          <span>โอนเข้า {formatSignedMoney(draft.amount)}</span>
+        </div>
+      ) : (
+        <div className="impact-row">
+          <span>กระเป๋า {formatSignedMoney(draft.wallet_impact)}</span>
+          <span>หนี้ {formatSignedMoney(draft.debt_impact)}</span>
+        </div>
+      )}
       {isDebtType && (
         <div className="draft-debtor-field">
           <input
@@ -4096,13 +4222,21 @@ function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft:
           ))}
         </select>
       )}
+      {isTransfer && !!wallets.length && (
+        <select className="draft-date" aria-invalid={transferInvalid} value={draft.transfer_to_wallet_id ?? ""} onChange={(event) => update({ transfer_to_wallet_id: event.target.value || null })}>
+          <option value="">ไปกระเป๋า…</option>
+          {wallets.map((wallet) => (
+            <option key={wallet.id} value={wallet.id} disabled={wallet.id === draft.wallet_id}>{wallet.name}</option>
+          ))}
+        </select>
+      )}
       <input className="draft-date" value={draft.note ?? ""} onChange={(event) => update({ note: event.target.value })} placeholder="หมายเหตุ" />
     </div>
   );
 }
 
 function DraftImpact({ items }: { items: Draft[] }) {
-  const wallet = items.reduce((sum, item) => sum + item.wallet_impact, 0);
+  const wallet = items.filter((item) => item.transaction_type !== "transfer").reduce((sum, item) => sum + item.wallet_impact, 0);
   const debt = items.reduce((sum, item) => sum + item.debt_impact, 0);
 
   return (
@@ -4228,19 +4362,7 @@ function ManualEntryForm({
   const submit = () => {
     if (isTransfer) {
       if (transferInvalid || draft.amount <= 0 || !destWalletId) return;
-      const groupId = crypto.randomUUID();
-      const title = draft.title.trim();
-      const sourceLeg = normalizeEntry({
-        id: `${groupId}-out`, title: title || `โอนไป${destWallet?.name ?? "กระเป๋าอื่น"}`, category: "อื่น ๆ",
-        amount: draft.amount, transaction_type: "transfer", debtor_name: "", occurred_at: draft.occurred_at,
-        wallet_id: draft.wallet_id, wallet_impact: -draft.amount, note: draft.note, transfer_group_id: groupId,
-      }, false);
-      const destLeg = normalizeEntry({
-        id: `${groupId}-in`, title: title || `โอนจาก${sourceWallet?.name ?? "กระเป๋าอื่น"}`, category: "อื่น ๆ",
-        amount: draft.amount, transaction_type: "transfer", debtor_name: "", occurred_at: draft.occurred_at,
-        wallet_id: destWalletId, wallet_impact: draft.amount, note: draft.note, transfer_group_id: groupId,
-      }, false);
-      onSave([sourceLeg, destLeg]);
+      onSave([{ ...draft, transfer_to_wallet_id: destWalletId }]);
       return;
     }
     onSave([draft]);
@@ -4348,13 +4470,20 @@ function EditSheet({
   error: string;
   onChange: (entry: Entry) => void;
   onClose: () => void;
-  onSave: () => Promise<boolean>;
+  onSave: (transferToWalletId?: string | null) => Promise<boolean>;
   closing?: boolean;
 }) {
   const update = (patch: Partial<Entry>) => onChange(normalizeEntry({ ...entry, ...patch }, false));
+  const [originalType] = useState(entry.transaction_type);
+  const [destWalletId, setDestWalletId] = useState<string | null>(null);
+  const wasTransfer = originalType === "transfer";
   const isTransfer = entry.transaction_type === "transfer";
+  const convertingToTransfer = isTransfer && !wasTransfer;
+  const transferInvalid = convertingToTransfer && (!destWalletId || destWalletId === entry.wallet_id);
+  const sourceWallet = wallets.find((wallet) => wallet.id === entry.wallet_id);
+  const destWallet = wallets.find((wallet) => wallet.id === destWalletId);
   const submit = async () => {
-    const saved = await onSave();
+    const saved = await onSave(convertingToTransfer ? destWalletId : undefined);
     if (saved) onClose();
   };
 
@@ -4368,7 +4497,8 @@ function EditSheet({
         <button onClick={onClose}>x</button>
       </div>
 
-      {isTransfer && <p className="pin-hint">รายการโอนเงินแก้ไขได้เฉพาะชื่อ วันที่ และหมายเหตุ — ลบได้ทั้งสองฝั่งพร้อมกัน</p>}
+      {wasTransfer && <p className="pin-hint">รายการโอนเงินแก้ไขได้เฉพาะชื่อ วันที่ และหมายเหตุ — ลบได้ทั้งสองฝั่งพร้อมกัน</p>}
+      {convertingToTransfer && <p className="pin-hint">เลือกกระเป๋าปลายทางก่อนบันทึกเป็นรายการโอน</p>}
 
       <label>
         ชื่อรายการ
@@ -4386,8 +4516,8 @@ function EditSheet({
       )}
       <label>
         ชนิดรายการ
-        <select value={entry.transaction_type} disabled={isTransfer} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
-          {Object.entries(transactionTypeLabels).filter(([value]) => value !== "transfer" || isTransfer).map(([value, label]) => (
+        <select value={entry.transaction_type} disabled={wasTransfer} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
+          {Object.entries(transactionTypeLabels).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
@@ -4396,7 +4526,7 @@ function EditSheet({
       </label>
       <label>
         จำนวนเงิน
-        <AmountInput value={entry.amount} onChange={(amount) => update({ amount })} disabled={isTransfer} />
+        <AmountInput value={entry.amount} onChange={(amount) => update({ amount })} disabled={wasTransfer} />
       </label>
       {(["lend", "split_half", "debt_repayment", "debt_payment", "card_charge"] as TransactionType[]).includes(entry.transaction_type) && (
         <label>
@@ -4408,12 +4538,23 @@ function EditSheet({
         วันที่
         <input type="date" value={toDateInput(entry.occurred_at)} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, entry.occurred_at) })} />
       </label>
-      {!!wallets.length && entry.transaction_type !== "card_charge" && !isTransfer && (
+      {!!wallets.length && entry.transaction_type !== "card_charge" && !wasTransfer && (
         <label>
-          กระเป๋า
+          {isTransfer ? "จากกระเป๋า" : "กระเป๋า"}
           <select value={entry.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
             {wallets.map((wallet) => (
               <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      {convertingToTransfer && !!wallets.length && (
+        <label>
+          ไปกระเป๋า
+          <select value={destWalletId ?? ""} onChange={(event) => setDestWalletId(event.target.value || null)}>
+            <option value="">เลือกกระเป๋าปลายทาง</option>
+            {wallets.map((wallet) => (
+              <option key={wallet.id} value={wallet.id} disabled={wallet.id === entry.wallet_id}>{wallet.name}</option>
             ))}
           </select>
         </label>
@@ -4423,13 +4564,20 @@ function EditSheet({
         <textarea value={entry.note ?? ""} onChange={(event) => update({ note: event.target.value })} placeholder="รายละเอียดเพิ่มเติมของรายการนี้" />
       </label>
 
-      <div className="draft-impact">
-        <span>กระเป๋า {formatSignedMoney(entry.wallet_impact)}</span>
-        <span>หนี้ {formatSignedMoney(entry.debt_impact)}</span>
-      </div>
+      {convertingToTransfer ? (
+        <div className="draft-impact">
+          <span>{sourceWallet?.name ?? "จากกระเป๋า"} {formatSignedMoney(-entry.amount)}</span>
+          <span>{destWallet?.name ?? "ไปกระเป๋า"} {formatSignedMoney(entry.amount)}</span>
+        </div>
+      ) : (
+        <div className="draft-impact">
+          <span>กระเป๋า {formatSignedMoney(entry.wallet_impact)}</span>
+          <span>หนี้ {formatSignedMoney(entry.debt_impact)}</span>
+        </div>
+      )}
 
       {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
-      <button className="save" onClick={submit} disabled={busy || !entry.title.trim() || entry.amount < 0}>
+      <button className="save" onClick={submit} disabled={busy || !entry.title.trim() || entry.amount < 0 || transferInvalid}>
         {busy ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
       </button>
     </SheetFrame>
