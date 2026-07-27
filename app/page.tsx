@@ -5087,17 +5087,17 @@ function SideMenu({
             <button onClick={onOpenWallets}>
               <Wallet size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>กระเป๋าตังค์</span>
-              <b><CountUpMoney value={walletTotal} /></b>
+              <b>{moneySign}{formatMoney(walletTotal)}</b>
             </button>
             <button onClick={onOpenDebtors}>
               <Users size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>จัดการหนี้</span>
-              <b>{(receivableTotal - payableTotal) < 0 ? "−" : ""}<CountUpMoney value={Math.abs(receivableTotal - payableTotal)} /></b>
+              <b>{(receivableTotal - payableTotal) < 0 ? "−" : ""}{moneySign}{formatMoney(Math.abs(receivableTotal - payableTotal))}</b>
             </button>
             <button onClick={onOpenRecurring}>
               <Receipt size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>รายจ่ายประจำ</span>
-              <b><CountUpMoney value={recurringTotal} /></b>
+              <b>{moneySign}{formatMoney(recurringTotal)}</b>
             </button>
           </div>
           <div className="side-menu-section">
