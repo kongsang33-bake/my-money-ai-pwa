@@ -9,6 +9,7 @@ import {
   Banknote,
   Car,
   CreditCard,
+  Delete,
   Gift,
   GraduationCap,
   HeartPulse,
@@ -2763,9 +2764,25 @@ function PinGate({
   onLogout: () => void;
 }) {
   const [pin, setPin] = useState("");
-  const [confirmPin, setConfirmPin] = useState("");
+  const [setupStage, setSetupStage] = useState<"new" | "confirm">("new");
+  const [newPinDraft, setNewPinDraft] = useState("");
+  const [setupError, setSetupError] = useState("");
+  const [shake, setShake] = useState(false);
   const [tick, setTick] = useState(() => Date.now());
+  const [prevMode, setPrevMode] = useState(mode);
   const faceIdTried = useRef(false);
+  const submittingRef = useRef(false);
+
+  // Reset entry state whenever the gate's mode changes (e.g. setup -> locked).
+  // Adjusting state during render (React's documented pattern for this) rather
+  // than in an effect, so it applies before this render paints.
+  if (mode !== prevMode) {
+    setPrevMode(mode);
+    setPin("");
+    setSetupStage("new");
+    setNewPinDraft("");
+    setSetupError("");
+  }
   const blockedUntil = profile?.pin_blocked_until ? new Date(profile.pin_blocked_until).getTime() : 0;
   const blocked = blockedUntil > tick;
   const remainingMs = Math.max(0, blockedUntil - tick);
@@ -2773,6 +2790,10 @@ function PinGate({
   const attempts = clampInteger(profile?.pin_failed_attempts ?? 0, 0, pinMaxAttempts, 0);
   const remainingAttempts = Math.max(0, pinMaxAttempts - attempts);
   const faceIdAvailable = !!(profile?.webauthn_enabled && profile.webauthn_credential_id);
+  const metadata = user.user_metadata ?? {};
+  const displayName = profile?.nickname?.trim() || metadata.full_name || metadata.name || "";
+  const displayIcon = profile?.app_icon?.trim() || user.email?.[0]?.toUpperCase() || "฿";
+  const displayIconImage = profile?.app_icon_image?.trim() || "";
 
   useEffect(() => {
     if (!blocked) return;
@@ -2786,39 +2807,73 @@ function PinGate({
     void onFaceIdUnlock();
   }, [mode, faceIdAvailable, blocked, onFaceIdUnlock]);
 
+  const triggerShake = () => {
+    setShake(true);
+    window.setTimeout(() => setShake(false), 420);
+  };
+
   const appendDigit = (digit: string) => {
     if (blocked || busy || pin.length >= pinLength) return;
     setPin((current) => `${current}${digit}`.slice(0, pinLength));
   };
   const removeDigit = () => setPin((current) => current.slice(0, -1));
-  const submitUnlock = async () => {
-    if (!isSixDigitPin(pin) || blocked || busy) return;
-    const ok = await onUnlock(pin);
-    if (!ok) setPin("");
-  };
-  const submitSetup = () => {
-    if (!isSixDigitPin(pin)) return;
-    if (pin !== confirmPin) return;
-    onSetup(pin);
-  };
-  const setupError = mode === "setup" && confirmPin.length === pinLength && pin !== confirmPin ? "PIN สองรอบไม่ตรงกัน" : "";
+
+  useEffect(() => {
+    if (mode !== "locked" || blocked || busy || !isSixDigitPin(pin) || submittingRef.current) return;
+    submittingRef.current = true;
+    onUnlock(pin).then((ok) => {
+      submittingRef.current = false;
+      if (!ok) {
+        triggerShake();
+        setPin("");
+      }
+    });
+  }, [pin, mode, blocked, busy, onUnlock]);
+
+  useEffect(() => {
+    if (mode !== "setup" || !isSixDigitPin(pin)) return;
+    queueMicrotask(() => {
+      if (setupStage === "new") {
+        setNewPinDraft(pin);
+        setPin("");
+        setSetupStage("confirm");
+        setSetupError("");
+        return;
+      }
+      if (pin === newPinDraft) {
+        onSetup(pin);
+        return;
+      }
+      setSetupError("PIN สองรอบไม่ตรงกัน ลองใหม่อีกครั้ง");
+      triggerShake();
+      setPin("");
+      setNewPinDraft("");
+      setSetupStage("new");
+    });
+  }, [pin, mode, setupStage, newPinDraft, onSetup]);
+
+  const title = mode === "setup"
+    ? (setupStage === "new" ? "ตั้งรหัส PIN 6 หลัก" : "ยืนยันรหัส PIN อีกครั้ง")
+    : displayName
+      ? `สวัสดี ${displayName}`
+      : "ใส่รหัส PIN";
+  const copy = mode === "setup"
+    ? (setupStage === "new" ? "ตั้ง PIN สำหรับเข้าใช้งานแอพนี้บนทุกเครื่องที่ล็อกอินบัญชีเดียวกัน" : "กรอกรหัสเดิมอีกครั้งเพื่อยืนยัน")
+    : "ใส่รหัส PIN เพื่อเข้าใช้งาน";
 
   return (
     <main className="shell pin-shell">
       <section className="phone pin-screen">
-        <div className="pin-card">
-          <div className="pin-brand">
-            <span className="pin-lock-mark" aria-hidden="true"><Lock size={22} strokeWidth={2.25} /></span>
-            <div>
-              <p className="eyebrow">{mode === "setup" ? "ตั้งค่าความเป็นส่วนตัว" : "ยืนยันตัวตน"}</p>
-              <h1>{mode === "setup" ? "ตั้งรหัส PIN 6 หลัก" : "ใส่รหัส PIN"}</h1>
-            </div>
+        <div className={`pin-content ${shake ? "shake" : ""}`}>
+          <div className="pin-identity">
+            <span className={`avatar pin-avatar ${displayIconImage ? "has-image" : ""}`}>
+              {displayIconImage && <NextImage className="profile-image" src={displayIconImage} alt="" width={64} height={64} unoptimized />}
+              {!displayIconImage && (mode === "setup" ? <Lock size={26} strokeWidth={2.25} aria-hidden="true" /> : displayIcon)}
+            </span>
+            <p className="eyebrow">{mode === "setup" ? "ตั้งค่าความเป็นส่วนตัว" : "ยืนยันตัวตน"}</p>
+            <h1>{title}</h1>
+            <p className="pin-copy">{copy}</p>
           </div>
-          <p className="pin-copy">
-            {mode === "setup"
-              ? "ตั้ง PIN สำหรับเข้าใช้งานแอพนี้บนทุกเครื่องที่ล็อกอินบัญชีเดียวกัน"
-              : `บัญชี ${user.email ?? ""} ต้องยืนยัน PIN ก่อนดูข้อมูลการเงิน`}
-          </p>
 
           {mode === "checking" && (
             <div className="pin-loading">
@@ -2827,47 +2882,33 @@ function PinGate({
             </div>
           )}
 
-          {mode === "setup" && (
-            <div className="pin-form">
-              <label>
-                PIN ใหม่
-                <input inputMode="numeric" type="password" maxLength={pinLength} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, pinLength))} />
-              </label>
-              <label>
-                ยืนยัน PIN
-                <input inputMode="numeric" type="password" maxLength={pinLength} value={confirmPin} onChange={(event) => setConfirmPin(event.target.value.replace(/\D/g, "").slice(0, pinLength))} />
-              </label>
-              {(setupError || error) && <p className="pin-error">{setupError || error}</p>}
-              <button className="save" onClick={submitSetup} disabled={busy || !isSixDigitPin(pin) || pin !== confirmPin}>
-                {busy ? "กำลังบันทึก" : "ตั้ง PIN"}
-              </button>
-              <button className="pin-link-button" onClick={onLogout}>ออกจากระบบ</button>
-            </div>
-          )}
-
-          {mode === "locked" && (
-            <div className="pin-unlock">
+          {mode !== "checking" && (
+            <>
               <div className="pin-dots" aria-label={`กรอกแล้ว ${pin.length} หลัก`}>
-                {Array.from({ length: pinLength }, (_, index) => <span key={index} className={index < pin.length ? "filled" : ""} />)}
+                {Array.from({ length: pinLength }, (_, index) => (
+                  <span key={index} className={`${index < pin.length ? "filled" : ""} ${shake ? "error" : ""}`} />
+                ))}
               </div>
-              {blocked ? (
-                <p className="pin-error">ใส่ผิดครบ 5 ครั้ง กรุณารอประมาณ {remainingMinutes} นาที</p>
-              ) : (
-                <p className="pin-hint">ใส่ผิดได้อีก {remainingAttempts} ครั้ง</p>
-              )}
-              {error && !blocked && <p className="pin-error">{error}</p>}
-              <PinKeypad onDigit={appendDigit} onBackspace={removeDigit} disabled={busy || blocked} />
-              <button className="save" onClick={submitUnlock} disabled={busy || blocked || !isSixDigitPin(pin)}>
-                {busy ? "กำลังตรวจสอบ" : "เข้าใช้งาน"}
-              </button>
-              {faceIdAvailable && !blocked && (
-                <button className="pin-link-button pin-faceid-button" onClick={() => onFaceIdUnlock()} disabled={busy}>
-                  <ScanFace size={18} strokeWidth={2} aria-hidden="true" />
-                  ใช้ Face ID
-                </button>
-              )}
-              <button className="pin-link-button" onClick={onForgot} disabled={busy}>ลืม PIN / ออกจากระบบเพื่อรีเซ็ต</button>
-            </div>
+
+              <div className="pin-status">
+                {mode === "locked" && blocked && <p className="pin-error">ใส่ผิดครบ 5 ครั้ง กรุณารอประมาณ {remainingMinutes} นาที</p>}
+                {mode === "locked" && !blocked && error && <p className="pin-error">{error}</p>}
+                {mode === "locked" && !blocked && !error && remainingAttempts < pinMaxAttempts && <p className="pin-hint">ใส่ผิดได้อีก {remainingAttempts} ครั้ง</p>}
+                {mode === "setup" && (setupError || error) && <p className="pin-error">{setupError || error}</p>}
+              </div>
+
+              <PinKeypad
+                onDigit={appendDigit}
+                onBackspace={removeDigit}
+                disabled={busy || blocked}
+                onFaceId={mode === "locked" && faceIdAvailable && !blocked ? () => onFaceIdUnlock() : undefined}
+              />
+
+              <div className="pin-footer">
+                {mode === "setup" && <button className="pin-link-button" onClick={onLogout}>ออกจากระบบ</button>}
+                {mode === "locked" && <button className="pin-link-button" onClick={onForgot} disabled={busy}>ลืม PIN / ออกจากระบบเพื่อรีเซ็ต</button>}
+              </div>
+            </>
           )}
         </div>
       </section>
@@ -2875,14 +2916,30 @@ function PinGate({
   );
 }
 
-function PinKeypad({ onDigit, onBackspace, disabled }: { onDigit: (digit: string) => void; onBackspace: () => void; disabled: boolean }) {
+function PinKeypad({
+  onDigit,
+  onBackspace,
+  disabled,
+  onFaceId,
+}: {
+  onDigit: (digit: string) => void;
+  onBackspace: () => void;
+  disabled: boolean;
+  onFaceId?: () => void;
+}) {
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
   return (
     <div className="pin-keypad">
       {keys.map((key) => <button key={key} onClick={() => onDigit(key)} disabled={disabled}>{key}</button>)}
-      <span />
+      {onFaceId ? (
+        <button className="pin-keypad-faceid" onClick={onFaceId} disabled={disabled} aria-label="ใช้ Face ID">
+          <ScanFace size={22} strokeWidth={2} aria-hidden="true" />
+        </button>
+      ) : <span />}
       <button onClick={() => onDigit("0")} disabled={disabled}>0</button>
-      <button onClick={onBackspace} disabled={disabled}>ลบ</button>
+      <button className="pin-keypad-delete" onClick={onBackspace} disabled={disabled} aria-label="ลบ">
+        <Delete size={20} strokeWidth={2} aria-hidden="true" />
+      </button>
     </div>
   );
 }
