@@ -438,7 +438,7 @@ a:focus-visible {
   justify-content: center;
   gap: 2px;
   color: var(--ink-3);
-  transition: color var(--t-2) var(--e-out), transform var(--t-1) var(--e-out);
+  transition: color var(--t-2) var(--e-out), transform var(--t-1) var(--e-out), background var(--t-2) var(--e-out);
 }
 
 .bottom-nav button.active {
@@ -673,6 +673,14 @@ a:focus-visible {
 .wallet-card, .debtor-page-item, .entry-tappable, .quick-chip,
 .secondary-wallet-card {
   transition: box-shadow var(--t-2) var(--e-out), transform var(--t-2) var(--e-out);
+}
+
+.entry-tappable {
+  transition: opacity var(--t-1) var(--e-out);
+}
+
+.entry-tappable:active {
+  opacity: 0.6;
 }
 
 /* -------------------------------------------------------------------------
@@ -3496,15 +3504,15 @@ a:focus-visible {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.phone.tab-home .view > * {
+.view > * {
   animation: card-in var(--t-2) var(--e-out) both;
 }
 
-.phone.tab-home .view > *:nth-child(1) { animation-delay: 0ms; }
-.phone.tab-home .view > *:nth-child(2) { animation-delay: 60ms; }
-.phone.tab-home .view > *:nth-child(3) { animation-delay: 120ms; }
-.phone.tab-home .view > *:nth-child(4) { animation-delay: 180ms; }
-.phone.tab-home .view > *:nth-child(5) { animation-delay: 240ms; }
+.view > *:nth-child(1) { animation-delay: 0ms; }
+.view > *:nth-child(2) { animation-delay: 60ms; }
+.view > *:nth-child(3) { animation-delay: 120ms; }
+.view > *:nth-child(4) { animation-delay: 180ms; }
+.view > *:nth-child(5) { animation-delay: 240ms; }
 
 @keyframes fade-in {
   from { opacity: 0; }

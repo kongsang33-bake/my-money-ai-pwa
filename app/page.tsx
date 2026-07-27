@@ -2362,7 +2362,7 @@ export default function Home() {
                           </i>
                         )}
                         <span>{entry.label}</span>
-                        <strong>{moneySign}{formatMoney(walletTotals[entry.tag])}</strong>
+                        <strong><CountUpMoney value={walletTotals[entry.tag]} /></strong>
                       </button>
                     );
                   })}
@@ -3979,7 +3979,7 @@ function Metric({ label, value, tone }: { label: string; value: number; tone: "i
   return (
     <div className={`metric ${tone}`}>
       <span>{label}</span>
-      <b>{value < 0 ? "−" : ""}{moneySign}{formatMoney(Math.abs(value))}</b>
+      <b>{value < 0 ? "−" : ""}<CountUpMoney value={Math.abs(value)} /></b>
     </div>
   );
 }
@@ -4393,11 +4393,11 @@ function DebtorStatementSummary({ entries, kind }: { entries: Entry[]; kind: Deb
     <section className="debtor-statement">
       <div>
         <span>{kind === "own" ? "เพิ่มยอดหนี้" : "ยืม/หารสะสม"}</span>
-        <b>{moneySign}{formatMoney(lent)}</b>
+        <b><CountUpMoney value={lent} /></b>
       </div>
       <div>
         <span>{kind === "own" ? "ผ่อนชำระสะสม" : "คืนแล้ว"}</span>
-        <b>{moneySign}{formatMoney(paid)}</b>
+        <b><CountUpMoney value={paid} /></b>
       </div>
       <div>
         <span>รายการ</span>
@@ -4956,17 +4956,17 @@ function SideMenu({
             <button onClick={onOpenWallets}>
               <Wallet size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>กระเป๋าตังค์</span>
-              <b>{moneySign}{formatMoney(walletTotal)}</b>
+              <b><CountUpMoney value={walletTotal} /></b>
             </button>
             <button onClick={onOpenDebtors}>
               <Users size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>จัดการหนี้</span>
-              <b>{moneySign}{formatMoney(receivableTotal - payableTotal)}</b>
+              <b>{(receivableTotal - payableTotal) < 0 ? "−" : ""}<CountUpMoney value={Math.abs(receivableTotal - payableTotal)} /></b>
             </button>
             <button onClick={onOpenRecurring}>
               <Receipt size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>รายจ่ายประจำ</span>
-              <b>{moneySign}{formatMoney(recurringTotal)}</b>
+              <b><CountUpMoney value={recurringTotal} /></b>
             </button>
           </div>
           <div className="side-menu-section">
@@ -5121,7 +5121,7 @@ function WalletsView({
       </div>
       <section className="debtor-detail-card">
         <span>ยอดรวมทุกกระเป๋า</span>
-        <strong>{moneySign}{formatMoney(total)}</strong>
+        <strong><CountUpMoney value={total} /></strong>
       </section>
       <div className="debtor-page-list">
         {wallets.map((wallet) => (
@@ -5280,7 +5280,7 @@ function RecurringExpensesView({
       </div>
       <section className="debtor-detail-card">
         <span>ยอดรวมต่อเดือน</span>
-        <strong>{moneySign}{formatMoney(total)}</strong>
+        <strong><CountUpMoney value={total} /></strong>
       </section>
       <div className="debtor-page-list">
         {items.map((item) => (
