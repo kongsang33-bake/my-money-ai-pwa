@@ -1023,6 +1023,7 @@ export default function Home() {
   const [pinError, setPinError] = useState("");
   const [pinSheetOpen, setPinSheetOpen] = useState(false);
   const backgroundedAtRef = useRef<number | null>(null);
+  const authUserIdRef = useRef<string | null | undefined>(undefined);
   const displayName = profile?.nickname?.trim() || user?.user_metadata?.full_name || user?.user_metadata?.name || "เงินของฉัน";
   const displayIcon = profile?.app_icon?.trim() || user?.email?.[0]?.toUpperCase() || "฿";
   const displayIconImage = profile?.app_icon_image?.trim() || "";
@@ -1200,30 +1201,39 @@ export default function Home() {
     }
   }, [clearPrivateState, loadProfile, loadUserData]);
 
+  const applyAuthUser = useCallback((nextUser: User | null) => {
+    setUser(nextUser);
+    const nextId = nextUser?.id ?? null;
+    // supabase-js re-fires onAuthStateChange for the same signed-in user on
+    // events like a background token refresh, or when the tab regains focus
+    // after being briefly backgrounded — not just on a real sign-in/sign-out.
+    // Without this guard, switching apps for even a few seconds would replay
+    // the PIN gate and wipe in-progress typing every single time.
+    if (authUserIdRef.current === nextId) return;
+    authUserIdRef.current = nextId;
+    if (nextUser) {
+      void preparePinGate(nextUser.id);
+    } else {
+      setProfile(null);
+      setPinMode("checking");
+      setPinError("");
+      clearPrivateState();
+    }
+  }, [clearPrivateState, preparePinGate]);
+
   useEffect(() => {
     if (!supabase) return;
 
     supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user);
       setReady(true);
-      if (data.user) {
-        void preparePinGate(data.user.id);
-      }
+      applyAuthUser(data.user);
     });
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        void preparePinGate(session.user.id);
-      } else {
-        setProfile(null);
-        setPinMode("checking");
-        setPinError("");
-        clearPrivateState();
-      }
+      applyAuthUser(session?.user ?? null);
     });
     return () => data.subscription.unsubscribe();
-  }, [clearPrivateState, preparePinGate]);
+  }, [applyAuthUser]);
 
   const overlayOpen =
     menuOpen ||
