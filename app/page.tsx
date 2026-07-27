@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 
 type EntryKind = "expense" | "income";
-type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "debt_payment" | "gift";
+type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "debt_payment" | "card_charge" | "gift";
 type Tab = "home" | "add" | "history" | "debtors" | "wallets" | "recurring";
 type Theme = "light" | "dark";
 
@@ -82,6 +82,9 @@ type Debtor = {
   opening_balance: number;
   kind: DebtorKind;
   monthly_installment: number | null;
+  total_installments: number | null;
+  paid_installments: number | null;
+  credit_limit: number | null;
   icon: string | null;
   icon_color: string | null;
 };
@@ -174,6 +177,7 @@ const transactionTypeLabels: Record<TransactionType, string> = {
   split_half: "หารร่วมกัน",
   debt_repayment: "รับชำระหนี้",
   debt_payment: "ผ่อนชำระหนี้",
+  card_charge: "จ่ายด้วยบัตรเครดิต",
   gift: "ให้โดยไม่คิดคืน",
 };
 
@@ -184,6 +188,7 @@ const transactionKind: Record<TransactionType, EntryKind> = {
   lend: "expense",
   split_half: "expense",
   debt_payment: "expense",
+  card_charge: "expense",
   gift: "expense",
 };
 
@@ -591,8 +596,9 @@ function buildReportCsv({
   const categoryMap = new Map<string, number>();
 
   for (const entry of reportEntries) {
-    if (entry.wallet_impact >= 0) continue;
-    categoryMap.set(entry.category, (categoryMap.get(entry.category) ?? 0) + Math.abs(entry.wallet_impact));
+    const spendAmount = categorySpendAmount(entry);
+    if (spendAmount == null) continue;
+    categoryMap.set(entry.category, (categoryMap.get(entry.category) ?? 0) + spendAmount);
   }
 
   const lines = [
@@ -673,7 +679,20 @@ function calculateImpacts(amount: number, transactionType: TransactionType) {
   if (transactionType === "debt_payment") {
     return { wallet_impact: -amount, debt_impact: -amount, user_share: amount, partner_share: 0 };
   }
+  if (transactionType === "card_charge") {
+    return { wallet_impact: 0, debt_impact: amount, user_share: amount, partner_share: 0 };
+  }
   return { wallet_impact: -amount, debt_impact: 0, user_share: amount, partner_share: 0 };
+}
+
+function categorySpendAmount(entry: Entry): number | null {
+  if (entry.transaction_type === "card_charge") return entry.amount;
+  if (entry.wallet_impact < 0) return Math.abs(entry.wallet_impact);
+  return null;
+}
+
+function entryDisplayImpact(entry: Entry): number {
+  return entry.transaction_type === "card_charge" ? -entry.amount : entry.wallet_impact;
 }
 
 function normalizeEntry(input: EntryInput, applyDebtorDefault = true): Entry {
@@ -847,6 +866,25 @@ function buildDebtSummary(debtors: Debtor[], entries: Entry[], kind: DebtorKind,
     .map(([name, amount]) => ({ name, amount }))
     .filter((item) => item.amount > 0.005)
     .sort((a, b) => b.amount - a.amount);
+}
+
+function installmentsRemaining(debtor: Debtor, outstanding: number): number | null {
+  if (!debtor.monthly_installment) return null;
+  if (debtor.total_installments != null) {
+    return Math.max(0, debtor.total_installments - (debtor.paid_installments ?? 0));
+  }
+  if (outstanding <= 0.005) return null;
+  return Math.ceil(outstanding / debtor.monthly_installment);
+}
+
+function installmentStatusText(debtor: Debtor, outstanding: number): string {
+  if (!debtor.monthly_installment) return "";
+  const remaining = installmentsRemaining(debtor, outstanding);
+  if (debtor.total_installments != null) {
+    const paid = debtor.paid_installments ?? 0;
+    return ` · จ่ายแล้ว ${paid}/${debtor.total_installments} งวด${remaining != null ? ` (เหลือ ${remaining} งวด)` : ""}`;
+  }
+  return remaining !== null && outstanding > 0.005 ? ` · เหลืออีกประมาณ ${remaining} เดือน` : "";
 }
 
 function fileToSlipImage(file: File): Promise<SlipImage> {
@@ -1064,7 +1102,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("debtors")
-      .select("id,user_id,name,note,opening_balance,kind,monthly_installment,icon,icon_color")
+      .select("id,user_id,name,note,opening_balance,kind,monthly_installment,total_installments,paid_installments,credit_limit,icon,icon_color")
       .order("name", { ascending: true });
     if (error) {
       setError(error.message);
@@ -1074,6 +1112,9 @@ export default function Home() {
       ...row,
       opening_balance: toMoneyAmount(row.opening_balance),
       monthly_installment: row.monthly_installment == null ? null : Number(row.monthly_installment),
+      total_installments: row.total_installments == null ? null : Number(row.total_installments),
+      paid_installments: row.paid_installments == null ? null : Number(row.paid_installments),
+      credit_limit: row.credit_limit == null ? null : Number(row.credit_limit),
     })) as Debtor[]);
   }, []);
 
@@ -1236,7 +1277,7 @@ export default function Home() {
     [debtors, entries],
   );
   const payableSummary = useMemo(
-    () => buildDebtSummary(debtors, entries, "own", ["debt_payment"]),
+    () => buildDebtSummary(debtors, entries, "own", ["debt_payment", "card_charge"]),
     [debtors, entries],
   );
 
@@ -1327,8 +1368,9 @@ export default function Home() {
   const categorySummary = useMemo(() => {
     const map = new Map<string, number>();
     for (const entry of monthlyEntries) {
-      if (entry.wallet_impact >= 0) continue;
-      map.set(entry.category, (map.get(entry.category) ?? 0) + Math.abs(entry.wallet_impact));
+      const spendAmount = categorySpendAmount(entry);
+      if (spendAmount == null) continue;
+      map.set(entry.category, (map.get(entry.category) ?? 0) + spendAmount);
     }
     for (const category of Object.keys(budgets)) {
       if (!map.has(category)) map.set(category, 0);
@@ -1524,13 +1566,13 @@ export default function Home() {
   async function createMissingDebtors(items: Entry[]) {
     if (!supabase || !user) return;
     const known = new Set(debtors.map((debtor) => debtor.name.trim().toLowerCase()));
-    const debtTypes: TransactionType[] = ["lend", "split_half", "debt_repayment", "debt_payment"];
+    const debtTypes: TransactionType[] = ["lend", "split_half", "debt_repayment", "debt_payment", "card_charge"];
     const nameKinds = new Map<string, DebtorKind>();
     for (const item of items) {
       if (!debtTypes.includes(item.transaction_type)) continue;
       const name = item.debtor_name.trim();
       if (!name || name === unnamedDebtor || known.has(name.toLowerCase())) continue;
-      if (!nameKinds.has(name)) nameKinds.set(name, item.transaction_type === "debt_payment" ? "own" : "lend");
+      if (!nameKinds.has(name)) nameKinds.set(name, (["debt_payment", "card_charge"] as TransactionType[]).includes(item.transaction_type) ? "own" : "lend");
     }
 
     for (const [name, kind] of nameKinds) {
@@ -1903,10 +1945,13 @@ export default function Home() {
         opening_balance: toMoneyAmount(input.opening_balance),
         kind: input.kind,
         monthly_installment: input.monthly_installment,
+        total_installments: input.total_installments,
+        paid_installments: input.paid_installments,
+        credit_limit: input.credit_limit,
         icon: input.icon,
         icon_color: input.icon_color,
       })
-      .select("id,user_id,name,note,opening_balance,kind,monthly_installment,icon,icon_color")
+      .select("id,user_id,name,note,opening_balance,kind,monthly_installment,total_installments,paid_installments,credit_limit,icon,icon_color")
       .single();
     if (error) {
       setError(error.code === "23505" ? "มีชื่อนี้อยู่แล้ว" : error.message);
@@ -1931,6 +1976,9 @@ export default function Home() {
         opening_balance: openingBalance,
         kind: patch.kind,
         monthly_installment: patch.monthly_installment,
+        total_installments: patch.total_installments,
+        paid_installments: patch.paid_installments,
+        credit_limit: patch.credit_limit,
         icon: patch.icon,
         icon_color: patch.icon_color,
         updated_at: new Date().toISOString(),
@@ -3849,8 +3897,9 @@ function Metric({ label, value, tone }: { label: string; value: number; tone: "i
 
 function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft: Draft; knownDebtors: Debtor[]; wallets: Wallet[]; onChange: (draft: Draft) => void; onRemove: () => void }) {
   const update = (patch: Partial<Draft>) => onChange(normalizeEntry({ ...draft, ...patch }, false));
-  const isDebtType = (["lend", "split_half", "debt_repayment", "debt_payment"] as TransactionType[]).includes(draft.transaction_type);
-  const relevantKind: DebtorKind = draft.transaction_type === "debt_payment" ? "own" : "lend";
+  const isDebtType = (["lend", "split_half", "debt_repayment", "debt_payment", "card_charge"] as TransactionType[]).includes(draft.transaction_type);
+  const isOwnDebtType = (["debt_payment", "card_charge"] as TransactionType[]).includes(draft.transaction_type);
+  const relevantKind: DebtorKind = isOwnDebtType ? "own" : "lend";
   const knownNames = knownDebtors.filter((debtor) => debtor.kind === relevantKind).map((debtor) => debtor.name);
   const isNewDebtor = isDebtType && !!draft.debtor_name.trim() && draft.debtor_name !== unnamedDebtor && !knownNames.some((name) => name.trim().toLowerCase() === draft.debtor_name.trim().toLowerCase());
 
@@ -3890,7 +3939,7 @@ function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft:
         <div className="draft-debtor-field">
           <input
             className="draft-date"
-            placeholder={relevantKind === "own" ? "ชื่อหนี้ เช่น ผ่อนบ้าน ผ่อนรถ" : "ชื่อผู้เกี่ยวข้อง เช่น แฟน หรือ เพื่อนเอ"}
+            placeholder={draft.transaction_type === "card_charge" ? "ชื่อบัตร เช่น กรุงศรีเฟิร์สช้อย" : relevantKind === "own" ? "ชื่อหนี้ เช่น ผ่อนบ้าน ผ่อนรถ" : "ชื่อผู้เกี่ยวข้อง เช่น แฟน หรือ เพื่อนเอ"}
             value={draft.debtor_name}
             onChange={(event) => update({ debtor_name: event.target.value })}
           />
@@ -3898,7 +3947,7 @@ function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft:
         </div>
       )}
       <input className="draft-date" type="date" value={toDateInput(draft.occurred_at)} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, draft.occurred_at) })} />
-      {!!wallets.length && (
+      {!!wallets.length && draft.transaction_type !== "card_charge" && (
         <select className="draft-date" value={draft.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
           {wallets.map((wallet) => (
             <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
@@ -3957,7 +4006,7 @@ function EntryList({
                 </small>
                 {entry.note && <small className="entry-note" title={entry.note}>{entry.note}</small>}
               </div>
-              <strong className={entry.wallet_impact >= 0 ? "income" : "expense"}>{formatSignedMoney(entry.wallet_impact)}</strong>
+              <strong className={entryDisplayImpact(entry) >= 0 ? "income" : "expense"}>{formatSignedMoney(entryDisplayImpact(entry))}</strong>
               {(onEdit || onDelete) && (
                 <menu onClick={(event) => event.stopPropagation()}>
                   {onEdit && <button onClick={() => onEdit(entry)} title="แก้ไข">แก้</button>}
@@ -3988,8 +4037,8 @@ function RecentActivityTimeline({ entries, onEdit }: { entries: Entry[]; onEdit:
               <b>{entry.title}</b>
               <small>{entry.category} · {formatDateTime(entry.occurred_at)}</small>
             </span>
-            <span className={`activity-timeline-amount ${entry.wallet_impact >= 0 ? "income" : "expense"}`}>
-              {formatSignedMoney(entry.wallet_impact)}
+            <span className={`activity-timeline-amount ${entryDisplayImpact(entry) >= 0 ? "income" : "expense"}`}>
+              {formatSignedMoney(entryDisplayImpact(entry))}
             </span>
           </button>
         ))}
@@ -4059,17 +4108,17 @@ function EditSheet({
         จำนวนเงิน
         <AmountInput value={entry.amount} onChange={(amount) => update({ amount })} />
       </label>
-      {(["lend", "split_half", "debt_repayment", "debt_payment"] as TransactionType[]).includes(entry.transaction_type) && (
+      {(["lend", "split_half", "debt_repayment", "debt_payment", "card_charge"] as TransactionType[]).includes(entry.transaction_type) && (
         <label>
-          ชื่อผู้เกี่ยวข้อง
-          <input type="text" placeholder="เช่น เพื่อนเอ" value={entry.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
+          {entry.transaction_type === "card_charge" ? "ชื่อบัตร" : "ชื่อผู้เกี่ยวข้อง"}
+          <input type="text" placeholder={entry.transaction_type === "card_charge" ? "เช่น กรุงศรีเฟิร์สช้อย" : "เช่น เพื่อนเอ"} value={entry.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
         </label>
       )}
       <label>
         วันที่
         <input type="date" value={toDateInput(entry.occurred_at)} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, entry.occurred_at) })} />
       </label>
-      {!!wallets.length && (
+      {!!wallets.length && entry.transaction_type !== "card_charge" && (
         <label>
           กระเป๋า
           <select value={entry.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
@@ -4130,9 +4179,6 @@ function DebtorsView({
   const selectedAmount = selectedDebtor ? summary.find((item) => item.name.trim().toLowerCase() === selectedDebtor.name.trim().toLowerCase())?.amount ?? 0 : 0;
 
   if (selectedDebtor) {
-    const monthsLeft = selectedDebtor.kind === "own" && selectedDebtor.monthly_installment
-      ? Math.ceil(selectedAmount / selectedDebtor.monthly_installment)
-      : null;
     return (
       <div className="view debtor-view">
         <div className="add-title">
@@ -4151,10 +4197,13 @@ function DebtorsView({
           {selectedDebtor.kind === "own" && selectedDebtor.monthly_installment ? (
             <small>
               ผ่อนเดือนละ {moneySign}{formatMoney(selectedDebtor.monthly_installment)}
-              {monthsLeft !== null && selectedAmount > 0.005 ? ` · เหลืออีกประมาณ ${monthsLeft} เดือน` : ""}
+              {installmentStatusText(selectedDebtor, selectedAmount)}
             </small>
           ) : (
             selectedDebtor.note && <small>{selectedDebtor.note}</small>
+          )}
+          {selectedDebtor.kind === "own" && !!selectedDebtor.credit_limit && (
+            <CreditLimitMeter outstanding={selectedAmount} creditLimit={selectedDebtor.credit_limit} />
           )}
         </section>
         <DebtorStatementSummary entries={debtorEntries} kind={selectedDebtor.kind} />
@@ -4191,7 +4240,6 @@ function DebtorsView({
       <div className="debtor-page-list">
         {visibleDebtors.map((debtor) => {
           const amount = summary.find((item) => item.name.trim().toLowerCase() === debtor.name.trim().toLowerCase())?.amount ?? 0;
-          const monthsLeft = debtor.kind === "own" && debtor.monthly_installment ? Math.ceil(amount / debtor.monthly_installment) : null;
           return (
             <article className="debtor-page-item" key={debtor.id}>
               <button className="debtor-main-button" onClick={() => onSelect(debtor)}>
@@ -4203,10 +4251,13 @@ function DebtorsView({
                   {debtor.kind === "own" && debtor.monthly_installment ? (
                     <small>
                       ผ่อนเดือนละ {moneySign}{formatMoney(debtor.monthly_installment)}
-                      {monthsLeft !== null && amount > 0.005 ? ` · เหลืออีกประมาณ ${monthsLeft} เดือน` : ""}
+                      {installmentStatusText(debtor, amount)}
                     </small>
                   ) : (
                     <small>{debtor.note || "ไม่มีหมายเหตุ"} · ค้าง {moneySign}{formatMoney(amount)}</small>
+                  )}
+                  {debtor.kind === "own" && !!debtor.credit_limit && (
+                    <CreditLimitMeter outstanding={amount} creditLimit={debtor.credit_limit} />
                   )}
                 </div>
               </button>
@@ -4226,6 +4277,20 @@ function DebtorsView({
           </EmptyNote>
         )}
       </div>
+    </div>
+  );
+}
+
+function CreditLimitMeter({ outstanding, creditLimit }: { outstanding: number; creditLimit: number }) {
+  const pct = creditLimit > 0 ? Math.min(100, Math.max(0, (outstanding / creditLimit) * 100)) : 0;
+  const tone = pct >= 90 ? "danger" : pct >= 70 ? "warn" : "safe";
+
+  return (
+    <div className={`credit-limit-meter credit-limit-meter-${tone}`}>
+      <div className="credit-limit-meter-track">
+        <div className="credit-limit-meter-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <small>ใช้ไป {moneySign}{formatMoney(outstanding)} จากวงเงิน {moneySign}{formatMoney(creditLimit)} ({Math.round(pct)}%)</small>
     </div>
   );
 }
@@ -4328,6 +4393,9 @@ type DebtorInput = {
   opening_balance: number;
   kind: DebtorKind;
   monthly_installment: number | null;
+  total_installments: number | null;
+  paid_installments: number | null;
+  credit_limit: number | null;
   icon: string | null;
   icon_color: string | null;
 };
@@ -4356,17 +4424,30 @@ function DebtorEditSheet({
   const [openingBalanceText, setOpeningBalanceText] = useState(debtor?.opening_balance ? String(debtor.opening_balance) : "");
   const [kind, setKind] = useState<DebtorKind>(debtor?.kind ?? defaultKind);
   const [monthlyInstallmentText, setMonthlyInstallmentText] = useState(debtor?.monthly_installment ? String(debtor.monthly_installment) : "");
+  const [paidInstallmentsText, setPaidInstallmentsText] = useState(debtor?.paid_installments != null ? String(debtor.paid_installments) : "");
+  const [totalInstallmentsText, setTotalInstallmentsText] = useState(debtor?.total_installments != null ? String(debtor.total_installments) : "");
+  const [creditLimitText, setCreditLimitText] = useState(debtor?.credit_limit != null ? String(debtor.credit_limit) : "");
   const [icon, setIcon] = useState<string | null>(debtor?.icon ?? null);
   const [iconColor, setIconColor] = useState<string | null>(debtor?.icon_color ?? null);
 
+  const hasInstallment = kind === "own" && monthlyInstallmentText !== "";
+
   const submit = async () => {
     if (!name.trim()) return;
+    const totalInstallments = hasInstallment && totalInstallmentsText !== "" ? Math.max(0, Math.round(Number(totalInstallmentsText))) : null;
+    let paidInstallments = hasInstallment && paidInstallmentsText !== "" ? Math.max(0, Math.round(Number(paidInstallmentsText))) : null;
+    if (totalInstallments != null && paidInstallments != null && paidInstallments > totalInstallments) {
+      paidInstallments = totalInstallments;
+    }
     const payload: DebtorInput = {
       name,
       note,
       opening_balance: toMoneyAmount(openingBalanceText),
       kind,
-      monthly_installment: kind === "own" && monthlyInstallmentText !== "" ? toMoneyAmount(monthlyInstallmentText) : null,
+      monthly_installment: hasInstallment ? toMoneyAmount(monthlyInstallmentText) : null,
+      total_installments: totalInstallments,
+      paid_installments: paidInstallments,
+      credit_limit: kind === "own" && creditLimitText !== "" ? toMoneyAmount(creditLimitText) : null,
       icon,
       icon_color: iconColor,
     };
@@ -4392,21 +4473,37 @@ function DebtorEditSheet({
         ชื่อ
         <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder={kind === "own" ? "เช่น ผ่อนบ้าน ผ่อนรถ" : "เช่น เพื่อนเอ"} />
       </label>
-      {kind === "lend" && (
-        <label>
-          หมายเหตุ
-          <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="เช่น เพื่อนร่วมงาน" />
-        </label>
-      )}
+      <label>
+        หมายเหตุ
+        <input value={note} onChange={(event) => setNote(event.target.value)} placeholder={kind === "own" ? "เช่น ธนาคาร หรือรายละเอียดหนี้" : "เช่น เพื่อนร่วมงาน"} />
+      </label>
       <label>
         {kind === "own" ? "ยอดหนี้คงเหลือ" : "ยอดเริ่มต้น"}
         <input inputMode="decimal" value={openingBalanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setOpeningBalanceText(event.target.value); }} />
       </label>
       {kind === "own" && (
-        <label>
-          ผ่อนต่อเดือน
-          <input inputMode="decimal" value={monthlyInstallmentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMonthlyInstallmentText(event.target.value); }} placeholder="เช่น 15000" />
-        </label>
+        <>
+          <label>
+            ผ่อนต่อเดือน
+            <input inputMode="decimal" value={monthlyInstallmentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMonthlyInstallmentText(event.target.value); }} placeholder="เช่น 15000" />
+          </label>
+          {hasInstallment && (
+            <div className="field-pair">
+              <label>
+                จ่ายไปแล้ว (งวด)
+                <input inputMode="numeric" value={paidInstallmentsText} onChange={(event) => { if (event.target.value === "" || /^\d*$/.test(event.target.value)) setPaidInstallmentsText(event.target.value); }} placeholder="เช่น 6" />
+              </label>
+              <label>
+                ทั้งหมด (งวด)
+                <input inputMode="numeric" value={totalInstallmentsText} onChange={(event) => { if (event.target.value === "" || /^\d*$/.test(event.target.value)) setTotalInstallmentsText(event.target.value); }} placeholder="เช่น 24" />
+              </label>
+            </div>
+          )}
+          <label>
+            วงเงิน (สำหรับบัตรเครดิต)
+            <input inputMode="decimal" value={creditLimitText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setCreditLimitText(event.target.value); }} placeholder="เช่น 50000" />
+          </label>
+        </>
       )}
       {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
       <button className="save" onClick={submit} disabled={busy || !name.trim()}>
