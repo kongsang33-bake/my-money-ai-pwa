@@ -3162,21 +3162,35 @@ function HeatmapLegend({ total, activeDays }: { total: number; activeDays: numbe
 }
 
 function CountUpMoney({ value }: { value: number }) {
-  const [shown, setShown] = useState(value);
+  const [shown, setShown] = useState(0);
+  const fromRef = useRef(0);
 
   useEffect(() => {
-    const start = 0;
-    const diff = value;
-    let frame = 0;
-    const total = 26;
-    const tick = () => {
-      frame += 1;
-      const progress = 1 - Math.pow(1 - frame / total, 3);
-      setShown(start + diff * progress);
-      if (frame < total) window.requestAnimationFrame(tick);
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const id = window.requestAnimationFrame(() => {
+        setShown(value);
+        fromRef.current = value;
+      });
+      return () => window.cancelAnimationFrame(id);
+    }
+    const from = fromRef.current;
+    const to = value;
+    const duration = 420;
+    let startTime: number | null = null;
+    let frameId: number;
+    const tick = (timestamp: number) => {
+      if (startTime === null) startTime = timestamp;
+      const progress = Math.min(1, (timestamp - startTime) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setShown(from + (to - from) * eased);
+      if (progress < 1) {
+        frameId = window.requestAnimationFrame(tick);
+      } else {
+        fromRef.current = to;
+      }
     };
-    const id = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(id);
+    frameId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frameId);
   }, [value]);
 
   return <>{moneySign}{formatMoney(shown)}</>;
