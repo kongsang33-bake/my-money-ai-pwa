@@ -524,6 +524,22 @@ function lastSevenDayOutflow(entries: Entry[], anchorDate: Date) {
   });
 }
 
+function lastSevenDayCashFlow(entries: Entry[], anchorDate: Date) {
+  const today = startOfDay(anchorDate);
+  return Array.from({ length: 7 }, (_, index) => {
+    const time = today - (6 - index) * 86400000;
+    const dayEntries = entries.filter((entry) => startOfDay(new Date(entry.occurred_at)) === time);
+    const income = dayEntries.filter((entry) => entry.wallet_impact > 0).reduce((sum, entry) => sum + entry.wallet_impact, 0);
+    const expense = dayEntries.filter((entry) => entry.wallet_impact < 0).reduce((sum, entry) => sum + Math.abs(entry.wallet_impact), 0);
+    return {
+      key: String(time),
+      label: new Date(time).toLocaleDateString("th-TH", { weekday: "short" }),
+      income,
+      expense,
+    };
+  });
+}
+
 function cycleBounds(selectedMonth: string, startDay: number) {
   const [year, month] = selectedMonth.split("-").map(Number);
   const safeDay = Math.min(28, Math.max(1, startDay || 1));
@@ -1343,6 +1359,7 @@ export default function Home() {
     return today >= startOfDay(cycleRange.start) && today <= cycleLastDay ? new Date(today) : new Date(cycleLastDay);
   }, [cycleRange]);
   const sevenDayOutflow = useMemo(() => lastSevenDayOutflow(monthlyEntries, sevenDayAnchor), [monthlyEntries, sevenDayAnchor]);
+  const cashFlowTrend = useMemo(() => lastSevenDayCashFlow(entries, new Date()), [entries]);
   const monthlyTrend = useMemo(() => buildMonthlyTrend(entries, selectedMonth, monthStartDay, 6), [entries, selectedMonth, monthStartDay]);
   const aiSuggestions = useMemo<AiSuggestion[]>(() => {
     const fromHistory = quickShortcuts.map((shortcut) => ({
@@ -2318,6 +2335,8 @@ export default function Home() {
                     {budgetGlance.totalBudget > 0 && <BudgetGlanceCard budgetGlance={budgetGlance} onManage={() => setBudgetSheetOpen(true)} />}
                   </div>
                 )}
+                <CashFlowTrendCard trend={cashFlowTrend} />
+                <SpendingPersonalityCard topCategory={categorySummary[0] ?? null} monthlyOutflow={monthlyOutflow} />
               </>
             )}
 
@@ -3222,12 +3241,12 @@ function HomeInsightGrid({
         </div>
         <div className="home-insight-card">
           <span><i className="home-insight-icon neutral"><Users size={13} strokeWidth={2.25} aria-hidden="true" /></i>ลูกหนี้</span>
-          <strong>{moneySign}{formatMoney(receivableTotal)}</strong>
+          <strong><CountUpMoney value={receivableTotal} /></strong>
           <small>ยอดที่ควรได้รับคืน</small>
         </div>
         <div className="home-insight-card">
           <span><i className="home-insight-icon neutral"><CreditCard size={13} strokeWidth={2.25} aria-hidden="true" /></i>หนี้ผ่อน</span>
-          <strong>{moneySign}{formatMoney(payableTotal)}</strong>
+          <strong><CountUpMoney value={payableTotal} /></strong>
           <small>ยอดที่ยังต้องจ่าย</small>
         </div>
       </div>
@@ -3272,7 +3291,7 @@ function DueSoonCard({
               <b>{moneySign}{formatMoney(item.amount)}</b>
             </div>
           ))}
-          <p>รวม {moneySign}{formatMoney(total)}</p>
+          <p>รวม <CountUpMoney value={total} /></p>
         </div>
       ) : (
         <div className="home-compact-empty">
@@ -3318,6 +3337,76 @@ function BudgetGlanceCard({
         <div className="home-compact-empty">
           <span aria-hidden="true">▣</span>
           <p>ตั้งงบต่อหมวดเพื่อดูภาพรวมในหน้าแรก</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CashFlowTrendCard({ trend }: { trend: { key: string; label: string; income: number; expense: number }[] }) {
+  const totalIncome = trend.reduce((sum, day) => sum + day.income, 0);
+  const totalExpense = trend.reduce((sum, day) => sum + day.expense, 0);
+  const net = totalIncome - totalExpense;
+  const maxIncome = Math.max(...trend.map((day) => day.income), 1);
+  const maxExpense = Math.max(...trend.map((day) => day.expense), 1);
+  const isEmpty = !totalIncome && !totalExpense;
+
+  return (
+    <section className="home-focus-card cashflow-trend-card">
+      <div className="home-focus-head">
+        <div>
+          <span>กระแสเงินสด 7 วันล่าสุด</span>
+          <strong className={net >= 0 ? "income" : "expense"}>
+            {net < 0 ? "−" : "+"}
+            <CountUpMoney value={Math.abs(net)} />
+          </strong>
+        </div>
+      </div>
+      {isEmpty ? (
+        <div className="home-compact-empty">
+          <span aria-hidden="true">●</span>
+          <p>ยังไม่มีรายการใน 7 วันล่าสุด</p>
+        </div>
+      ) : (
+        <div className="cashflow-bars">
+          {trend.map((day) => (
+            <div key={day.key}>
+              <span>
+                <i className="income" style={{ height: `${day.income ? Math.max(3, (day.income / maxIncome) * 100) : 0}%` }} />
+                <i className="expense" style={{ height: `${day.expense ? Math.max(3, (day.expense / maxExpense) * 100) : 0}%` }} />
+              </span>
+              <small>{day.label}</small>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SpendingPersonalityCard({ topCategory, monthlyOutflow }: { topCategory: { category: string; amount: number } | null; monthlyOutflow: number }) {
+  const hasSpend = !!topCategory && topCategory.amount > 0.005;
+  const percent = hasSpend && monthlyOutflow > 0 ? Math.round((topCategory!.amount / monthlyOutflow) * 100) : 0;
+
+  return (
+    <section className="home-focus-card spending-personality-card">
+      <div className="home-focus-head">
+        <div>
+          <span>นิสัยการใช้เงินเดือนนี้</span>
+          <strong>{hasSpend ? topCategory!.category : "ยังไม่มีข้อมูล"}</strong>
+        </div>
+        {hasSpend && (
+          <i className="cat-dot" style={{ background: categoryTint(topCategory!.category, 13) }}><CategoryIcon category={topCategory!.category} /></i>
+        )}
+      </div>
+      {hasSpend ? (
+        <p className="spending-personality-note">
+          คุณใช้จ่ายด้าน{topCategory!.category}มากที่สุด — {moneySign}{formatMoney(topCategory!.amount)} หรือ {percent}% ของรายจ่ายทั้งหมดเดือนนี้
+        </p>
+      ) : (
+        <div className="home-compact-empty">
+          <span aria-hidden="true">●</span>
+          <p>เริ่มจดรายการเพื่อดูว่าคุณใช้จ่ายด้านไหนมากที่สุด</p>
         </div>
       )}
     </section>
@@ -4193,7 +4282,7 @@ function DebtorsView({
         </div>
         <section className="debtor-detail-card">
           <span>{selectedDebtor.kind === "own" ? "ยอดหนี้คงเหลือ" : "ยอดค้างปัจจุบัน"}</span>
-          <strong>{moneySign}{formatMoney(selectedAmount)}</strong>
+          <strong><CountUpMoney value={selectedAmount} /></strong>
           {selectedDebtor.kind === "own" && selectedDebtor.monthly_installment ? (
             <small>
               ผ่อนเดือนละ {moneySign}{formatMoney(selectedDebtor.monthly_installment)}
@@ -4235,7 +4324,7 @@ function DebtorsView({
       </div>
       <section className="debtor-detail-card">
         <span>{activeKind === "own" ? "หนี้ที่ต้องผ่อนรวม" : "ยอดรวมที่ค้างรับ"}</span>
-        <strong>{moneySign}{formatMoney(summaryTotal)}</strong>
+        <strong><CountUpMoney value={summaryTotal} /></strong>
       </section>
       <div className="debtor-page-list">
         {visibleDebtors.map((debtor) => {

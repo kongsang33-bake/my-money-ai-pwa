@@ -888,6 +888,12 @@ a:focus-visible {
   margin-bottom: var(--s-4);
 }
 
+.spending-personality-note {
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
 .home-focus-head {
   display: flex;
   align-items: flex-start;
@@ -2038,6 +2044,46 @@ a:focus-visible {
   margin: 0 -2px;
 }
 
+.cashflow-bars {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--s-2);
+  min-height: 72px;
+  align-items: end;
+}
+
+.cashflow-bars > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cashflow-bars span {
+  height: 56px;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  gap: 3px;
+}
+
+.cashflow-bars i {
+  display: block;
+  width: 8px;
+  min-height: 3px;
+  border-radius: var(--r-full) var(--r-full) 0 0;
+  transform-origin: bottom;
+  animation: grow-bar var(--t-3) var(--e-out) both;
+}
+
+.cashflow-bars i.income { background: var(--income); }
+.cashflow-bars i.expense { background: var(--expense); }
+
+.cashflow-bars small {
+  text-align: center;
+  color: var(--ink-3);
+  font-size: 10px;
+}
+
 .trend-legend {
   display: flex;
   gap: var(--s-3);
@@ -2263,6 +2309,8 @@ a:focus-visible {
   height: 100%;
   border-radius: var(--r-full);
   background: var(--income);
+  transform-origin: left;
+  animation: grow-width var(--t-3) var(--e-out) both;
 }
 
 .credit-limit-meter-warn .credit-limit-meter-fill {
