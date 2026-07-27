@@ -635,7 +635,7 @@ a:focus-visible {
    ------------------------------------------------------------------------- */
 .wallet-card, .summary-panel, .entry-list, .heatmap-panel, .debtor-detail-card,
 .debtor-page-item, .draft, .state-card, .empty-note, .report-preview,
-.mini-trend, .history-insight, .debtor-statement, .category-spotlight,
+.history-insight, .debtor-statement,
 .success-pulse, .report-summary-tiles > div, .auth-card, .recap-card,
 .metric, .confirm-dialog, .skeleton-card, .skeleton-list > span,
 .skeleton-panel, .activity-timeline, .ai-input-wrap, .quick-chip,
@@ -649,8 +649,8 @@ a:focus-visible {
 }
 
 .wallet-card, .summary-panel, .entry-list, .heatmap-panel, .debtor-detail-card,
-.state-card, .empty-note, .report-preview, .mini-trend, .history-insight,
-.debtor-statement, .category-spotlight, .success-pulse, .auth-card,
+.state-card, .empty-note, .report-preview, .history-insight,
+.debtor-statement, .success-pulse, .auth-card,
 .recap-card, .activity-timeline, .ai-input-wrap, .home-focus-card,
 .first-run-card, .history-search-panel, .monthly-trend-panel,
 .income-breakdown-panel, .wallet-statement-panel {
@@ -1567,95 +1567,6 @@ a:focus-visible {
 
 .metric.income b { color: var(--income); }
 .metric.expense b { color: var(--expense); }
-
-.mini-trend {
-  margin: 0 0 var(--s-4);
-}
-
-.mini-trend-head {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: var(--ink-3);
-  margin-bottom: var(--s-2);
-}
-
-.mini-trend-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  height: 56px;
-}
-
-.mini-trend-bars span {
-  flex: 1;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-
-.mini-trend-bars i {
-  display: block;
-  width: 100%;
-  border-radius: var(--r-sm) var(--r-sm) 2px 2px;
-  background: var(--accent);
-  min-height: 3px;
-  transform-origin: bottom;
-  animation: grow-bar var(--t-3) var(--e-out) both;
-}
-
-.mini-trend-bars small {
-  font-size: 10px;
-  color: var(--ink-3);
-}
-
-.category-spotlight {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  margin-bottom: var(--s-4);
-}
-
-.category-spotlight > div {
-  flex: 1;
-  min-width: 0;
-}
-
-.category-spotlight small {
-  display: block;
-  font-size: 11px;
-  color: var(--ink-3);
-}
-
-.category-spotlight b {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.category-spotlight i {
-  display: block;
-  height: 6px;
-  border-radius: var(--r-full);
-  background: var(--surface-3);
-  overflow: hidden;
-  margin-top: 6px;
-}
-
-.category-spotlight em {
-  display: block;
-  height: 100%;
-  border-radius: var(--r-full);
-  transform-origin: left;
-  animation: grow-width var(--t-3) var(--e-out) both;
-}
-
-.category-spotlight.over b {
-  color: var(--danger);
-}
 
 .category-bars {
   display: grid;
@@ -2826,7 +2737,7 @@ a:focus-visible {
 
 /* Side menu */
 .side-menu {
-  width: min(56%, 320px);
+  width: min(80%, 320px);
   height: 100%;
   background: var(--surface);
   border-left: 1px solid var(--line);
@@ -2890,19 +2801,6 @@ a:focus-visible {
   color: var(--ink-3);
 }
 
-.profile-info {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--s-2);
-  font-size: 12px;
-  padding-bottom: var(--s-4);
-  border-bottom: 1px solid var(--line-soft);
-  margin-bottom: var(--s-4);
-}
-
-.profile-info span { color: var(--ink-3); }
-.profile-info b { text-align: right; }
-
 .side-menu-list {
   display: grid;
   gap: var(--s-4);
@@ -2941,7 +2839,7 @@ a:focus-visible {
 .side-menu-list button b {
   color: var(--ink-3);
   font-size: 12px;
-  min-width: 64px;
+  min-width: 48px;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -3523,6 +3421,8 @@ a:focus-visible {
 .view > *:nth-child(3) { animation-delay: 120ms; }
 .view > *:nth-child(4) { animation-delay: 180ms; }
 .view > *:nth-child(5) { animation-delay: 240ms; }
+.view > *:nth-child(6) { animation-delay: 300ms; }
+.view > *:nth-child(7) { animation-delay: 360ms; }
 
 @keyframes fade-in {
   from { opacity: 0; }
@@ -3791,8 +3691,10 @@ a:focus-visible {
     align-items: start;
   }
 
+  /* Spans every analytics row so nothing auto-places into column 2.
+     6 = MonthSummary, filters, trend, income, heatmap, day insight. */
   .history-view > .entry-list {
-    grid-row: 2 / span 4;
+    grid-row: 2 / span 6;
     grid-column: 2;
     max-height: min(720px, calc(100vh - 200px));
     overflow: auto;

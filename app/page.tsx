@@ -10,6 +10,7 @@ import {
   Car,
   CreditCard,
   Delete,
+  Download,
   Gift,
   GraduationCap,
   HeartPulse,
@@ -29,6 +30,7 @@ import {
   Sun,
   TrendingDown,
   TrendingUp,
+  UserCog,
   Users,
   Utensils,
   Wallet,
@@ -512,21 +514,6 @@ function buildWalletInsight(balance: number, outflow: number, cycleEnd: Date) {
     text: `เหลือใช้ได้ประมาณ ${moneySign}${formatMoney(perDay)} ต่อวัน`,
     perDay,
   };
-}
-
-function lastSevenDayOutflow(entries: Entry[], anchorDate: Date) {
-  const today = startOfDay(anchorDate);
-  return Array.from({ length: 7 }, (_, index) => {
-    const time = today - (6 - index) * 86400000;
-    const amount = entries
-      .filter((entry) => startOfDay(new Date(entry.occurred_at)) === time && entry.transaction_type !== "transfer" && entry.wallet_impact < 0)
-      .reduce((sum, entry) => sum + Math.abs(entry.wallet_impact), 0);
-    return {
-      key: String(time),
-      label: new Date(time).toLocaleDateString("th-TH", { weekday: "short" }),
-      amount,
-    };
-  });
 }
 
 function lastSevenDayCashFlow(entries: Entry[], anchorDate: Date) {
@@ -1382,12 +1369,6 @@ export default function Home() {
   const netWorth = Object.values(walletTotals).reduce((sum, amount) => sum + amount, 0) + receivableTotal - payableTotal;
   const savingsRate = monthlyIncome > 0 ? (monthlyBalance / monthlyIncome) * 100 : 0;
   const walletInsight = useMemo(() => buildWalletInsight(mainWallet, monthlyOutflow, cycleRange.end), [mainWallet, monthlyOutflow, cycleRange.end]);
-  const sevenDayAnchor = useMemo(() => {
-    const today = startOfDay(new Date());
-    const cycleLastDay = startOfDay(new Date(cycleRange.end.getTime() - 1));
-    return today >= startOfDay(cycleRange.start) && today <= cycleLastDay ? new Date(today) : new Date(cycleLastDay);
-  }, [cycleRange]);
-  const sevenDayOutflow = useMemo(() => lastSevenDayOutflow(monthlyEntries, sevenDayAnchor), [monthlyEntries, sevenDayAnchor]);
   const cashFlowTrend = useMemo(() => lastSevenDayCashFlow(entries, new Date()), [entries]);
   const monthlyTrend = useMemo(() => buildMonthlyTrend(entries, selectedMonth, monthStartDay, 6), [entries, selectedMonth, monthStartDay]);
   const aiSuggestions = useMemo<AiSuggestion[]>(() => {
@@ -2542,7 +2523,6 @@ export default function Home() {
             <div className="add-title">
               <button onClick={() => setTab("home")}>‹</button>
               <div>
-                <p className="eyebrow">ข้อมูลที่ซิงก์แล้ว</p>
                 <h2>รายการทั้งหมด</h2>
               </div>
               <button className="header-add-button" onClick={() => setRecapOpen(true)}>สรุปเดือนนี้</button>
@@ -2557,7 +2537,6 @@ export default function Home() {
               categories={categorySummary}
               monthStartDay={monthStartDay}
               budgets={budgets}
-              trend={sevenDayOutflow}
               onCategorySelect={(category) => { setHistoryFilters((current) => ({ ...current, category })); setSelectedDay(null); }}
             />
             <HistoryFilterBar
@@ -2568,7 +2547,7 @@ export default function Home() {
             <MonthlyTrendChart trend={monthlyTrend} />
             <IncomeBreakdown items={incomeSummary} />
             <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
-            <HistoryInsight entries={dayEntries} selectedDay={activeDay} />
+            {activeDay && <HistoryInsight entries={dayEntries} />}
             <EntryList entries={dayEntries} onEdit={setEditing} onDelete={deleteEntry} emptyAction={{ label: "จดด้วย AI", onClick: openAddTab }} />
           </div>
         )}
@@ -3565,26 +3544,6 @@ function FirstRunHomeState({
   );
 }
 
-function MiniTrend({ items }: { items: { key: string; label: string; amount: number }[] }) {
-  const max = Math.max(...items.map((item) => item.amount), 1);
-  return (
-    <div className="mini-trend" aria-label="รายจ่าย 7 วันล่าสุด">
-      <div className="mini-trend-head">
-        <span>รายจ่าย 7 วันล่าสุด</span>
-        <b>{moneySign}{formatMoney(items.reduce((sum, item) => sum + item.amount, 0))}</b>
-      </div>
-      <div className="mini-trend-bars">
-        {items.map((item) => (
-          <span key={item.key} title={`${item.label}: ${moneySign}${formatMoney(item.amount)}`}>
-            <i style={{ height: `${Math.max(8, (item.amount / max) * 100)}%` }} />
-            <small>{item.label}</small>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function SuccessPulse({ count, onAddMore, closing }: { count: number; onAddMore: () => void; closing?: boolean }) {
   return (
     <section className={`success-pulse ${closing ? "closing" : ""}`} role="status">
@@ -3598,7 +3557,7 @@ function SuccessPulse({ count, onAddMore, closing }: { count: number; onAddMore:
   );
 }
 
-function HistoryInsight({ entries, selectedDay }: { entries: Entry[]; selectedDay: string | null }) {
+function HistoryInsight({ entries }: { entries: Entry[] }) {
   const nonTransferEntries = entries.filter((entry) => entry.transaction_type !== "transfer");
   const outflow = nonTransferEntries.filter((entry) => entry.wallet_impact < 0).reduce((sum, entry) => sum + Math.abs(entry.wallet_impact), 0);
   const income = nonTransferEntries.filter((entry) => entry.wallet_impact > 0).reduce((sum, entry) => sum + entry.wallet_impact, 0);
@@ -3609,7 +3568,7 @@ function HistoryInsight({ entries, selectedDay }: { entries: Entry[]; selectedDa
   return (
     <section className="history-insight">
       <div>
-        <span>{selectedDay ? "มุมมองวันที่เลือก" : "มุมมองรอบนี้"}</span>
+        <span>มุมมองวันที่เลือก</span>
         <b>{entries.length} รายการ</b>
       </div>
       <div>
@@ -3759,14 +3718,14 @@ function IncomeBreakdown({ items }: { items: { category: string; amount: number 
   if (!items.length) return null;
   const total = items.reduce((sum, item) => sum + item.amount, 0);
   return (
-    <section className="income-breakdown-panel">
-      <div className="monthly-trend-head">
-        <div>
+    <details className="income-breakdown-panel compact-disclosure">
+      <summary>
+        <span>
           <p className="eyebrow">รายรับ</p>
           <h2>แหล่งเงินเข้า</h2>
-        </div>
-        <strong>{moneySign}{formatMoney(total)}</strong>
-      </div>
+        </span>
+        <em>{moneySign}{formatMoney(total)}</em>
+      </summary>
       <div className="income-breakdown-list">
         {items.map((item) => (
           <div key={item.category}>
@@ -3776,37 +3735,7 @@ function IncomeBreakdown({ items }: { items: { category: string; amount: number 
           </div>
         ))}
       </div>
-    </section>
-  );
-}
-
-function CategorySpotlight({
-  categories: categoryItems,
-  outflow,
-  budgets,
-}: {
-  categories: { category: string; amount: number }[];
-  outflow: number;
-  budgets: Record<string, number>;
-}) {
-  const top = categoryItems.find((item) => item.amount > 0);
-  if (!top) return null;
-  const budget = budgets[top.category] || 0;
-  const percent = budget > 0 ? Math.min(140, (top.amount / budget) * 100) : outflow > 0 ? Math.min(100, (top.amount / outflow) * 100) : 0;
-  const isOver = budget > 0 && top.amount > budget;
-
-  return (
-    <section className={`category-spotlight ${isOver ? "over" : ""}`}>
-      <span className="cat-dot" style={{ background: categoryTint(top.category, 13) }}><CategoryIcon category={top.category} /></span>
-      <div>
-        <small>{budget > 0 ? "หมวดที่ต้องจับตา" : "หมวดใช้จ่ายเด่น"}</small>
-        <b>{top.category}</b>
-        <i>
-          <em style={{ width: `${Math.max(6, Math.min(100, percent))}%`, background: isOver ? "var(--danger)" : categoryColor(top.category) }} />
-        </i>
-      </div>
-      <strong>{moneySign}{formatMoney(top.amount)}</strong>
-    </section>
+    </details>
   );
 }
 
@@ -3820,7 +3749,6 @@ function MonthSummary({
   categories: categoryItems,
   monthStartDay,
   budgets,
-  trend,
   onCategorySelect,
 }: {
   selectedMonth: string;
@@ -3832,14 +3760,12 @@ function MonthSummary({
   categories: { category: string; amount: number }[];
   monthStartDay: number;
   budgets: Record<string, number>;
-  trend: { key: string; label: string; amount: number }[];
   onCategorySelect: (category: string) => void;
 }) {
   return (
     <section className="summary-panel">
       <div className="summary-head">
         <div>
-          <p className="eyebrow">สรุปรายเดือน</p>
           <h2>ภาพรวมเดือนนี้</h2>
           <small className="cycle-note">รอบเริ่มวันที่ {monthStartDay} ของเดือน</small>
         </div>
@@ -3851,8 +3777,6 @@ function MonthSummary({
         <Metric label="สุทธิ" value={balance} tone={balance >= 0 ? "income" : "expense"} />
         <Metric label="ลูกหนี้เปลี่ยน" value={debtChange} tone={debtChange >= 0 ? "income" : "expense"} />
       </div>
-      <MiniTrend items={trend} />
-      <CategorySpotlight categories={categoryItems} outflow={outflow} budgets={budgets} />
       <div className="category-bars">
         {categoryItems.length ? (
           categoryItems.map((item) => {
@@ -3868,8 +3792,8 @@ function MonthSummary({
                   <b>{item.category}</b>
                   {overBudget && <span className="over-budget-chip">เกินงบ</span>}
                   <small>{hasBudget ? `${moneySign}${formatMoney(item.amount)} / ${moneySign}${formatMoney(budget)}` : `${percent.toFixed(0)}%`}</small>
+                  {!hasBudget && <strong>{moneySign}{formatMoney(item.amount)}</strong>}
                 </div>
-                {!hasBudget && <strong>{moneySign}{formatMoney(item.amount)}</strong>}
                 <i style={{ width: `${Math.max(4, Math.min(100, percent))}%`, background: color }} />
               </button>
             );
@@ -5197,7 +5121,6 @@ function SideMenu({
   const name = profile?.nickname || metadata.full_name || metadata.name || "ผู้ใช้";
   const appIcon = profile?.app_icon || user.email?.[0]?.toUpperCase() || "฿";
   const appIconImage = profile?.app_icon_image || "";
-  const provider = user.app_metadata?.provider ?? "Google";
 
   return (
     <div className={`side-menu-backdrop ${closing ? "closing" : ""}`} onClick={onClose}>
@@ -5211,7 +5134,7 @@ function SideMenu({
         </div>
 
         <div className="profile-head">
-          <div className={`avatar profile-avatar profile-avatar-image ${appIconImage ? "has-image" : ""}`}>
+          <div className={`avatar ${appIconImage ? "has-image" : ""}`}>
             {appIconImage && <NextImage className="profile-image" src={appIconImage} alt="" width={44} height={44} unoptimized />}
             {!appIconImage && appIcon}
           </div>
@@ -5219,12 +5142,6 @@ function SideMenu({
             <b>{name}</b>
             <small>{user.email}</small>
           </div>
-        </div>
-        <div className="profile-info">
-          <span>เข้าสู่ระบบด้วย</span>
-          <b>{provider}</b>
-          <span>สร้างบัญชี</span>
-          <b>{user.created_at ? new Date(user.created_at).toLocaleDateString("th-TH") : "—"}</b>
         </div>
 
         <nav className="side-menu-list">
@@ -5247,20 +5164,17 @@ function SideMenu({
             </button>
           </div>
           <div className="side-menu-section">
-            <p>เครื่องมือ</p>
+            <p>ตั้งค่า</p>
             <button onClick={onOpenBudgets}>
               <TrendingUp size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>งบประมาณ</span>
             </button>
             <button onClick={onOpenReport}>
-              <Receipt size={16} strokeWidth={2.25} aria-hidden="true" />
+              <Download size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>ส่งออกรีพอร์ท</span>
             </button>
-          </div>
-          <div className="side-menu-section">
-            <p>บัญชี</p>
             <button onClick={onOpenProfile}>
-              <Users size={16} strokeWidth={2.25} aria-hidden="true" />
+              <UserCog size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>จัดการโปรไฟล์</span>
             </button>
             <button onClick={onOpenPin}>
