@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 
 type EntryKind = "expense" | "income";
-type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "debt_payment" | "card_charge" | "gift";
+type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "debt_payment" | "card_charge" | "transfer" | "gift";
 type Tab = "home" | "add" | "history" | "debtors" | "wallets" | "recurring";
 type Theme = "light" | "dark";
 
@@ -57,6 +57,7 @@ type Entry = {
   source_text?: string | null;
   wallet_id?: string | null;
   note?: string | null;
+  transfer_group_id?: string | null;
 };
 
 type Draft = Omit<Entry, "id"> & { id: string };
@@ -159,6 +160,7 @@ type EntryInput = {
   source_text?: string | null;
   wallet_id?: string | null;
   note?: string | null;
+  transfer_group_id?: string | null;
 };
 
 type SlipImage = {
@@ -179,6 +181,7 @@ const transactionTypeLabels: Record<TransactionType, string> = {
   debt_repayment: "รับชำระหนี้",
   debt_payment: "ผ่อนชำระหนี้",
   card_charge: "จ่ายด้วยบัตรเครดิต",
+  transfer: "โอนเงินระหว่างกระเป๋า",
   gift: "ให้โดยไม่คิดคืน",
 };
 
@@ -190,6 +193,7 @@ const transactionKind: Record<TransactionType, EntryKind> = {
   split_half: "expense",
   debt_payment: "expense",
   card_charge: "expense",
+  transfer: "expense",
   gift: "expense",
 };
 
@@ -515,7 +519,7 @@ function lastSevenDayOutflow(entries: Entry[], anchorDate: Date) {
   return Array.from({ length: 7 }, (_, index) => {
     const time = today - (6 - index) * 86400000;
     const amount = entries
-      .filter((entry) => startOfDay(new Date(entry.occurred_at)) === time && entry.wallet_impact < 0)
+      .filter((entry) => startOfDay(new Date(entry.occurred_at)) === time && entry.transaction_type !== "transfer" && entry.wallet_impact < 0)
       .reduce((sum, entry) => sum + Math.abs(entry.wallet_impact), 0);
     return {
       key: String(time),
@@ -529,7 +533,7 @@ function lastSevenDayCashFlow(entries: Entry[], anchorDate: Date) {
   const today = startOfDay(anchorDate);
   return Array.from({ length: 7 }, (_, index) => {
     const time = today - (6 - index) * 86400000;
-    const dayEntries = entries.filter((entry) => startOfDay(new Date(entry.occurred_at)) === time);
+    const dayEntries = entries.filter((entry) => startOfDay(new Date(entry.occurred_at)) === time && entry.transaction_type !== "transfer");
     const income = dayEntries.filter((entry) => entry.wallet_impact > 0).reduce((sum, entry) => sum + entry.wallet_impact, 0);
     const expense = dayEntries.filter((entry) => entry.wallet_impact < 0).reduce((sum, entry) => sum + Math.abs(entry.wallet_impact), 0);
     return {
@@ -699,10 +703,14 @@ function calculateImpacts(amount: number, transactionType: TransactionType) {
   if (transactionType === "card_charge") {
     return { wallet_impact: 0, debt_impact: amount, user_share: amount, partner_share: 0 };
   }
+  if (transactionType === "transfer") {
+    return { wallet_impact: -amount, debt_impact: 0, user_share: 0, partner_share: 0 };
+  }
   return { wallet_impact: -amount, debt_impact: 0, user_share: amount, partner_share: 0 };
 }
 
 function categorySpendAmount(entry: Entry): number | null {
+  if (entry.transaction_type === "transfer") return null;
   if (entry.transaction_type === "card_charge") return entry.amount;
   if (entry.wallet_impact < 0) return Math.abs(entry.wallet_impact);
   return null;
@@ -715,7 +723,13 @@ function entryDisplayImpact(entry: Entry): number {
 function normalizeEntry(input: EntryInput, applyDebtorDefault = true): Entry {
   const transaction_type = input.transaction_type ?? (input.type === "income" ? "income" : "personal_expense");
   const amount = toMoneyAmount(input.amount);
-  const impacts = calculateImpacts(amount, transaction_type);
+  // A transfer's direction (which wallet loses money vs. gains it) can't be
+  // derived from amount + type alone the way every other type can — the
+  // caller (building one of the two linked legs) must supply the signed
+  // wallet_impact explicitly, so it's trusted here instead of recomputed.
+  const impacts = transaction_type === "transfer"
+    ? { wallet_impact: input.wallet_impact ?? -amount, debt_impact: 0, user_share: 0, partner_share: 0 }
+    : calculateImpacts(amount, transaction_type);
   const trimmedDebtorName = input.debtor_name?.trim() ?? "";
   return {
     ...input,
@@ -729,6 +743,7 @@ function normalizeEntry(input: EntryInput, applyDebtorDefault = true): Entry {
     debtor_name: trimmedDebtorName || (applyDebtorDefault ? unnamedDebtor : trimmedDebtorName),
     wallet_id: input.wallet_id ?? null,
     note: input.note?.trim() || null,
+    transfer_group_id: input.transfer_group_id ?? null,
   };
 }
 
@@ -748,6 +763,7 @@ function mapTransactionRow(row: {
   source_text: string | null;
   wallet_id: string | null;
   note: string | null;
+  transfer_group_id?: string | null;
 }): Entry {
   return normalizeEntry({
     id: row.id,
@@ -765,6 +781,7 @@ function mapTransactionRow(row: {
     source_text: row.source_text,
     wallet_id: row.wallet_id,
     note: row.note,
+    transfer_group_id: row.transfer_group_id ?? null,
   });
 }
 
@@ -774,7 +791,7 @@ function defaultWalletId(wallets: Wallet[]) {
 
 function totalWallet(entries: Entry[], direction: EntryKind) {
   return entries
-    .filter((entry) => (direction === "income" ? entry.wallet_impact > 0 : entry.wallet_impact < 0))
+    .filter((entry) => entry.transaction_type !== "transfer" && (direction === "income" ? entry.wallet_impact > 0 : entry.wallet_impact < 0))
     .reduce((sum, entry) => sum + entry.wallet_impact, 0);
 }
 
@@ -1083,7 +1100,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("transactions")
-      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note")
+      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id")
       .order("occurred_at", { ascending: false });
 
     if (error) {
@@ -1413,7 +1430,7 @@ export default function Home() {
   const incomeSummary = useMemo(() => {
     const map = new Map<string, number>();
     for (const entry of monthlyEntries) {
-      if (entry.wallet_impact <= 0) continue;
+      if (entry.transaction_type === "transfer" || entry.wallet_impact <= 0) continue;
       map.set(entry.category, (map.get(entry.category) ?? 0) + entry.wallet_impact);
     }
     return [...map.entries()].map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount).slice(0, 4);
@@ -1568,12 +1585,13 @@ export default function Home() {
       source_text: normalized.source_text,
       wallet_id: normalized.wallet_id ?? defaultWalletId(wallets),
       note: normalized.note,
+      transfer_group_id: normalized.transfer_group_id,
     }));
 
     const { data, error } = await supabase
       .from("transactions")
       .insert(payload)
-      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note");
+      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id");
 
     if (error) {
       setError(error.message);
@@ -1656,9 +1674,15 @@ export default function Home() {
 
   async function deleteEntry(entry: Entry) {
     if (!supabase) return;
+    const pairedEntry = entry.transfer_group_id
+      ? entries.find((item) => item.id !== entry.id && item.transfer_group_id === entry.transfer_group_id)
+      : null;
+    const entriesToDelete = pairedEntry ? [entry, pairedEntry] : [entry];
     const confirmed = await requestConfirm({
-      title: "ลบรายการนี้?",
-      detail: `ลบ "${entry.title}" ออกจากประวัติ`,
+      title: pairedEntry ? "ลบรายการโอนเงินนี้?" : "ลบรายการนี้?",
+      detail: pairedEntry
+        ? `ลบรายการโอนเงิน "${entry.title}" ทั้งสองฝั่ง (ต้นทางและปลายทาง) ออกจากประวัติ`
+        : `ลบ "${entry.title}" ออกจากประวัติ`,
       confirmLabel: "ลบรายการ",
       tone: "danger",
     });
@@ -1667,17 +1691,18 @@ export default function Home() {
     setBusy(true);
     setError("");
 
-    const { error } = await supabase.from("transactions").delete().eq("id", entry.id);
+    const { error } = await supabase.from("transactions").delete().in("id", entriesToDelete.map((item) => item.id));
     if (error) setError(error.message);
     else {
-      setEntries((current) => current.filter((item) => item.id !== entry.id));
+      const deletedIds = new Set(entriesToDelete.map((item) => item.id));
+      setEntries((current) => current.filter((item) => !deletedIds.has(item.id)));
       notify({
         tone: "info",
-        title: "ลบรายการแล้ว",
+        title: pairedEntry ? "ลบรายการโอนเงินแล้ว" : "ลบรายการแล้ว",
         detail: entry.title,
         action: {
           label: "ย้อนคืน",
-          onClick: () => { void restoreEntry(entry); },
+          onClick: () => { void restoreEntries(entriesToDelete); },
         },
       });
     }
@@ -1685,9 +1710,9 @@ export default function Home() {
     setBusy(false);
   }
 
-  async function restoreEntry(entry: Entry) {
-    if (!supabase || !user) return;
-    const { error } = await supabase.from("transactions").insert({
+  async function restoreEntries(entriesToRestore: Entry[]) {
+    if (!supabase || !user || !entriesToRestore.length) return;
+    const { error } = await supabase.from("transactions").insert(entriesToRestore.map((entry) => ({
       id: entry.id,
       user_id: user.id,
       title: entry.title,
@@ -1704,14 +1729,15 @@ export default function Home() {
       source_text: entry.source_text,
       wallet_id: entry.wallet_id ?? defaultWalletId(wallets),
       note: entry.note,
-    });
+      transfer_group_id: entry.transfer_group_id,
+    })));
     if (error) {
       setError(error.message);
       notify({ tone: "error", title: "ย้อนคืนรายการไม่สำเร็จ", detail: error.message });
       return;
     }
-    setEntries((current) => [entry, ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
-    notify({ tone: "success", title: "ย้อนคืนรายการแล้ว", detail: entry.title });
+    setEntries((current) => [...entriesToRestore, ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
+    notify({ tone: "success", title: "ย้อนคืนรายการแล้ว", detail: entriesToRestore[0].title });
   }
 
   function updateBudgets(next: Record<string, number>) {
@@ -2504,7 +2530,7 @@ export default function Home() {
                 busy={busy}
                 error={error}
                 initialDate={entryDate}
-                onSave={(draft) => saveEntries([draft])}
+                onSave={(drafts) => saveEntries(drafts)}
               />
             )}
           </div>
@@ -3163,7 +3189,7 @@ function CalendarHeatmap({
   const dayTotals = useMemo(() => {
     const map = new Map<string, number>();
     for (const entry of entries) {
-      if (entry.wallet_impact >= 0) continue;
+      if (entry.transaction_type === "transfer" || entry.wallet_impact >= 0) continue;
       const key = new Date(entry.occurred_at).toDateString();
       map.set(key, (map.get(key) ?? 0) + Math.abs(entry.wallet_impact));
     }
@@ -3573,9 +3599,10 @@ function SuccessPulse({ count, onAddMore, closing }: { count: number; onAddMore:
 }
 
 function HistoryInsight({ entries, selectedDay }: { entries: Entry[]; selectedDay: string | null }) {
-  const outflow = entries.filter((entry) => entry.wallet_impact < 0).reduce((sum, entry) => sum + Math.abs(entry.wallet_impact), 0);
-  const income = entries.filter((entry) => entry.wallet_impact > 0).reduce((sum, entry) => sum + entry.wallet_impact, 0);
-  const top = [...entries]
+  const nonTransferEntries = entries.filter((entry) => entry.transaction_type !== "transfer");
+  const outflow = nonTransferEntries.filter((entry) => entry.wallet_impact < 0).reduce((sum, entry) => sum + Math.abs(entry.wallet_impact), 0);
+  const income = nonTransferEntries.filter((entry) => entry.wallet_impact > 0).reduce((sum, entry) => sum + entry.wallet_impact, 0);
+  const top = [...nonTransferEntries]
     .filter((entry) => entry.wallet_impact < 0)
     .sort((a, b) => Math.abs(b.wallet_impact) - Math.abs(a.wallet_impact))[0];
 
@@ -3988,7 +4015,7 @@ function ConfirmDialog({ dialog, onClose, closing = false }: { dialog: ConfirmDi
 
 const decimalInputPattern = /^\d*\.?\d*$/;
 
-function AmountInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+function AmountInput({ value, onChange, disabled }: { value: number; onChange: (value: number) => void; disabled?: boolean }) {
   const [text, setText] = useState(() => (value ? String(value) : ""));
 
   if ((Number(text) || 0) !== value) {
@@ -3999,6 +4026,7 @@ function AmountInput({ value, onChange }: { value: number; onChange: (value: num
     <input
       inputMode="decimal"
       value={text}
+      disabled={disabled}
       onChange={(event) => {
         const next = event.target.value;
         if (next !== "" && !decimalInputPattern.test(next)) return;
@@ -4110,7 +4138,7 @@ function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft:
       <div className="draft-side">
         <span className="draft-type-badge">{transactionTypeLabels[draft.transaction_type]}</span>
         <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
-          {Object.entries(transactionTypeLabels).map(([value, label]) => (
+          {Object.entries(transactionTypeLabels).filter(([value]) => value !== "transfer").map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
@@ -4248,7 +4276,7 @@ function ManualEntryForm({
   busy: boolean;
   error: string;
   initialDate: string;
-  onSave: (draft: Draft) => void;
+  onSave: (drafts: Draft[]) => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() =>
     normalizeEntry(
@@ -4266,22 +4294,36 @@ function ManualEntryForm({
       false,
     ),
   );
+  const [destWalletId, setDestWalletId] = useState<string | null>(null);
   const update = (patch: Partial<Draft>) => setDraft(normalizeEntry({ ...draft, ...patch }, false));
+  const isTransfer = draft.transaction_type === "transfer";
+  const sourceWallet = wallets.find((wallet) => wallet.id === draft.wallet_id);
+  const destWallet = wallets.find((wallet) => wallet.id === destWalletId);
+  const transferInvalid = isTransfer && (!destWalletId || destWalletId === draft.wallet_id);
+
+  const submit = () => {
+    if (isTransfer) {
+      if (transferInvalid || draft.amount <= 0 || !destWalletId) return;
+      const groupId = crypto.randomUUID();
+      const title = draft.title.trim();
+      const sourceLeg = normalizeEntry({
+        id: `${groupId}-out`, title: title || `โอนไป${destWallet?.name ?? "กระเป๋าอื่น"}`, category: "อื่น ๆ",
+        amount: draft.amount, transaction_type: "transfer", debtor_name: "", occurred_at: draft.occurred_at,
+        wallet_id: draft.wallet_id, wallet_impact: -draft.amount, note: draft.note, transfer_group_id: groupId,
+      }, false);
+      const destLeg = normalizeEntry({
+        id: `${groupId}-in`, title: title || `โอนจาก${sourceWallet?.name ?? "กระเป๋าอื่น"}`, category: "อื่น ๆ",
+        amount: draft.amount, transaction_type: "transfer", debtor_name: "", occurred_at: draft.occurred_at,
+        wallet_id: destWalletId, wallet_impact: draft.amount, note: draft.note, transfer_group_id: groupId,
+      }, false);
+      onSave([sourceLeg, destLeg]);
+      return;
+    }
+    onSave([draft]);
+  };
 
   return (
     <div className="manual-entry-form">
-      <label>
-        ชื่อรายการ
-        <input autoFocus value={draft.title} onChange={(event) => update({ title: event.target.value })} />
-      </label>
-      <label>
-        หมวดหมู่
-        <select value={draft.category} onChange={(event) => update({ category: event.target.value })}>
-          {categories.map((category) => (
-            <option key={category}>{category}</option>
-          ))}
-        </select>
-      </label>
       <label>
         ชนิดรายการ
         <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
@@ -4292,6 +4334,20 @@ function ManualEntryForm({
           ))}
         </select>
       </label>
+      <label>
+        ชื่อรายการ{isTransfer && <small> (เว้นว่างได้ จะตั้งชื่อให้อัตโนมัติ)</small>}
+        <input autoFocus value={draft.title} onChange={(event) => update({ title: event.target.value })} />
+      </label>
+      {!isTransfer && (
+        <label>
+          หมวดหมู่
+          <select value={draft.category} onChange={(event) => update({ category: event.target.value })}>
+            {categories.map((category) => (
+              <option key={category}>{category}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <label>
         จำนวนเงิน
         <AmountInput value={draft.amount} onChange={(amount) => update({ amount })} />
@@ -4308,10 +4364,21 @@ function ManualEntryForm({
       </label>
       {!!wallets.length && draft.transaction_type !== "card_charge" && (
         <label>
-          กระเป๋า
+          {isTransfer ? "จากกระเป๋า" : "กระเป๋า"}
           <select value={draft.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
             {wallets.map((wallet) => (
               <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      {isTransfer && !!wallets.length && (
+        <label>
+          ไปกระเป๋า
+          <select value={destWalletId ?? ""} onChange={(event) => setDestWalletId(event.target.value || null)}>
+            <option value="">เลือกกระเป๋าปลายทาง</option>
+            {wallets.map((wallet) => (
+              <option key={wallet.id} value={wallet.id} disabled={wallet.id === draft.wallet_id}>{wallet.name}</option>
             ))}
           </select>
         </label>
@@ -4321,13 +4388,20 @@ function ManualEntryForm({
         <textarea value={draft.note ?? ""} onChange={(event) => update({ note: event.target.value })} placeholder="รายละเอียดเพิ่มเติมของรายการนี้" />
       </label>
 
-      <div className="draft-impact">
-        <span>กระเป๋า {formatSignedMoney(draft.wallet_impact)}</span>
-        <span>หนี้ {formatSignedMoney(draft.debt_impact)}</span>
-      </div>
+      {isTransfer ? (
+        <div className="draft-impact">
+          <span>{sourceWallet?.name ?? "จากกระเป๋า"} {formatSignedMoney(-draft.amount)}</span>
+          <span>{destWallet?.name ?? "ไปกระเป๋า"} {formatSignedMoney(draft.amount)}</span>
+        </div>
+      ) : (
+        <div className="draft-impact">
+          <span>กระเป๋า {formatSignedMoney(draft.wallet_impact)}</span>
+          <span>หนี้ {formatSignedMoney(draft.debt_impact)}</span>
+        </div>
+      )}
 
       {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
-      <button className="save" onClick={() => onSave(draft)} disabled={busy || !draft.title.trim() || draft.amount <= 0}>
+      <button className="save" onClick={submit} disabled={busy || (isTransfer ? (transferInvalid || draft.amount <= 0) : (!draft.title.trim() || draft.amount <= 0))}>
         {busy ? "กำลังบันทึก..." : "บันทึกรายการ"}
       </button>
     </div>
@@ -4354,6 +4428,7 @@ function EditSheet({
   closing?: boolean;
 }) {
   const update = (patch: Partial<Entry>) => onChange(normalizeEntry({ ...entry, ...patch }, false));
+  const isTransfer = entry.transaction_type === "transfer";
   const submit = async () => {
     const saved = await onSave();
     if (saved) onClose();
@@ -4369,22 +4444,26 @@ function EditSheet({
         <button onClick={onClose}>x</button>
       </div>
 
+      {isTransfer && <p className="pin-hint">รายการโอนเงินแก้ไขได้เฉพาะชื่อ วันที่ และหมายเหตุ — ลบได้ทั้งสองฝั่งพร้อมกัน</p>}
+
       <label>
         ชื่อรายการ
         <input autoFocus value={entry.title} onChange={(event) => update({ title: event.target.value })} />
       </label>
-      <label>
-        หมวดหมู่
-        <select value={entry.category} onChange={(event) => update({ category: event.target.value })}>
-          {categories.map((category) => (
-            <option key={category}>{category}</option>
-          ))}
-        </select>
-      </label>
+      {!isTransfer && (
+        <label>
+          หมวดหมู่
+          <select value={entry.category} onChange={(event) => update({ category: event.target.value })}>
+            {categories.map((category) => (
+              <option key={category}>{category}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <label>
         ชนิดรายการ
-        <select value={entry.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
-          {Object.entries(transactionTypeLabels).map(([value, label]) => (
+        <select value={entry.transaction_type} disabled={isTransfer} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
+          {Object.entries(transactionTypeLabels).filter(([value]) => value !== "transfer" || isTransfer).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
@@ -4393,7 +4472,7 @@ function EditSheet({
       </label>
       <label>
         จำนวนเงิน
-        <AmountInput value={entry.amount} onChange={(amount) => update({ amount })} />
+        <AmountInput value={entry.amount} onChange={(amount) => update({ amount })} disabled={isTransfer} />
       </label>
       {(["lend", "split_half", "debt_repayment", "debt_payment", "card_charge"] as TransactionType[]).includes(entry.transaction_type) && (
         <label>
@@ -4405,7 +4484,7 @@ function EditSheet({
         วันที่
         <input type="date" value={toDateInput(entry.occurred_at)} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, entry.occurred_at) })} />
       </label>
-      {!!wallets.length && entry.transaction_type !== "card_charge" && (
+      {!!wallets.length && entry.transaction_type !== "card_charge" && !isTransfer && (
         <label>
           กระเป๋า
           <select value={entry.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
