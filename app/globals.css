@@ -3644,26 +3644,27 @@ a:focus-visible {
   .phone.tab-home .view {
     display: grid;
     grid-template-columns: minmax(360px, 1fr) minmax(320px, 0.85fr);
+    grid-auto-flow: dense;
     gap: var(--s-4);
     align-items: start;
   }
 
   .phone.tab-home .wallet-grid.single-wallet,
   .phone.tab-home .home-insight-wrap,
+  .phone.tab-home .wallet-grid:not(.single-wallet),
   .phone.tab-home .first-run-card,
-  .phone.tab-home .activity-timeline,
   .phone.tab-home .error-actions,
   .phone.tab-home .state-card {
     grid-column: 1;
   }
 
-  .phone.tab-home .home-focus-grid,
-  .phone.tab-home .wallet-grid:not(.single-wallet) {
+  .phone.tab-home .home-focus-grid {
     grid-column: 2;
+    grid-template-columns: 1fr;
   }
 
-  .phone.tab-home .home-focus-grid {
-    grid-template-columns: 1fr;
+  .phone.tab-home .activity-timeline {
+    grid-column: 1 / -1;
   }
 
   .history-view {
@@ -3769,7 +3770,6 @@ a:focus-visible {
   }
 
   .phone.tab-home .home-focus-grid,
-  .phone.tab-home .wallet-grid:not(.single-wallet),
   .history-view > .entry-list,
   .history-view > .add-title {
     grid-column: 1;
