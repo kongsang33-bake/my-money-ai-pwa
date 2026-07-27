@@ -2576,7 +2576,7 @@ a:focus-visible {
   flex-shrink: 0;
 }
 
-.edit-sheet label {
+.edit-sheet label, .manual-entry-form label {
   display: block;
   margin: var(--s-3) 0;
   font-size: 12px;
@@ -2585,7 +2585,8 @@ a:focus-visible {
 }
 
 .edit-sheet label input, .edit-sheet label select,
-.edit-sheet label textarea, .auth-screen form input, .budget-row input {
+.edit-sheet label textarea, .auth-screen form input, .budget-row input,
+.manual-entry-form label input, .manual-entry-form label select, .manual-entry-form label textarea {
   width: 100%;
   margin-top: 6px;
   border: 1px solid var(--line);
@@ -2624,7 +2625,7 @@ a:focus-visible {
   max-width: 100%;
 }
 
-.edit-sheet label textarea {
+.edit-sheet label textarea, .manual-entry-form label textarea {
   min-height: 92px;
   resize: vertical;
 }

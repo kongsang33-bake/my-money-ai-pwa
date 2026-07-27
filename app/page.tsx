@@ -991,6 +991,7 @@ export default function Home() {
   const [text, setText] = useState("");
   const [slipImages, setSlipImages] = useState<SlipImage[]>([]);
   const [entryDate, setEntryDate] = useState(todayDateInput);
+  const [addMode, setAddMode] = useState<"ai" | "manual">("ai");
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [editing, setEditing] = useState<Entry | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -2382,99 +2383,118 @@ export default function Home() {
             <div className="add-title add-title-compact">
               <button onClick={() => setTab("home")}>‹</button>
               <div>
-                <p className="eyebrow">AI Chat</p>
-                <h2>{busy ? "กำลังอ่านให้แบบตั้งใจสุด ๆ" : drafts.length ? "แยกข้อมูลให้แล้ว ลองตรวจอีกนิด" : "วันนี้มีรายการอะไรบ้าง?"}</h2>
+                <p className="eyebrow">{addMode === "manual" ? "เพิ่มรายการ" : "AI Chat"}</p>
+                <h2>{addMode === "manual" ? "กรอกรายการด้วยตัวเอง" : busy ? "กำลังอ่านให้แบบตั้งใจสุด ๆ" : drafts.length ? "แยกข้อมูลให้แล้ว ลองตรวจอีกนิด" : "วันนี้มีรายการอะไรบ้าง?"}</h2>
               </div>
             </div>
 
-            <label className="entry-date-picker compact">
-              <span>บันทึกของวันที่</span>
-              <input type="date" value={entryDate} max={todayDateInput()} onChange={(event) => setEntryDate(event.target.value)} />
-            </label>
-
-            <div className="ai-suggestions">
-              <span>แตะตัวอย่างเพื่อเริ่มเร็ว</span>
-              <div className="quick-shortcuts">
-                {aiSuggestions.map((suggestion) => (
-                  <button
-                    key={`${suggestion.label}|${suggestion.detail}`}
-                    className="quick-chip"
-                    onClick={() => applySuggestion(suggestion.text, suggestion.shortcut)}
-                  >
-                    <span className="cat-dot" style={{ background: suggestion.shortcut ? categoryTint(suggestion.shortcut.category, 13) : undefined }}>
-                      {suggestion.shortcut ? <CategoryIcon category={suggestion.shortcut.category} /> : <Lightbulb size={14} strokeWidth={2.25} aria-hidden="true" />}
-                    </span>
-                    <span>
-                      <b>{suggestion.label}</b>
-                      <small>{suggestion.detail}</small>
-                    </span>
-                  </button>
-                ))}
-              </div>
+            <div className="report-period-toggle">
+              <button className={addMode === "ai" ? "active" : ""} onClick={() => setAddMode("ai")}>ให้ AI ช่วยจด</button>
+              <button className={addMode === "manual" ? "active" : ""} onClick={() => setAddMode("manual")}>เขียนเอง</button>
             </div>
 
-            <div className="ai-input-wrap">
-              <div className="assistant-rail" aria-hidden="true">
-                <span>AI</span>
-                <i />
-              </div>
-              <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="เช่น กินข้าว 120 บาท, ออกให้เพื่อนเอก่อน 500, เพื่อนเอโอนคืน 200" />
-
-              {!!slipImages.length && (
-                <div className="slip-preview-list">
-                  {slipImages.map((image) => (
-                    <div className="slip-preview" key={image.id}>
-                      <span className="slip-thumb" style={{ backgroundImage: `url(${image.preview})` }} aria-label={image.name} />
-                      <span>{image.name}</span>
-                      <button onClick={() => setSlipImages((items) => items.filter((item) => item.id !== image.id))}>×</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="input-tools">
-                <label className="attach-button">
-                  แนบสลิป
-                  <input type="file" accept="image/*" multiple onChange={(event) => { void addSlipFiles(event.target.files); event.currentTarget.value = ""; }} />
+            {addMode === "ai" && (
+              <>
+                <label className="entry-date-picker compact">
+                  <span>บันทึกของวันที่</span>
+                  <input type="date" value={entryDate} max={todayDateInput()} onChange={(event) => setEntryDate(event.target.value)} />
                 </label>
-                <span>{slipImages.length ? `${slipImages.length}/3 รูป` : "Gemini ช่วยอ่านรูปและข้อความ"}</span>
-              </div>
-            </div>
 
-            <button className="primary" onClick={analyze} disabled={busy || (!text.trim() && !slipImages.length)}>
-              {busy ? "กำลังวิเคราะห์..." : "ให้ AI แยกรายการ"}
-            </button>
-            {busy && <SkeletonList rows={2} />}
-            {error && <StateCard tone="error" title="AI ยังทำรายการนี้ไม่ได้" detail={error} />}
-
-            {!!drafts.length && (
-              <section className="review">
-                <div className="review-head">
-                  <div>
-                    <h3>ตรวจสอบก่อนบันทึก</h3>
-                    <p>พบ {drafts.length} รายการ แก้ข้อมูลได้ก่อนยืนยัน</p>
-                  </div>
-                  <div className="review-head-actions">
-                    <span>AI</span>
-                    <button className="review-cancel-all" onClick={() => setDrafts([])}>ยกเลิกทั้งหมด</button>
+                <div className="ai-suggestions">
+                  <span>แตะตัวอย่างเพื่อเริ่มเร็ว</span>
+                  <div className="quick-shortcuts">
+                    {aiSuggestions.map((suggestion) => (
+                      <button
+                        key={`${suggestion.label}|${suggestion.detail}`}
+                        className="quick-chip"
+                        onClick={() => applySuggestion(suggestion.text, suggestion.shortcut)}
+                      >
+                        <span className="cat-dot" style={{ background: suggestion.shortcut ? categoryTint(suggestion.shortcut.category, 13) : undefined }}>
+                          {suggestion.shortcut ? <CategoryIcon category={suggestion.shortcut.category} /> : <Lightbulb size={14} strokeWidth={2.25} aria-hidden="true" />}
+                        </span>
+                        <span>
+                          <b>{suggestion.label}</b>
+                          <small>{suggestion.detail}</small>
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 </div>
-                {drafts.map((draft, index) => (
-                  <DraftRow
-                    key={draft.id}
-                    draft={draft}
-                    knownDebtors={debtors}
-                    wallets={wallets}
-                    onChange={(next) => setDrafts((items) => items.map((item, i) => (i === index ? next : item)))}
-                    onRemove={() => setDrafts((items) => items.filter((_, i) => i !== index))}
-                  />
-                ))}
-                <DraftImpact items={drafts} />
-                <button className="save" onClick={() => saveEntries(drafts)} disabled={busy}>
-                  บันทึก {drafts.length} รายการ
+
+                <div className="ai-input-wrap">
+                  <div className="assistant-rail" aria-hidden="true">
+                    <span>AI</span>
+                    <i />
+                  </div>
+                  <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="เช่น กินข้าว 120 บาท, ออกให้เพื่อนเอก่อน 500, เพื่อนเอโอนคืน 200" />
+
+                  {!!slipImages.length && (
+                    <div className="slip-preview-list">
+                      {slipImages.map((image) => (
+                        <div className="slip-preview" key={image.id}>
+                          <span className="slip-thumb" style={{ backgroundImage: `url(${image.preview})` }} aria-label={image.name} />
+                          <span>{image.name}</span>
+                          <button onClick={() => setSlipImages((items) => items.filter((item) => item.id !== image.id))}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="input-tools">
+                    <label className="attach-button">
+                      แนบสลิป
+                      <input type="file" accept="image/*" multiple onChange={(event) => { void addSlipFiles(event.target.files); event.currentTarget.value = ""; }} />
+                    </label>
+                    <span>{slipImages.length ? `${slipImages.length}/3 รูป` : "Gemini ช่วยอ่านรูปและข้อความ"}</span>
+                  </div>
+                </div>
+
+                <button className="primary" onClick={analyze} disabled={busy || (!text.trim() && !slipImages.length)}>
+                  {busy ? "กำลังวิเคราะห์..." : "ให้ AI แยกรายการ"}
                 </button>
-                <p className="privacy">AI ช่วยอ่านและแยกข้อมูล แต่สูตรคำนวณกระเป๋า/ลูกหนี้ยังล็อกอยู่ในแอพ</p>
-              </section>
+                {busy && <SkeletonList rows={2} />}
+                {error && <StateCard tone="error" title="AI ยังทำรายการนี้ไม่ได้" detail={error} />}
+
+                {!!drafts.length && (
+                  <section className="review">
+                    <div className="review-head">
+                      <div>
+                        <h3>ตรวจสอบก่อนบันทึก</h3>
+                        <p>พบ {drafts.length} รายการ แก้ข้อมูลได้ก่อนยืนยัน</p>
+                      </div>
+                      <div className="review-head-actions">
+                        <span>AI</span>
+                        <button className="review-cancel-all" onClick={() => setDrafts([])}>ยกเลิกทั้งหมด</button>
+                      </div>
+                    </div>
+                    {drafts.map((draft, index) => (
+                      <DraftRow
+                        key={draft.id}
+                        draft={draft}
+                        knownDebtors={debtors}
+                        wallets={wallets}
+                        onChange={(next) => setDrafts((items) => items.map((item, i) => (i === index ? next : item)))}
+                        onRemove={() => setDrafts((items) => items.filter((_, i) => i !== index))}
+                      />
+                    ))}
+                    <DraftImpact items={drafts} />
+                    <button className="save" onClick={() => saveEntries(drafts)} disabled={busy}>
+                      บันทึก {drafts.length} รายการ
+                    </button>
+                    <p className="privacy">AI ช่วยอ่านและแยกข้อมูล แต่สูตรคำนวณกระเป๋า/ลูกหนี้ยังล็อกอยู่ในแอพ</p>
+                  </section>
+                )}
+              </>
+            )}
+
+            {addMode === "manual" && (
+              <ManualEntryForm
+                wallets={wallets}
+                busy={busy}
+                error={error}
+                initialDate={entryDate}
+                onSave={(draft) => saveEntries([draft])}
+              />
             )}
           </div>
         )}
@@ -4133,6 +4153,103 @@ function RecentActivityTimeline({ entries, onEdit }: { entries: Entry[]; onEdit:
         ))}
       </div>
     </section>
+  );
+}
+
+function ManualEntryForm({
+  wallets,
+  busy,
+  error,
+  initialDate,
+  onSave,
+}: {
+  wallets: Wallet[];
+  busy: boolean;
+  error: string;
+  initialDate: string;
+  onSave: (draft: Draft) => void;
+}) {
+  const [draft, setDraft] = useState<Draft>(() =>
+    normalizeEntry(
+      {
+        id: `manual-${Date.now()}`,
+        title: "",
+        category: categories[0],
+        amount: 0,
+        transaction_type: "personal_expense",
+        debtor_name: "",
+        occurred_at: withDateKeepingTime(initialDate, new Date().toISOString()),
+        wallet_id: defaultWalletId(wallets),
+        note: null,
+      },
+      false,
+    ),
+  );
+  const update = (patch: Partial<Draft>) => setDraft(normalizeEntry({ ...draft, ...patch }, false));
+
+  return (
+    <div className="manual-entry-form">
+      <label>
+        ชื่อรายการ
+        <input autoFocus value={draft.title} onChange={(event) => update({ title: event.target.value })} />
+      </label>
+      <label>
+        หมวดหมู่
+        <select value={draft.category} onChange={(event) => update({ category: event.target.value })}>
+          {categories.map((category) => (
+            <option key={category}>{category}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        ชนิดรายการ
+        <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
+          {Object.entries(transactionTypeLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        จำนวนเงิน
+        <AmountInput value={draft.amount} onChange={(amount) => update({ amount })} />
+      </label>
+      {(["lend", "split_half", "debt_repayment", "debt_payment", "card_charge"] as TransactionType[]).includes(draft.transaction_type) && (
+        <label>
+          {draft.transaction_type === "card_charge" ? "ชื่อบัตร" : "ชื่อผู้เกี่ยวข้อง"}
+          <input type="text" placeholder={draft.transaction_type === "card_charge" ? "เช่น กรุงศรีเฟิร์สช้อย" : "เช่น เพื่อนเอ"} value={draft.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
+        </label>
+      )}
+      <label>
+        วันที่
+        <input type="date" value={toDateInput(draft.occurred_at)} max={todayDateInput()} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, draft.occurred_at) })} />
+      </label>
+      {!!wallets.length && draft.transaction_type !== "card_charge" && (
+        <label>
+          กระเป๋า
+          <select value={draft.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
+            {wallets.map((wallet) => (
+              <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label>
+        หมายเหตุ
+        <textarea value={draft.note ?? ""} onChange={(event) => update({ note: event.target.value })} placeholder="รายละเอียดเพิ่มเติมของรายการนี้" />
+      </label>
+
+      <div className="draft-impact">
+        <span>กระเป๋า {formatSignedMoney(draft.wallet_impact)}</span>
+        <span>หนี้ {formatSignedMoney(draft.debt_impact)}</span>
+      </div>
+
+      {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
+      <button className="save" onClick={() => onSave(draft)} disabled={busy || !draft.title.trim() || draft.amount <= 0}>
+        {busy ? "กำลังบันทึก..." : "บันทึกรายการ"}
+      </button>
+    </div>
   );
 }
 
