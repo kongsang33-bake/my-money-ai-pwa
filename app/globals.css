@@ -1927,10 +1927,6 @@ a:focus-visible {
   color: var(--ink);
 }
 
-.history-filter-date {
-  grid-column: 1 / -1;
-}
-
 .monthly-trend-head {
   display: flex;
   justify-content: space-between;

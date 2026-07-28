@@ -124,8 +124,6 @@ type HistoryFilters = {
   type: "all" | TransactionType;
   minAmount: string;
   maxAmount: string;
-  startDate: string;
-  endDate: string;
 };
 type Toast = { id: number; tone: "success" | "info" | "error"; title: string; detail?: string; action?: { label: string; onClick: () => void } };
 type ConfirmDialogState = {
@@ -818,19 +816,14 @@ function filterEntries(entries: Entry[], filters: HistoryFilters) {
   const query = filters.query.trim().toLowerCase();
   const minAmount = filters.minAmount === "" ? null : toFiniteNumber(filters.minAmount, NaN);
   const maxAmount = filters.maxAmount === "" ? null : toFiniteNumber(filters.maxAmount, NaN);
-  const start = filters.startDate ? new Date(`${filters.startDate}T00:00:00`) : null;
-  const end = filters.endDate ? new Date(`${filters.endDate}T23:59:59.999`) : null;
 
   return entries.filter((entry) => {
     const amount = Math.abs(entry.wallet_impact);
-    const occurred = new Date(entry.occurred_at);
     if (query && !`${entry.title} ${entry.category} ${entry.debtor_name} ${entry.note ?? ""}`.toLowerCase().includes(query)) return false;
     if (filters.category && entry.category !== filters.category) return false;
     if (filters.type !== "all" && entry.transaction_type !== filters.type) return false;
     if (minAmount !== null && Number.isFinite(minAmount) && amount < minAmount) return false;
     if (maxAmount !== null && Number.isFinite(maxAmount) && amount > maxAmount) return false;
-    if (start && occurred < start) return false;
-    if (end && occurred > end) return false;
     return true;
   });
 }
@@ -1065,7 +1058,7 @@ export default function Home() {
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(monthKey(new Date()));
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [historyFilters, setHistoryFilters] = useState<HistoryFilters>({ query: "", category: "", type: "all", minAmount: "", maxAmount: "", startDate: "", endDate: "" });
+  const [historyFilters, setHistoryFilters] = useState<HistoryFilters>({ query: "", category: "", type: "all", minAmount: "", maxAmount: "" });
   const [budgets, setBudgets] = useState<Record<string, number>>({});
   const [budgetSheetOpen, setBudgetSheetOpen] = useState(false);
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
@@ -2679,7 +2672,7 @@ export default function Home() {
             <HistoryFilterBar
               filters={historyFilters}
               onChange={setHistoryFilters}
-              onClear={() => setHistoryFilters({ query: "", category: "", type: "all", minAmount: "", maxAmount: "", startDate: "", endDate: "" })}
+              onClear={() => setHistoryFilters({ query: "", category: "", type: "all", minAmount: "", maxAmount: "" })}
             />
             <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
             {activeDay && <HistoryInsight entries={dayEntries} />}
@@ -3783,8 +3776,6 @@ function HistoryFilterBar({
     filters.type !== "all" && { key: "type" as const, label: transactionTypeLabels[filters.type as TransactionType] },
     filters.minAmount && { key: "minAmount" as const, label: `ตั้งแต่ ${moneySign}${filters.minAmount}` },
     filters.maxAmount && { key: "maxAmount" as const, label: `ไม่เกิน ${moneySign}${filters.maxAmount}` },
-    filters.startDate && { key: "startDate" as const, label: `จาก ${filters.startDate}` },
-    filters.endDate && { key: "endDate" as const, label: `ถึง ${filters.endDate}` },
   ].filter(Boolean) as { key: keyof HistoryFilters; label: string }[];
   const removeFilter = (key: keyof HistoryFilters) => update({ [key]: key === "type" ? "all" : "" } as Partial<HistoryFilters>);
 
@@ -3852,14 +3843,6 @@ function HistoryFilterBar({
           <label>
             ยอดสูงสุด
             <input inputMode="decimal" value={filters.maxAmount} onChange={(event) => update({ maxAmount: event.target.value })} placeholder="ไม่จำกัด" />
-          </label>
-          <label className="history-filter-date">
-            ตั้งแต่วันที่
-            <input type="date" value={filters.startDate} onChange={(event) => update({ startDate: event.target.value })} />
-          </label>
-          <label className="history-filter-date">
-            ถึงวันที่
-            <input type="date" value={filters.endDate} onChange={(event) => update({ endDate: event.target.value })} />
           </label>
         </div>
       )}
