@@ -645,7 +645,7 @@ a:focus-visible {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  box-shadow: var(--sh-1);
+  box-shadow: var(--sh-2);
 }
 
 .wallet-card, .summary-panel, .entry-list, .heatmap-panel, .debtor-detail-card,
@@ -663,24 +663,23 @@ a:focus-visible {
 }
 
 @media (hover: hover) {
-  .wallet-card:hover, .debtor-page-item:hover, .entry-tappable:hover,
+  .wallet-card:not(.primary-wallet):hover, .debtor-page-item:hover, .entry-tappable:hover,
   .quick-chip:hover {
-    box-shadow: var(--sh-2);
-    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--primary) 20%, var(--line));
+    transform: translateY(-2px);
   }
 }
 
-.wallet-card, .debtor-page-item, .entry-tappable, .quick-chip,
+.wallet-card:not(.primary-wallet), .debtor-page-item, .entry-tappable, .quick-chip,
 .secondary-wallet-card {
-  transition: box-shadow var(--t-2) var(--e-out), transform var(--t-2) var(--e-out);
+  transition: box-shadow var(--t-2) var(--e-out), transform var(--t-2) var(--e-out), border-color var(--t-2) var(--e-out);
 }
 
-.entry-tappable {
-  transition: opacity var(--t-1) var(--e-out);
-}
-
-.entry-tappable:active {
-  opacity: 0.6;
+.wallet-card:not(.primary-wallet):active, .debtor-page-item:active, .entry-tappable:active,
+.quick-chip:active {
+  box-shadow: var(--sh-1);
+  border-color: var(--line);
+  transform: scale(0.98);
 }
 
 /* -------------------------------------------------------------------------
@@ -3544,9 +3543,10 @@ a:focus-visible {
 }
 
 @media (hover: none), (pointer: coarse) {
-  .wallet-card:hover, .debtor-page-item:hover, .entry-tappable:hover,
+  .wallet-card:not(.primary-wallet):hover, .debtor-page-item:hover, .entry-tappable:hover,
   .quick-chip:hover {
-    box-shadow: var(--sh-1);
+    box-shadow: var(--sh-2);
+    border-color: var(--line);
     transform: none;
   }
 }
