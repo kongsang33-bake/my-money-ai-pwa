@@ -1655,6 +1655,20 @@ a:focus-visible {
   font-weight: 700;
 }
 
+.heatmap-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.heatmap-weekdays span {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+
 .heatmap-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -1662,10 +1676,18 @@ a:focus-visible {
   margin-bottom: var(--s-3);
 }
 
+.heatmap-cell-blank {
+  aspect-ratio: 1;
+}
+
 .heatmap-cell {
   aspect-ratio: 1;
   border-radius: var(--r-sm);
   background: var(--seq-0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
   transition: box-shadow var(--t-1) var(--e-out);
 }
 

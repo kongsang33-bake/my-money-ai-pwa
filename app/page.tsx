@@ -2674,13 +2674,13 @@ export default function Home() {
               budgets={budgets}
               onCategorySelect={(category) => { setHistoryFilters((current) => ({ ...current, category })); setSelectedDay(null); }}
             />
+            <MonthlyTrendChart trend={monthlyTrend} />
+            <IncomeBreakdown items={incomeSummary} />
             <HistoryFilterBar
               filters={historyFilters}
               onChange={setHistoryFilters}
               onClear={() => setHistoryFilters({ query: "", category: "", type: "all", minAmount: "", maxAmount: "", startDate: "", endDate: "" })}
             />
-            <MonthlyTrendChart trend={monthlyTrend} />
-            <IncomeBreakdown items={incomeSummary} />
             <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
             {activeDay && <HistoryInsight entries={dayEntries} />}
             <EntryList entries={dayEntries} onEdit={setEditing} onDelete={deleteEntry} emptyAction={{ label: "จดด้วย AI", onClick: openAddTab }} />
@@ -3330,6 +3330,16 @@ const CalendarHeatmap = memo(function CalendarHeatmap({
     if (ratio > 0.25) return 2;
     return 1;
   };
+  const weekdayLabels = useMemo(() => {
+    const sunday = new Date();
+    sunday.setDate(sunday.getDate() - sunday.getDay());
+    return Array.from({ length: 7 }, (_, index) => {
+      const d = new Date(sunday);
+      d.setDate(sunday.getDate() + index);
+      return d.toLocaleDateString("th-TH", { weekday: "short" });
+    });
+  }, []);
+  const leadingBlanks = days.length ? days[0].date.getDay() : 0;
 
   return (
     <section className="heatmap-panel">
@@ -3337,13 +3347,21 @@ const CalendarHeatmap = memo(function CalendarHeatmap({
         <h2>ปฏิทินการใช้จ่าย</h2>
         {selectedDay && <button onClick={() => onSelectDay(null)}>ล้างตัวกรอง</button>}
       </div>
+      <div className="heatmap-weekdays">
+        {weekdayLabels.map((label) => (
+          <span key={label}>{label}</span>
+        ))}
+      </div>
       <div className="heatmap-grid">
+        {Array.from({ length: leadingBlanks }, (_, index) => (
+          <span key={`blank-${index}`} className="heatmap-cell-blank" />
+        ))}
         {days.map((day) => (
           <button
             key={day.key}
             className={`heatmap-cell bucket-${bucket(day.amount)}${selectedDay === day.key ? " selected" : ""}`}
             onClick={() => onSelectDay(selectedDay === day.key ? null : day.key)}
-            title={`${day.date.toLocaleDateString("th-TH", { day: "numeric", month: "short" })} · ${moneySign}${formatMoney(day.amount)}`}
+            title={`${day.date.toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" })} · ${moneySign}${formatMoney(day.amount)}`}
           >
             {day.date.getDate()}
           </button>
