@@ -4552,7 +4552,7 @@ function EditSheet({
 
       <label>
         ชื่อรายการ
-        <input autoFocus value={entry.title} onChange={(event) => update({ title: event.target.value })} />
+        <input value={entry.title} onChange={(event) => update({ title: event.target.value })} />
       </label>
       {!isTransfer && (
         <label>
@@ -4962,7 +4962,7 @@ function DebtorEditSheet({
       <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
       <label>
         ชื่อ
-        <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder={kind === "own" ? "เช่น ผ่อนบ้าน ผ่อนรถ" : "เช่น เพื่อนเอ"} />
+        <input autoFocus={!debtor} value={name} onChange={(event) => setName(event.target.value)} placeholder={kind === "own" ? "เช่น ผ่อนบ้าน ผ่อนรถ" : "เช่น เพื่อนเอ"} />
       </label>
       <label>
         หมายเหตุ
@@ -5451,7 +5451,7 @@ function ProfileEditSheet({
       </div>
       <label>
         ชื่อเล่น
-        <input autoFocus value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="เช่น ก้อง" />
+        <input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="เช่น ก้อง" />
       </label>
       <label>
         รูปไอคอนจากภายนอก
@@ -5621,7 +5621,7 @@ function WalletEditSheet({
       <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
       <label>
         ชื่อกระเป๋า
-        <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น กระเป๋าหลัก, ออมทรัพย์ SCB" />
+        <input autoFocus={!wallet} value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น กระเป๋าหลัก, ออมทรัพย์ SCB" />
       </label>
       <label>
         ประเภท
@@ -5753,7 +5753,7 @@ function RecurringExpenseEditSheet({
       <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
       <label>
         ชื่อรายการ
-        <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น Netflix, Claude Pro, YouTube Premium" />
+        <input autoFocus={!item} value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น Netflix, Claude Pro, YouTube Premium" />
       </label>
       <label>
         ยอดต่อเดือน
