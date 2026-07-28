@@ -4790,6 +4790,7 @@ function DebtorsView({
 function CreditLimitMeter({ outstanding, creditLimit }: { outstanding: number; creditLimit: number }) {
   const pct = creditLimit > 0 ? Math.min(100, Math.max(0, (outstanding / creditLimit) * 100)) : 0;
   const tone = pct >= 90 ? "danger" : pct >= 70 ? "warn" : "safe";
+  const remaining = Math.max(0, creditLimit - outstanding);
 
   return (
     <div className={`credit-limit-meter credit-limit-meter-${tone}`}>
@@ -4797,6 +4798,7 @@ function CreditLimitMeter({ outstanding, creditLimit }: { outstanding: number; c
         <div className="credit-limit-meter-fill" style={{ width: `${pct}%` }} />
       </div>
       <small>ใช้ไป {moneySign}{formatMoney(outstanding)} จากวงเงิน {moneySign}{formatMoney(creditLimit)} ({Math.round(pct)}%)</small>
+      <small className="credit-limit-remaining">เหลือวงเงินใช้ได้ {moneySign}{formatMoney(remaining)}</small>
     </div>
   );
 }

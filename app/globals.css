@@ -2286,6 +2286,11 @@ a:focus-visible {
   color: var(--ink-3);
 }
 
+.credit-limit-meter small.credit-limit-remaining {
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
 .debtor-statement {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
