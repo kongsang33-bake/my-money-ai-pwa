@@ -2554,6 +2554,7 @@ export default function Home() {
                         className="quick-chip"
                         onClick={() => applySuggestion(suggestion.text, suggestion.shortcut)}
                       >
+                        <i className="card-accent" style={{ background: suggestion.shortcut ? categoryColor(suggestion.shortcut.category) : undefined }} />
                         <span className="cat-dot" style={{ background: suggestion.shortcut ? categoryTint(suggestion.shortcut.category, 13) : undefined }}>
                           {suggestion.shortcut ? <CategoryIcon category={suggestion.shortcut.category} /> : <Lightbulb size={14} strokeWidth={2.25} aria-hidden="true" />}
                         </span>
@@ -4728,6 +4729,7 @@ function DebtorsView({
           const amount = summary.find((item) => item.name.trim().toLowerCase() === debtor.name.trim().toLowerCase())?.amount ?? 0;
           return (
             <article className="debtor-page-item" key={debtor.id}>
+              <i className="card-accent" style={{ background: debtor.icon_color ?? nameColor(debtor.name) }} />
               <button className="debtor-main-button" onClick={() => onSelect(debtor)}>
                 <span className="debtor-avatar" style={{ background: debtor.icon_color ?? nameColor(debtor.name) }}>
                   <WalletAvatarGlyph iconKey={debtor.icon} fallbackName={debtor.name} />
@@ -5513,6 +5515,7 @@ function WalletsView({
       <div className="debtor-page-list">
         {wallets.map((wallet) => (
           <article className={`debtor-page-item ${openWalletId === wallet.id ? "active" : ""}`} key={wallet.id}>
+            <i className="card-accent" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }} />
             <button className="debtor-main-button" onClick={() => setOpenWalletId((current) => current === wallet.id ? null : wallet.id)}>
               <span className="debtor-avatar" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>
                 <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} />
@@ -5672,6 +5675,7 @@ function RecurringExpensesView({
       <div className="debtor-page-list">
         {items.map((item) => (
           <article className="debtor-page-item" key={item.id}>
+            <i className="card-accent" style={{ background: item.icon_color ?? nameColor(item.name) }} />
             <button className="debtor-main-button" onClick={() => onEdit(item)}>
               <span className="debtor-avatar" style={{ background: item.icon_color ?? nameColor(item.name) }}>
                 <WalletAvatarGlyph iconKey={item.icon} fallbackName={item.name} />

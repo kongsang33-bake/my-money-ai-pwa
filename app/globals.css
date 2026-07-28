@@ -886,6 +886,8 @@ a:focus-visible {
   line-height: 1.45;
 }
 
+.home-insight-card.income { background: color-mix(in srgb, var(--income) 6%, var(--surface)); }
+.home-insight-card.expense { background: color-mix(in srgb, var(--expense) 6%, var(--surface)); }
 .home-insight-card.income strong { color: var(--income); }
 .home-insight-card.expense strong { color: var(--expense); }
 
@@ -1219,6 +1221,7 @@ a:focus-visible {
   min-width: 150px;
   text-align: left;
   border-radius: var(--r-lg);
+  position: relative;
 }
 
 .quick-chip b {
@@ -1417,8 +1420,23 @@ a:focus-visible {
 }
 
 .draft-income::before, .draft-debt_repayment::before { background: var(--income); }
-.draft-personal_expense::before, .draft-gift::before { background: var(--expense); }
+.draft-personal_expense::before, .draft-gift::before, .draft-card_charge::before { background: var(--expense); }
 .draft-lend::before, .draft-split_half::before, .draft-debt_payment::before { background: var(--cat-travel); }
+.draft-transfer::before { background: var(--accent); }
+
+/* Reusable per-row color accent (categories, per-item icon colors) for
+   cards whose color isn't a fixed enum, so it can't be a CSS class like
+   .draft-income above — a real element instead of ::before because it
+   needs an inline color from JS, not a class-selected one. */
+.card-accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: var(--r-full) 0 0 var(--r-full);
+  background: var(--ink-3);
+}
 
 .draft > div:first-of-type {
   grid-column: 2;
