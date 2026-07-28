@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import NextImage from "next/image";
 import type { User } from "@supabase/supabase-js";
@@ -248,6 +248,9 @@ const unnamedDebtor = "ไม่ระบุ";
 const profileImageMaxInputBytes = 10 * 1024 * 1024;
 const profileImageMaxStoredBytes = 1.5 * 1024 * 1024;
 const profileImageSize = 512;
+const slipImageMaxInputBytes = 15 * 1024 * 1024;
+const slipImageMaxStoredBytes = 3 * 1024 * 1024;
+const slipImageMaxDimension = 1800;
 const pinLength = 6;
 const pinMaxAttempts = 5;
 const pinBlockMs = 60 * 60 * 1000;
@@ -937,25 +940,6 @@ function installmentStatusText(debtor: Debtor, outstanding: number): string {
   return remaining !== null && outstanding > 0.005 ? ` · เหลืออีกประมาณ ${remaining} เดือน` : "";
 }
 
-function fileToSlipImage(file: File): Promise<SlipImage> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("อ่านไฟล์รูปไม่สำเร็จ"));
-    reader.onload = () => {
-      const value = String(reader.result ?? "");
-      const [, data = ""] = value.split(",");
-      resolve({
-        id: `${Date.now()}-${file.name}`,
-        name: file.name,
-        mimeType: file.type,
-        data,
-        preview: value,
-      });
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1010,6 +994,43 @@ async function compressProfileImage(file: File) {
   }
 
   throw new Error("ย่อรูปแล้วยังใหญ่เกินไป ลองเลือกรูปอื่นที่ไม่ซับซ้อนมากครับ");
+}
+
+// Slips need their full rectangle (unlike a cropped-to-square avatar) and
+// legible text, so this scales proportionally instead of cropping, capping
+// the longest edge rather than forcing a fixed square.
+async function compressSlipImage(file: File): Promise<SlipImage> {
+  if (file.size > slipImageMaxInputBytes) {
+    throw new Error("รูปใหญ่เกินไป กรุณาเลือกรูปไม่เกิน 15MB");
+  }
+
+  const source = await fileToDataUrl(file);
+  const image = await loadImage(source);
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("เบราว์เซอร์ไม่รองรับการย่อรูป");
+
+  const scale = Math.min(1, slipImageMaxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+  canvas.width = Math.round(image.naturalWidth * scale);
+  canvas.height = Math.round(image.naturalHeight * scale);
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const qualities = [0.85, 0.75, 0.65, 0.55, 0.45];
+  for (const quality of qualities) {
+    const compressed = canvas.toDataURL("image/jpeg", quality);
+    if (dataUrlBytes(compressed) <= slipImageMaxStoredBytes) {
+      const [, data = ""] = compressed.split(",");
+      return {
+        id: `${Date.now()}-${file.name}`,
+        name: file.name,
+        mimeType: "image/jpeg",
+        data,
+        preview: compressed,
+      };
+    }
+  }
+
+  throw new Error("ย่อรูปแล้วยังใหญ่เกินไป ลองเลือกรูปอื่นที่ชัดเจนกว่านี้");
 }
 
 export default function Home() {
@@ -1469,13 +1490,9 @@ export default function Home() {
       setError("รองรับเฉพาะไฟล์รูปภาพเท่านั้น");
       return;
     }
-    if (nextFiles.some((file) => file.size > 5 * 1024 * 1024)) {
-      setError("รูปภาพต้องมีขนาดไม่เกิน 5MB ต่อรูป");
-      return;
-    }
 
     try {
-      const images = await Promise.all(nextFiles.map(fileToSlipImage));
+      const images = await Promise.all(nextFiles.map(compressSlipImage));
       setSlipImages((current) => [...current, ...images].slice(0, 3));
       notify({ tone: "success", title: "แนบสลิปแล้ว", detail: `${images.length} รูปพร้อมให้ AI อ่าน` });
     } catch (e) {
@@ -3269,7 +3286,7 @@ function GoogleIcon() {
   );
 }
 
-function CalendarHeatmap({
+const CalendarHeatmap = memo(function CalendarHeatmap({
   start,
   end,
   entries,
@@ -3334,7 +3351,7 @@ function CalendarHeatmap({
       <HeatmapLegend total={days.reduce((sum, day) => sum + day.amount, 0)} activeDays={days.filter((day) => day.amount > 0).length} />
     </section>
   );
-}
+});
 
 function HeatmapLegend({ total, activeDays }: { total: number; activeDays: number }) {
   return (
@@ -3350,7 +3367,7 @@ function HeatmapLegend({ total, activeDays }: { total: number; activeDays: numbe
   );
 }
 
-function CountUpMoney({ value }: { value: number }) {
+const CountUpMoney = memo(function CountUpMoney({ value }: { value: number }) {
   const [shown, setShown] = useState(0);
   const fromRef = useRef(0);
 
@@ -3383,7 +3400,7 @@ function CountUpMoney({ value }: { value: number }) {
   }, [value]);
 
   return <>{moneySign}{formatMoney(shown)}</>;
-}
+});
 
 function HeroWalletCard({
   balance,
@@ -3429,13 +3446,22 @@ function HomeInsightGrid({
   const trackRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const cardCount = 4;
+  const scrollFrameRef = useRef<number | null>(null);
 
   const handleScroll = () => {
-    const track = trackRef.current;
-    if (!track || !track.clientWidth) return;
-    const index = Math.round(track.scrollLeft / track.clientWidth);
-    setActiveIndex(Math.max(0, Math.min(cardCount - 1, index)));
+    if (scrollFrameRef.current !== null) return;
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      const track = trackRef.current;
+      if (!track || !track.clientWidth) return;
+      const index = Math.round(track.scrollLeft / track.clientWidth);
+      setActiveIndex(Math.max(0, Math.min(cardCount - 1, index)));
+    });
   };
+
+  useEffect(() => () => {
+    if (scrollFrameRef.current !== null) window.cancelAnimationFrame(scrollFrameRef.current);
+  }, []);
 
   const scrollToIndex = (index: number) => {
     const track = trackRef.current;
@@ -3711,6 +3737,28 @@ function HistoryFilterBar({
 }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const update = (patch: Partial<HistoryFilters>) => onChange({ ...filters, ...patch });
+  // Local draft so typing feels instant while the parent (and the whole
+  // Home tree it re-renders) only updates ~200ms after the user pauses.
+  const [queryDraft, setQueryDraft] = useState(filters.query);
+  const [prevFiltersQuery, setPrevFiltersQuery] = useState(filters.query);
+  if (filters.query !== prevFiltersQuery) {
+    setPrevFiltersQuery(filters.query);
+    setQueryDraft(filters.query);
+  }
+  const queryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (queryTimeoutRef.current) clearTimeout(queryTimeoutRef.current);
+  }, []);
+  const handleQueryChange = (value: string) => {
+    setQueryDraft(value);
+    if (queryTimeoutRef.current) clearTimeout(queryTimeoutRef.current);
+    queryTimeoutRef.current = setTimeout(() => update({ query: value }), 200);
+  };
+  const clearQuery = () => {
+    if (queryTimeoutRef.current) clearTimeout(queryTimeoutRef.current);
+    setQueryDraft("");
+    update({ query: "" });
+  };
   const activeFilters = [
     filters.category && { key: "category" as const, label: `หมวด ${filters.category}` },
     filters.type !== "all" && { key: "type" as const, label: transactionTypeLabels[filters.type as TransactionType] },
@@ -3726,12 +3774,12 @@ function HistoryFilterBar({
       <div className="history-search-row">
         <span className="history-search-icon" aria-hidden="true"><Search size={16} strokeWidth={2.25} /></span>
         <input
-          value={filters.query}
-          onChange={(event) => update({ query: event.target.value })}
+          value={queryDraft}
+          onChange={(event) => handleQueryChange(event.target.value)}
           placeholder="ค้นหาชื่อ หมวด ลูกหนี้ หรือหมายเหตุ"
         />
-        {filters.query && (
-          <button className="history-search-clear" aria-label="ล้างคำค้นหา" onClick={() => update({ query: "" })}>
+        {queryDraft && (
+          <button className="history-search-clear" aria-label="ล้างคำค้นหา" onClick={clearQuery}>
             <X size={14} strokeWidth={2.5} />
           </button>
         )}
@@ -4247,7 +4295,7 @@ function DraftImpact({ items }: { items: Draft[] }) {
   );
 }
 
-function EntryList({
+const EntryList = memo(function EntryList({
   entries,
   onEdit,
   onDelete,
@@ -4296,7 +4344,7 @@ function EntryList({
       {!entries.length && <EmptyNote glyph="▪" action={emptyAction}>ยังไม่มีรายการในช่วงนี้</EmptyNote>}
     </div>
   );
-}
+});
 
 function RecentActivityTimeline({ entries, onEdit }: { entries: Entry[]; onEdit: (entry: Entry) => void }) {
   const recent = entries.slice(0, 4);
