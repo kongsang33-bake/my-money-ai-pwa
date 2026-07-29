@@ -65,6 +65,17 @@ type Entry = {
 
 type Draft = Omit<Entry, "id"> & { id: string };
 type CsvImportRow = { title: string; amount: number; category: string; transaction_type: TransactionType; occurred_at: string; note: string; debtor_name: string; wallet_id: string | null };
+type AiFinanceContext = {
+  periodLabel: string;
+  totals: { income: number; outflow: number; balance: number; cashAvailable: number; walletBalance: number; netWorth: number };
+  walletBalances: { name: string; balance: number }[];
+  categories: { category: string; amount: number }[];
+  recurringTotal: number;
+  receivableTotal: number;
+  payableTotal: number;
+  transactionCount: number;
+  transactions: Pick<Entry, "title" | "category" | "amount" | "transaction_type" | "wallet_impact" | "occurred_at">[];
+};
 type Profile = {
   user_id: string;
   nickname: string | null;
@@ -1519,6 +1530,24 @@ export default function Home() {
       totalSpent: budgeted.reduce((sum, item) => sum + item.spent, 0),
     };
   }, [budgets, categorySummary]);
+  const aiFinanceContext = useMemo<AiFinanceContext>(() => ({
+    periodLabel: reportLabel("month", selectedMonth, Number(selectedMonth.slice(0, 4)), monthStartDay),
+    totals: {
+      income: monthlyIncome,
+      outflow: monthlyOutflow,
+      balance: monthlyBalance,
+      cashAvailable: mainWallet,
+      walletBalance: Object.values(walletTotals).reduce((sum, amount) => sum + amount, 0),
+      netWorth,
+    },
+    walletBalances: displayWallets.map((wallet) => ({ name: wallet.name, balance: wallet.display_balance })),
+    categories: categorySummary.filter((item) => item.amount > 0),
+    recurringTotal: recurringExpenses.reduce((sum, item) => sum + item.amount, 0),
+    receivableTotal,
+    payableTotal,
+    transactionCount: monthlyEntries.length,
+    transactions: monthlyEntries.slice(0, 120).map(({ title, category, amount, transaction_type, wallet_impact, occurred_at }) => ({ title, category, amount, transaction_type, wallet_impact, occurred_at })),
+  }), [selectedMonth, monthStartDay, monthlyIncome, monthlyOutflow, monthlyBalance, mainWallet, walletTotals, netWorth, displayWallets, categorySummary, recurringExpenses, receivableTotal, payableTotal, monthlyEntries]);
 
   async function addSlipFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -2914,7 +2943,7 @@ export default function Home() {
           <CsvImportSheet busy={busy} error={error} onClose={csvImportDismiss.requestClose} onImport={importEntries} closing={csvImportDismiss.closing} />
         )}
         {askAiDismiss.mounted && (
-          <AskFinanceSheet entries={entries} wallets={wallets} debtors={debtors} onClose={askAiDismiss.requestClose} closing={askAiDismiss.closing} />
+          <AskFinanceSheet context={aiFinanceContext} onClose={askAiDismiss.requestClose} closing={askAiDismiss.closing} />
         )}
         {recapDismiss.mounted && (
           <RecapSheet
@@ -5428,7 +5457,7 @@ function CsvImportSheet({ busy, error, onClose, onImport, closing }: { busy: boo
   );
 }
 
-function AskFinanceSheet({ entries, wallets, debtors, onClose, closing }: { entries: Entry[]; wallets: Wallet[]; debtors: Debtor[]; onClose: () => void; closing?: boolean }) {
+function AskFinanceSheet({ context, onClose, closing }: { context: AiFinanceContext; onClose: () => void; closing?: boolean }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false);
@@ -5437,7 +5466,7 @@ function AskFinanceSheet({ entries, wallets, debtors, onClose, closing }: { entr
     if (!question.trim()) return;
     setBusy(true); setError(""); setAnswer("");
     try {
-      const response = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: question.trim(), entries: entries.slice(0, 300).map(({ id, title, category, amount, transaction_type, wallet_impact, debtor_name, occurred_at }) => ({ id, title, category, amount, transaction_type, wallet_impact, debtor_name, occurred_at })), wallets: wallets.map(({ name, tag, balance }) => ({ name, tag, balance })), debtors: debtors.map(({ name, kind, opening_balance }) => ({ name, kind, opening_balance })) }) });
+      const response = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: question.trim(), context }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "AI ตอบคำถามไม่สำเร็จ");
       setAnswer(data.answer || "ยังไม่มีคำตอบ");
@@ -5446,6 +5475,7 @@ function AskFinanceSheet({ entries, wallets, debtors, onClose, closing }: { entr
   };
   return <div className={`sheet-backdrop ${closing ? "closing" : ""}`}><section className={`edit-sheet ask-ai-sheet ${closing ? "closing" : ""}`}>
     <div className="sheet-head"><div><p className="eyebrow">ผู้ช่วยการเงิน</p><h2>ถาม AI เรื่องเงิน</h2></div><button onClick={onClose}>×</button></div>
+    <p className="ask-ai-period">อ้างอิงตัวเลขที่แอปคำนวณไว้ใน{context.periodLabel}</p>
     <div className="ask-ai-examples"><span>ลองถาม</span><button onClick={() => setQuestion("เดือนนี้ฉันใช้เงินกับหมวดไหนมากที่สุด")}>หมวดไหนใช้เยอะสุด</button><button onClick={() => setQuestion("ช่วงนี้เงินของฉันเหลือเป็นอย่างไร")}>เงินเหลือเป็นอย่างไร</button></div>
     <textarea className="ask-ai-input" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="เช่น เดือนนี้มีรายจ่ายอะไรที่ควรระวังบ้าง" />
     {error && <StateCard tone="error" title="ถาม AI ไม่สำเร็จ" detail={error} />}

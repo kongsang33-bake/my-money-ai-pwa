@@ -2,9 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 
 type AskBody = {
   question?: string;
-  entries?: Array<Record<string, unknown>>;
-  wallets?: Array<Record<string, unknown>>;
-  debtors?: Array<Record<string, unknown>>;
+  context?: Record<string, unknown>;
 };
 
 export async function POST(request: Request) {
@@ -17,12 +15,12 @@ export async function POST(request: Request) {
 
   const prompt = [
     "คุณคือผู้ช่วยการเงินส่วนตัว ตอบเป็นภาษาไทยที่เข้าใจง่าย กระชับ และอิงจากข้อมูลที่ให้เท่านั้น",
+    "ข้อมูลสรุปที่ระบุด้านล่างเป็นตัวเลขอ้างอิงที่แอปคำนวณแล้วและต้องใช้ตามนั้นทุกหลัก ห้ามคำนวณทับหรือเปลี่ยนตัวเลขเหล่านี้",
     "ห้ามแต่งตัวเลขหรือธุรกรรมขึ้นมาเอง ถ้าข้อมูลไม่พอให้บอกตรง ๆ และเสนอว่าต้องมีข้อมูลอะไรเพิ่ม",
     "อย่าให้คำแนะนำการลงทุนหรือสินเชื่อแบบฟันธง ให้ใช้ถ้อยคำระมัดระวัง",
     `คำถามของผู้ใช้: ${question}`,
-    `รายการธุรกรรมล่าสุด (อาจมีเฉพาะ 300 รายการ): ${JSON.stringify(body.entries ?? [])}`,
-    `กระเป๋าเงิน: ${JSON.stringify(body.wallets ?? [])}`,
-    `ลูกหนี้และหนี้: ${JSON.stringify(body.debtors ?? [])}`,
+    `ข้อมูลอ้างอิงจากแอป: ${JSON.stringify(body.context ?? {})}`,
+    "เมื่อพูดถึงยอดเงิน ให้ระบุชื่อยอดให้ชัด: cashAvailable คือยอดเงินสด/กระเป๋าเงินหลัก, walletBalance คือยอดรวมทุกกระเป๋า, balance คือรายรับลบรายจ่ายในรอบที่แสดง และ netWorth คือมูลค่าสุทธิรวมลูกหนี้และหนี้.",
   ].join("\n\n");
 
   try {

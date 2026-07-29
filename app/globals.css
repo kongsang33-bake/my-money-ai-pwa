@@ -1322,6 +1322,7 @@ a:focus-visible {
 .csv-preview small { grid-column: 1; color: var(--ink-3); font-size: 10px; }
 .csv-preview strong { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 12px; }
 .ask-ai-examples { display: flex; gap: var(--s-2); overflow-x: auto; margin-bottom: var(--s-3); }
+.ask-ai-period { margin: var(--s-2) 0 var(--s-3); color: var(--ink-3); font-size: 11px; }
 .ask-ai-examples span { flex: 0 0 auto; color: var(--ink-3); font-size: 11px; align-self: center; }
 .ask-ai-examples button { flex: 0 0 auto; padding: 6px 10px; border-radius: var(--r-full); background: var(--surface-2); color: var(--ink-2); font-size: 11px; }
 .ask-ai-input { width: 100%; min-height: 100px; resize: vertical; }
