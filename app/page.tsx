@@ -64,6 +64,7 @@ type Entry = {
 };
 
 type Draft = Omit<Entry, "id"> & { id: string };
+type CsvImportRow = { title: string; amount: number; category: string; transaction_type: TransactionType; occurred_at: string; note: string; debtor_name: string; wallet_id: string | null };
 type Profile = {
   user_id: string;
   nickname: string | null;
@@ -176,6 +177,7 @@ type SlipImage = {
 };
 
 const categories = ["อาหาร", "เดินทาง", "ของใช้", "ที่อยู่อาศัย", "สุขภาพ", "บันเทิง", "รายได้", "บิลประจำ", "อื่น ๆ"];
+const transactionTypes: TransactionType[] = ["income", "personal_expense", "lend", "split_half", "debt_repayment", "debt_payment", "card_charge", "transfer", "gift"];
 
 const transactionTypeLabels: Record<TransactionType, string> = {
   income: "รายรับ",
@@ -444,6 +446,33 @@ function saveBudgets(userId: string, budgets: Record<string, number>) {
     window.localStorage.setItem(budgetStorageKey(userId), JSON.stringify(budgets));
   } catch {
     // localStorage unavailable (private mode, quota) — budgets simply won't persist
+  }
+}
+
+type MoneyGoal = { id: string; name: string; target: number; saved: number; deadline: string };
+
+function goalStorageKey(userId: string) {
+  return `money-ai-goals:v1:${userId}`;
+}
+
+function loadGoals(userId: string): MoneyGoal[] {
+  try {
+    const raw = window.localStorage.getItem(goalStorageKey(userId));
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is MoneyGoal => item && typeof item.id === "string" && typeof item.name === "string" && Number(item.target) > 0)
+      .map((item) => ({ ...item, target: toMoneyAmount(item.target), saved: toMoneyAmount(item.saved), deadline: typeof item.deadline === "string" ? item.deadline : "" }));
+  } catch {
+    return [];
+  }
+}
+
+function saveGoals(userId: string, goals: MoneyGoal[]) {
+  try {
+    window.localStorage.setItem(goalStorageKey(userId), JSON.stringify(goals));
+  } catch {
+    // localStorage unavailable (private mode, quota) — goals simply won't persist
   }
 }
 
@@ -1047,6 +1076,7 @@ export default function Home() {
   const [slipImages, setSlipImages] = useState<SlipImage[]>([]);
   const [entryDate, setEntryDate] = useState(todayDateInput);
   const [addMode, setAddMode] = useState<"ai" | "manual">("ai");
+  const [quickAddPreset, setQuickAddPreset] = useState<QuickShortcut | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [editing, setEditing] = useState<Entry | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -1067,8 +1097,12 @@ export default function Home() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [historyFilters, setHistoryFilters] = useState<HistoryFilters>({ query: "", category: "", type: "all", minAmount: "", maxAmount: "", startDate: "", endDate: "" });
   const [budgets, setBudgets] = useState<Record<string, number>>({});
+  const [goals, setGoals] = useState<MoneyGoal[]>([]);
+  const [goalSheetOpen, setGoalSheetOpen] = useState(false);
   const [budgetSheetOpen, setBudgetSheetOpen] = useState(false);
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
+  const [csvImportOpen, setCsvImportOpen] = useState(false);
+  const [askAiOpen, setAskAiOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [closingToastIds, setClosingToastIds] = useState<number[]>([]);
@@ -1225,6 +1259,7 @@ export default function Home() {
     try {
       await Promise.all([loadEntries(), loadDebtors(), loadWallets(), loadRecurringExpenses()]);
       setBudgets(loadBudgets(userId));
+      setGoals(loadGoals(userId));
     } finally {
       setDataLoading(false);
     }
@@ -1236,6 +1271,7 @@ export default function Home() {
     setWallets([]);
     setRecurringExpenses([]);
     setBudgets({});
+    setGoals([]);
     setDrafts([]);
     setText("");
     setSlipImages([]);
@@ -1299,6 +1335,9 @@ export default function Home() {
     !!recurringSheetMode ||
     budgetSheetOpen ||
     reportSheetOpen ||
+    csvImportOpen ||
+    askAiOpen ||
+    goalSheetOpen ||
     recapOpen ||
     pinSheetOpen ||
     logoutOpen;
@@ -1501,14 +1540,32 @@ export default function Home() {
     }
   }
 
-  function openAddTab() {
+  function openAddTab(mode: "ai" | "manual" = "ai", shortcut?: QuickShortcut) {
     setEntryDate(todayDateInput());
+    setAddMode(mode);
+    setQuickAddPreset(shortcut ?? null);
     setTab("add");
   }
 
   function retrySync() {
     setError("");
     if (user) void loadUserData(user.id);
+  }
+
+  function persistGoals(next: MoneyGoal[]) {
+    setGoals(next);
+    if (user) saveGoals(user.id, next);
+  }
+
+  function createGoal(input: Omit<MoneyGoal, "id">) {
+    persistGoals([{ ...input, id: crypto.randomUUID() }, ...goals]);
+    setGoalSheetOpen(false);
+    notify({ tone: "success", title: "สร้างเป้าหมายแล้ว", detail: input.name });
+  }
+
+  async function removeGoal(goal: MoneyGoal) {
+    const confirmed = await requestConfirm({ title: "ลบเป้าหมายนี้?", detail: goal.name, confirmLabel: "ลบเป้าหมาย", tone: "danger" });
+    if (confirmed) persistGoals(goals.filter((item) => item.id !== goal.id));
   }
 
   function addQuickShortcut(shortcut: { title: string; category: string; transaction_type: TransactionType; amount: number }) {
@@ -1594,6 +1651,14 @@ export default function Home() {
   async function saveEntries(items: Draft[]) {
     if (!supabase || !user || !items.length) return;
 
+    const confirmed = await requestConfirm({
+      title: "ยืนยันการบันทึก",
+      detail: `กำลังจะบันทึก ${items.length} รายการ รวม ${moneySign}${formatMoney(items.reduce((sum, item) => sum + item.amount, 0))}`,
+      confirmLabel: "บันทึกเลย",
+      tone: "default",
+    });
+    if (!confirmed) return;
+
     setBusy(true);
     setError("");
     const normalizedItems = items
@@ -1639,6 +1704,36 @@ export default function Home() {
     }
 
     setBusy(false);
+  }
+
+  async function importEntries(rows: CsvImportRow[]) {
+    if (!supabase || !user || !rows.length) return false;
+    setBusy(true);
+    setError("");
+    const normalized = rows.map((row, index) => normalizeEntry({
+      id: `csv-${Date.now()}-${index}`,
+      title: row.title,
+      category: categories.includes(row.category) ? row.category : "อื่น ๆ",
+      amount: toMoneyAmount(row.amount),
+      transaction_type: transactionTypes.includes(row.transaction_type) ? row.transaction_type : "personal_expense",
+      debtor_name: row.debtor_name,
+      occurred_at: fromDateInput(row.occurred_at || todayDateInput()),
+      wallet_id: wallets.some((wallet) => wallet.id === row.wallet_id) ? row.wallet_id : defaultWalletId(wallets),
+      note: row.note,
+      source_text: "CSV import",
+    }, false));
+    const { data, error: insertError } = await supabase.from("transactions").insert(normalized.map((item) => ({
+      user_id: user.id, title: item.title.trim(), category: item.category, amount: item.amount, kind: item.type,
+      transaction_type: item.transaction_type, debtor_name: item.debtor_name, wallet_impact: item.wallet_impact,
+      debt_impact: item.debt_impact, user_share: item.user_share, partner_share: item.partner_share,
+      occurred_at: item.occurred_at, source_text: item.source_text, wallet_id: item.wallet_id, note: item.note,
+    }))).select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id");
+    if (insertError) { setError(insertError.message); setBusy(false); return false; }
+    setEntries((current) => [...(data ?? []).map(mapTransactionRow), ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
+    setBusy(false);
+    setCsvImportOpen(false);
+    notify({ tone: "success", title: "นำเข้า CSV แล้ว", detail: `${normalized.length} รายการ` });
+    return true;
   }
 
   async function createMissingDebtors(items: Entry[]) {
@@ -2395,7 +2490,10 @@ export default function Home() {
   const menuDismiss = useDismiss(menuOpen, () => setMenuOpen(false));
   const profileSheetDismiss = useDismiss(profileSheetOpen, () => setProfileSheetOpen(false));
   const budgetSheetDismiss = useDismiss(budgetSheetOpen, () => setBudgetSheetOpen(false));
+  const goalSheetDismiss = useDismiss(goalSheetOpen, () => setGoalSheetOpen(false));
   const reportSheetDismiss = useDismiss(reportSheetOpen, () => setReportSheetOpen(false));
+  const csvImportDismiss = useDismiss(csvImportOpen, () => setCsvImportOpen(false));
+  const askAiDismiss = useDismiss(askAiOpen, () => setAskAiOpen(false));
   const recapDismiss = useDismiss(recapOpen, () => setRecapOpen(false));
   const pinSheetDismiss = useDismiss(pinSheetOpen, () => { setPinSheetOpen(false); setPinError(""); });
   const logoutDismiss = useDismiss<[boolean]>(logoutOpen, (confirmed) => { setLogoutOpen(false); if (confirmed) void supabase?.auth.signOut(); });
@@ -2475,6 +2573,8 @@ export default function Home() {
                   receivableTotal={receivableTotal}
                   payableTotal={payableTotal}
                 />
+                <QuickAddStrip shortcuts={quickShortcuts.slice(0, 4)} onSelect={(shortcut) => openAddTab("manual", shortcut)} onMore={() => openAddTab()} />
+                <GoalCard goals={goals} onAdd={() => setGoalSheetOpen(true)} onDelete={removeGoal} />
                 {(dueSoonRecurring.length > 0 || budgetGlance.totalBudget > 0) && (
                   <div className="home-focus-grid">
                     {dueSoonRecurring.length > 0 && <DueSoonCard items={dueSoonRecurring} onManage={() => setTab("recurring")} />}
@@ -2490,7 +2590,7 @@ export default function Home() {
               <FirstRunHomeState
                 onCreateWallet={() => { setEditingWallet(null); setWalletSheetMode("create"); }}
                 onSetBudget={() => setBudgetSheetOpen(true)}
-                onAddEntry={openAddTab}
+                onAddEntry={() => openAddTab()}
               />
             )}
 
@@ -2642,10 +2742,12 @@ export default function Home() {
 
             {addMode === "manual" && (
               <ManualEntryForm
+                key={`${quickAddPreset?.title ?? "manual"}|${quickAddPreset?.amount ?? 0}`}
                 wallets={wallets}
                 busy={busy}
                 error={error}
                 initialDate={entryDate}
+                initialPreset={quickAddPreset}
                 onSave={(drafts) => saveEntries(drafts)}
               />
             )}
@@ -2775,6 +2877,8 @@ export default function Home() {
             onOpenRecurring={() => { menuDismiss.requestClose(); setTab("recurring"); }}
             onOpenBudgets={() => { menuDismiss.requestClose(); setBudgetSheetOpen(true); }}
             onOpenReport={() => { menuDismiss.requestClose(); setReportSheetOpen(true); }}
+            onOpenImport={() => { menuDismiss.requestClose(); setCsvImportOpen(true); }}
+            onOpenAsk={() => { menuDismiss.requestClose(); setAskAiOpen(true); }}
             onOpenPin={() => { menuDismiss.requestClose(); setPinSheetOpen(true); }}
             theme={theme}
             onSetTheme={setTheme}
@@ -2791,6 +2895,9 @@ export default function Home() {
         {budgetSheetDismiss.mounted && (
           <BudgetSheet budgets={budgets} onClose={budgetSheetDismiss.requestClose} onSave={updateBudgets} closing={budgetSheetDismiss.closing} />
         )}
+        {goalSheetDismiss.mounted && (
+          <GoalEditSheet onClose={goalSheetDismiss.requestClose} onCreate={createGoal} closing={goalSheetDismiss.closing} />
+        )}
         {reportSheetDismiss.mounted && (
           <ReportExportSheet
             entries={entries}
@@ -2802,6 +2909,12 @@ export default function Home() {
             onClose={reportSheetDismiss.requestClose}
             closing={reportSheetDismiss.closing}
           />
+        )}
+        {csvImportDismiss.mounted && (
+          <CsvImportSheet busy={busy} error={error} onClose={csvImportDismiss.requestClose} onImport={importEntries} closing={csvImportDismiss.closing} />
+        )}
+        {askAiDismiss.mounted && (
+          <AskFinanceSheet entries={entries} wallets={wallets} debtors={debtors} onClose={askAiDismiss.requestClose} closing={askAiDismiss.closing} />
         )}
         {recapDismiss.mounted && (
           <RecapSheet
@@ -2857,7 +2970,7 @@ export default function Home() {
               </span>
               <span className="nav-label">หน้าหลัก</span>
             </button>
-            <button className="add-button" onClick={openAddTab} aria-label="เพิ่มรายการด้วย AI">
+            <button className="add-button" onClick={() => openAddTab()} aria-label="เพิ่มรายการด้วย AI">
               <span className="nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24">
                   <path d="M12 5v14M5 12h14" />
@@ -3608,6 +3721,60 @@ function BudgetGlanceCard({
         </div>
       )}
     </section>
+  );
+}
+
+function GoalCard({ goals, onAdd, onDelete }: { goals: MoneyGoal[]; onAdd: () => void; onDelete: (goal: MoneyGoal) => void }) {
+  if (!goals.length) {
+    return (
+      <section className="goal-card goal-empty">
+        <div>
+          <p className="eyebrow">เป้าหมายการเงิน</p>
+          <h2>เก็บเงินให้มีแรงส่ง</h2>
+          <p>ตั้งเป้าหมายแรก แล้วติดตามความคืบหน้าได้จากหน้าแรก</p>
+        </div>
+        <button className="text-button" onClick={onAdd}>สร้างเป้าหมาย</button>
+      </section>
+    );
+  }
+
+  return (
+    <section className="goal-card">
+      <div className="goal-card-head"><div><p className="eyebrow">เป้าหมายการเงิน</p><h2>{goals.length} เป้าหมาย</h2></div><button className="text-button" onClick={onAdd}>เพิ่มเป้าหมาย</button></div>
+      <div className="goal-list">
+        {goals.slice(0, 3).map((goal) => {
+          const progress = Math.min(100, Math.max(0, (goal.saved / goal.target) * 100));
+          return <div className="goal-item" key={goal.id}>
+            <div className="goal-item-head"><b>{goal.name}</b><button className="icon-button" onClick={() => onDelete(goal)} aria-label={`ลบเป้าหมาย ${goal.name}`}>×</button></div>
+            <div className="goal-card-values"><strong>{moneySign}{formatMoney(goal.saved)}</strong><span>จาก {moneySign}{formatMoney(goal.target)}</span></div>
+            <div className="goal-progress" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${progress}%` }} /></div>
+            <small>{Math.round(progress)}%{goal.deadline ? ` · เป้าหมาย ${new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("th-TH", { day: "numeric", month: "short" })}` : ""}</small>
+          </div>;
+        })}
+      </div>
+    </section>
+  );
+}
+
+function GoalEditSheet({ onClose, onCreate, closing }: { onClose: () => void; onCreate: (input: Omit<MoneyGoal, "id">) => void; closing?: boolean }) {
+  const [name, setName] = useState("");
+  const [targetText, setTargetText] = useState("");
+  const [savedText, setSavedText] = useState("");
+  const [deadline, setDeadline] = useState("");
+  const submit = () => {
+    const target = toMoneyAmount(targetText);
+    if (!name.trim() || target <= 0) return;
+    onCreate({ name: name.trim(), target, saved: toMoneyAmount(savedText), deadline });
+  };
+  return (
+    <SheetFrame onClose={onClose} closing={closing}>
+      <div className="sheet-head"><div><p className="eyebrow">เป้าหมายการเงิน</p><h2>สร้างเป้าหมายใหม่</h2></div><button onClick={onClose}>×</button></div>
+      <label>ชื่อเป้าหมาย<input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น เงินฉุกเฉิน" /></label>
+      <label>ยอดเป้าหมาย<input inputMode="decimal" value={targetText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setTargetText(event.target.value); }} placeholder="50000" /></label>
+      <label>มีเงินเก็บแล้ว<input inputMode="decimal" value={savedText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setSavedText(event.target.value); }} placeholder="0" /></label>
+      <label>วันที่อยากบรรลุ (ถ้ามี)<input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} /></label>
+      <button className="save" onClick={submit} disabled={!name.trim() || toMoneyAmount(targetText) <= 0}>สร้างเป้าหมาย</button>
+    </SheetFrame>
   );
 }
 
@@ -4390,27 +4557,65 @@ function RecentActivityTimeline({ entries, onEdit }: { entries: Entry[]; onEdit:
   );
 }
 
+function QuickAddStrip({
+  shortcuts,
+  onSelect,
+  onMore,
+}: {
+  shortcuts: QuickShortcut[];
+  onSelect: (shortcut: QuickShortcut) => void;
+  onMore: () => void;
+}) {
+  if (!shortcuts.length) return null;
+  return (
+    <section className="quick-add-strip" aria-label="เพิ่มรายการด่วน">
+      <div className="quick-add-head">
+        <div>
+          <p className="eyebrow">บันทึกให้เร็วขึ้น</p>
+          <h2>รายการที่ใช้บ่อย</h2>
+        </div>
+        <button className="text-button" onClick={onMore}>รายการอื่น</button>
+      </div>
+      <div className="quick-add-list">
+        {shortcuts.map((shortcut) => (
+          <button className="quick-add-chip" key={`${shortcut.title}|${shortcut.category}`} onClick={() => onSelect(shortcut)}>
+            <span className="cat-dot" style={{ background: categoryTint(shortcut.category, 13) }}>
+              <CategoryIcon category={shortcut.category} size={15} />
+            </span>
+            <span>
+              <b>{shortcut.title}</b>
+              <small>{moneySign}{formatMoney(shortcut.amount)}</small>
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ManualEntryForm({
   wallets,
   busy,
   error,
   initialDate,
+  initialPreset,
   onSave,
 }: {
   wallets: Wallet[];
   busy: boolean;
   error: string;
   initialDate: string;
+  initialPreset?: QuickShortcut | null;
   onSave: (drafts: Draft[]) => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() =>
     normalizeEntry(
       {
         id: `manual-${Date.now()}`,
-        title: "",
-        category: categories[0],
-        amount: 0,
-        transaction_type: "personal_expense",
+        title: initialPreset?.title ?? "",
+        category: initialPreset?.category ?? categories[0],
+        amount: initialPreset?.amount ?? 0,
+        transaction_type: initialPreset?.transaction_type ?? "personal_expense",
         debtor_name: "",
         occurred_at: withDateKeepingTime(initialDate, new Date().toISOString()),
         wallet_id: defaultWalletId(wallets),
@@ -5162,6 +5367,93 @@ function BudgetSheet({
   );
 }
 
+function parseCsvLine(line: string) {
+  const values: string[] = [];
+  let value = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (char === '"' && line[index + 1] === '"') { value += '"'; index += 1; continue; }
+    if (char === '"') { quoted = !quoted; continue; }
+    if (char === "," && !quoted) { values.push(value.trim()); value = ""; continue; }
+    value += char;
+  }
+  values.push(value.trim());
+  return values;
+}
+
+function normalizeImportedDate(value: string) {
+  const text = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const parts = text.split(/[/-]/).map(Number);
+  if (parts.length === 3 && parts[2] > 1900) return `${parts[2]}-${String(parts[1]).padStart(2, "0")}-${String(parts[0]).padStart(2, "0")}`;
+  return todayDateInput();
+}
+
+function CsvImportSheet({ busy, error, onClose, onImport, closing }: { busy: boolean; error: string; onClose: () => void; onImport: (rows: CsvImportRow[]) => Promise<boolean>; closing?: boolean }) {
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [rawRows, setRawRows] = useState<string[][]>([]);
+  const [mapping, setMapping] = useState<Record<keyof CsvImportRow, string>>({ title: "", amount: "", category: "", transaction_type: "", occurred_at: "", note: "", debtor_name: "", wallet_id: "" });
+  const fields: { key: keyof CsvImportRow; label: string; required?: boolean }[] = [
+    { key: "title", label: "ชื่อรายการ", required: true }, { key: "amount", label: "จำนวนเงิน", required: true }, { key: "occurred_at", label: "วันที่", required: true },
+    { key: "category", label: "หมวดหมู่" }, { key: "transaction_type", label: "ประเภทรายการ" }, { key: "note", label: "หมายเหตุ" }, { key: "debtor_name", label: "ชื่อผู้เกี่ยวข้อง" }, { key: "wallet_id", label: "Wallet ID" },
+  ];
+  const chooseFile = async (file: File | undefined) => {
+    if (!file) return;
+    const lines = (await file.text()).split(/\r?\n/).filter((line) => line.trim());
+    if (lines.length < 2) return;
+    const nextHeaders = parseCsvLine(lines[0]);
+    setHeaders(nextHeaders);
+    setRawRows(lines.slice(1).map(parseCsvLine));
+    const guess = (names: string[]) => nextHeaders.find((header) => names.some((name) => header.toLowerCase().includes(name))) ?? "";
+    setMapping({ title: guess(["title", "name", "รายการ", "ชื่อ"]), amount: guess(["amount", "เงิน", "ยอด"]), occurred_at: guess(["date", "วันที่", "occurred"]), category: guess(["category", "หมวด"]), transaction_type: guess(["type", "ประเภท"]), note: guess(["note", "หมายเหตุ"]), debtor_name: guess(["debtor", "ลูกหนี้", "ผู้เกี่ยวข้อง"]), wallet_id: guess(["wallet"]), });
+  };
+  const rows = useMemo(() => rawRows.map((cells) => {
+    const value = (key: keyof CsvImportRow) => { const header = mapping[key]; return header ? cells[headers.indexOf(header)] ?? "" : ""; };
+    return { title: value("title"), amount: toMoneyAmount(value("amount").replace(/[,฿]/g, "")), category: value("category") || "อื่น ๆ", transaction_type: (value("transaction_type") as TransactionType) || "personal_expense", occurred_at: normalizeImportedDate(value("occurred_at")), note: value("note"), debtor_name: value("debtor_name"), wallet_id: value("wallet_id") || null } satisfies CsvImportRow;
+  }), [rawRows, mapping, headers]);
+  const valid = rows.filter((row) => row.title.trim() && row.amount > 0 && row.occurred_at);
+  return (
+    <div className={`sheet-backdrop ${closing ? "closing" : ""}`}><section className={`edit-sheet report-sheet csv-import-sheet ${closing ? "closing" : ""}`}>
+      <div className="sheet-head"><div><p className="eyebrow">นำเข้าข้อมูล</p><h2>นำเข้า CSV</h2></div><button onClick={onClose}>×</button></div>
+      <label className="csv-file-picker">เลือกไฟล์ CSV<input type="file" accept=".csv,text/csv" onChange={(event) => { void chooseFile(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>
+      {!!headers.length && <>
+        <p className="budget-hint">จับคู่คอลัมน์ก่อนนำเข้า ระบบจะไม่บันทึกจนกว่าจะกดยืนยัน</p>
+        <div className="csv-mapping-grid">{fields.map((field) => <label key={field.key}>{field.label}{field.required && " *"}<select value={mapping[field.key]} onChange={(event) => setMapping((current) => ({ ...current, [field.key]: event.target.value }))}><option value="">ไม่ใช้คอลัมน์นี้</option>{headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>)}</div>
+        <div className="csv-preview"><b>ตัวอย่าง {Math.min(valid.length, 5)} จาก {valid.length} รายการ</b>{valid.slice(0, 5).map((row, index) => <div key={`${row.title}-${index}`}><span>{row.title}</span><small>{row.occurred_at} · {row.category}</small><strong>{moneySign}{formatMoney(row.amount)}</strong></div>)}</div>
+        {error && <StateCard tone="error" title="นำเข้าไม่สำเร็จ" detail={error} />}
+        <button className="save" onClick={() => { void onImport(valid); }} disabled={busy || valid.length === 0}>นำเข้า {valid.length} รายการ</button>
+      </>}
+    </section></div>
+  );
+}
+
+function AskFinanceSheet({ entries, wallets, debtors, onClose, closing }: { entries: Entry[]; wallets: Wallet[]; debtors: Debtor[]; onClose: () => void; closing?: boolean }) {
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const ask = async () => {
+    if (!question.trim()) return;
+    setBusy(true); setError(""); setAnswer("");
+    try {
+      const response = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: question.trim(), entries: entries.slice(0, 300).map(({ id, title, category, amount, transaction_type, wallet_impact, debtor_name, occurred_at }) => ({ id, title, category, amount, transaction_type, wallet_impact, debtor_name, occurred_at })), wallets: wallets.map(({ name, tag, balance }) => ({ name, tag, balance })), debtors: debtors.map(({ name, kind, opening_balance }) => ({ name, kind, opening_balance })) }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "AI ตอบคำถามไม่สำเร็จ");
+      setAnswer(data.answer || "ยังไม่มีคำตอบ");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "AI ตอบคำถามไม่สำเร็จ"); }
+    setBusy(false);
+  };
+  return <div className={`sheet-backdrop ${closing ? "closing" : ""}`}><section className={`edit-sheet ask-ai-sheet ${closing ? "closing" : ""}`}>
+    <div className="sheet-head"><div><p className="eyebrow">ผู้ช่วยการเงิน</p><h2>ถาม AI เรื่องเงิน</h2></div><button onClick={onClose}>×</button></div>
+    <div className="ask-ai-examples"><span>ลองถาม</span><button onClick={() => setQuestion("เดือนนี้ฉันใช้เงินกับหมวดไหนมากที่สุด")}>หมวดไหนใช้เยอะสุด</button><button onClick={() => setQuestion("ช่วงนี้เงินของฉันเหลือเป็นอย่างไร")}>เงินเหลือเป็นอย่างไร</button></div>
+    <textarea className="ask-ai-input" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="เช่น เดือนนี้มีรายจ่ายอะไรที่ควรระวังบ้าง" />
+    {error && <StateCard tone="error" title="ถาม AI ไม่สำเร็จ" detail={error} />}
+    {answer && <div className="ask-ai-answer"><span>AI</span><p>{answer}</p></div>}
+    <button className="save" onClick={() => { void ask(); }} disabled={busy || !question.trim()}>{busy ? "กำลังวิเคราะห์..." : "ถาม AI"}</button>
+  </section></div>;
+}
+
 function ReportExportSheet({
   entries,
   wallets,
@@ -5307,6 +5599,8 @@ function SideMenu({
   onOpenRecurring,
   onOpenBudgets,
   onOpenReport,
+  onOpenImport,
+  onOpenAsk,
   onOpenPin,
   theme,
   onSetTheme,
@@ -5326,6 +5620,8 @@ function SideMenu({
   onOpenRecurring: () => void;
   onOpenBudgets: () => void;
   onOpenReport: () => void;
+  onOpenImport: () => void;
+  onOpenAsk: () => void;
   onOpenPin: () => void;
   theme: Theme;
   onSetTheme: (theme: Theme) => void;
@@ -5390,6 +5686,14 @@ function SideMenu({
             <button onClick={onOpenReport}>
               <Download size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>ส่งออกรีพอร์ท</span>
+            </button>
+            <button onClick={onOpenImport}>
+              <Receipt size={16} strokeWidth={2.25} aria-hidden="true" />
+              <span>นำเข้า CSV</span>
+            </button>
+            <button onClick={onOpenAsk}>
+              <Lightbulb size={16} strokeWidth={2.25} aria-hidden="true" />
+              <span>ถาม AI เรื่องเงิน</span>
             </button>
             <button onClick={onOpenProfile}>
               <UserCog size={16} strokeWidth={2.25} aria-hidden="true" />
@@ -5677,6 +5981,14 @@ function RecurringExpensesView({
   onDelete: (item: RecurringExpense) => void;
 }) {
   const total = items.reduce((sum, item) => sum + item.amount, 0);
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const upcoming = items.map((item) => {
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    let date = new Date(today.getFullYear(), today.getMonth(), Math.min(item.billing_day, daysInMonth));
+    if (date < startOfToday) date = new Date(today.getFullYear(), today.getMonth() + 1, Math.min(item.billing_day, new Date(today.getFullYear(), today.getMonth() + 2, 0).getDate()));
+    return { item, date, days: Math.round((date.getTime() - startOfToday.getTime()) / 86400000) };
+  }).sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 4);
 
   return (
     <div className="view debtor-view">
@@ -5692,6 +6004,20 @@ function RecurringExpensesView({
         <span>ยอดรวมต่อเดือน</span>
         <strong><CountUpMoney value={total} /></strong>
       </section>
+      {!!upcoming.length && (
+        <section className="recurring-timeline" aria-label="กำหนดตัดเงินถัดไป">
+          <div className="section-title-row"><h3>กำหนดตัดเงินถัดไป</h3><small>{upcoming.length} รายการ</small></div>
+          <div className="recurring-timeline-list">
+            {upcoming.map(({ item, date, days }) => (
+              <button key={item.id} className="recurring-timeline-row" onClick={() => onEdit(item)}>
+                <span className="recurring-date"><b>{date.getDate()}</b><small>{date.toLocaleDateString("th-TH", { month: "short" })}</small></span>
+                <span><b>{item.name}</b><small>{days === 0 ? "วันนี้" : `อีก ${days} วัน`}</small></span>
+                <strong>{moneySign}{formatMoney(item.amount)}</strong>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
       <div className="debtor-page-list">
         {items.map((item) => (
           <article className="debtor-page-item" key={item.id}>
