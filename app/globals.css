@@ -3839,18 +3839,18 @@ a:focus-visible {
   }
 
   .phone {
-    width: min(1100px, calc(100vw - 64px));
+    width: min(1180px, calc(100vw - 80px));
     height: calc(100vh - 64px);
     min-height: calc(100vh - 64px);
     border-radius: var(--r-xl);
-    padding-bottom: var(--s-6);
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
     overflow-x: hidden;
     overflow-y: auto;
   }
 
   .topbar {
     top: var(--s-3);
-    margin: var(--s-3) var(--s-7) var(--s-4) calc(var(--s-7) + 80px);
+    margin: var(--s-3) var(--s-7) var(--s-4);
     padding: var(--s-2) var(--s-3);
   }
 
@@ -3859,7 +3859,7 @@ a:focus-visible {
   }
 
   .view {
-    padding: 0 var(--s-7) var(--s-7) calc(var(--s-7) + 88px);
+    padding: 0 var(--s-7) calc(var(--s-8) + 80px);
   }
 
   .phone > .view:not(.add-view):not(.history-view):not(.debtor-view) {
@@ -3868,8 +3868,7 @@ a:focus-visible {
 
   .phone.tab-home .view {
     display: grid;
-    grid-template-columns: minmax(360px, 1fr) minmax(320px, 0.85fr);
-    grid-auto-flow: dense;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--s-4);
     align-items: start;
   }
@@ -3879,12 +3878,12 @@ a:focus-visible {
   .phone.tab-home .wallet-grid:not(.single-wallet),
   .phone.tab-home .first-run-card,
   .phone.tab-home .error-actions,
-  .phone.tab-home .state-card {
-    grid-column: 1;
+  .phone.tab-home .state-card,
+  .phone.tab-home .activity-timeline {
+    grid-column: 1 / -1;
   }
 
   .phone.tab-home .home-focus-grid {
-    grid-column: 2;
     grid-template-columns: 1fr;
   }
 
@@ -3892,25 +3891,26 @@ a:focus-visible {
   .phone.tab-home .goal-card,
   .phone.tab-home .cashflow-trend-card,
   .phone.tab-home .spending-personality-card {
-    grid-column: 2;
-  }
-
-  .phone.tab-home .activity-timeline {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
 
   .history-view {
     display: grid;
-    grid-template-columns: minmax(360px, 0.9fr) minmax(400px, 1.1fr);
+    grid-template-columns: minmax(0, 0.92fr) minmax(380px, 1.08fr);
     gap: var(--s-6);
     align-items: start;
   }
 
-  /* Spans every analytics row so nothing auto-places into column 2.
-     6 = MonthSummary, filters, trend, income, heatmap, day insight. */
+  .history-view > :not(.add-title):not(.entry-list) {
+    grid-column: 1;
+  }
+
   .history-view > .entry-list {
-    grid-row: 2 / span 6;
     grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+    position: sticky;
+    top: 88px;
     max-height: min(720px, calc(100vh - 200px));
     overflow: auto;
   }
@@ -3944,50 +3944,38 @@ a:focus-visible {
     padding: var(--s-6);
   }
 
-  .side-menu-backdrop {
-    position: absolute;
-    inset: 0;
-    border-radius: var(--r-xl);
-    overflow: hidden;
-  }
-
   .side-menu {
-    width: min(320px, 32%);
+    width: min(360px, calc(100vw - 48px));
   }
 
   .bottom-nav {
-    left: var(--s-7);
+    position: fixed;
+    left: 50%;
     right: auto;
-    top: 112px;
-    bottom: auto;
-    width: 64px;
-    height: auto;
-    padding: var(--s-2);
-    border-radius: var(--r-lg);
-    grid-template-columns: 1fr;
-    grid-auto-rows: 62px;
-    gap: var(--s-2);
-    transform: none;
+    top: auto;
+    bottom: var(--s-7);
+    width: min(520px, calc(100vw - 128px));
+    height: 68px;
+    padding: 0;
+    border-radius: var(--r-xl);
+    grid-template-columns: 1fr 80px 1fr;
+    transform: translateX(-50%);
   }
 
   .bottom-nav button {
-    min-height: 58px;
-    border-radius: var(--r-md);
-  }
-
-  .bottom-nav button.active {
-    background: var(--surface-2);
+    min-height: 0;
+    border-radius: 0;
   }
 
   .bottom-nav .add-button {
-    width: 48px;
-    height: 48px;
-    transform: none;
+    width: 56px;
+    height: 56px;
     justify-self: center;
+    transform: translateY(-14px);
   }
 
   .bottom-nav .add-button:active {
-    transform: scale(0.94);
+    transform: translateY(-10px) scale(0.94);
   }
 
   .toast-host {
@@ -4011,6 +3999,7 @@ a:focus-visible {
 
   .history-view > .entry-list {
     grid-row: auto;
+    position: static;
     max-height: none;
   }
 }
