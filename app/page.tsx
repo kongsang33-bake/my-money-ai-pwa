@@ -7,11 +7,14 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import {
   Banknote,
+  Bot,
   Car,
+  Cloud,
   CreditCard,
   Delete,
   Download,
   Gift,
+  Gamepad2,
   GraduationCap,
   HeartPulse,
   Home as HomeIcon,
@@ -20,6 +23,7 @@ import {
   Moon,
   MoreHorizontal,
   Music,
+  MonitorPlay,
   PiggyBank,
   Plane,
   Receipt,
@@ -30,6 +34,7 @@ import {
   Sun,
   TrendingDown,
   TrendingUp,
+  Tv,
   UserCog,
   Users,
   Utensils,
@@ -5079,6 +5084,31 @@ const walletIconOptions: { key: string; label: string; Icon: LucideIcon }[] = [
 ];
 const walletIconMap: Record<string, LucideIcon> = Object.fromEntries(walletIconOptions.map((option) => [option.key, option.Icon]));
 
+const recurringIconOptions: { key: string; label: string; Icon: LucideIcon }[] = [
+  { key: "tv", label: "สตรีมมิง", Icon: Tv },
+  { key: "monitor-play", label: "วิดีโอ", Icon: MonitorPlay },
+  { key: "music", label: "เพลง", Icon: Music },
+  { key: "bot", label: "AI", Icon: Bot },
+  { key: "cloud", label: "คลาวด์", Icon: Cloud },
+  { key: "gamepad", label: "เกม", Icon: Gamepad2 },
+  { key: "receipt", label: "บริการรายเดือน", Icon: Receipt },
+  { key: "credit-card", label: "การชำระเงิน", Icon: CreditCard },
+];
+const recurringIconMap: Record<string, LucideIcon> = Object.fromEntries(recurringIconOptions.map((option) => [option.key, option.Icon]));
+const recurringServiceIconKeywords: { terms: string[]; key: string }[] = [
+  { terms: ["netflix", "disney", "hbo", "prime video", "streaming"], key: "tv" },
+  { terms: ["youtube", "video", "tiktok"], key: "monitor-play" },
+  { terms: ["spotify", "apple music", "youtube music", "music"], key: "music" },
+  { terms: ["claude", "chatgpt", "openai", "gemini", "ai"], key: "bot" },
+  { terms: ["icloud", "google one", "dropbox", "onedrive", "cloud"], key: "cloud" },
+  { terms: ["playstation", "xbox", "nintendo", "game pass", "gaming"], key: "gamepad" },
+];
+
+function inferredRecurringIcon(name: string) {
+  const normalizedName = name.trim().toLowerCase();
+  return recurringServiceIconKeywords.find(({ terms }) => terms.some((term) => normalizedName.includes(term)))?.key ?? "receipt";
+}
+
 function WalletAvatarGlyph({ iconKey, fallbackName, size = 18 }: { iconKey: string | null; fallbackName: string; size?: number }) {
   const Icon = (iconKey && walletIconMap[iconKey]) || null;
   if (!Icon) return <>{nameInitial(fallbackName)}</>;
@@ -5094,18 +5124,23 @@ function IconColorPicker({
   value,
   onChange,
   fallbackName,
+  iconOptions = walletIconOptions,
+  renderGlyph = WalletAvatarGlyph,
 }: {
   value: { icon: string | null; color: string | null };
   onChange: (next: { icon: string | null; color: string | null }) => void;
   fallbackName: string;
+  iconOptions?: { key: string; label: string; Icon: LucideIcon }[];
+  renderGlyph?: typeof WalletAvatarGlyph;
 }) {
   const previewColor = value.color ?? nameColor(fallbackName);
+  const Glyph = renderGlyph;
 
   return (
     <div className="icon-color-picker">
       <div className="icon-color-picker-preview">
         <span className="debtor-avatar" style={{ background: previewColor }}>
-          <WalletAvatarGlyph iconKey={value.icon} fallbackName={fallbackName} size={20} />
+          <Glyph iconKey={value.icon} fallbackName={fallbackName} size={20} />
         </span>
         {(value.icon || value.color) && (
           <button type="button" className="icon-color-picker-reset" onClick={() => onChange({ icon: null, color: null })}>
@@ -5114,7 +5149,7 @@ function IconColorPicker({
         )}
       </div>
       <div className="icon-color-picker-glyphs" role="group" aria-label="เลือกไอคอน">
-        {walletIconOptions.map(({ key, label, Icon }) => (
+        {iconOptions.map(({ key, label, Icon }) => (
           <button type="button" key={key} className={value.icon === key ? "active" : ""} onClick={() => onChange({ ...value, icon: key })} aria-label={label} title={label}>
             <Icon size={18} strokeWidth={2.25} aria-hidden="true" />
           </button>
@@ -5409,6 +5444,11 @@ function parseCsvLine(line: string) {
   }
   values.push(value.trim());
   return values;
+}
+
+function RecurringAvatarGlyph({ iconKey, fallbackName, size = 18 }: { iconKey: string | null; fallbackName: string; size?: number }) {
+  const Icon = (iconKey && (recurringIconMap[iconKey] || walletIconMap[iconKey])) || recurringIconMap[inferredRecurringIcon(fallbackName)];
+  return <Icon size={size} strokeWidth={2.25} aria-hidden="true" />;
 }
 
 function normalizeImportedDate(value: string) {
@@ -6041,7 +6081,7 @@ function RecurringExpensesView({
             {upcoming.map(({ item, date, days }) => (
               <button key={item.id} className="recurring-timeline-row" onClick={() => onEdit(item)}>
                 <span className="recurring-date"><b>{date.getDate()}</b><small>{date.toLocaleDateString("th-TH", { month: "short" })}</small></span>
-                <span><b>{item.name}</b><small>{days === 0 ? "วันนี้" : `อีก ${days} วัน`}</small></span>
+                <span className="recurring-service"><i style={{ background: item.icon_color ?? nameColor(item.name) }}><RecurringAvatarGlyph iconKey={item.icon} fallbackName={item.name} size={15} /></i><span><b>{item.name}</b><small>{days === 0 ? "วันนี้" : `อีก ${days} วัน`}</small></span></span>
                 <strong>{moneySign}{formatMoney(item.amount)}</strong>
               </button>
             ))}
@@ -6054,7 +6094,7 @@ function RecurringExpensesView({
             <i className="card-accent" style={{ background: item.icon_color ?? nameColor(item.name) }} />
             <button className="debtor-main-button" onClick={() => onEdit(item)}>
               <span className="debtor-avatar" style={{ background: item.icon_color ?? nameColor(item.name) }}>
-                <WalletAvatarGlyph iconKey={item.icon} fallbackName={item.name} />
+                <RecurringAvatarGlyph iconKey={item.icon} fallbackName={item.name} />
               </span>
               <div>
                 <span>{item.name}</span>
@@ -6123,7 +6163,7 @@ function RecurringExpenseEditSheet({
         </div>
         <button onClick={onClose}>x</button>
       </div>
-      <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
+      <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} iconOptions={recurringIconOptions} renderGlyph={RecurringAvatarGlyph} />
       <label>
         ชื่อรายการ
         <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น Netflix, Claude Pro, YouTube Premium" />

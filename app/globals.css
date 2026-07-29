@@ -1337,9 +1337,11 @@ a:focus-visible {
 .recurring-timeline-row:first-child { padding-top: var(--s-2); }
 .recurring-date { display: grid; place-items: center; padding: 4px 0; border-radius: var(--r-sm); background: var(--surface-2); }
 .recurring-date b { font-size: 15px; line-height: 1; }
-.recurring-date small, .recurring-timeline-row span > small { display: block; color: var(--ink-3); font-size: 10px; }
-.recurring-timeline-row span:nth-child(2) { min-width: 0; }
-.recurring-timeline-row span:nth-child(2) b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.recurring-date small, .recurring-service small { display: block; color: var(--ink-3); font-size: 10px; }
+.recurring-service { display: flex; align-items: center; min-width: 0; gap: var(--s-2); }
+.recurring-service > i { display: grid; flex: 0 0 auto; place-items: center; width: 26px; height: 26px; border-radius: var(--r-sm); color: var(--primary-text); }
+.recurring-service > span { min-width: 0; }
+.recurring-service b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .recurring-timeline-row strong { font-size: 13px; white-space: nowrap; }
 
 .csv-file-picker { display: block; padding: var(--s-4); border: 1px dashed var(--line); border-radius: var(--r-md); text-align: center; font-weight: 700; cursor: pointer; }
