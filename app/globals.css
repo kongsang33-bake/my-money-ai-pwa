@@ -268,7 +268,7 @@ a:focus-visible {
   overflow-x: hidden;
   overflow-y: auto;
   padding-bottom: calc(96px + env(safe-area-inset-bottom));
-  scroll-padding-top: 70px;
+  scroll-padding-top: 82px;
 }
 
 .view {
@@ -278,16 +278,20 @@ a:focus-visible {
 
 .topbar {
   position: sticky;
-  top: 0;
-  z-index: 10;
+  top: max(var(--s-2), env(safe-area-inset-top));
+  z-index: var(--z-nav);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-2);
-  padding: max(var(--s-3), env(safe-area-inset-top)) var(--s-5) var(--s-3);
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: blur(22px) saturate(1.12);
-  border-bottom: 1px solid var(--line-soft);
+  min-height: 52px;
+  margin: max(var(--s-2), env(safe-area-inset-top)) var(--s-3) var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(20px) saturate(1.08);
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
 }
 
 .home-identity {
@@ -297,8 +301,8 @@ a:focus-visible {
 }
 
 .home-profile-icon {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: var(--r-full);
   background: var(--accent-soft);
   color: var(--accent-strong);
@@ -323,55 +327,39 @@ a:focus-visible {
 }
 
 .home-identity h1 {
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 700;
+  line-height: 1.1;
+}
+
+.topbar .eyebrow {
+  font-size: 10px;
+  line-height: 1.1;
 }
 
 .menu-button {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--r-full);
   background: transparent;
-  border: 0;
+  border: 1px solid transparent;
   display: grid;
   place-items: center;
-  gap: 2px;
+  color: var(--ink-2);
+  transition: transform var(--t-press) var(--e-out), background var(--t-2) var(--e-out), color var(--t-2) var(--e-out);
 }
 
-.menu-button span {
-  display: block;
-  width: 14px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--ink-2);
+.menu-button:hover, .menu-button:focus-visible {
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
-/* Two-tone header: Home tab gets a fixed dark panel the hero card overlaps */
+.menu-button:active {
+  transform: scale(0.92);
+}
+
 .phone.tab-home .topbar {
-  background: var(--header-bg);
-  color: var(--header-text);
-  border-radius: 0;
-  padding-bottom: var(--s-4);
   margin-bottom: var(--s-3);
-  border-bottom: 0;
-}
-
-.phone.tab-home .topbar .eyebrow {
-  color: var(--header-muted);
-}
-
-.phone.tab-home .topbar .home-profile-icon {
-  background: rgba(255, 255, 255, 0.12);
-  color: var(--header-text);
-}
-
-.phone.tab-home .topbar .menu-button {
-  background: transparent;
-  border-color: transparent;
-}
-
-.phone.tab-home .topbar .menu-button span {
-  background: var(--header-text);
 }
 
 .add-title {
@@ -2941,33 +2929,18 @@ a:focus-visible {
 
 /* Side menu */
 .side-menu {
-  width: min(80%, 320px);
+  width: min(86%, 344px);
   height: 100%;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
   border-left: 1px solid var(--line);
-  padding: var(--s-5);
+  padding: max(var(--s-5), env(safe-area-inset-top)) var(--s-4) max(var(--s-5), env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
+  backdrop-filter: blur(24px) saturate(1.08);
+  box-shadow: var(--sh-3);
   animation: drawer-in var(--t-3) var(--e-out) both;
-}
-
-.side-menu-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--s-4);
-}
-
-.side-menu-head button {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--r-md);
-  background: var(--surface-2);
-  display: grid;
-  place-items: center;
-  font-size: 18px;
 }
 
 .profile-head {
@@ -2978,6 +2951,25 @@ a:focus-visible {
   border-bottom: 1px solid var(--line-soft);
   margin-bottom: var(--s-4);
 }
+
+.drawer-account {
+  padding: var(--s-2) 0 var(--s-4);
+}
+
+.drawer-close {
+  width: 34px;
+  height: 34px;
+  margin-left: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  display: grid;
+  place-items: center;
+  transition: transform var(--t-press) var(--e-out), background var(--t-2) var(--e-out);
+}
+
+.drawer-close:active { transform: scale(0.92); }
 
 .avatar {
   width: 44px;
@@ -3007,12 +2999,12 @@ a:focus-visible {
 
 .side-menu-list {
   display: grid;
-  gap: var(--s-4);
+  gap: var(--s-5);
 }
 
 .side-menu-section {
   display: grid;
-  gap: 6px;
+  gap: var(--s-1);
 }
 
 .side-menu-section p {
@@ -3027,13 +3019,22 @@ a:focus-visible {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: var(--s-2);
-  padding: 12px 14px;
+  padding: var(--s-3) var(--s-2);
   border-radius: var(--r-md);
-  background: var(--surface-2);
+  background: transparent;
   font-weight: 700;
   font-size: 13px;
   text-align: left;
   min-height: 44px;
+  transition: transform var(--t-press) var(--e-out), background var(--t-2) var(--e-out);
+}
+
+.side-menu-list button:hover {
+  background: var(--surface-2);
+}
+
+.side-menu-list button:active {
+  transform: scale(0.98);
 }
 
 .side-menu-list button svg {
@@ -3052,7 +3053,8 @@ a:focus-visible {
   margin-top: auto;
   display: grid;
   gap: var(--s-3);
-  padding-top: var(--s-4);
+  padding: var(--s-5) 0 var(--s-1);
+  border-top: 1px solid var(--line-soft);
 }
 
 .confirm-dialog {
@@ -3847,11 +3849,12 @@ a:focus-visible {
   }
 
   .topbar {
-    padding: var(--s-4) var(--s-7) var(--s-3) calc(var(--s-7) + 88px);
+    top: var(--s-3);
+    margin: var(--s-3) var(--s-7) var(--s-4) calc(var(--s-7) + 80px);
+    padding: var(--s-2) var(--s-3);
   }
 
   .phone.tab-home .topbar {
-    padding-bottom: var(--s-3);
     margin-bottom: var(--s-3);
   }
 

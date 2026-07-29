@@ -20,6 +20,7 @@ import {
   Home as HomeIcon,
   Lightbulb,
   Lock,
+  Menu,
   Moon,
   MoreHorizontal,
   Music,
@@ -2522,6 +2523,7 @@ export default function Home() {
   const walletSheetDismiss = useDismiss(!!walletSheetMode, () => { setWalletSheetMode(null); setEditingWallet(null); });
   const recurringSheetDismiss = useDismiss(!!recurringSheetMode, () => { setRecurringSheetMode(null); setEditingRecurringExpense(null); });
   const menuDismiss = useDismiss(menuOpen, () => setMenuOpen(false));
+  const menuVisible = menuDismiss.mounted && !menuDismiss.closing;
   const profileSheetDismiss = useDismiss(profileSheetOpen, () => setProfileSheetOpen(false));
   const budgetSheetDismiss = useDismiss(budgetSheetOpen, () => setBudgetSheetOpen(false));
   const goalSheetDismiss = useDismiss(goalSheetOpen, () => setGoalSheetOpen(false));
@@ -2585,10 +2587,8 @@ export default function Home() {
               <h1>{displayName}</h1>
             </div>
           </div>
-          <button className="menu-button" onClick={() => setMenuOpen(true)} title="เมนู">
-            <span />
-            <span />
-            <span />
+          <button className={`menu-button ${menuVisible ? "active" : ""}`} onClick={() => { if (menuVisible) menuDismiss.requestClose(); else setMenuOpen(true); }} title={menuVisible ? "ปิดเมนู" : "เมนู"} aria-label={menuVisible ? "ปิดเมนู" : "เปิดเมนู"} aria-expanded={menuVisible}>
+            {menuVisible ? <X size={18} strokeWidth={2.25} aria-hidden="true" /> : <Menu size={18} strokeWidth={2.25} aria-hidden="true" />}
           </button>
         </header>
 
@@ -5709,15 +5709,7 @@ function SideMenu({
   return (
     <div className={`side-menu-backdrop ${closing ? "closing" : ""}`} onClick={onClose}>
       <aside className={`side-menu ${closing ? "closing" : ""}`} onClick={(event) => event.stopPropagation()}>
-        <div className="side-menu-head">
-          <div>
-            <p className="eyebrow">เมนู</p>
-            <h2>บัญชีของฉัน</h2>
-          </div>
-          <button onClick={onClose}>×</button>
-        </div>
-
-        <div className="profile-head">
+        <div className="profile-head drawer-account">
           <div className={`avatar ${appIconImage ? "has-image" : ""}`}>
             {appIconImage && <NextImage className="profile-image" src={appIconImage} alt="" width={44} height={44} unoptimized />}
             {!appIconImage && appIcon}
@@ -5726,6 +5718,7 @@ function SideMenu({
             <b>{name}</b>
             <small>{user.email}</small>
           </div>
+          <button className="drawer-close" onClick={onClose} aria-label="ปิดเมนู" title="ปิดเมนู"><X size={18} strokeWidth={2.25} aria-hidden="true" /></button>
         </div>
 
         <nav className="side-menu-list">
