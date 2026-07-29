@@ -192,6 +192,7 @@ type SlipImage = {
 };
 
 const categories = ["อาหาร", "เดินทาง", "ของใช้", "ที่อยู่อาศัย", "สุขภาพ", "บันเทิง", "รายได้", "บิลประจำ", "อื่น ๆ"];
+const historyFiltersEnabled = false;
 const transactionTypes: TransactionType[] = ["income", "personal_expense", "lend", "split_half", "debt_repayment", "debt_payment", "card_charge", "transfer", "gift"];
 
 const transactionTypeLabels: Record<TransactionType, string> = {
@@ -589,6 +590,11 @@ function cycleBounds(selectedMonth: string, startDay: number) {
   return { start, end };
 }
 
+function currentCycleMonthKey(startDay: number, now = new Date()) {
+  const safeStartDay = Math.min(28, Math.max(1, startDay || 1));
+  return monthKey(new Date(now.getFullYear(), now.getMonth() - (now.getDate() < safeStartDay ? 1 : 0), 1));
+}
+
 function reportBounds(period: ReportPeriod, selectedMonth: string, selectedYear: number, startDay: number) {
   if (period === "month") return cycleBounds(selectedMonth, startDay);
   const safeYear = Number.isFinite(selectedYear) ? selectedYear : new Date().getFullYear();
@@ -747,9 +753,8 @@ function calculateImpacts(amount: number, transactionType: TransactionType) {
 
 function categorySpendAmount(entry: Entry): number | null {
   if (entry.transaction_type === "transfer") return null;
-  if (entry.transaction_type === "card_charge") return entry.amount;
-  if (entry.wallet_impact < 0) return Math.abs(entry.wallet_impact);
-  return null;
+  if (entry.wallet_impact > 0 && entry.transaction_type !== "card_charge") return null;
+  return entry.user_share > 0 ? entry.user_share : null;
 }
 
 function entryDisplayImpact(entry: Entry): number {
@@ -877,6 +882,17 @@ function filterEntries(entries: Entry[], filters: HistoryFilters) {
 function shiftMonthKey(key: string, delta: number) {
   const [year, month] = key.split("-").map(Number);
   return monthKey(new Date(year, month - 1 + delta, 1));
+}
+
+function defaultDayForCycle(key: string, startDay: number) {
+  const [year, month] = key.split("-").map(Number);
+  const today = new Date();
+  const range = cycleBounds(key, startDay);
+  const day = Math.min(today.getDate(), new Date(year, month, 0).getDate());
+  const preferred = new Date(year, month - 1, day);
+  if (preferred < range.start) return range.start.toDateString();
+  if (preferred >= range.end) return new Date(range.end.getTime() - 1).toDateString();
+  return preferred.toDateString();
 }
 
 function buildMonthlyTrend(entries: Entry[], selectedMonth: string, monthStartDay: number, months = 6) {
@@ -1104,7 +1120,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(monthKey(new Date()));
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState(() => new Date().toDateString());
   const [historyFilters, setHistoryFilters] = useState<HistoryFilters>({ query: "", category: "", type: "all", minAmount: "", maxAmount: "" });
   const [budgets, setBudgets] = useState<Record<string, number>>({});
   const [goals, setGoals] = useState<MoneyGoal[]>([]);
@@ -1123,10 +1139,19 @@ export default function Home() {
   const [pinSheetOpen, setPinSheetOpen] = useState(false);
   const backgroundedAtRef = useRef<number | null>(null);
   const authUserIdRef = useRef<string | null | undefined>(undefined);
+  const cycleMonthSettingRef = useRef<string | null>(null);
   const displayName = profile?.nickname?.trim() || user?.user_metadata?.full_name || user?.user_metadata?.name || "เงินของฉัน";
   const displayIcon = profile?.app_icon?.trim() || user?.email?.[0]?.toUpperCase() || "฿";
   const displayIconImage = profile?.app_icon_image?.trim() || "";
   const monthStartDay = profile?.month_start_day || 1;
+
+  useEffect(() => {
+    const settingKey = profile ? `${profile.user_id}:${monthStartDay}` : null;
+    if (!settingKey || cycleMonthSettingRef.current === settingKey) return;
+    cycleMonthSettingRef.current = settingKey;
+    setSelectedMonth(currentCycleMonthKey(monthStartDay));
+    setSelectedDay(new Date().toDateString());
+  }, [profile, monthStartDay]);
 
   const notify = useCallback((toast: Omit<Toast, "id">) => {
     const id = Date.now() + Math.random();
@@ -1445,6 +1470,11 @@ export default function Home() {
   }, [dueSoonRecurring, user, notify]);
 
   const cycleRange = useMemo(() => cycleBounds(selectedMonth, monthStartDay), [selectedMonth, monthStartDay]);
+  const defaultHistoryDay = useMemo(() => defaultDayForCycle(selectedMonth, monthStartDay), [selectedMonth, monthStartDay]);
+  const selectHistoryMonth = useCallback((value: string) => {
+    setSelectedMonth(value);
+    setSelectedDay(defaultDayForCycle(value, monthStartDay));
+  }, [monthStartDay]);
   const monthlyEntries = useMemo(() => {
     const { start, end } = cycleRange;
     return entries.filter((entry) => {
@@ -2793,7 +2823,7 @@ export default function Home() {
             </div>
             <MonthSummary
               selectedMonth={selectedMonth}
-              setSelectedMonth={(value) => { setSelectedMonth(value); setSelectedDay(null); }}
+              setSelectedMonth={selectHistoryMonth}
               income={monthlyIncome}
               outflow={monthlyOutflow}
               debtChange={monthlyDebtChange}
@@ -2801,16 +2831,17 @@ export default function Home() {
               categories={categorySummary}
               monthStartDay={monthStartDay}
               budgets={budgets}
-              onCategorySelect={(category) => { setHistoryFilters((current) => ({ ...current, category })); setSelectedDay(null); }}
             />
             <MonthlyTrendChart trend={monthlyTrend} />
             <IncomeBreakdown items={incomeSummary} />
-            <HistoryFilterBar
-              filters={historyFilters}
-              onChange={setHistoryFilters}
-              onClear={() => setHistoryFilters({ query: "", category: "", type: "all", minAmount: "", maxAmount: "" })}
-            />
-            <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
+            {historyFiltersEnabled && (
+              <HistoryFilterBar
+                filters={historyFilters}
+                onChange={setHistoryFilters}
+                onClear={() => setHistoryFilters({ query: "", category: "", type: "all", minAmount: "", maxAmount: "" })}
+              />
+            )}
+            <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedMonth={selectedMonth} onChangeMonth={selectHistoryMonth} selectedDay={selectedDay} defaultDay={defaultHistoryDay} onSelectDay={setSelectedDay} />
             {activeDay && <HistoryInsight entries={dayEntries} />}
             <EntryList entries={dayEntries} onEdit={setEditing} onDelete={deleteEntry} emptyAction={{ label: "จดด้วย AI", onClick: openAddTab }} />
           </div>
@@ -3431,14 +3462,20 @@ const CalendarHeatmap = memo(function CalendarHeatmap({
   start,
   end,
   entries,
+  selectedMonth,
+  onChangeMonth,
   selectedDay,
+  defaultDay,
   onSelectDay,
 }: {
   start: Date;
   end: Date;
   entries: Entry[];
-  selectedDay: string | null;
-  onSelectDay: (day: string | null) => void;
+  selectedMonth: string;
+  onChangeMonth: (month: string) => void;
+  selectedDay: string;
+  defaultDay: string;
+  onSelectDay: (day: string) => void;
 }) {
   const dayTotals = useMemo(() => {
     const map = new Map<string, number>();
@@ -3485,7 +3522,11 @@ const CalendarHeatmap = memo(function CalendarHeatmap({
     <section className="heatmap-panel">
       <div className="section-title">
         <h2>ปฏิทินการใช้จ่าย</h2>
-        {selectedDay && <button onClick={() => onSelectDay(null)}>ล้างตัวกรอง</button>}
+        <div className="heatmap-month-controls" aria-label="เลือกรอบเดือนของปฏิทิน">
+          <button type="button" onClick={() => onChangeMonth(shiftMonthKey(selectedMonth, -1))} aria-label="เดือนก่อนหน้า">‹</button>
+          <input type="month" value={selectedMonth} onChange={(event) => { if (event.target.value) onChangeMonth(event.target.value); }} aria-label="เลือกเดือนและปี" />
+          <button type="button" onClick={() => onChangeMonth(shiftMonthKey(selectedMonth, 1))} aria-label="เดือนถัดไป">›</button>
+        </div>
       </div>
       <div className="heatmap-weekdays">
         {weekdayLabels.map((label) => (
@@ -3500,7 +3541,7 @@ const CalendarHeatmap = memo(function CalendarHeatmap({
           <button
             key={day.key}
             className={`heatmap-cell bucket-${bucket(day.amount)}${selectedDay === day.key ? " selected" : ""}`}
-            onClick={() => onSelectDay(selectedDay === day.key ? null : day.key)}
+            onClick={() => onSelectDay(selectedDay === day.key ? defaultDay : day.key)}
             title={`${day.date.toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" })} · ${moneySign}${formatMoney(day.amount)}`}
           >
             {day.date.getDate()}
@@ -4117,7 +4158,6 @@ function MonthSummary({
   categories: categoryItems,
   monthStartDay,
   budgets,
-  onCategorySelect,
 }: {
   selectedMonth: string;
   setSelectedMonth: (value: string) => void;
@@ -4128,7 +4168,6 @@ function MonthSummary({
   categories: { category: string; amount: number }[];
   monthStartDay: number;
   budgets: Record<string, number>;
-  onCategorySelect: (category: string) => void;
 }) {
   return (
     <section className="summary-panel">
@@ -4143,9 +4182,18 @@ function MonthSummary({
         <Metric label="เงินเข้า" value={income} tone="income" />
         <Metric label="เงินออก" value={outflow} tone="expense" />
         <Metric label="สุทธิ" value={balance} tone={balance >= 0 ? "income" : "expense"} />
-        <Metric label="ลูกหนี้เปลี่ยน" value={debtChange} tone={debtChange >= 0 ? "income" : "expense"} />
+        <Metric
+          label={debtChange > 0 ? "ยอดลูกหนี้เพิ่มขึ้น" : debtChange < 0 ? "ยอดลูกหนี้ลดลง" : "ยอดลูกหนี้คงเดิม"}
+          value={debtChange}
+          tone={debtChange > 0 ? "expense" : debtChange < 0 ? "income" : undefined}
+          showPositiveSign
+        />
       </div>
       <div className="category-bars">
+        <div className="category-bars-head">
+          <span>ค่าใช้จ่ายตามหมวด</span>
+          <small>นับเฉพาะส่วนที่คุณจ่ายจริง</small>
+        </div>
         {categoryItems.length ? (
           categoryItems.map((item) => {
             const budget = budgets[item.category];
@@ -4154,7 +4202,7 @@ function MonthSummary({
             const color = overBudget ? "var(--danger)" : categoryColor(item.category);
             const percent = hasBudget ? (item.amount / budget) * 100 : outflow > 0 ? (item.amount / outflow) * 100 : 0;
             return (
-              <button className="category-bar" key={item.category} onClick={() => onCategorySelect(item.category)}>
+              <div className="category-bar" key={item.category}>
                 <div>
                   <span className="cat-dot" style={{ background: categoryTint(item.category, 13) }}><CategoryIcon category={item.category} /></span>
                   <b>{item.category}</b>
@@ -4163,7 +4211,7 @@ function MonthSummary({
                   {!hasBudget && <strong>{moneySign}{formatMoney(item.amount)}</strong>}
                 </div>
                 <i style={{ width: `${Math.max(4, Math.min(100, percent))}%`, background: color }} />
-              </button>
+              </div>
             );
           })
         ) : (
@@ -4396,11 +4444,11 @@ function ErrorActions({ onRetry, onDismiss }: { onRetry: () => void; onDismiss: 
   );
 }
 
-function Metric({ label, value, tone }: { label: string; value: number; tone: "income" | "expense" }) {
+function Metric({ label, value, tone, showPositiveSign = false }: { label: string; value: number; tone?: "income" | "expense"; showPositiveSign?: boolean }) {
   return (
     <div className={`metric ${tone}`}>
       <span>{label}</span>
-      <b>{value < 0 ? "−" : ""}<CountUpMoney value={Math.abs(value)} /></b>
+      <b>{value < 0 ? "−" : showPositiveSign && value > 0 ? "+" : ""}<CountUpMoney value={Math.abs(value)} /></b>
     </div>
   );
 }
@@ -5480,6 +5528,29 @@ function CsvImportSheet({ busy, error, onClose, onImport, closing }: { busy: boo
   );
 }
 
+function cleanAiAnswer(value: string) {
+  const withoutCodeMarkers = value
+    .replace(/```[a-zA-Z]*\s*/g, "")
+    .replace(/```/g, "")
+    .trim();
+  let plainText = withoutCodeMarkers;
+  if (withoutCodeMarkers.startsWith("{") && withoutCodeMarkers.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(withoutCodeMarkers) as Record<string, unknown>;
+      plainText = [parsed.answer, parsed.response, parsed.message, ...Object.values(parsed)]
+        .find((item): item is string => typeof item === "string" && item.trim().length > 0) ?? withoutCodeMarkers;
+    } catch {
+      plainText = withoutCodeMarkers;
+    }
+  }
+  return plainText
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s*/gm, "")
+    .replace(/^\s*[-*]\s+/gm, "– ")
+    .replace(/^\s*\d+[.)]\s+/gm, "")
+    .trim();
+}
+
 function AskFinanceSheet({ context, onClose, closing }: { context: AiFinanceContext; onClose: () => void; closing?: boolean }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
@@ -5492,7 +5563,7 @@ function AskFinanceSheet({ context, onClose, closing }: { context: AiFinanceCont
       const response = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: question.trim(), context }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "AI ตอบคำถามไม่สำเร็จ");
-      setAnswer(data.answer || "ยังไม่มีคำตอบ");
+      setAnswer(cleanAiAnswer(data.answer || "ยังไม่มีคำตอบ"));
     } catch (cause) { setError(cause instanceof Error ? cause.message : "AI ตอบคำถามไม่สำเร็จ"); }
     setBusy(false);
   };
@@ -5789,6 +5860,7 @@ function ProfileEditSheet({
   const [app_icon_image, setAppIconImage] = useState(profile?.app_icon_image ?? "");
   const [month_start_day, setMonthStartDay] = useState(profile?.month_start_day ?? 1);
   const [localError, setLocalError] = useState("");
+  const profileName = nickname.trim() || "ผู้ใช้";
 
   async function chooseProfileImage(files: FileList | null) {
     const file = files?.[0];
@@ -5816,12 +5888,22 @@ function ProfileEditSheet({
         </div>
         <button onClick={onClose}>x</button>
       </div>
+      <section className="profile-editor-preview" aria-label="ตัวอย่างโปรไฟล์">
+        <span className={`profile-editor-avatar ${app_icon_image ? "has-image" : ""}`}>
+          {app_icon_image ? <NextImage className="profile-image" src={app_icon_image} alt="รูปโปรไฟล์ปัจจุบัน" width={72} height={72} unoptimized /> : (app_icon || nameInitial(profileName))}
+        </span>
+        <div>
+          <small>รูปโปรไฟล์ปัจจุบัน</small>
+          <b>{profileName}</b>
+          <span>เปลี่ยนรูปหรือชื่อได้ด้านล่าง</span>
+        </div>
+      </section>
       <label>
         ชื่อเล่น
         <input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="เช่น ก้อง" />
       </label>
       <label>
-        รูปไอคอนจากภายนอก
+        เปลี่ยนรูปโปรไฟล์
         <input type="file" accept="image/*" onChange={(event) => { void chooseProfileImage(event.target.files); event.currentTarget.value = ""; }} />
         <small>รองรับรูปจากมือถือได้ถึง 10MB ระบบจะย่อเป็นไอคอนให้อัตโนมัติ</small>
       </label>

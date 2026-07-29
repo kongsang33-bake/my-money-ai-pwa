@@ -284,7 +284,7 @@ a:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: var(--s-2);
-  min-height: 52px;
+  min-height: 58px;
   margin: max(var(--s-2), env(safe-area-inset-top)) var(--s-3) var(--s-3);
   padding: var(--s-2) var(--s-3);
   background: color-mix(in srgb, var(--surface) 82%, transparent);
@@ -301,8 +301,8 @@ a:focus-visible {
 }
 
 .home-profile-icon {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border-radius: var(--r-full);
   background: var(--accent-soft);
   color: var(--accent-strong);
@@ -326,20 +326,64 @@ a:focus-visible {
   padding: 3px;
 }
 
+.profile-editor-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-5);
+  padding: var(--s-4);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+}
+
+.profile-editor-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--r-full);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.profile-editor-avatar.has-image {
+  padding: 3px;
+  background: var(--surface);
+}
+
+.profile-editor-preview small, .profile-editor-preview b, .profile-editor-preview span {
+  display: block;
+}
+
+.profile-editor-preview small, .profile-editor-preview span {
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.profile-editor-preview b {
+  margin: 2px 0;
+  font-size: 15px;
+}
+
 .home-identity h1 {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.1;
 }
 
 .topbar .eyebrow {
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.1;
 }
 
 .menu-button {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--r-full);
   background: transparent;
   border: 1px solid transparent;
@@ -1350,7 +1394,7 @@ a:focus-visible {
 .ask-ai-input { width: 100%; min-height: 100px; resize: vertical; }
 .ask-ai-answer { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: var(--s-2); margin: var(--s-3) 0; padding: var(--s-3); border-radius: var(--r-md); background: var(--surface-2); }
 .ask-ai-answer > span { display: grid; place-items: center; width: 24px; height: 24px; border-radius: var(--r-full); background: var(--accent); color: var(--primary-text); font-size: 10px; font-weight: 800; }
-.ask-ai-answer p { margin: 2px 0 0; white-space: pre-wrap; font-size: 13px; line-height: 1.6; }
+.ask-ai-answer p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
 
 .quick-chip {
   flex-shrink: 0;
@@ -1730,6 +1774,24 @@ a:focus-visible {
   gap: var(--s-3);
 }
 
+.category-bars-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.category-bars-head span {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.category-bars-head small {
+  color: var(--ink-3);
+  font-size: 10px;
+  text-align: right;
+}
+
 .category-bar > div {
   display: flex;
   align-items: center;
@@ -1792,6 +1854,43 @@ a:focus-visible {
 .heatmap-panel .section-title button {
   font-size: 12px;
   color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.heatmap-month-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+
+.heatmap-panel .heatmap-month-controls button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
+  transition: transform var(--t-press) var(--e-out), background var(--t-2) var(--e-out);
+}
+
+.heatmap-month-controls button:active {
+  transform: scale(0.92);
+}
+
+.heatmap-month-controls input {
+  width: 118px;
+  height: 30px;
+  padding: 0 var(--s-1);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -2531,6 +2630,11 @@ a:focus-visible {
 
 .kebab-menu menu button:last-child {
   color: var(--danger);
+}
+
+.debtor-page-list > .debtor-page-item:last-child .kebab-menu menu {
+  top: auto;
+  bottom: 42px;
 }
 
 /* -------------------------------------------------------------------------
