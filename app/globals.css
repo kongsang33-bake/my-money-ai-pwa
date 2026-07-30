@@ -3462,17 +3462,16 @@ a:focus-visible {
   flex-direction: column;
 }
 
+.splash-screen.closing {
+  animation: fade-out var(--t-3) ease both;
+}
+
 .splash-mark {
-  width: 88px;
-  height: 88px;
+  width: 96px;
+  height: 96px;
   border-radius: var(--r-xl);
-  background: var(--primary);
-  color: var(--primary-text);
-  display: grid;
-  place-items: center;
-  font-size: 36px;
-  font-weight: 700;
-  animation: pop-in var(--t-2) var(--e-spring) both;
+  box-shadow: var(--sh-2);
+  animation: pop-in var(--t-3) var(--e-spring) both;
 }
 
 .splash-wordmark {

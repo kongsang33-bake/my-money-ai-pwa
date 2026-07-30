@@ -1096,6 +1096,9 @@ async function compressSlipImage(file: File): Promise<SlipImage> {
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(!supabase);
+  const [splashStartedAt] = useState(() => Date.now());
+  const [splashClosing, setSplashClosing] = useState(false);
+  const [splashVisible, setSplashVisible] = useState(true);
   const [tab, setTab] = useState<Tab>("home");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -1365,6 +1368,20 @@ export default function Home() {
     });
     return () => data.subscription.unsubscribe();
   }, [applyAuthUser]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const elapsed = Date.now() - splashStartedAt;
+    const remaining = Math.max(0, 2500 - elapsed);
+    const timer = setTimeout(() => setSplashClosing(true), remaining);
+    return () => clearTimeout(timer);
+  }, [ready, splashStartedAt]);
+
+  useEffect(() => {
+    if (!splashClosing) return;
+    const timer = setTimeout(() => setSplashVisible(false), 320);
+    return () => clearTimeout(timer);
+  }, [splashClosing]);
 
   const overlayOpen =
     menuOpen ||
@@ -2578,11 +2595,11 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [savePulse, closeSavePulse]);
 
-  if (!ready) {
+  if (splashVisible) {
     return (
       <main className="shell">
-        <section className="phone splash-screen">
-          <div className="splash-mark" aria-hidden="true">฿</div>
+        <section className={`phone splash-screen${splashClosing ? " closing" : ""}`}>
+          <NextImage className="splash-mark" src="/icons/icon-512.png" alt="" width={96} height={96} priority />
           <p className="splash-wordmark">Monii</p>
         </section>
       </main>
