@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { createGeminiClient, getGeminiApiKey, GEMINI_MODEL, missingGeminiKeyResponse } from "@/lib/gemini";
 
 type AskBody = {
   question?: string;
@@ -6,8 +6,8 @@ type AskBody = {
 };
 
 export async function POST(request: Request) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return Response.json({ error: "ยังไม่ได้ตั้งค่า GEMINI_API_KEY" }, { status: 503 });
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) return missingGeminiKeyResponse();
   const body = (await request.json()) as AskBody;
   const question = body.question?.trim() ?? "";
   if (!question) return Response.json({ error: "กรุณาพิมพ์คำถามก่อน" }, { status: 400 });
@@ -25,8 +25,8 @@ export async function POST(request: Request) {
   ].join("\n\n");
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({ model: "gemini-flash-latest", contents: [{ text: prompt }], config: { temperature: 0.2 } });
+    const ai = createGeminiClient(apiKey);
+    const response = await ai.models.generateContent({ model: GEMINI_MODEL, contents: [{ text: prompt }], config: { temperature: 0.2 } });
     return Response.json({ answer: response.text?.trim() || "ยังไม่มีคำตอบ" });
   } catch (error) {
     console.error("Gemini ask failed", error);

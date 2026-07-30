@@ -39,6 +39,7 @@
   --header-bg: #14181c;
   --header-text: #ffffff;
   --header-muted: rgba(255, 255, 255, 0.64);
+  --overlay-on-primary: rgba(255, 255, 255, 0.14);
 
   /* semantic amounts */
   --income: #1f7a5a;
@@ -809,7 +810,7 @@ a:focus-visible {
   font-weight: 700;
   padding: 4px 10px;
   border-radius: var(--r-full);
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--overlay-on-primary);
 }
 
 .hero-danger .hero-wallet-top em { background: var(--danger); color: #fff; }
@@ -848,7 +849,7 @@ a:focus-visible {
   font-weight: 700;
   padding: 4px 10px;
   border-radius: var(--r-full);
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--overlay-on-primary);
   opacity: 1 !important;
 }
 
@@ -2166,23 +2167,6 @@ a:focus-visible {
   color: var(--ink);
 }
 
-.monthly-trend-head {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--s-3);
-  margin-bottom: var(--s-4);
-}
-
-.monthly-trend-head h2 {
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.monthly-trend-head strong {
-  font-size: 15px;
-  font-weight: 700;
-}
-
 .monthly-trend-bars {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -2872,7 +2856,7 @@ a:focus-visible {
   width: 32px;
   height: 32px;
   border-radius: var(--r-full);
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--overlay-on-primary);
   color: var(--primary-text);
   font-size: 16px;
   display: grid;

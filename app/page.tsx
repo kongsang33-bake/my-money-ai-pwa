@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import NextImage from "next/image";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { CATEGORIES, type TransactionType } from "@/lib/taxonomy";
 import {
   Banknote,
   Bot,
@@ -45,7 +46,6 @@ import {
 } from "lucide-react";
 
 type EntryKind = "expense" | "income";
-type TransactionType = "income" | "personal_expense" | "lend" | "split_half" | "debt_repayment" | "debt_payment" | "card_charge" | "transfer" | "gift";
 type Tab = "home" | "add" | "history" | "debtors" | "wallets" | "recurring";
 type Theme = "light" | "dark";
 
@@ -191,7 +191,7 @@ type SlipImage = {
   preview: string;
 };
 
-const categories = ["อาหาร", "เดินทาง", "ของใช้", "ที่อยู่อาศัย", "สุขภาพ", "บันเทิง", "รายได้", "บิลประจำ", "อื่น ๆ"];
+const categories: string[] = [...CATEGORIES];
 const historyFiltersEnabled = false;
 const transactionTypes: TransactionType[] = ["income", "personal_expense", "lend", "split_half", "debt_repayment", "debt_payment", "card_charge", "transfer", "gift"];
 
@@ -1421,6 +1421,10 @@ export default function Home() {
   const walletLedger = useMemo(() => buildWalletLedger(wallets, entries), [wallets, entries]);
   const walletTotals = walletLedger.totals;
   const displayWallets = walletLedger.wallets;
+  const walletBalanceTotal = useMemo(
+    () => Object.values(walletTotals).reduce((sum, amount) => sum + amount, 0),
+    [walletTotals],
+  );
 
   const mainWallet = useMemo(
     () => walletTotals.cash,
@@ -1495,7 +1499,7 @@ export default function Home() {
   const monthlyBalance = monthlyIncome - monthlyOutflow;
   const receivableTotal = receivableSummary.reduce((sum, item) => sum + item.amount, 0);
   const payableTotal = payableSummary.reduce((sum, item) => sum + item.amount, 0);
-  const netWorth = Object.values(walletTotals).reduce((sum, amount) => sum + amount, 0) + receivableTotal - payableTotal;
+  const netWorth = walletBalanceTotal + receivableTotal - payableTotal;
   const savingsRate = monthlyIncome > 0 ? (monthlyBalance / monthlyIncome) * 100 : 0;
   const walletInsight = useMemo(() => buildWalletInsight(mainWallet, monthlyOutflow, cycleRange.end), [mainWallet, monthlyOutflow, cycleRange.end]);
   const cashFlowTrend = useMemo(() => lastSevenDayCashFlow(entries, new Date()), [entries]);
@@ -1566,7 +1570,7 @@ export default function Home() {
       outflow: monthlyOutflow,
       balance: monthlyBalance,
       cashAvailable: mainWallet,
-      walletBalance: Object.values(walletTotals).reduce((sum, amount) => sum + amount, 0),
+      walletBalance: walletBalanceTotal,
       netWorth,
     },
     walletBalances: displayWallets.map((wallet) => ({ name: wallet.name, balance: wallet.display_balance })),
@@ -1576,7 +1580,7 @@ export default function Home() {
     payableTotal,
     transactionCount: monthlyEntries.length,
     transactions: monthlyEntries.slice(0, 120).map(({ title, category, amount, transaction_type, wallet_impact, occurred_at }) => ({ title, category, amount, transaction_type, wallet_impact, occurred_at })),
-  }), [selectedMonth, monthStartDay, monthlyIncome, monthlyOutflow, monthlyBalance, mainWallet, walletTotals, netWorth, displayWallets, categorySummary, recurringExpenses, receivableTotal, payableTotal, monthlyEntries]);
+  }), [selectedMonth, monthStartDay, monthlyIncome, monthlyOutflow, monthlyBalance, mainWallet, walletBalanceTotal, netWorth, displayWallets, categorySummary, recurringExpenses, receivableTotal, payableTotal, monthlyEntries]);
 
   async function addSlipFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -1598,12 +1602,14 @@ export default function Home() {
     }
   }
 
-  function openAddTab(mode: "ai" | "manual" = "ai", shortcut?: QuickShortcut) {
+  const openAddTab = useCallback((mode: "ai" | "manual" = "ai", shortcut?: QuickShortcut) => {
     setEntryDate(todayDateInput());
     setAddMode(mode);
     setQuickAddPreset(shortcut ?? null);
     setTab("add");
-  }
+  }, []);
+
+  const addWithAiAction = useMemo(() => ({ label: "จดด้วย AI", onClick: openAddTab }), [openAddTab]);
 
   function retrySync() {
     setError("");
@@ -1933,7 +1939,37 @@ export default function Home() {
     return true;
   }
 
-  async function deleteEntry(entry: Entry) {
+  const restoreEntries = useCallback(async (entriesToRestore: Entry[]) => {
+    if (!supabase || !user || !entriesToRestore.length) return;
+    const { error } = await supabase.from("transactions").insert(entriesToRestore.map((entry) => ({
+      id: entry.id,
+      user_id: user.id,
+      title: entry.title,
+      category: entry.category,
+      amount: entry.amount,
+      kind: entry.type,
+      transaction_type: entry.transaction_type,
+      debtor_name: entry.debtor_name,
+      wallet_impact: entry.wallet_impact,
+      debt_impact: entry.debt_impact,
+      user_share: entry.user_share,
+      partner_share: entry.partner_share,
+      occurred_at: entry.occurred_at,
+      source_text: entry.source_text,
+      wallet_id: entry.wallet_id ?? defaultWalletId(wallets),
+      note: entry.note,
+      transfer_group_id: entry.transfer_group_id,
+    })));
+    if (error) {
+      setError(error.message);
+      notify({ tone: "error", title: "ย้อนคืนรายการไม่สำเร็จ", detail: error.message });
+      return;
+    }
+    setEntries((current) => [...entriesToRestore, ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
+    notify({ tone: "success", title: "ย้อนคืนรายการแล้ว", detail: entriesToRestore[0].title });
+  }, [user, wallets, notify]);
+
+  const deleteEntry = useCallback(async (entry: Entry) => {
     if (!supabase) return;
     const pairedEntry = entry.transfer_group_id
       ? entries.find((item) => item.id !== entry.id && item.transfer_group_id === entry.transfer_group_id)
@@ -1969,37 +2005,7 @@ export default function Home() {
     }
 
     setBusy(false);
-  }
-
-  async function restoreEntries(entriesToRestore: Entry[]) {
-    if (!supabase || !user || !entriesToRestore.length) return;
-    const { error } = await supabase.from("transactions").insert(entriesToRestore.map((entry) => ({
-      id: entry.id,
-      user_id: user.id,
-      title: entry.title,
-      category: entry.category,
-      amount: entry.amount,
-      kind: entry.type,
-      transaction_type: entry.transaction_type,
-      debtor_name: entry.debtor_name,
-      wallet_impact: entry.wallet_impact,
-      debt_impact: entry.debt_impact,
-      user_share: entry.user_share,
-      partner_share: entry.partner_share,
-      occurred_at: entry.occurred_at,
-      source_text: entry.source_text,
-      wallet_id: entry.wallet_id ?? defaultWalletId(wallets),
-      note: entry.note,
-      transfer_group_id: entry.transfer_group_id,
-    })));
-    if (error) {
-      setError(error.message);
-      notify({ tone: "error", title: "ย้อนคืนรายการไม่สำเร็จ", detail: error.message });
-      return;
-    }
-    setEntries((current) => [...entriesToRestore, ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
-    notify({ tone: "success", title: "ย้อนคืนรายการแล้ว", detail: entriesToRestore[0].title });
-  }
+  }, [entries, requestConfirm, notify, restoreEntries]);
 
   function updateBudgets(next: Record<string, number>) {
     if (!user) return;
@@ -2843,7 +2849,7 @@ export default function Home() {
             )}
             <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedMonth={selectedMonth} onChangeMonth={selectHistoryMonth} selectedDay={selectedDay} defaultDay={defaultHistoryDay} onSelectDay={setSelectedDay} />
             {activeDay && <HistoryInsight entries={dayEntries} />}
-            <EntryList entries={dayEntries} onEdit={setEditing} onDelete={deleteEntry} emptyAction={{ label: "จดด้วย AI", onClick: openAddTab }} />
+            <EntryList entries={dayEntries} onEdit={setEditing} onDelete={deleteEntry} emptyAction={addWithAiAction} />
           </div>
         )}
 
@@ -2940,7 +2946,7 @@ export default function Home() {
             onOpenPin={() => { menuDismiss.requestClose(); setPinSheetOpen(true); }}
             theme={theme}
             onSetTheme={setTheme}
-            walletTotal={Object.values(walletTotals).reduce((sum, amount) => sum + amount, 0)}
+            walletTotal={walletBalanceTotal}
             receivableTotal={receivableTotal}
             payableTotal={payableTotal}
             recurringTotal={recurringExpenses.reduce((sum, item) => sum + item.amount, 0)}
@@ -3280,7 +3286,7 @@ function PinSecuritySheet({
   onDisableFaceId: (currentPin: string) => Promise<boolean>;
   closing?: boolean;
 }) {
-  const [mode, setMode] = useState<"change" | "disable" | "faceid">(pinEnabled ? "change" : "change");
+  const [mode, setMode] = useState<"change" | "disable" | "faceid">("change");
   const [currentPin, setCurrentPin] = useState("");
   const [nextPin, setNextPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");

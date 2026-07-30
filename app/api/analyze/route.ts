@@ -1,7 +1,5 @@
-import { GoogleGenAI } from "@google/genai";
-
-const transactionTypes = ["income", "personal_expense", "lend", "split_half", "debt_repayment", "debt_payment", "card_charge", "gift", "transfer"] as const;
-const categories = ["อาหาร", "เดินทาง", "ของใช้", "ที่อยู่อาศัย", "สุขภาพ", "บันเทิง", "รายได้", "บิลประจำ", "อื่น ๆ"] as const;
+import { createGeminiClient, getGeminiApiKey, GEMINI_MODEL, missingGeminiKeyResponse } from "@/lib/gemini";
+import { CATEGORIES, TRANSACTION_TYPES } from "@/lib/taxonomy";
 
 const schema = {
   type: "array",
@@ -9,11 +7,11 @@ const schema = {
     type: "object",
     properties: {
       title: { type: "string", description: "ชื่อรายการสั้น กระชับ เป็นภาษาไทย" },
-      category: { type: "string", enum: categories },
+      category: { type: "string", enum: CATEGORIES },
       amount: { type: "number", minimum: 0, description: "ยอดเงินที่จ่ายหรือรับจริง รวมเศษสตางค์ทศนิยมได้ถึง 2 ตำแหน่ง ห้ามปัดเศษ" },
       transaction_type: {
         type: "string",
-        enum: transactionTypes,
+        enum: TRANSACTION_TYPES,
         description: "ชนิดธุรกรรมตาม logic กระเป๋าหลักและยอดลูกหนี้",
       },
       debtor_name: {
@@ -81,7 +79,7 @@ function buildPrompt(input: string, today: string, hasImages: boolean, debtors: 
       ? "ถ้ามีรูปสลิป ให้อ่านชื่อร้าน/ผู้รับเงิน รายการสินค้า ยอดเงิน วันที่ เวลา และข้อความอ้างอิงจากรูป"
       : "ไม่มีรูปแนบ ให้วิเคราะห์จากข้อความเท่านั้น",
     "",
-    "หมวดหมู่ที่อนุญาต: อาหาร, เดินทาง, ของใช้, ที่อยู่อาศัย, สุขภาพ, บันเทิง, รายได้, บิลประจำ, อื่น ๆ",
+    `หมวดหมู่ที่อนุญาต: ${CATEGORIES.join(", ")}`,
     "",
     ...(hasImages
       ? [
@@ -131,8 +129,8 @@ function buildPrompt(input: string, today: string, hasImages: boolean, debtors: 
 }
 
 export async function POST(request: Request) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return Response.json({ error: "ยังไม่ได้ตั้งค่า GEMINI_API_KEY" }, { status: 503 });
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) return missingGeminiKeyResponse();
 
   const body = (await request.json()) as AnalyzeBody;
   const input = body.text?.trim() ?? "";
@@ -168,9 +166,9 @@ export async function POST(request: Request) {
 
   let response;
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = createGeminiClient(apiKey);
     response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: GEMINI_MODEL,
       contents: [
         { text: prompt },
         ...images.map((image) => ({
