@@ -32,7 +32,7 @@ export const viewport: Viewport = {
   themeColor: "#14181C",
 };
 
-const themeInitScript = `(function(){try{var t=localStorage.getItem("money-ai-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}catch(e){}})();`;
+const themeInitScript = `(function(){try{var t=localStorage.getItem("money-ai-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}catch(e){}window.__splashStartedAt=Date.now();var el=document.getElementById("app-splash");if(el)el.classList.add("app-splash-play");})();`;
 
 export default function RootLayout({
   children,
@@ -41,10 +41,21 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="th" className={ibmPlexSansThai.variable}>
-      <head>
+      <body>
+        <div id="app-splash">
+          <div id="app-splash-inner">
+            <div id="app-splash-logo-stack">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img id="app-splash-logo" src="/icons/icon-512.png" alt="" width={112} height={112} decoding="sync" fetchPriority="high" />
+            </div>
+            <div id="app-splash-text-wrap">
+              <p id="app-splash-text">Monii</p>
+            </div>
+          </div>
+        </div>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-      </head>
-      <body>{children}</body>
+        {children}
+      </body>
     </html>
   );
 }
