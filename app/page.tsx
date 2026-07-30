@@ -1018,6 +1018,11 @@ function loadImage(value: string): Promise<HTMLImageElement> {
   });
 }
 
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = (await supabase?.auth.getSession())?.data.session?.access_token;
+  return token ? { authorization: `Bearer ${token}` } : {};
+}
+
 async function compressProfileImage(file: File) {
   if (file.size > profileImageMaxInputBytes) {
     throw new Error("รูปใหญ่เกินไป กรุณาเลือกรูปไม่เกิน 10MB");
@@ -1668,7 +1673,7 @@ export default function Home() {
     try {
       const response = await fetch("/api/analyze", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({
           text,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -5566,7 +5571,7 @@ function AskFinanceSheet({ context, onClose, closing }: { context: AiFinanceCont
     if (!question.trim()) return;
     setBusy(true); setError(""); setAnswer("");
     try {
-      const response = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: question.trim(), context }) });
+      const response = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json", ...(await authHeaders()) }, body: JSON.stringify({ question: question.trim(), context }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "AI ตอบคำถามไม่สำเร็จ");
       setAnswer(cleanAiAnswer(data.answer || "ยังไม่มีคำตอบ"));

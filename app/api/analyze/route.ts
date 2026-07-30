@@ -1,5 +1,6 @@
 import { createGeminiClient, getGeminiApiKey, GEMINI_MODEL, missingGeminiKeyResponse } from "@/lib/gemini";
 import { CATEGORIES, TRANSACTION_TYPES } from "@/lib/taxonomy";
+import { requireUser, unauthorizedResponse } from "@/lib/auth";
 
 const schema = {
   type: "array",
@@ -129,6 +130,9 @@ function buildPrompt(input: string, today: string, hasImages: boolean, debtors: 
 }
 
 export async function POST(request: Request) {
+  const user = await requireUser(request);
+  if (!user) return unauthorizedResponse();
+
   const apiKey = getGeminiApiKey();
   if (!apiKey) return missingGeminiKeyResponse();
 

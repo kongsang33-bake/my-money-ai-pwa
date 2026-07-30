@@ -1,4 +1,5 @@
 import { createGeminiClient, getGeminiApiKey, GEMINI_MODEL, missingGeminiKeyResponse } from "@/lib/gemini";
+import { requireUser, unauthorizedResponse } from "@/lib/auth";
 
 type AskBody = {
   question?: string;
@@ -6,6 +7,9 @@ type AskBody = {
 };
 
 export async function POST(request: Request) {
+  const user = await requireUser(request);
+  if (!user) return unauthorizedResponse();
+
   const apiKey = getGeminiApiKey();
   if (!apiKey) return missingGeminiKeyResponse();
   const body = (await request.json()) as AskBody;
