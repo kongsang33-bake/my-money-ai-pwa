@@ -3451,6 +3451,39 @@ a:focus-visible {
 }
 
 /* -------------------------------------------------------------------------
+   Splash
+   ------------------------------------------------------------------------- */
+.splash-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  gap: var(--s-3);
+  flex-direction: column;
+}
+
+.splash-mark {
+  width: 88px;
+  height: 88px;
+  border-radius: var(--r-xl);
+  background: var(--primary);
+  color: var(--primary-text);
+  display: grid;
+  place-items: center;
+  font-size: 36px;
+  font-weight: 700;
+  animation: pop-in var(--t-2) var(--e-spring) both;
+}
+
+.splash-wordmark {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-3);
+  letter-spacing: 0.02em;
+  animation: fade-in var(--t-2) var(--e-out) both;
+}
+
+/* -------------------------------------------------------------------------
    Auth
    ------------------------------------------------------------------------- */
 .auth-screen {

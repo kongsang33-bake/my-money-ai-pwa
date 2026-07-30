@@ -2581,9 +2581,9 @@ export default function Home() {
   if (!ready) {
     return (
       <main className="shell">
-        <section className="phone auth-screen">
-          <div className="loading-spinner" aria-hidden="true" />
-          <p className="auth-copy">กำลังเตรียมบัญชี...</p>
+        <section className="phone splash-screen">
+          <div className="splash-mark" aria-hidden="true">฿</div>
+          <p className="splash-wordmark">Monii</p>
         </section>
       </main>
     );
