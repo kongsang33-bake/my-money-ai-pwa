@@ -1561,7 +1561,7 @@ export default function Home() {
   }, [monthlyEntries, budgets]);
   const monthlyLentOut = useMemo(
     () => monthlyEntries.reduce((sum, entry) => {
-      if (entry.wallet_impact >= 0) return sum;
+      if (entry.transaction_type === "transfer" || entry.wallet_impact >= 0) return sum;
       return sum + (Math.abs(entry.wallet_impact) - (categorySpendAmount(entry) ?? 0));
     }, 0),
     [monthlyEntries],
