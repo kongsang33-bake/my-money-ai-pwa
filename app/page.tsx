@@ -4566,11 +4566,13 @@ const EntryList = memo(function EntryList({
   onEdit,
   onDelete,
   emptyAction,
+  amountField = "wallet",
 }: {
   entries: Entry[];
   onEdit?: (entry: Entry) => void;
   onDelete?: (entry: Entry) => void;
   emptyAction?: EmptyAction;
+  amountField?: "wallet" | "debt";
 }) {
   const groups = useMemo(() => groupEntriesByDay(entries), [entries]);
 
@@ -4579,7 +4581,9 @@ const EntryList = memo(function EntryList({
       {groups.map((group) => (
         <div className="entry-group" key={group.label}>
           <p className="entry-day">{group.label}</p>
-          {group.items.map((entry) => (
+          {group.items.map((entry) => {
+            const impact = amountField === "debt" ? entry.debt_impact : entryDisplayImpact(entry);
+            return (
             <article
               className={onEdit ? "entry entry-tappable" : "entry"}
               key={entry.id}
@@ -4596,7 +4600,7 @@ const EntryList = memo(function EntryList({
                 </small>
                 {entry.note && <small className="entry-note" title={entry.note}>{entry.note}</small>}
               </div>
-              <strong className={entryDisplayImpact(entry) >= 0 ? "income" : "expense"}>{formatSignedMoney(entryDisplayImpact(entry))}</strong>
+              <strong className={impact >= 0 ? "income" : "expense"}>{formatSignedMoney(impact)}</strong>
               {(onEdit || onDelete) && (
                 <menu onClick={(event) => event.stopPropagation()}>
                   {onEdit && <button onClick={() => onEdit(entry)} title="แก้ไข">แก้</button>}
@@ -4604,7 +4608,8 @@ const EntryList = memo(function EntryList({
                 </menu>
               )}
             </article>
-          ))}
+            );
+          })}
         </div>
       ))}
       {!entries.length && <EmptyNote glyph="▪" action={emptyAction}>ยังไม่มีรายการในช่วงนี้</EmptyNote>}
@@ -5001,7 +5006,7 @@ function DebtorsView({
           <h2>ประวัติยืม/จ่าย</h2>
           <button onClick={() => onEdit(selectedDebtor)}>แก้ไข</button>
         </div>
-        <EntryList entries={debtorEntries} />
+        <EntryList entries={debtorEntries} amountField="debt" />
       </div>
     );
   }
