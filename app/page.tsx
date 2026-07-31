@@ -895,14 +895,24 @@ function defaultDayForCycle(key: string, startDay: number) {
   return preferred.toDateString();
 }
 
-function buildMonthlyTrend(entries: Entry[], selectedMonth: string, monthStartDay: number, months = 6) {
+function netWorthAsOf(wallets: Wallet[], debtors: Debtor[], entriesUpToCutoff: Entry[]) {
+  const ledger = buildWalletLedger(wallets, entriesUpToCutoff);
+  const walletTotal = Object.values(ledger.totals).reduce((sum, amount) => sum + amount, 0);
+  const receivable = buildDebtSummary(debtors, entriesUpToCutoff, "lend", ["lend", "split_half", "debt_repayment"]).reduce((sum, item) => sum + item.amount, 0);
+  const payable = buildDebtSummary(debtors, entriesUpToCutoff, "own", ["debt_payment", "card_charge"]).reduce((sum, item) => sum + item.amount, 0);
+  return walletTotal + receivable - payable;
+}
+
+function buildMonthlyTrend(entries: Entry[], wallets: Wallet[], debtors: Debtor[], selectedMonth: string, monthStartDay: number, months = 6) {
   return Array.from({ length: months }, (_, index) => {
     const key = shiftMonthKey(selectedMonth, index - months + 1);
     const range = cycleBounds(key, monthStartDay);
     const monthEntries = entriesInRange(entries, range.start, range.end);
     const income = totalWallet(monthEntries, "income");
     const outflow = Math.abs(totalWallet(monthEntries, "expense"));
-    return { key, label: new Date(`${key}-01T00:00:00`).toLocaleDateString("th-TH", { month: "short" }), income, outflow };
+    const entriesUpToCutoff = entries.filter((entry) => new Date(entry.occurred_at) < range.end);
+    const netWorth = netWorthAsOf(wallets, debtors, entriesUpToCutoff);
+    return { key, label: new Date(`${key}-01T00:00:00`).toLocaleDateString("th-TH", { month: "short" }), income, outflow, netWorth };
   });
 }
 
@@ -1109,6 +1119,7 @@ export default function Home() {
   const [addMode, setAddMode] = useState<"ai" | "manual">("ai");
   const [quickAddPreset, setQuickAddPreset] = useState<QuickShortcut | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [receiptTotal, setReceiptTotal] = useState(0);
   const [editing, setEditing] = useState<Entry | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
@@ -1313,6 +1324,7 @@ export default function Home() {
     setBudgets({});
     setGoals([]);
     setDrafts([]);
+    setReceiptTotal(0);
     setText("");
     setSlipImages([]);
     setEditing(null);
@@ -1521,7 +1533,7 @@ export default function Home() {
   const savingsRate = monthlyIncome > 0 ? (monthlyBalance / monthlyIncome) * 100 : 0;
   const walletInsight = useMemo(() => buildWalletInsight(mainWallet, monthlyOutflow, cycleRange.end), [mainWallet, monthlyOutflow, cycleRange.end]);
   const cashFlowTrend = useMemo(() => lastSevenDayCashFlow(entries, new Date()), [entries]);
-  const monthlyTrend = useMemo(() => buildMonthlyTrend(entries, selectedMonth, monthStartDay, 6), [entries, selectedMonth, monthStartDay]);
+  const monthlyTrend = useMemo(() => buildMonthlyTrend(entries, wallets, debtors, selectedMonth, monthStartDay, 6), [entries, wallets, debtors, selectedMonth, monthStartDay]);
   const aiSuggestions = useMemo<AiSuggestion[]>(() => {
     const fromHistory = quickShortcuts.map((shortcut) => ({
       label: shortcut.title,
@@ -1542,6 +1554,16 @@ export default function Home() {
     () => activeDay ? filteredMonthlyEntries.filter((entry) => new Date(entry.occurred_at).toDateString() === activeDay) : filteredMonthlyEntries,
     [activeDay, filteredMonthlyEntries],
   );
+
+  const categoryMemory = useMemo(() => {
+    const map = new Map<string, string>();
+    const byRecency = [...entries].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1));
+    for (const entry of byRecency) {
+      const key = entry.title.trim().toLowerCase();
+      if (key && !map.has(key)) map.set(key, entry.category);
+    }
+    return map;
+  }, [entries]);
 
   const categorySummary = useMemo(() => {
     const map = new Map<string, number>();
@@ -1712,10 +1734,11 @@ export default function Home() {
           {
             const aiWalletId = item.wallet_id && wallets.some((wallet) => wallet.id === item.wallet_id) ? item.wallet_id : null;
             const aiDestWalletId = item.transfer_to_wallet_id && wallets.some((wallet) => wallet.id === item.transfer_to_wallet_id) ? item.transfer_to_wallet_id : null;
+            const rememberedCategory = categoryMemory.get(item.title.trim().toLowerCase());
             return normalizeEntry({
             id: `${Date.now()}-${index}`,
             title: item.title,
-            category: item.category,
+            category: rememberedCategory ?? item.category,
             amount: item.amount,
             transaction_type: item.transaction_type,
             debtor_name: item.debtor_name,
@@ -1728,6 +1751,7 @@ export default function Home() {
           },
         ),
       );
+      setReceiptTotal(typeof data.receiptTotal === "number" ? data.receiptTotal : 0);
       notify({ tone: "success", title: "AI แยกรายการแล้ว", detail: `พบ ${data.items.length} รายการให้ตรวจสอบ` });
     } catch (e) {
       setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
@@ -1785,6 +1809,7 @@ export default function Home() {
       const inserted = (data ?? []).map(mapTransactionRow);
       setEntries((current) => [...inserted, ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
       setDrafts([]);
+      setReceiptTotal(0);
       setText("");
       setSlipImages([]);
       setTab("home");
@@ -2344,9 +2369,14 @@ export default function Home() {
   }
   async function deleteDebtor(debtor: Debtor) {
     if (!supabase) return;
+    const outstanding = (debtor.kind === "own" ? payableSummary : receivableSummary)
+      .find((item) => item.name.trim().toLowerCase() === debtor.name.trim().toLowerCase())?.amount ?? 0;
+    const balanceWarning = outstanding > 0.005
+      ? ` ตอนนี้ยัง${debtor.kind === "own" ? "เหลือหนี้ค้าง" : "มียอดค้างรับ"} ${moneySign}${formatMoney(outstanding)} อยู่`
+      : "";
     const confirmed = await requestConfirm({
       title: "ลบรายชื่อนี้?",
-      detail: `ลบ "${debtor.name}" ออกจากรายชื่อ รายการเก่าจะไม่ถูกลบ`,
+      detail: `ลบ "${debtor.name}" ออกจากรายชื่อ รายการเก่าจะไม่ถูกลบ${balanceWarning}`,
       confirmLabel: "ลบรายชื่อ",
       tone: "danger",
     });
@@ -2445,9 +2475,13 @@ export default function Home() {
   }
   async function deleteWallet(wallet: Wallet) {
     if (!supabase) return;
+    const currentBalance = displayWallets.find((item) => item.id === wallet.id)?.display_balance ?? wallet.balance;
+    const balanceWarning = Math.abs(currentBalance) > 0.005
+      ? ` ตอนนี้ยังมียอดเหลืออยู่ ${moneySign}${formatMoney(currentBalance)}`
+      : "";
     const confirmed = await requestConfirm({
       title: "ลบกระเป๋านี้?",
-      detail: `ลบ "${wallet.name}" ออกจากกระเป๋าตังค์`,
+      detail: `ลบ "${wallet.name}" ออกจากกระเป๋าตังค์${balanceWarning}`,
       confirmLabel: "ลบกระเป๋า",
       tone: "danger",
     });
@@ -2789,7 +2823,7 @@ export default function Home() {
                       </div>
                       <div className="review-head-actions">
                         <span>AI</span>
-                        <button className="review-cancel-all" onClick={() => setDrafts([])}>ยกเลิกทั้งหมด</button>
+                        <button className="review-cancel-all" onClick={() => { setDrafts([]); setReceiptTotal(0); }}>ยกเลิกทั้งหมด</button>
                       </div>
                     </div>
                     {drafts.map((draft, index) => (
@@ -2802,6 +2836,13 @@ export default function Home() {
                         onRemove={() => setDrafts((items) => items.filter((_, i) => i !== index))}
                       />
                     ))}
+                    {!!slipImages.length && receiptTotal > 0 && Math.abs(drafts.reduce((sum, draft) => sum + draft.amount, 0) - receiptTotal) > 1 && (
+                      <StateCard
+                        tone="error"
+                        title="ยอดรวมไม่ตรงกับสลิป"
+                        detail={`AI แยกรายการได้รวม ${moneySign}${formatMoney(drafts.reduce((sum, draft) => sum + draft.amount, 0))} แต่ยอดบนสลิประบุ ${moneySign}${formatMoney(receiptTotal)} ลองตรวจรายการอีกครั้งก่อนบันทึก`}
+                      />
+                    )}
                     <DraftImpact items={drafts} />
                     {drafts.some((draft) => draft.transaction_type === "transfer" && (!draft.transfer_to_wallet_id || draft.transfer_to_wallet_id === draft.wallet_id)) && (
                       <p className="pin-hint">มีรายการโอนเงินที่ยังไม่ได้เลือกกระเป๋าปลายทาง</p>
@@ -2827,6 +2868,7 @@ export default function Home() {
                 error={error}
                 initialDate={entryDate}
                 initialPreset={quickAddPreset}
+                categoryMemory={categoryMemory}
                 onSave={(drafts) => saveEntries(drafts)}
               />
             )}
@@ -4115,8 +4157,12 @@ function HistoryFilterBar({
   );
 }
 
-function MonthlyTrendChart({ trend }: { trend: { key: string; label: string; income: number; outflow: number }[] }) {
+function MonthlyTrendChart({ trend }: { trend: { key: string; label: string; income: number; outflow: number; netWorth: number }[] }) {
   const max = Math.max(...trend.flatMap((item) => [item.income, item.outflow]), 1);
+  const netWorthValues = trend.map((item) => item.netWorth);
+  const netWorthMin = Math.min(...netWorthValues, 0);
+  const netWorthMax = Math.max(...netWorthValues, netWorthMin + 1);
+  const netWorthRange = netWorthMax - netWorthMin;
   const currentKey = trend[trend.length - 1]?.key;
   return (
     <details className="monthly-trend-panel compact-disclosure">
@@ -4137,6 +4183,19 @@ function MonthlyTrendChart({ trend }: { trend: { key: string; label: string; inc
             <span>
               <i className="income" style={{ height: `${Math.max(6, (item.income / max) * 100)}%` }} title={`รายรับ ${moneySign}${formatMoney(item.income)}`} />
               <i className="expense" style={{ height: `${Math.max(6, (item.outflow / max) * 100)}%` }} title={`รายจ่าย ${moneySign}${formatMoney(item.outflow)}`} />
+            </span>
+            <small>{item.label}</small>
+          </div>
+        ))}
+      </div>
+      <div className="trend-legend">
+        <span><i className="networth" />สุทธิสะสม (มูลค่าทรัพย์สินสุทธิ ณ สิ้นเดือน)</span>
+      </div>
+      <div className="monthly-trend-bars monthly-trend-bars-networth">
+        {trend.map((item) => (
+          <div key={item.key} className={item.key === currentKey ? "current" : ""}>
+            <span>
+              <i className="networth" style={{ height: `${Math.max(6, ((item.netWorth - netWorthMin) / netWorthRange) * 100)}%` }} title={`สุทธิสะสม ${moneySign}${formatMoney(item.netWorth)}`} />
             </span>
             <small>{item.label}</small>
           </div>
@@ -4705,6 +4764,7 @@ function ManualEntryForm({
   error,
   initialDate,
   initialPreset,
+  categoryMemory,
   onSave,
 }: {
   wallets: Wallet[];
@@ -4712,6 +4772,7 @@ function ManualEntryForm({
   error: string;
   initialDate: string;
   initialPreset?: QuickShortcut | null;
+  categoryMemory: Map<string, string>;
   onSave: (drafts: Draft[]) => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() =>
@@ -4760,7 +4821,15 @@ function ManualEntryForm({
       </label>
       <label>
         ชื่อรายการ{isTransfer && <small> (เว้นว่างได้ จะตั้งชื่อให้อัตโนมัติ)</small>}
-        <input autoFocus value={draft.title} onChange={(event) => update({ title: event.target.value })} />
+        <input
+          autoFocus
+          value={draft.title}
+          onChange={(event) => update({ title: event.target.value })}
+          onBlur={() => {
+            const remembered = categoryMemory.get(draft.title.trim().toLowerCase());
+            if (remembered) update({ category: remembered });
+          }}
+        />
       </label>
       {!isTransfer && (
         <label>

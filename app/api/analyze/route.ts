@@ -2,31 +2,41 @@ import { createGeminiClient, getGeminiApiKey, GEMINI_MODEL, missingGeminiKeyResp
 import { CATEGORIES, TRANSACTION_TYPES } from "@/lib/taxonomy";
 import { requireUser, unauthorizedResponse } from "@/lib/auth";
 
-const schema = {
-  type: "array",
-  items: {
-    type: "object",
-    properties: {
-      title: { type: "string", description: "ชื่อรายการสั้น กระชับ เป็นภาษาไทย" },
-      category: { type: "string", enum: CATEGORIES },
-      amount: { type: "number", minimum: 0, description: "ยอดเงินที่จ่ายหรือรับจริง รวมเศษสตางค์ทศนิยมได้ถึง 2 ตำแหน่ง ห้ามปัดเศษ" },
-      transaction_type: {
-        type: "string",
-        enum: TRANSACTION_TYPES,
-        description: "ชนิดธุรกรรมตาม logic กระเป๋าหลักและยอดลูกหนี้",
-      },
-      debtor_name: {
-        type: "string",
-        description: "ชื่อบุคคลที่เป็นลูกหนี้ เช่น แฟน เพื่อนเอ คุณบี ถ้าไม่พบให้ใช้ ไม่ระบุ",
-      },
-      date: { type: "string", description: "วันที่รูปแบบ YYYY-MM-DD" },
-      note: { type: "string", description: "คำอธิบายสั้น ๆ ถ้ามีบริบทสำคัญ" },
-      wallet_id: { type: "string", description: "id ของกระเป๋าที่เหมาะที่สุด ถ้าระบุไม่ได้ให้ส่งค่าว่าง" },
-      transfer_to_wallet_id: { type: "string", description: "id กระเป๋าปลายทาง ใช้เฉพาะ transaction_type เป็น transfer ถ้าไม่ใช่ให้ส่งค่าว่าง" },
+const itemSchema = {
+  type: "object",
+  properties: {
+    title: { type: "string", description: "ชื่อรายการสั้น กระชับ เป็นภาษาไทย" },
+    category: { type: "string", enum: CATEGORIES },
+    amount: { type: "number", minimum: 0, description: "ยอดเงินที่จ่ายหรือรับจริง รวมเศษสตางค์ทศนิยมได้ถึง 2 ตำแหน่ง ห้ามปัดเศษ" },
+    transaction_type: {
+      type: "string",
+      enum: TRANSACTION_TYPES,
+      description: "ชนิดธุรกรรมตาม logic กระเป๋าหลักและยอดลูกหนี้",
     },
-    required: ["title", "category", "amount", "transaction_type", "debtor_name", "date", "note", "wallet_id", "transfer_to_wallet_id"],
-    additionalProperties: false,
+    debtor_name: {
+      type: "string",
+      description: "ชื่อบุคคลที่เป็นลูกหนี้ เช่น แฟน เพื่อนเอ คุณบี ถ้าไม่พบให้ใช้ ไม่ระบุ",
+    },
+    date: { type: "string", description: "วันที่รูปแบบ YYYY-MM-DD" },
+    note: { type: "string", description: "คำอธิบายสั้น ๆ ถ้ามีบริบทสำคัญ" },
+    wallet_id: { type: "string", description: "id ของกระเป๋าที่เหมาะที่สุด ถ้าระบุไม่ได้ให้ส่งค่าว่าง" },
+    transfer_to_wallet_id: { type: "string", description: "id กระเป๋าปลายทาง ใช้เฉพาะ transaction_type เป็น transfer ถ้าไม่ใช่ให้ส่งค่าว่าง" },
   },
+  required: ["title", "category", "amount", "transaction_type", "debtor_name", "date", "note", "wallet_id", "transfer_to_wallet_id"],
+  additionalProperties: false,
+};
+
+const schema = {
+  type: "object",
+  properties: {
+    items: { type: "array", items: itemSchema },
+    receiptTotal: {
+      type: "number",
+      description: "ยอดรวมสุทธิที่ระบุไว้บนสลิปโดยตรง (ตัวเลขที่พิมพ์อยู่บนสลิปจริง ๆ) ถ้ามีรูปสลิปแนบมาและเห็นยอดรวมชัดเจน ให้ใส่ตัวเลขนั้น ถ้าไม่มีรูปสลิปแนบมา หรือมีรูปแต่ไม่เห็นยอดรวมชัดเจน ให้ใส่ 0",
+    },
+  },
+  required: ["items", "receiptTotal"],
+  additionalProperties: false,
 };
 
 type AnalyzeImage = {
@@ -89,6 +99,7 @@ function buildPrompt(input: string, today: string, hasImages: boolean, debtors: 
           "- ตั้ง title ของแต่ละรายการตามชื่อสินค้านั้นจริง ๆ ตามที่พิมพ์บนสลิป ไม่ใช่ชื่อร้านหรือชื่อรวม",
           "- จัดหมวดหมู่ (category) ของแต่ละรายการแยกกันตามประเภทของสินค้านั้นเอง เช่น เครื่องดื่ม/ของกินให้เป็นอาหาร เครื่องเขียนหรือของใช้ทั่วไปให้เป็นของใช้",
           "- ยอดรวมของทุกรายการที่แยกจากสลิปเดียวกัน ต้องบวกกันได้เท่ากับยอดสุทธิที่ระบุบนสลิป",
+          "- ใส่ยอดสุทธิที่อ่านได้จากสลิปลงใน receiptTotal ตรง ๆ ตามที่พิมพ์ไว้ (ไม่ใช่ผลรวมที่คำนวณเอง) เพื่อให้แอพเทียบยอดได้ภายหลัง",
           "",
         ]
       : []),
@@ -195,7 +206,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    return Response.json({ items: JSON.parse(response.text || "[]") });
+    const parsed = JSON.parse(response.text || "{}") as { items?: unknown[]; receiptTotal?: number };
+    return Response.json({ items: parsed.items ?? [], receiptTotal: parsed.receiptTotal ?? 0 });
   } catch (error) {
     console.error("Gemini analyze: could not parse response as JSON", error, response.text);
     return Response.json({ error: "AI ส่งข้อมูลกลับมาในรูปแบบที่อ่านไม่ได้ กรุณาลองใหม่" }, { status: 502 });

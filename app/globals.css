@@ -2217,6 +2217,23 @@ a:focus-visible {
   background: var(--expense);
 }
 
+.monthly-trend-bars i.networth, .trend-legend i.networth {
+  background: var(--accent);
+}
+
+.monthly-trend-bars-networth {
+  min-height: 64px;
+  margin-top: var(--s-3);
+}
+
+.monthly-trend-bars-networth span {
+  height: 48px;
+}
+
+.monthly-trend-bars-networth i {
+  width: 18px;
+}
+
 .monthly-trend-bars small {
   text-align: center;
   color: var(--ink-3);
