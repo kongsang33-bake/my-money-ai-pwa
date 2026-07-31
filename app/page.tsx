@@ -1559,6 +1559,13 @@ export default function Home() {
     const missingBudgeted = sorted.filter((item) => !shownNames.has(item.category) && budgets[item.category] > 0);
     return [...shown, ...missingBudgeted];
   }, [monthlyEntries, budgets]);
+  const monthlyLentOut = useMemo(
+    () => monthlyEntries.reduce((sum, entry) => {
+      if (entry.wallet_impact >= 0) return sum;
+      return sum + (Math.abs(entry.wallet_impact) - (categorySpendAmount(entry) ?? 0));
+    }, 0),
+    [monthlyEntries],
+  );
   const incomeSummary = useMemo(() => {
     const map = new Map<string, number>();
     for (const entry of monthlyEntries) {
@@ -2844,6 +2851,7 @@ export default function Home() {
               debtChange={monthlyDebtChange}
               balance={monthlyBalance}
               categories={categorySummary}
+              lentOut={monthlyLentOut}
               monthStartDay={monthStartDay}
               budgets={budgets}
             />
@@ -4171,6 +4179,7 @@ function MonthSummary({
   debtChange,
   balance,
   categories: categoryItems,
+  lentOut,
   monthStartDay,
   budgets,
 }: {
@@ -4181,6 +4190,7 @@ function MonthSummary({
   debtChange: number;
   balance: number;
   categories: { category: string; amount: number }[];
+  lentOut: number;
   monthStartDay: number;
   budgets: Record<string, number>;
 }) {
@@ -4231,6 +4241,17 @@ function MonthSummary({
           })
         ) : (
           <EmptyNote glyph="▣">ยังไม่มีรายจ่ายในเดือนนี้</EmptyNote>
+        )}
+        {lentOut > 0 && (
+          <div className="category-bar category-bar-lent">
+            <div>
+              <span className="cat-dot cat-dot-neutral"><Users size={14} strokeWidth={2.25} aria-hidden="true" /></span>
+              <b>ให้คนอื่นยืม/หารก่อน</b>
+              <small>{outflow > 0 ? `${((lentOut / outflow) * 100).toFixed(0)}%` : "0%"}</small>
+              <strong>{moneySign}{formatMoney(lentOut)}</strong>
+            </div>
+            <i style={{ width: `${Math.max(4, Math.min(100, outflow > 0 ? (lentOut / outflow) * 100 : 0))}%` }} />
+          </div>
         )}
       </div>
     </section>
