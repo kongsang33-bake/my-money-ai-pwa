@@ -4211,9 +4211,11 @@ function HomeInsightGrid({
   payableTotal: number;
 }) {
   const savingsPositive = savingsRate >= 0;
+  const netDebt = receivableTotal - payableTotal;
+  const netDebtPositive = netDebt >= 0;
   const trackRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const cardCount = 4;
+  const cardCount = 3;
   const scrollFrameRef = useRef<number | null>(null);
 
   const handleScroll = () => {
@@ -4244,7 +4246,7 @@ function HomeInsightGrid({
         <div className="home-insight-card net-worth">
           <span><i className="home-insight-icon neutral"><Wallet size={13} strokeWidth={2.25} aria-hidden="true" /></i>มูลค่าสุทธิ</span>
           <strong>{formatSignedMoney(netWorth)}</strong>
-          <small>กระเป๋า + ลูกหนี้ - หนี้ที่ต้องจ่าย</small>
+          <small>กระเป๋า + พอร์ตลงทุน + ลูกหนี้ - หนี้ที่ต้องจ่าย</small>
         </div>
         <div className={`home-insight-card ${savingsPositive ? "income" : "expense"}`}>
           <span>
@@ -4256,15 +4258,15 @@ function HomeInsightGrid({
           <strong>{Number.isFinite(savingsRate) ? `${Math.round(savingsRate)}%` : "0%"}</strong>
           <small>เทียบกับรายรับในรอบนี้</small>
         </div>
-        <div className="home-insight-card">
-          <span><i className="home-insight-icon neutral"><Users size={13} strokeWidth={2.25} aria-hidden="true" /></i>ลูกหนี้</span>
-          <strong><CountUpMoney value={receivableTotal} /></strong>
-          <small>ยอดที่ควรได้รับคืน</small>
-        </div>
-        <div className="home-insight-card">
-          <span><i className="home-insight-icon neutral"><CreditCard size={13} strokeWidth={2.25} aria-hidden="true" /></i>หนี้ผ่อน</span>
-          <strong><CountUpMoney value={payableTotal} /></strong>
-          <small>ยอดที่ยังต้องจ่าย</small>
+        <div className={`home-insight-card ${netDebtPositive ? "income" : "expense"}`}>
+          <span>
+            <i className={`home-insight-icon ${netDebtPositive ? "income" : "expense"}`}>
+              <Users size={13} strokeWidth={2.25} aria-hidden="true" />
+            </i>
+            หนี้สุทธิ
+          </span>
+          <strong>{formatSignedMoney(netDebt)}</strong>
+          <small>ลูกหนี้ - หนี้ที่ต้องจ่าย</small>
         </div>
       </div>
       <div className="home-insight-dots" aria-hidden="true">
