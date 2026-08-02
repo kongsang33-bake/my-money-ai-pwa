@@ -7042,7 +7042,10 @@ function PortfolioView({
         )}
       </section>
 
-      <button type="button" className="text-button" onClick={onOpenAi}>บันทึกด้วย AI (เช่น DCA รายเดือน)</button>
+      <button type="button" className="ai-log-button" onClick={onOpenAi}>
+        <Lightbulb size={16} strokeWidth={2.25} aria-hidden="true" />
+        <span>บันทึกด้วย AI (เช่น DCA รายเดือน)</span>
+      </button>
 
       {!!pendingPurchases.length && (
         <section className="recurring-timeline" aria-label="รอยืนยันหน่วย">
@@ -7081,10 +7084,10 @@ function PortfolioView({
                 <WalletAvatarGlyph iconKey={holding.icon} fallbackName={holding.name} />
               </span>
               <div>
-                <span>{holding.name}{holding.code ? ` (${holding.code})` : ""}</span>
+                <span>{holding.name}{holding.code && holding.code !== holding.name ? ` (${holding.code})` : ""}</span>
                 <small>
-                  {holding.units.toLocaleString("th-TH", { maximumFractionDigits: 4 })} หน่วย · ทุนเฉลี่ย {holding.avgCost.toFixed(4)}
-                  {holding.latestNav != null ? ` · ราคาล่าสุด ${holding.latestNav.toFixed(4)}` : " · ยังไม่มีราคา"}
+                  {holding.units.toLocaleString("th-TH", { maximumFractionDigits: 4 })} หน่วย · ทุน {holding.avgCost.toFixed(4)}
+                  {holding.latestNav != null ? ` · ล่าสุด ${holding.latestNav.toFixed(4)}` : " · ยังไม่มีราคา"}
                 </small>
               </div>
             </button>
