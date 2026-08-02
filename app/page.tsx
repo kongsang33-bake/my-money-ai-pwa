@@ -582,17 +582,34 @@ function lastSevenDayCashFlow(entries: Entry[], anchorDate: Date) {
   });
 }
 
-function cycleBounds(selectedMonth: string, startDay: number) {
-  const [year, month] = selectedMonth.split("-").map(Number);
+// A cycle spans from `startDay` of one calendar month to `startDay` (excl.) of
+// the next, so it always straddles two months. `startMonthCycleBounds` keys it
+// by the month it *starts* in; `cycleBounds` below keys it by whichever month
+// holds the majority of its days instead, since that's the month users expect
+// to see it labeled as (e.g. a 25th-start cycle is mostly next month).
+function startMonthCycleBounds(startMonthKey: string, startDay: number) {
+  const [year, month] = startMonthKey.split("-").map(Number);
   const safeDay = Math.min(28, Math.max(1, startDay || 1));
   const start = new Date(year, month - 1, safeDay, 0, 0, 0, 0);
   const end = new Date(year, month, safeDay, 0, 0, 0, 0);
   return { start, end };
 }
 
+function cycleMajorityMonthKey(start: Date, end: Date) {
+  return monthKey(new Date((start.getTime() + end.getTime()) / 2));
+}
+
+function cycleBounds(majorityMonthKey: string, startDay: number) {
+  const candidate = startMonthCycleBounds(majorityMonthKey, startDay);
+  if (cycleMajorityMonthKey(candidate.start, candidate.end) === majorityMonthKey) return candidate;
+  return startMonthCycleBounds(shiftMonthKey(majorityMonthKey, -1), startDay);
+}
+
 function currentCycleMonthKey(startDay: number, now = new Date()) {
   const safeStartDay = Math.min(28, Math.max(1, startDay || 1));
-  return monthKey(new Date(now.getFullYear(), now.getMonth() - (now.getDate() < safeStartDay ? 1 : 0), 1));
+  const startMonthKey = monthKey(new Date(now.getFullYear(), now.getMonth() - (now.getDate() < safeStartDay ? 1 : 0), 1));
+  const { start, end } = startMonthCycleBounds(startMonthKey, startDay);
+  return cycleMajorityMonthKey(start, end);
 }
 
 function reportBounds(period: ReportPeriod, selectedMonth: string, selectedYear: number, startDay: number) {
