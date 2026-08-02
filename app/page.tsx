@@ -1581,6 +1581,40 @@ export default function Home() {
     const missingBudgeted = sorted.filter((item) => !shownNames.has(item.category) && budgets[item.category] > 0);
     return [...shown, ...missingBudgeted];
   }, [monthlyEntries, budgets]);
+  const discretionaryTopCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const entry of monthlyEntries) {
+      if (entry.category === "บิลประจำ") continue;
+      const spendAmount = categorySpendAmount(entry);
+      if (spendAmount == null) continue;
+      map.set(entry.category, (map.get(entry.category) ?? 0) + spendAmount);
+    }
+    const sorted = [...map.entries()].map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount);
+    return sorted[0] ?? null;
+  }, [monthlyEntries]);
+  const discretionaryCategoryTrend = useMemo(() => {
+    if (!discretionaryTopCategory) return null;
+    const category = discretionaryTopCategory.category;
+    const pastAmounts: number[] = [];
+    for (let offset = 1; offset <= 3; offset++) {
+      const { start, end } = cycleBounds(shiftMonthKey(selectedMonth, -offset), monthStartDay);
+      const amount = entries.reduce((sum, entry) => {
+        if (entry.category !== category) return sum;
+        const occurred = new Date(entry.occurred_at);
+        if (occurred < start || occurred >= end) return sum;
+        const spend = categorySpendAmount(entry);
+        return spend != null ? sum + spend : sum;
+      }, 0);
+      if (amount > 0) pastAmounts.push(amount);
+    }
+    if (!pastAmounts.length) return null;
+    const average = pastAmounts.reduce((sum, amount) => sum + amount, 0) / pastAmounts.length;
+    if (average <= 0) return null;
+    const ratio = discretionaryTopCategory.amount / average;
+    if (ratio >= 1.2) return { direction: "up" as const, percent: Math.round((ratio - 1) * 100) };
+    if (ratio <= 0.8) return { direction: "down" as const, percent: Math.round((1 - ratio) * 100) };
+    return { direction: "flat" as const, percent: 0 };
+  }, [discretionaryTopCategory, entries, selectedMonth, monthStartDay]);
   const monthlyLentOut = useMemo(
     () => monthlyEntries.reduce((sum, entry) => {
       if (entry.transaction_type === "transfer" || entry.wallet_impact >= 0) return sum;
@@ -2695,7 +2729,7 @@ export default function Home() {
                   </div>
                 )}
                 <CashFlowTrendCard trend={cashFlowTrend} />
-                <SpendingPersonalityCard topCategory={categorySummary[0] ?? null} monthlyOutflow={monthlyOutflow} />
+                <SpendingPersonalityCard topCategory={discretionaryTopCategory} trend={discretionaryCategoryTrend} monthlyOutflow={monthlyOutflow} hasBillsOnly={!discretionaryTopCategory && monthlyOutflow > 0} />
               </>
             )}
 
@@ -3988,9 +4022,24 @@ function CashFlowTrendCard({ trend }: { trend: { key: string; label: string; inc
   );
 }
 
-function SpendingPersonalityCard({ topCategory, monthlyOutflow }: { topCategory: { category: string; amount: number } | null; monthlyOutflow: number }) {
+function SpendingPersonalityCard({
+  topCategory,
+  trend,
+  monthlyOutflow,
+  hasBillsOnly,
+}: {
+  topCategory: { category: string; amount: number } | null;
+  trend: { direction: "up" | "down" | "flat"; percent: number } | null;
+  monthlyOutflow: number;
+  hasBillsOnly: boolean;
+}) {
   const hasSpend = !!topCategory && topCategory.amount > 0.005;
   const percent = hasSpend && monthlyOutflow > 0 ? Math.round((topCategory!.amount / monthlyOutflow) * 100) : 0;
+  const trendNote = trend?.direction === "up"
+    ? ` (เยอะกว่าค่าเฉลี่ย 3 เดือนก่อน ${trend.percent}%)`
+    : trend?.direction === "down"
+      ? ` (น้อยกว่าค่าเฉลี่ย 3 เดือนก่อน ${trend.percent}%)`
+      : "";
 
   return (
     <section className="home-focus-card spending-personality-card">
@@ -4005,12 +4054,12 @@ function SpendingPersonalityCard({ topCategory, monthlyOutflow }: { topCategory:
       </div>
       {hasSpend ? (
         <p className="spending-personality-note">
-          คุณใช้จ่ายด้าน{topCategory!.category}มากที่สุด — {moneySign}{formatMoney(topCategory!.amount)} หรือ {percent}% ของรายจ่ายทั้งหมดเดือนนี้
+          คุณใช้จ่ายด้าน{topCategory!.category}มากที่สุด (ไม่รวมบิลประจำ) — {moneySign}{formatMoney(topCategory!.amount)} หรือ {percent}% ของรายจ่ายทั้งหมดเดือนนี้{trendNote}
         </p>
       ) : (
         <div className="home-compact-empty">
           <span aria-hidden="true">●</span>
-          <p>เริ่มจดรายการเพื่อดูว่าคุณใช้จ่ายด้านไหนมากที่สุด</p>
+          <p>{hasBillsOnly ? "เดือนนี้มีแต่รายจ่ายประจำ ยังไม่มีรายจ่ายอื่นให้ดูเป็นนิสัย" : "เริ่มจดรายการเพื่อดูว่าคุณใช้จ่ายด้านไหนมากที่สุด"}</p>
         </div>
       )}
     </section>
