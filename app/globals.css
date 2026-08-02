@@ -1397,17 +1397,6 @@ a:focus-visible {
 .recurring-service b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .recurring-timeline-row strong { font-size: 13px; white-space: nowrap; }
 
-.csv-file-picker { display: block; padding: var(--s-4); border: 1px dashed var(--line); border-radius: var(--r-md); text-align: center; font-weight: 700; cursor: pointer; }
-.csv-file-picker input { display: none; }
-.csv-mapping-grid { display: grid; gap: var(--s-2); max-height: 280px; overflow-y: auto; margin: var(--s-3) 0; }
-.csv-mapping-grid label { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: var(--s-2); font-size: 12px; }
-.csv-mapping-grid select { min-width: 0; }
-.csv-preview { padding: var(--s-3); border: 1px solid var(--line-soft); border-radius: var(--r-md); margin-bottom: var(--s-3); }
-.csv-preview > b { display: block; margin-bottom: var(--s-2); font-size: 12px; }
-.csv-preview > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-2); padding: 7px 0; border-top: 1px solid var(--line-soft); }
-.csv-preview span, .csv-preview small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.csv-preview small { grid-column: 1; color: var(--ink-3); font-size: 10px; }
-.csv-preview strong { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 12px; }
 .ask-ai-examples { display: flex; gap: var(--s-2); overflow-x: auto; margin-bottom: var(--s-3); }
 .ask-ai-period { margin: var(--s-2) 0 var(--s-3); color: var(--ink-3); font-size: 11px; }
 .ask-ai-examples span { flex: 0 0 auto; color: var(--ink-3); font-size: 11px; align-self: center; }

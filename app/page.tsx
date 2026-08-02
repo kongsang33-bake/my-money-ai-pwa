@@ -73,7 +73,6 @@ type Entry = {
 };
 
 type Draft = Omit<Entry, "id"> & { id: string };
-type CsvImportRow = { title: string; amount: number; category: string; transaction_type: TransactionType; occurred_at: string; note: string; debtor_name: string; wallet_id: string | null };
 type AiFinanceContext = {
   periodLabel: string;
   totals: { income: number; outflow: number; balance: number; cashAvailable: number; walletBalance: number; netWorth: number };
@@ -228,7 +227,6 @@ type SlipImage = {
 
 const categories: string[] = [...CATEGORIES];
 const historyFiltersEnabled = false;
-const transactionTypes: TransactionType[] = ["income", "personal_expense", "lend", "split_half", "debt_repayment", "debt_payment", "card_charge", "transfer", "gift"];
 
 const transactionTypeLabels: Record<TransactionType, string> = {
   income: "รายรับ",
@@ -1262,7 +1260,6 @@ export default function Home() {
   const [goalSheetOpen, setGoalSheetOpen] = useState(false);
   const [budgetSheetOpen, setBudgetSheetOpen] = useState(false);
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
-  const [csvImportOpen, setCsvImportOpen] = useState(false);
   const [askAiOpen, setAskAiOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -1558,7 +1555,6 @@ export default function Home() {
     investmentAiSheetOpen ||
     budgetSheetOpen ||
     reportSheetOpen ||
-    csvImportOpen ||
     askAiOpen ||
     goalSheetOpen ||
     recapOpen ||
@@ -2084,36 +2080,6 @@ export default function Home() {
     }
 
     setBusy(false);
-  }
-
-  async function importEntries(rows: CsvImportRow[]) {
-    if (!supabase || !user || !rows.length) return false;
-    setBusy(true);
-    setError("");
-    const normalized = rows.map((row, index) => normalizeEntry({
-      id: `csv-${Date.now()}-${index}`,
-      title: row.title,
-      category: categories.includes(row.category) ? row.category : "อื่น ๆ",
-      amount: toMoneyAmount(row.amount),
-      transaction_type: transactionTypes.includes(row.transaction_type) ? row.transaction_type : "personal_expense",
-      debtor_name: row.debtor_name,
-      occurred_at: fromDateInput(row.occurred_at || todayDateInput()),
-      wallet_id: wallets.some((wallet) => wallet.id === row.wallet_id) ? row.wallet_id : defaultWalletId(wallets),
-      note: row.note,
-      source_text: "CSV import",
-    }, false));
-    const { data, error: insertError } = await supabase.from("transactions").insert(normalized.map((item) => ({
-      user_id: user.id, title: item.title.trim(), category: item.category, amount: item.amount, kind: item.type,
-      transaction_type: item.transaction_type, debtor_name: item.debtor_name, wallet_impact: item.wallet_impact,
-      debt_impact: item.debt_impact, user_share: item.user_share, partner_share: item.partner_share,
-      occurred_at: item.occurred_at, source_text: item.source_text, wallet_id: item.wallet_id, note: item.note,
-    }))).select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id,investment_id,investment_units");
-    if (insertError) { setError(insertError.message); setBusy(false); return false; }
-    setEntries((current) => [...(data ?? []).map(mapTransactionRow), ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
-    setBusy(false);
-    setCsvImportOpen(false);
-    notify({ tone: "success", title: "นำเข้า CSV แล้ว", detail: `${normalized.length} รายการ` });
-    return true;
   }
 
   async function createMissingDebtors(items: Entry[]) {
@@ -3071,7 +3037,6 @@ export default function Home() {
   const budgetSheetDismiss = useDismiss(budgetSheetOpen, () => setBudgetSheetOpen(false));
   const goalSheetDismiss = useDismiss(goalSheetOpen, () => setGoalSheetOpen(false));
   const reportSheetDismiss = useDismiss(reportSheetOpen, () => setReportSheetOpen(false));
-  const csvImportDismiss = useDismiss(csvImportOpen, () => setCsvImportOpen(false));
   const askAiDismiss = useDismiss(askAiOpen, () => setAskAiOpen(false));
   const recapDismiss = useDismiss(recapOpen, () => setRecapOpen(false));
   const pinSheetDismiss = useDismiss(pinSheetOpen, () => { setPinSheetOpen(false); setPinError(""); });
@@ -3541,7 +3506,6 @@ export default function Home() {
             onOpenPortfolio={() => { menuDismiss.requestClose(); setTab("portfolio"); }}
             onOpenBudgets={() => { menuDismiss.requestClose(); setBudgetSheetOpen(true); }}
             onOpenReport={() => { menuDismiss.requestClose(); setReportSheetOpen(true); }}
-            onOpenImport={() => { menuDismiss.requestClose(); setCsvImportOpen(true); }}
             onOpenAsk={() => { menuDismiss.requestClose(); setAskAiOpen(true); }}
             onOpenPin={() => { menuDismiss.requestClose(); setPinSheetOpen(true); }}
             theme={theme}
@@ -3574,9 +3538,6 @@ export default function Home() {
             onClose={reportSheetDismiss.requestClose}
             closing={reportSheetDismiss.closing}
           />
-        )}
-        {csvImportDismiss.mounted && (
-          <CsvImportSheet busy={busy} error={error} onClose={csvImportDismiss.requestClose} onImport={importEntries} closing={csvImportDismiss.closing} />
         )}
         {askAiDismiss.mounted && (
           <AskFinanceSheet context={aiFinanceContext} onClose={askAiDismiss.requestClose} closing={askAiDismiss.closing} />
@@ -6158,70 +6119,9 @@ function BudgetSheet({
   );
 }
 
-function parseCsvLine(line: string) {
-  const values: string[] = [];
-  let value = "";
-  let quoted = false;
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    if (char === '"' && line[index + 1] === '"') { value += '"'; index += 1; continue; }
-    if (char === '"') { quoted = !quoted; continue; }
-    if (char === "," && !quoted) { values.push(value.trim()); value = ""; continue; }
-    value += char;
-  }
-  values.push(value.trim());
-  return values;
-}
-
 function RecurringAvatarGlyph({ iconKey, fallbackName, size = 18 }: { iconKey: string | null; fallbackName: string; size?: number }) {
   const Icon = (iconKey && (recurringIconMap[iconKey] || walletIconMap[iconKey])) || recurringIconMap[inferredRecurringIcon(fallbackName)];
   return <Icon size={size} strokeWidth={2.25} aria-hidden="true" />;
-}
-
-function normalizeImportedDate(value: string) {
-  const text = value.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
-  const parts = text.split(/[/-]/).map(Number);
-  if (parts.length === 3 && parts[2] > 1900) return `${parts[2]}-${String(parts[1]).padStart(2, "0")}-${String(parts[0]).padStart(2, "0")}`;
-  return todayDateInput();
-}
-
-function CsvImportSheet({ busy, error, onClose, onImport, closing }: { busy: boolean; error: string; onClose: () => void; onImport: (rows: CsvImportRow[]) => Promise<boolean>; closing?: boolean }) {
-  const [headers, setHeaders] = useState<string[]>([]);
-  const [rawRows, setRawRows] = useState<string[][]>([]);
-  const [mapping, setMapping] = useState<Record<keyof CsvImportRow, string>>({ title: "", amount: "", category: "", transaction_type: "", occurred_at: "", note: "", debtor_name: "", wallet_id: "" });
-  const fields: { key: keyof CsvImportRow; label: string; required?: boolean }[] = [
-    { key: "title", label: "ชื่อรายการ", required: true }, { key: "amount", label: "จำนวนเงิน", required: true }, { key: "occurred_at", label: "วันที่", required: true },
-    { key: "category", label: "หมวดหมู่" }, { key: "transaction_type", label: "ประเภทรายการ" }, { key: "note", label: "หมายเหตุ" }, { key: "debtor_name", label: "ชื่อผู้เกี่ยวข้อง" }, { key: "wallet_id", label: "Wallet ID" },
-  ];
-  const chooseFile = async (file: File | undefined) => {
-    if (!file) return;
-    const lines = (await file.text()).split(/\r?\n/).filter((line) => line.trim());
-    if (lines.length < 2) return;
-    const nextHeaders = parseCsvLine(lines[0]);
-    setHeaders(nextHeaders);
-    setRawRows(lines.slice(1).map(parseCsvLine));
-    const guess = (names: string[]) => nextHeaders.find((header) => names.some((name) => header.toLowerCase().includes(name))) ?? "";
-    setMapping({ title: guess(["title", "name", "รายการ", "ชื่อ"]), amount: guess(["amount", "เงิน", "ยอด"]), occurred_at: guess(["date", "วันที่", "occurred"]), category: guess(["category", "หมวด"]), transaction_type: guess(["type", "ประเภท"]), note: guess(["note", "หมายเหตุ"]), debtor_name: guess(["debtor", "ลูกหนี้", "ผู้เกี่ยวข้อง"]), wallet_id: guess(["wallet"]), });
-  };
-  const rows = useMemo(() => rawRows.map((cells) => {
-    const value = (key: keyof CsvImportRow) => { const header = mapping[key]; return header ? cells[headers.indexOf(header)] ?? "" : ""; };
-    return { title: value("title"), amount: toMoneyAmount(value("amount").replace(/[,฿]/g, "")), category: value("category") || "อื่น ๆ", transaction_type: (value("transaction_type") as TransactionType) || "personal_expense", occurred_at: normalizeImportedDate(value("occurred_at")), note: value("note"), debtor_name: value("debtor_name"), wallet_id: value("wallet_id") || null } satisfies CsvImportRow;
-  }), [rawRows, mapping, headers]);
-  const valid = rows.filter((row) => row.title.trim() && row.amount > 0 && row.occurred_at);
-  return (
-    <div className={`sheet-backdrop ${closing ? "closing" : ""}`}><section className={`edit-sheet report-sheet csv-import-sheet ${closing ? "closing" : ""}`}>
-      <div className="sheet-head"><div><p className="eyebrow">นำเข้าข้อมูล</p><h2>นำเข้า CSV</h2></div><button onClick={onClose}>×</button></div>
-      <label className="csv-file-picker">เลือกไฟล์ CSV<input type="file" accept=".csv,text/csv" onChange={(event) => { void chooseFile(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>
-      {!!headers.length && <>
-        <p className="budget-hint">จับคู่คอลัมน์ก่อนนำเข้า ระบบจะไม่บันทึกจนกว่าจะกดยืนยัน</p>
-        <div className="csv-mapping-grid">{fields.map((field) => <label key={field.key}>{field.label}{field.required && " *"}<select value={mapping[field.key]} onChange={(event) => setMapping((current) => ({ ...current, [field.key]: event.target.value }))}><option value="">ไม่ใช้คอลัมน์นี้</option>{headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>)}</div>
-        <div className="csv-preview"><b>ตัวอย่าง {Math.min(valid.length, 5)} จาก {valid.length} รายการ</b>{valid.slice(0, 5).map((row, index) => <div key={`${row.title}-${index}`}><span>{row.title}</span><small>{row.occurred_at} · {row.category}</small><strong>{moneySign}{formatMoney(row.amount)}</strong></div>)}</div>
-        {error && <StateCard tone="error" title="นำเข้าไม่สำเร็จ" detail={error} />}
-        <button className="save" onClick={() => { void onImport(valid); }} disabled={busy || valid.length === 0}>นำเข้า {valid.length} รายการ</button>
-      </>}
-    </section></div>
-  );
 }
 
 function cleanAiAnswer(value: string) {
@@ -6421,7 +6321,6 @@ function SideMenu({
   onOpenPortfolio,
   onOpenBudgets,
   onOpenReport,
-  onOpenImport,
   onOpenAsk,
   onOpenPin,
   theme,
@@ -6445,7 +6344,6 @@ function SideMenu({
   onOpenPortfolio: () => void;
   onOpenBudgets: () => void;
   onOpenReport: () => void;
-  onOpenImport: () => void;
   onOpenAsk: () => void;
   onOpenPin: () => void;
   theme: Theme;
@@ -6504,25 +6402,24 @@ function SideMenu({
               <span>พอร์ตลงทุน</span>
               <b>{moneySign}{formatMoney(portfolioTotal)}</b>
             </button>
-          </div>
-          <div className="side-menu-section">
-            <p>ตั้งค่า</p>
             <button onClick={onOpenBudgets}>
               <TrendingUp size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>งบประมาณ</span>
+            </button>
+          </div>
+          <div className="side-menu-section">
+            <p>เครื่องมือ</p>
+            <button onClick={onOpenAsk}>
+              <Lightbulb size={16} strokeWidth={2.25} aria-hidden="true" />
+              <span>ถาม AI เรื่องเงิน</span>
             </button>
             <button onClick={onOpenReport}>
               <Download size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>ส่งออกรีพอร์ท</span>
             </button>
-            <button onClick={onOpenImport}>
-              <Receipt size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>นำเข้า CSV</span>
-            </button>
-            <button onClick={onOpenAsk}>
-              <Lightbulb size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>ถาม AI เรื่องเงิน</span>
-            </button>
+          </div>
+          <div className="side-menu-section">
+            <p>ตั้งค่า</p>
             <button onClick={onOpenProfile}>
               <UserCog size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>จัดการโปรไฟล์</span>
