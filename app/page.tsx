@@ -1614,6 +1614,7 @@ export default function Home() {
     () => walletTotals.cash,
     [walletTotals.cash],
   );
+  const secondaryWallets = useMemo(() => displayWallets.filter((wallet) => wallet.tag !== "cash"), [displayWallets]);
   const portfolioHoldings = useMemo(() => buildPortfolioHoldings(investments, investmentPrices), [investments, investmentPrices]);
   const pendingInvestmentPurchases = useMemo(
     () => entries.filter((entry) => entry.transaction_type === "investment_buy" && entry.investment_units == null),
@@ -3138,25 +3139,18 @@ export default function Home() {
               />
             )}
 
-            {!dataLoading && secondaryWalletTags.some((entry) => wallets.some((wallet) => wallet.tag === entry.tag)) && (
-              <section className="wallet-grid">
-                {secondaryWalletTags
-                  .filter((entry) => wallets.some((wallet) => wallet.tag === entry.tag))
-                  .map((entry) => {
-                    const wallet = wallets.find((item) => item.tag === entry.tag);
-                    return (
-                      <button className={`wallet-card secondary-wallet-card ${entry.className}`} key={entry.tag} onClick={() => setTab("wallets")}>
-                        {wallet && (
-                          <i className="debtor-avatar sm" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>
-                            <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} size={16} />
-                          </i>
-                        )}
-                        <span>{entry.label}</span>
-                        <strong><CountUpMoney value={walletTotals[entry.tag]} /></strong>
-                      </button>
-                    );
-                  })}
-              </section>
+            {!dataLoading && !!secondaryWallets.length && (
+              <div className="wallet-carousel">
+                {secondaryWallets.map((wallet) => (
+                  <button className={`wallet-carousel-card ${secondaryWalletTags.find((entry) => entry.tag === wallet.tag)?.className ?? ""}`} key={wallet.id} onClick={() => setTab("wallets")}>
+                    <i className="debtor-avatar sm" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>
+                      <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} size={16} />
+                    </i>
+                    <span>{wallet.name}</span>
+                    <strong><CountUpMoney value={wallet.display_balance} /></strong>
+                  </button>
+                ))}
+              </div>
             )}
 
             {!dataLoading && <RecentActivityTimeline entries={entries} onEdit={setEditing} />}
