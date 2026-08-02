@@ -46,7 +46,7 @@ import {
 } from "lucide-react";
 
 type EntryKind = "expense" | "income";
-type Tab = "home" | "add" | "history" | "debtors" | "wallets" | "recurring";
+type Tab = "home" | "add" | "history" | "debtors" | "wallets" | "recurring" | "goals";
 type Theme = "light" | "dark";
 
 type Entry = {
@@ -2687,7 +2687,7 @@ export default function Home() {
                   payableTotal={payableTotal}
                 />
                 <QuickAddStrip shortcuts={quickShortcuts.slice(0, 4)} onSelect={(shortcut) => openAddTab("manual", shortcut)} onMore={() => openAddTab()} />
-                <GoalCard goals={goals} onAdd={() => setGoalSheetOpen(true)} onDelete={removeGoal} />
+                {!!goals.length && <GoalCard goals={goals} onAdd={() => setGoalSheetOpen(true)} onDelete={removeGoal} />}
                 {(dueSoonRecurring.length > 0 || budgetGlance.totalBudget > 0) && (
                   <div className="home-focus-grid">
                     {dueSoonRecurring.length > 0 && <DueSoonCard items={dueSoonRecurring} onManage={() => setTab("recurring")} />}
@@ -2950,6 +2950,15 @@ export default function Home() {
           />
         )}
 
+        {tab === "goals" && (
+          <GoalsView
+            goals={goals}
+            onBack={() => setTab("home")}
+            onAdd={() => setGoalSheetOpen(true)}
+            onDelete={removeGoal}
+          />
+        )}
+
         {editingDismiss.mounted && editing && (
           <EditSheet entry={editing} wallets={wallets} busy={busy} error={error} onChange={setEditing} onClose={editingDismiss.requestClose} onSave={updateEntry} closing={editingDismiss.closing} />
         )}
@@ -2998,6 +3007,7 @@ export default function Home() {
             onOpenWallets={() => { menuDismiss.requestClose(); setTab("wallets"); }}
             onOpenDebtors={() => { menuDismiss.requestClose(); setSelectedDebtor(null); setTab("debtors"); }}
             onOpenRecurring={() => { menuDismiss.requestClose(); setTab("recurring"); }}
+            onOpenGoals={() => { menuDismiss.requestClose(); setTab("goals"); }}
             onOpenBudgets={() => { menuDismiss.requestClose(); setBudgetSheetOpen(true); }}
             onOpenReport={() => { menuDismiss.requestClose(); setReportSheetOpen(true); }}
             onOpenImport={() => { menuDismiss.requestClose(); setCsvImportOpen(true); }}
@@ -3857,20 +3867,46 @@ function BudgetGlanceCard({
   );
 }
 
-function GoalCard({ goals, onAdd, onDelete }: { goals: MoneyGoal[]; onAdd: () => void; onDelete: (goal: MoneyGoal) => void }) {
-  if (!goals.length) {
-    return (
-      <section className="goal-card goal-empty">
+function GoalsView({
+  goals,
+  onBack,
+  onAdd,
+  onDelete,
+}: {
+  goals: MoneyGoal[];
+  onBack: () => void;
+  onAdd: () => void;
+  onDelete: (goal: MoneyGoal) => void;
+}) {
+  return (
+    <div className="view debtor-view">
+      <div className="add-title">
+        <button onClick={onBack}>‹</button>
         <div>
           <p className="eyebrow">เป้าหมายการเงิน</p>
-          <h2>เก็บเงินให้มีแรงส่ง</h2>
-          <p>ตั้งเป้าหมายแรก แล้วติดตามความคืบหน้าได้จากหน้าแรก</p>
+          <h2>เป้าหมายทั้งหมด</h2>
         </div>
-        <button className="text-button" onClick={onAdd}>สร้างเป้าหมาย</button>
-      </section>
-    );
-  }
+        <button className="header-add-button" onClick={onAdd}>เพิ่ม</button>
+      </div>
+      <div className="goal-list">
+        {goals.map((goal) => {
+          const progress = Math.min(100, Math.max(0, (goal.saved / goal.target) * 100));
+          return (
+            <div className="goal-item" key={goal.id}>
+              <div className="goal-item-head"><b>{goal.name}</b><button className="icon-button" onClick={() => onDelete(goal)} aria-label={`ลบเป้าหมาย ${goal.name}`}>×</button></div>
+              <div className="goal-card-values"><strong>{moneySign}{formatMoney(goal.saved)}</strong><span>จาก {moneySign}{formatMoney(goal.target)}</span></div>
+              <div className="goal-progress" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${progress}%` }} /></div>
+              <small>{Math.round(progress)}%{goal.deadline ? ` · เป้าหมาย ${new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("th-TH", { day: "numeric", month: "short" })}` : ""}</small>
+            </div>
+          );
+        })}
+        {!goals.length && <EmptyNote glyph="●" action={{ label: "สร้างเป้าหมาย", onClick: onAdd }}>ตั้งเป้าหมายแรก แล้วติดตามความคืบหน้าได้จากที่นี่</EmptyNote>}
+      </div>
+    </div>
+  );
+}
 
+function GoalCard({ goals, onAdd, onDelete }: { goals: MoneyGoal[]; onAdd: () => void; onDelete: (goal: MoneyGoal) => void }) {
   return (
     <section className="goal-card">
       <div className="goal-card-head"><div><p className="eyebrow">เป้าหมายการเงิน</p><h2>{goals.length} เป้าหมาย</h2></div><button className="text-button" onClick={onAdd}>เพิ่มเป้าหมาย</button></div>
@@ -5831,6 +5867,7 @@ function SideMenu({
   onOpenWallets,
   onOpenDebtors,
   onOpenRecurring,
+  onOpenGoals,
   onOpenBudgets,
   onOpenReport,
   onOpenImport,
@@ -5852,6 +5889,7 @@ function SideMenu({
   onOpenWallets: () => void;
   onOpenDebtors: () => void;
   onOpenRecurring: () => void;
+  onOpenGoals: () => void;
   onOpenBudgets: () => void;
   onOpenReport: () => void;
   onOpenImport: () => void;
@@ -5902,6 +5940,10 @@ function SideMenu({
               <Receipt size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>รายจ่ายประจำ</span>
               <b>{moneySign}{formatMoney(recurringTotal)}</b>
+            </button>
+            <button onClick={onOpenGoals}>
+              <PiggyBank size={16} strokeWidth={2.25} aria-hidden="true" />
+              <span>เป้าหมายการเงิน</span>
             </button>
           </div>
           <div className="side-menu-section">
