@@ -1976,16 +1976,27 @@ export default function Home() {
     return (data.items ?? []) as InvestmentDraftItem[];
   }
 
+  async function extractUnitsFromStatement(image: SlipImage, targetAmount: number) {
+    const response = await fetch("/api/analyze-investment-confirm", {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(await authHeaders()) },
+      body: JSON.stringify({ image: { data: image.data, mimeType: image.mimeType }, targetAmount }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error);
+    return data as { found: boolean; units: number; price_per_unit: number; amount: number; transaction_date: string };
+  }
+
   // Always creates a *pending* purchase (investment_units left null) even
   // though the caller might already know the units for a same-day buy —
   // logging via AI is specifically for the DCA case where units aren't
   // known yet, so it never tries to guess/parse units from free text.
-  async function createPendingInvestmentPurchase(input: { investmentId: string | null; name: string; walletId: string; amount: number; occurredAt: string; note?: string }) {
+  async function createPendingInvestmentPurchase(input: { investmentId: string | null; name: string; code?: string; icon?: string | null; icon_color?: string | null; walletId: string; amount: number; occurredAt: string; note?: string }) {
     if (!supabase || !user || !(input.amount > 0) || !input.walletId) return false;
     setBusy(true);
     setError("");
     const target = input.investmentId ? investments.find((item) => item.id === input.investmentId) ?? null : null;
-    const investment = await resolveInvestment(target, { name: input.name, code: "", icon: "trending-up", icon_color: null });
+    const investment = await resolveInvestment(target, { name: input.name, code: input.code ?? "", icon: input.icon ?? "trending-up", icon_color: input.icon_color ?? null });
     if (!investment) {
       setBusy(false);
       return false;
@@ -3446,6 +3457,7 @@ export default function Home() {
             error={error}
             onClose={investmentBuyDismiss.requestClose}
             onSubmit={buyInvestment}
+            onSubmitPending={createPendingInvestmentPurchase}
             closing={investmentBuyDismiss.closing}
           />
         )}
@@ -3477,6 +3489,7 @@ export default function Home() {
             error={error}
             onClose={investmentConfirmDismiss.requestClose}
             onSubmit={confirmInvestmentPurchase}
+            onExtractUnits={extractUnitsFromStatement}
             closing={investmentConfirmDismiss.closing}
           />
         )}
@@ -7021,6 +7034,7 @@ function InvestmentBuySheet({
   error,
   onClose,
   onSubmit,
+  onSubmitPending,
   closing,
 }: {
   target: Investment | null;
@@ -7030,6 +7044,7 @@ function InvestmentBuySheet({
   error: string;
   onClose: () => void;
   onSubmit: (target: Investment | null, input: { name: string; code: string; icon: string | null; icon_color: string | null; units: number; amount: number; wallet_id: string; occurred_at: string }) => Promise<boolean>;
+  onSubmitPending: (input: { investmentId: string | null; name: string; code?: string; icon?: string | null; icon_color?: string | null; walletId: string; amount: number; occurredAt: string }) => Promise<boolean>;
   closing?: boolean;
 }) {
   const [selectedId, setSelectedId] = useState(target?.id ?? "new");
@@ -7049,8 +7064,10 @@ function InvestmentBuySheet({
 
   const submit = async () => {
     const holdingName = selected ? selected.name : name;
-    if (!holdingName.trim() || !(units > 0) || !(amount > 0) || !walletId) return;
-    const saved = await onSubmit(selected, { name: holdingName, code: selected ? (selected.code ?? "") : code, icon: selected ? selected.icon : icon, icon_color: selected ? selected.icon_color : iconColor, units, amount, wallet_id: walletId, occurred_at: fromDateInput(occurredAt) });
+    if (!holdingName.trim() || !(amount > 0) || !walletId) return;
+    const saved = units > 0
+      ? await onSubmit(selected, { name: holdingName, code: selected ? (selected.code ?? "") : code, icon: selected ? selected.icon : icon, icon_color: selected ? selected.icon_color : iconColor, units, amount, wallet_id: walletId, occurred_at: fromDateInput(occurredAt) })
+      : await onSubmitPending({ investmentId: selected?.id ?? null, name: holdingName, code: selected ? (selected.code ?? "") : code, icon: selected ? selected.icon : icon, icon_color: selected ? selected.icon_color : iconColor, walletId, amount, occurredAt: fromDateInput(occurredAt) });
     if (saved) onClose();
   };
 
@@ -7088,14 +7105,16 @@ function InvestmentBuySheet({
         </>
       )}
       <label>
-        จำนวนหน่วยที่ซื้อ
+        จำนวนหน่วยที่ซื้อ (เว้นว่างได้ถ้ายังไม่รู้)
         <input inputMode="decimal" value={unitsText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setUnitsText(event.target.value); }} placeholder="เช่น 92.6397" />
       </label>
       <label>
         จำนวนเงินที่จ่ายไป
         <input inputMode="decimal" value={amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setAmountText(event.target.value); }} placeholder="เช่น 1000" />
       </label>
-      {pricePerUnit != null && <small className="cycle-note">ราคาต่อหน่วย {pricePerUnit.toFixed(4)}</small>}
+      {pricePerUnit != null
+        ? <small className="cycle-note">ราคาต่อหน่วย {pricePerUnit.toFixed(4)}</small>
+        : <small className="cycle-note">ถ้าเว้นจำนวนหน่วยว่างไว้ จะหักเงินออกจากกระเป๋าทันทีแล้วบันทึกเป็นรายการรอยืนยันหน่วย ไปกรอกหน่วยจริงทีหลังได้ที่หน้าพอร์ตลงทุน</small>}
       <label>
         หักเงินจากกระเป๋า
         <select value={walletId} onChange={(event) => setWalletId(event.target.value)}>
@@ -7109,8 +7128,8 @@ function InvestmentBuySheet({
         <input type="date" value={occurredAt} max={todayDateInput()} onChange={(event) => setOccurredAt(event.target.value)} />
       </label>
       {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
-      <button className="save" onClick={submit} disabled={busy || !(units > 0) || !(amount > 0) || !walletId || (!selected && !name.trim())}>
-        {busy ? "กำลังบันทึก..." : "บันทึก"}
+      <button className="save" onClick={submit} disabled={busy || !(amount > 0) || !walletId || (!selected && !name.trim())}>
+        {busy ? "กำลังบันทึก..." : units > 0 ? "บันทึก" : "บันทึก (รอยืนยันหน่วย)"}
       </button>
     </SheetFrame>
   );
@@ -7222,6 +7241,7 @@ function InvestmentConfirmUnitsSheet({
   error,
   onClose,
   onSubmit,
+  onExtractUnits,
   closing,
 }: {
   entry: Entry;
@@ -7230,11 +7250,38 @@ function InvestmentConfirmUnitsSheet({
   error: string;
   onClose: () => void;
   onSubmit: (entry: Entry, units: number) => Promise<boolean>;
+  onExtractUnits: (image: SlipImage, targetAmount: number) => Promise<{ found: boolean; units: number; price_per_unit: number; amount: number; transaction_date: string }>;
   closing?: boolean;
 }) {
   const [unitsText, setUnitsText] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const [extractNote, setExtractNote] = useState<{ tone: "success" | "warning" | "error"; text: string } | null>(null);
   const units = toFiniteNumber(unitsText);
   const pricePerUnit = units > 0 ? entry.amount / units : null;
+
+  const attachStatement = async (file: File | undefined) => {
+    if (!file) return;
+    setExtracting(true);
+    setExtractNote(null);
+    try {
+      const image = await compressSlipImage(file);
+      const result = await onExtractUnits(image, entry.amount);
+      if (!result.found || !(result.units > 0)) {
+        setExtractNote({ tone: "warning", text: "AI ไม่พบแถวรายการซื้อในรูปนี้ ลองแนบรูปที่เห็นตารางประวัติการซื้อชัดเจน หรือกรอกหน่วยเอง" });
+        return;
+      }
+      setUnitsText(String(result.units));
+      const amountDiff = Math.abs(result.amount - entry.amount);
+      if (amountDiff > 1) {
+        setExtractNote({ tone: "warning", text: `อ่านได้ ${result.units.toLocaleString("th-TH", { maximumFractionDigits: 4 })} หน่วย แต่ยอดเงินในรูป (${moneySign}${formatMoney(result.amount)}) ไม่ตรงกับยอดที่จ่ายไป (${moneySign}${formatMoney(entry.amount)}) เท่าไหร่ — เช็คให้แน่ใจก่อนกดยืนยัน` });
+      } else {
+        setExtractNote({ tone: "success", text: `อ่านได้ ${result.units.toLocaleString("th-TH", { maximumFractionDigits: 4 })} หน่วย ตรงกับยอด ${moneySign}${formatMoney(result.amount)} — ตรวจอีกครั้งก่อนกดยืนยัน` });
+      }
+    } catch (e) {
+      setExtractNote({ tone: "error", text: e instanceof Error ? e.message : "อ่านรูปไม่สำเร็จ" });
+    }
+    setExtracting(false);
+  };
 
   const submit = async () => {
     if (!(units > 0)) return;
@@ -7252,6 +7299,13 @@ function InvestmentConfirmUnitsSheet({
         <button onClick={onClose}>x</button>
       </div>
       <small className="cycle-note">จ่ายไปแล้ว {moneySign}{formatMoney(entry.amount)} เมื่อ {formatDateTime(entry.occurred_at)}</small>
+      <label className="attach-button">
+        {extracting ? "กำลังอ่านรูป..." : "แนบรูป statement ให้ AI อ่านหน่วยให้"}
+        <input type="file" accept="image/*" disabled={extracting} onChange={(event) => { void attachStatement(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+      </label>
+      {extractNote && (extractNote.tone === "success"
+        ? <p className="pin-hint">{extractNote.text}</p>
+        : <StateCard tone="error" title="ลองตรวจสอบอีกครั้ง" detail={extractNote.text} />)}
       <label>
         จำนวนหน่วยที่ได้จริง
         <input autoFocus inputMode="decimal" value={unitsText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setUnitsText(event.target.value); }} placeholder="เช่น 92.6397" />
