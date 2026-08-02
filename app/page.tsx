@@ -20,6 +20,7 @@ import {
   HeartPulse,
   Home as HomeIcon,
   Lightbulb,
+  LineChart,
   Lock,
   Menu,
   Moon,
@@ -46,7 +47,7 @@ import {
 } from "lucide-react";
 
 type EntryKind = "expense" | "income";
-type Tab = "home" | "add" | "history" | "debtors" | "wallets" | "recurring" | "goals";
+type Tab = "home" | "add" | "history" | "debtors" | "wallets" | "recurring" | "goals" | "portfolio";
 type Theme = "light" | "dark";
 
 type Entry = {
@@ -111,7 +112,7 @@ type Debtor = {
   icon: string | null;
   icon_color: string | null;
 };
-type WalletTag = "cash" | "savings" | "investment" | "other" | "petty";
+type WalletTag = "cash" | "savings" | "other" | "petty";
 type Wallet = {
   id: string;
   user_id: string;
@@ -135,6 +136,22 @@ type RecurringExpense = {
   icon: string | null;
   icon_color: string | null;
 };
+type Investment = {
+  id: string;
+  user_id: string;
+  name: string;
+  code: string | null;
+  units: number;
+  cost_basis: number;
+  icon: string | null;
+  icon_color: string | null;
+};
+type InvestmentPrice = {
+  id: string;
+  investment_id: string;
+  nav: number;
+  recorded_at: string;
+};
 type ReportPeriod = "month" | "year";
 type HistoryFilters = {
   query: string;
@@ -155,20 +172,17 @@ type EmptyAction = { label: string; onClick: () => void };
 const walletTagLabels: Record<WalletTag, string> = {
   cash: "เงินสด",
   savings: "ออมทรัพย์",
-  investment: "เงินลงทุน",
   other: "อื่น ๆ",
   petty: "เงินสดย่อย",
 };
 const walletTagHints: Record<WalletTag, string> = {
   cash: "รวมเป็นยอดกระเป๋าหลักบนหน้าแรก",
   savings: "แยกยอดออกจากหน้าแรก เหมาะกับเงินเก็บระยะยาว",
-  investment: "แยกยอดออกจากหน้าแรก เหมาะกับเงินที่นำไปลงทุน",
   other: "แยกยอดออกจากหน้าแรก สำหรับเงินที่ไม่เข้าพวกไหนเลย",
   petty: "แยกยอดออกจากหน้าแรก เหมาะกับเงินสดที่กันไว้ใช้จ่ายจิปาถะหรือทอนลูกค้า เช่น เงินทอนหน้าร้าน เงินสำรองแลกเหรียญ",
 };
 const secondaryWalletTags: { tag: WalletTag; label: string; className: string }[] = [
   { tag: "savings", label: walletTagLabels.savings, className: "savings-wallet" },
-  { tag: "investment", label: walletTagLabels.investment, className: "investment-wallet" },
   { tag: "petty", label: walletTagLabels.petty, className: "petty-wallet" },
   { tag: "other", label: walletTagLabels.other, className: "other-wallet" },
 ];
@@ -921,15 +935,20 @@ function defaultDayForCycle(key: string, startDay: number) {
   return preferred.toDateString();
 }
 
-function netWorthAsOf(wallets: Wallet[], debtors: Debtor[], entriesUpToCutoff: Entry[]) {
+function netWorthAsOf(wallets: Wallet[], debtors: Debtor[], entriesUpToCutoff: Entry[], portfolioValue = 0) {
   const ledger = buildWalletLedger(wallets, entriesUpToCutoff);
   const walletTotal = Object.values(ledger.totals).reduce((sum, amount) => sum + amount, 0);
   const receivable = buildDebtSummary(debtors, entriesUpToCutoff, "lend", ["lend", "split_half", "debt_repayment"]).reduce((sum, item) => sum + item.amount, 0);
   const payable = buildDebtSummary(debtors, entriesUpToCutoff, "own", ["debt_payment", "card_charge"]).reduce((sum, item) => sum + item.amount, 0);
-  return walletTotal + receivable - payable;
+  return walletTotal + receivable - payable + portfolioValue;
 }
 
-function buildMonthlyTrend(entries: Entry[], wallets: Wallet[], debtors: Debtor[], selectedMonth: string, monthStartDay: number, months = 6) {
+// portfolioValue is today's portfolio market value, held constant across every
+// past point in the trend (no historical per-day reconstruction of holdings/
+// NAV is available) so at least the most recent point matches the live net
+// worth figure shown elsewhere; older points understate how much of that
+// net worth was already invested at the time.
+function buildMonthlyTrend(entries: Entry[], wallets: Wallet[], debtors: Debtor[], selectedMonth: string, monthStartDay: number, months = 6, portfolioValue = 0) {
   return Array.from({ length: months }, (_, index) => {
     const key = shiftMonthKey(selectedMonth, index - months + 1);
     const range = cycleBounds(key, monthStartDay);
@@ -937,7 +956,7 @@ function buildMonthlyTrend(entries: Entry[], wallets: Wallet[], debtors: Debtor[
     const income = totalWallet(monthEntries, "income");
     const outflow = Math.abs(totalWallet(monthEntries, "expense"));
     const entriesUpToCutoff = entries.filter((entry) => new Date(entry.occurred_at) < range.end);
-    const netWorth = netWorthAsOf(wallets, debtors, entriesUpToCutoff);
+    const netWorth = netWorthAsOf(wallets, debtors, entriesUpToCutoff, portfolioValue);
     return { key, label: new Date(`${key}-01T00:00:00`).toLocaleDateString("th-TH", { month: "short" }), income, outflow, netWorth };
   });
 }
@@ -960,13 +979,12 @@ function transferWalletTag(entry: Entry, wallets: Wallet[]): Exclude<WalletTag, 
   }
 
   if (matchesAnyKeyword(text, ["\u0e2d\u0e2d\u0e21", "\u0e40\u0e01\u0e47\u0e1a\u0e40\u0e07\u0e34\u0e19", "\u0e40\u0e07\u0e34\u0e19\u0e40\u0e01\u0e47\u0e1a"])) return "savings";
-  if (matchesAnyKeyword(text, ["\u0e25\u0e07\u0e17\u0e38\u0e19", "\u0e01\u0e2d\u0e07\u0e17\u0e38\u0e19", "\u0e2b\u0e38\u0e49\u0e19", "\u0e04\u0e23\u0e34\u0e1b\u0e42\u0e15"])) return "investment";
 
   return null;
 }
 
 function buildWalletLedger(wallets: Wallet[], entries: Entry[]) {
-  const totals: Record<WalletTag, number> = { cash: 0, savings: 0, investment: 0, other: 0, petty: 0 };
+  const totals: Record<WalletTag, number> = { cash: 0, savings: 0, other: 0, petty: 0 };
   const walletDeltas = new Map<string, number>();
   const fallbackWalletId = defaultWalletId(wallets);
 
@@ -990,7 +1008,7 @@ function buildWalletLedger(wallets: Wallet[], entries: Entry[]) {
       };
     });
 
-  const nextTotals: Record<WalletTag, number> = { cash: 0, savings: 0, investment: 0, other: 0, petty: 0 };
+  const nextTotals: Record<WalletTag, number> = { cash: 0, savings: 0, other: 0, petty: 0 };
   for (const wallet of displayWallets) nextTotals[wallet.tag] += wallet.display_balance;
 
   return { totals: nextTotals, wallets: displayWallets };
@@ -1010,6 +1028,53 @@ function buildDebtSummary(debtors: Debtor[], entries: Entry[], kind: DebtorKind,
     .map(([name, amount]) => ({ name, amount }))
     .filter((item) => item.amount > 0.005)
     .sort((a, b) => b.amount - a.amount);
+}
+
+type PortfolioHolding = Investment & {
+  avgCost: number;
+  latestNav: number | null;
+  latestNavDate: string | null;
+  marketValue: number;
+  gain: number;
+  gainPercent: number | null;
+};
+
+function latestPriceFor(investmentId: string, prices: InvestmentPrice[]): InvestmentPrice | null {
+  let latest: InvestmentPrice | null = null;
+  for (const price of prices) {
+    if (price.investment_id !== investmentId) continue;
+    if (!latest || price.recorded_at > latest.recorded_at) latest = price;
+  }
+  return latest;
+}
+
+function buildPortfolioHoldings(investments: Investment[], prices: InvestmentPrice[]): PortfolioHolding[] {
+  return investments.map((investment) => {
+    const avgCost = investment.units > 0 ? investment.cost_basis / investment.units : 0;
+    const latest = latestPriceFor(investment.id, prices);
+    const latestNav = latest?.nav ?? null;
+    const marketValue = latestNav != null ? latestNav * investment.units : investment.cost_basis;
+    const gain = marketValue - investment.cost_basis;
+    const gainPercent = investment.cost_basis > 0 ? (gain / investment.cost_basis) * 100 : null;
+    return { ...investment, avgCost, latestNav, latestNavDate: latest?.recorded_at ?? null, marketValue, gain, gainPercent };
+  });
+}
+
+// Approximates portfolio value over time using each holding's CURRENT unit
+// count against its historical NAV on each date a price was logged — not a
+// true point-in-time reconstruction (units held may have changed since),
+// but enough to show whether the trend is up or down.
+function buildPortfolioTrend(investments: Investment[], prices: InvestmentPrice[]) {
+  const dates = [...new Set(prices.map((price) => price.recorded_at))].sort();
+  return dates.map((date) => {
+    const value = investments.reduce((sum, investment) => {
+      const pricesUpToDate = prices.filter((price) => price.investment_id === investment.id && price.recorded_at <= date);
+      if (!pricesUpToDate.length) return sum;
+      const nav = pricesUpToDate.reduce((latest, price) => (price.recorded_at > latest.recorded_at ? price : latest)).nav;
+      return sum + nav * investment.units;
+    }, 0);
+    return { date, value };
+  });
 }
 
 function installmentsRemaining(debtor: Debtor, outstanding: number): number | null {
@@ -1157,6 +1222,12 @@ export default function Home() {
   const [editingWallet, setEditingWallet] = useState<Wallet | null>(null);
   const [recurringSheetMode, setRecurringSheetMode] = useState<"create" | "edit" | null>(null);
   const [editingRecurringExpense, setEditingRecurringExpense] = useState<RecurringExpense | null>(null);
+  const [investments, setInvestments] = useState<Investment[]>([]);
+  const [investmentPrices, setInvestmentPrices] = useState<InvestmentPrice[]>([]);
+  const [investmentBuySheetOpen, setInvestmentBuySheetOpen] = useState(false);
+  const [investmentBuyTarget, setInvestmentBuyTarget] = useState<Investment | null>(null);
+  const [investmentSellTarget, setInvestmentSellTarget] = useState<Investment | null>(null);
+  const [investmentPriceTarget, setInvestmentPriceTarget] = useState<Investment | null>(null);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1330,23 +1401,57 @@ export default function Home() {
     setRecurringExpenses((data ?? []).map((row) => ({ ...row, amount: toMoneyAmount(row.amount), billing_day: normalizeBillingDay(row.billing_day) })) as RecurringExpense[]);
   }, []);
 
+  const loadInvestments = useCallback(async () => {
+    if (!supabase) return;
+
+    const { data, error } = await supabase
+      .from("investments")
+      .select("id,user_id,name,code,units,cost_basis,icon,icon_color")
+      .order("created_at", { ascending: true });
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setInvestments((data ?? []).map((row) => ({
+      ...row,
+      units: toFiniteNumber(row.units),
+      cost_basis: toFiniteNumber(row.cost_basis),
+    })) as Investment[]);
+  }, []);
+
+  const loadInvestmentPrices = useCallback(async () => {
+    if (!supabase) return;
+
+    const { data, error } = await supabase
+      .from("investment_prices")
+      .select("id,investment_id,nav,recorded_at")
+      .order("recorded_at", { ascending: true });
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setInvestmentPrices((data ?? []).map((row) => ({ ...row, nav: toFiniteNumber(row.nav) })) as InvestmentPrice[]);
+  }, []);
+
   const loadUserData = useCallback(async (userId: string) => {
     setDataLoading(true);
     setError("");
     try {
-      await Promise.all([loadEntries(), loadDebtors(), loadWallets(), loadRecurringExpenses()]);
+      await Promise.all([loadEntries(), loadDebtors(), loadWallets(), loadRecurringExpenses(), loadInvestments(), loadInvestmentPrices()]);
       setBudgets(loadBudgets(userId));
       setGoals(loadGoals(userId));
     } finally {
       setDataLoading(false);
     }
-  }, [loadDebtors, loadEntries, loadWallets, loadRecurringExpenses]);
+  }, [loadDebtors, loadEntries, loadWallets, loadRecurringExpenses, loadInvestments, loadInvestmentPrices]);
 
   const clearPrivateState = useCallback(() => {
     setEntries([]);
     setDebtors([]);
     setWallets([]);
     setRecurringExpenses([]);
+    setInvestments([]);
+    setInvestmentPrices([]);
     setBudgets({});
     setGoals([]);
     setDrafts([]);
@@ -1424,6 +1529,9 @@ export default function Home() {
     !!debtorSheetMode ||
     !!walletSheetMode ||
     !!recurringSheetMode ||
+    investmentBuySheetOpen ||
+    !!investmentSellTarget ||
+    !!investmentPriceTarget ||
     budgetSheetOpen ||
     reportSheetOpen ||
     csvImportOpen ||
@@ -1486,6 +1594,12 @@ export default function Home() {
     () => walletTotals.cash,
     [walletTotals.cash],
   );
+  const portfolioHoldings = useMemo(() => buildPortfolioHoldings(investments, investmentPrices), [investments, investmentPrices]);
+  const portfolioTrend = useMemo(() => buildPortfolioTrend(investments, investmentPrices), [investments, investmentPrices]);
+  const portfolioTotalValue = useMemo(() => portfolioHoldings.reduce((sum, holding) => sum + holding.marketValue, 0), [portfolioHoldings]);
+  const portfolioTotalCost = useMemo(() => portfolioHoldings.reduce((sum, holding) => sum + holding.cost_basis, 0), [portfolioHoldings]);
+  const portfolioTotalGain = portfolioTotalValue - portfolioTotalCost;
+  const portfolioTotalGainPercent = portfolioTotalCost > 0 ? (portfolioTotalGain / portfolioTotalCost) * 100 : null;
   const streak = useMemo(() => computeStreak(entries), [entries]);
   const quickShortcuts = useMemo(() => deriveQuickShortcuts(entries), [entries]);
   const receivableSummary = useMemo(
@@ -1555,11 +1669,11 @@ export default function Home() {
   const monthlyBalance = monthlyIncome - monthlyOutflow;
   const receivableTotal = receivableSummary.reduce((sum, item) => sum + item.amount, 0);
   const payableTotal = payableSummary.reduce((sum, item) => sum + item.amount, 0);
-  const netWorth = walletBalanceTotal + receivableTotal - payableTotal;
+  const netWorth = walletBalanceTotal + receivableTotal - payableTotal + portfolioTotalValue;
   const savingsRate = monthlyIncome > 0 ? (monthlyBalance / monthlyIncome) * 100 : 0;
   const walletInsight = useMemo(() => buildWalletInsight(mainWallet, monthlyOutflow, cycleRange.end), [mainWallet, monthlyOutflow, cycleRange.end]);
   const cashFlowTrend = useMemo(() => lastSevenDayCashFlow(entries, new Date()), [entries]);
-  const monthlyTrend = useMemo(() => buildMonthlyTrend(entries, wallets, debtors, selectedMonth, monthStartDay, 6), [entries, wallets, debtors, selectedMonth, monthStartDay]);
+  const monthlyTrend = useMemo(() => buildMonthlyTrend(entries, wallets, debtors, selectedMonth, monthStartDay, 6, portfolioTotalValue), [entries, wallets, debtors, selectedMonth, monthStartDay, portfolioTotalValue]);
   const aiSuggestions = useMemo<AiSuggestion[]>(() => {
     const fromHistory = quickShortcuts.map((shortcut) => ({
       label: shortcut.title,
@@ -2666,10 +2780,122 @@ export default function Home() {
     notify({ tone: "success", title: "ย้อนคืนรายจ่ายประจำแล้ว", detail: item.name });
   }
 
+  async function buyInvestment(target: Investment | null, input: { name: string; code: string; icon: string | null; icon_color: string | null; units: number; amount: number }) {
+    if (!supabase || !user) return false;
+    const units = Math.abs(input.units);
+    const amount = Math.abs(input.amount);
+    if (!units || !amount) return false;
+    setBusy(true);
+    setError("");
+    if (target) {
+      const { error } = await supabase
+        .from("investments")
+        .update({ units: target.units + units, cost_basis: target.cost_basis + amount, updated_at: new Date().toISOString() })
+        .eq("id", target.id);
+      if (error) {
+        setError(error.message);
+        setBusy(false);
+        return false;
+      }
+      setInvestments((current) => current.map((row) => (row.id === target.id ? { ...row, units: row.units + units, cost_basis: row.cost_basis + amount } : row)));
+      setBusy(false);
+      return true;
+    }
+    const { data, error } = await supabase
+      .from("investments")
+      .insert({
+        user_id: user.id,
+        name: input.name.trim(),
+        code: input.code.trim() || null,
+        units,
+        cost_basis: amount,
+        icon: input.icon,
+        icon_color: input.icon_color,
+      })
+      .select("id,user_id,name,code,units,cost_basis,icon,icon_color")
+      .single();
+    if (error) {
+      setError(error.message);
+      setBusy(false);
+      return false;
+    }
+    const created = { ...data, units: toFiniteNumber(data.units), cost_basis: toFiniteNumber(data.cost_basis) } as Investment;
+    setInvestments((current) => [...current, created]);
+    setBusy(false);
+    return true;
+  }
+
+  async function sellInvestment(item: Investment, unitsSold: number) {
+    if (!supabase) return false;
+    const sold = Math.min(Math.abs(unitsSold), item.units);
+    if (!sold) return false;
+    const avgCost = item.units > 0 ? item.cost_basis / item.units : 0;
+    const nextUnits = Math.max(0, item.units - sold);
+    const nextCostBasis = nextUnits <= 0.000001 ? 0 : Math.max(0, item.cost_basis - avgCost * sold);
+    setBusy(true);
+    setError("");
+    const { error } = await supabase
+      .from("investments")
+      .update({ units: nextUnits, cost_basis: nextCostBasis, updated_at: new Date().toISOString() })
+      .eq("id", item.id);
+    if (error) {
+      setError(error.message);
+      setBusy(false);
+      return false;
+    }
+    setInvestments((current) => current.map((row) => (row.id === item.id ? { ...row, units: nextUnits, cost_basis: nextCostBasis } : row)));
+    setBusy(false);
+    return true;
+  }
+
+  async function addInvestmentPrice(item: Investment, nav: number, recordedAt: string) {
+    if (!supabase || !user || !(nav > 0)) return false;
+    setBusy(true);
+    setError("");
+    const { data, error } = await supabase
+      .from("investment_prices")
+      .upsert({ investment_id: item.id, user_id: user.id, nav, recorded_at: recordedAt }, { onConflict: "investment_id,recorded_at" })
+      .select("id,investment_id,nav,recorded_at")
+      .single();
+    if (error) {
+      setError(error.message);
+      setBusy(false);
+      return false;
+    }
+    const saved = { ...data, nav: toFiniteNumber(data.nav) } as InvestmentPrice;
+    setInvestmentPrices((current) => [...current.filter((row) => !(row.investment_id === item.id && row.recorded_at === recordedAt)), saved].sort((a, b) => a.recorded_at.localeCompare(b.recorded_at)));
+    setBusy(false);
+    return true;
+  }
+
+  async function deleteInvestment(item: Investment) {
+    if (!supabase) return;
+    const confirmed = await requestConfirm({
+      title: "ลบพอร์ตนี้?",
+      detail: `ลบ "${item.name}" และประวัติราคาทั้งหมดออกจากพอร์ตลงทุน`,
+      confirmLabel: "ลบรายการ",
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    setBusy(true);
+    setError("");
+    const { error } = await supabase.from("investments").delete().eq("id", item.id);
+    if (error) setError(error.message);
+    else {
+      setInvestments((current) => current.filter((row) => row.id !== item.id));
+      setInvestmentPrices((current) => current.filter((row) => row.investment_id !== item.id));
+      notify({ tone: "info", title: "ลบพอร์ตแล้ว", detail: item.name });
+    }
+    setBusy(false);
+  }
+
   const editingDismiss = useDismiss(!!editing, () => setEditing(null));
   const debtorSheetDismiss = useDismiss(!!debtorSheetMode, () => { setDebtorSheetMode(null); setEditingDebtor(null); });
   const walletSheetDismiss = useDismiss(!!walletSheetMode, () => { setWalletSheetMode(null); setEditingWallet(null); });
   const recurringSheetDismiss = useDismiss(!!recurringSheetMode, () => { setRecurringSheetMode(null); setEditingRecurringExpense(null); });
+  const investmentBuyDismiss = useDismiss(investmentBuySheetOpen, () => { setInvestmentBuySheetOpen(false); setInvestmentBuyTarget(null); });
+  const investmentSellDismiss = useDismiss(!!investmentSellTarget, () => setInvestmentSellTarget(null));
+  const investmentPriceDismiss = useDismiss(!!investmentPriceTarget, () => setInvestmentPriceTarget(null));
   const menuDismiss = useDismiss(menuOpen, () => setMenuOpen(false));
   const menuVisible = menuDismiss.mounted && !menuDismiss.closing;
   const profileSheetDismiss = useDismiss(profileSheetOpen, () => setProfileSheetOpen(false));
@@ -3019,6 +3245,22 @@ export default function Home() {
           />
         )}
 
+        {tab === "portfolio" && (
+          <PortfolioView
+            holdings={portfolioHoldings}
+            trend={portfolioTrend}
+            totalValue={portfolioTotalValue}
+            totalCost={portfolioTotalCost}
+            totalGain={portfolioTotalGain}
+            totalGainPercent={portfolioTotalGainPercent}
+            onBack={() => setTab("home")}
+            onBuy={(target) => { setInvestmentBuyTarget(target); setInvestmentBuySheetOpen(true); }}
+            onSell={(item) => setInvestmentSellTarget(item)}
+            onUpdatePrice={(item) => setInvestmentPriceTarget(item)}
+            onDelete={deleteInvestment}
+          />
+        )}
+
         {editingDismiss.mounted && editing && (
           <EditSheet entry={editing} wallets={wallets} busy={busy} error={error} onChange={setEditing} onClose={editingDismiss.requestClose} onSave={updateEntry} closing={editingDismiss.closing} />
         )}
@@ -3057,6 +3299,37 @@ export default function Home() {
             closing={recurringSheetDismiss.closing}
           />
         )}
+        {investmentBuyDismiss.mounted && (
+          <InvestmentBuySheet
+            target={investmentBuyTarget}
+            investments={investments}
+            busy={busy}
+            error={error}
+            onClose={investmentBuyDismiss.requestClose}
+            onSubmit={buyInvestment}
+            closing={investmentBuyDismiss.closing}
+          />
+        )}
+        {investmentSellDismiss.mounted && investmentSellTarget && (
+          <InvestmentSellSheet
+            item={investmentSellTarget}
+            busy={busy}
+            error={error}
+            onClose={investmentSellDismiss.requestClose}
+            onSubmit={sellInvestment}
+            closing={investmentSellDismiss.closing}
+          />
+        )}
+        {investmentPriceDismiss.mounted && investmentPriceTarget && (
+          <InvestmentPriceSheet
+            item={investmentPriceTarget}
+            busy={busy}
+            error={error}
+            onClose={investmentPriceDismiss.requestClose}
+            onSubmit={addInvestmentPrice}
+            closing={investmentPriceDismiss.closing}
+          />
+        )}
         {menuDismiss.mounted && (
           <SideMenu
             user={user}
@@ -3068,6 +3341,7 @@ export default function Home() {
             onOpenDebtors={() => { menuDismiss.requestClose(); setSelectedDebtor(null); setTab("debtors"); }}
             onOpenRecurring={() => { menuDismiss.requestClose(); setTab("recurring"); }}
             onOpenGoals={() => { menuDismiss.requestClose(); setTab("goals"); }}
+            onOpenPortfolio={() => { menuDismiss.requestClose(); setTab("portfolio"); }}
             onOpenBudgets={() => { menuDismiss.requestClose(); setBudgetSheetOpen(true); }}
             onOpenReport={() => { menuDismiss.requestClose(); setReportSheetOpen(true); }}
             onOpenImport={() => { menuDismiss.requestClose(); setCsvImportOpen(true); }}
@@ -3079,6 +3353,7 @@ export default function Home() {
             receivableTotal={receivableTotal}
             payableTotal={payableTotal}
             recurringTotal={recurringExpenses.reduce((sum, item) => sum + item.amount, 0)}
+            portfolioTotal={portfolioTotalValue}
             closing={menuDismiss.closing}
           />
         )}
@@ -5943,6 +6218,7 @@ function SideMenu({
   onOpenDebtors,
   onOpenRecurring,
   onOpenGoals,
+  onOpenPortfolio,
   onOpenBudgets,
   onOpenReport,
   onOpenImport,
@@ -5954,6 +6230,7 @@ function SideMenu({
   receivableTotal,
   payableTotal,
   recurringTotal,
+  portfolioTotal,
   closing,
 }: {
   user: User;
@@ -5965,6 +6242,7 @@ function SideMenu({
   onOpenDebtors: () => void;
   onOpenRecurring: () => void;
   onOpenGoals: () => void;
+  onOpenPortfolio: () => void;
   onOpenBudgets: () => void;
   onOpenReport: () => void;
   onOpenImport: () => void;
@@ -5976,6 +6254,7 @@ function SideMenu({
   receivableTotal: number;
   payableTotal: number;
   recurringTotal: number;
+  portfolioTotal: number;
   closing?: boolean;
 }) {
   const metadata = user.user_metadata ?? {};
@@ -6019,6 +6298,11 @@ function SideMenu({
             <button onClick={onOpenGoals}>
               <PiggyBank size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>เป้าหมายการเงิน</span>
+            </button>
+            <button onClick={onOpenPortfolio}>
+              <LineChart size={16} strokeWidth={2.25} aria-hidden="true" />
+              <span>พอร์ตลงทุน</span>
+              <b>{moneySign}{formatMoney(portfolioTotal)}</b>
             </button>
           </div>
           <div className="side-menu-section">
@@ -6473,6 +6757,310 @@ function RecurringExpenseEditSheet({
     </SheetFrame>
   );
 }
+function PortfolioTrendChart({ trend }: { trend: { date: string; value: number }[] }) {
+  if (trend.length < 2) return null;
+  const values = trend.map((point) => point.value);
+  const min = Math.min(...values, 0);
+  const max = Math.max(...values, min + 1);
+  const range = max - min;
+  return (
+    <section className="monthly-trend-panel">
+      <div className="section-title">
+        <h2>แนวโน้มมูลค่าพอร์ต</h2>
+      </div>
+      <div className="trend-legend">
+        <span><i className="networth" />มูลค่าตามหน่วยที่ถืออยู่ปัจจุบัน × ราคาย้อนหลัง</span>
+      </div>
+      <div className="monthly-trend-bars monthly-trend-bars-networth">
+        {trend.map((point, index) => (
+          <div key={point.date} className={index === trend.length - 1 ? "current" : ""}>
+            <span>
+              <i className="networth" style={{ height: `${Math.max(6, ((point.value - min) / range) * 100)}%` }} title={`${new Date(`${point.date}T00:00:00`).toLocaleDateString("th-TH", { day: "numeric", month: "short" })} · ${moneySign}${formatMoney(point.value)}`} />
+            </span>
+            <small>{new Date(`${point.date}T00:00:00`).toLocaleDateString("th-TH", { day: "numeric", month: "short" })}</small>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PortfolioView({
+  holdings,
+  trend,
+  totalValue,
+  totalCost,
+  totalGain,
+  totalGainPercent,
+  onBack,
+  onBuy,
+  onSell,
+  onUpdatePrice,
+  onDelete,
+}: {
+  holdings: PortfolioHolding[];
+  trend: { date: string; value: number }[];
+  totalValue: number;
+  totalCost: number;
+  totalGain: number;
+  totalGainPercent: number | null;
+  onBack: () => void;
+  onBuy: (target: Investment | null) => void;
+  onSell: (item: Investment) => void;
+  onUpdatePrice: (item: Investment) => void;
+  onDelete: (item: Investment) => void;
+}) {
+  return (
+    <div className="view debtor-view">
+      <div className="add-title">
+        <button onClick={onBack}>‹</button>
+        <div>
+          <p className="eyebrow">พอร์ตลงทุน</p>
+          <h2>เงินลงทุนทั้งหมด</h2>
+        </div>
+        <button className="header-add-button" onClick={() => onBuy(null)}>ลงทุนใหม่</button>
+      </div>
+
+      <section className="debtor-detail-card">
+        <span>มูลค่าปัจจุบัน</span>
+        <strong><CountUpMoney value={totalValue} /></strong>
+        {!!holdings.length && (
+          <small>
+            ทุน {moneySign}{formatMoney(totalCost)} ·{" "}
+            <b className={totalGain >= 0 ? "income" : "expense"}>
+              {formatSignedMoney(totalGain)}{totalGainPercent != null ? ` (${totalGainPercent >= 0 ? "+" : ""}${totalGainPercent.toFixed(1)}%)` : ""}
+            </b>
+          </small>
+        )}
+      </section>
+
+      <PortfolioTrendChart trend={trend} />
+
+      <div className="debtor-page-list">
+        {holdings.map((holding) => (
+          <article className="debtor-page-item" key={holding.id}>
+            <i className="card-accent" style={{ background: holding.icon_color ?? nameColor(holding.name) }} />
+            <button className="debtor-main-button" onClick={() => onUpdatePrice(holding)}>
+              <span className="debtor-avatar" style={{ background: holding.icon_color ?? nameColor(holding.name) }}>
+                <WalletAvatarGlyph iconKey={holding.icon} fallbackName={holding.name} />
+              </span>
+              <div>
+                <span>{holding.name}{holding.code ? ` (${holding.code})` : ""}</span>
+                <small>
+                  {holding.units.toLocaleString("th-TH", { maximumFractionDigits: 4 })} หน่วย · ทุนเฉลี่ย {holding.avgCost.toFixed(4)}
+                  {holding.latestNav != null ? ` · ราคาล่าสุด ${holding.latestNav.toFixed(4)}` : " · ยังไม่มีราคา"}
+                </small>
+              </div>
+            </button>
+            <div className="portfolio-holding-value">
+              <strong>{moneySign}{formatMoney(holding.marketValue)}</strong>
+              <span className={holding.gain >= 0 ? "income" : "expense"}>
+                {formatSignedMoney(holding.gain)}{holding.gainPercent != null ? ` (${holding.gainPercent >= 0 ? "+" : ""}${holding.gainPercent.toFixed(1)}%)` : ""}
+              </span>
+            </div>
+            <details className="kebab-menu" name="portfolio-kebab">
+              <summary>⋮</summary>
+              <menu>
+                <button onClick={() => onBuy(holding)}>เพิ่มเงินลงทุน</button>
+                <button onClick={() => onSell(holding)}>ขาย</button>
+                <button onClick={() => onUpdatePrice(holding)}>อัปเดตราคา</button>
+                <button onClick={() => onDelete(holding)}>ลบ</button>
+              </menu>
+            </details>
+          </article>
+        ))}
+        {!holdings.length && <EmptyNote glyph="↻" action={{ label: "เพิ่มการลงทุนแรก", onClick: () => onBuy(null) }}>ยังไม่มีการลงทุนในระบบ เพิ่มกองทุน หุ้น หรือสินทรัพย์อื่นที่ถืออยู่ แล้วอัปเดตราคาเป็นระยะเพื่อดูกำไร/ขาดทุน</EmptyNote>}
+      </div>
+    </div>
+  );
+}
+
+function InvestmentBuySheet({
+  target,
+  investments,
+  busy,
+  error,
+  onClose,
+  onSubmit,
+  closing,
+}: {
+  target: Investment | null;
+  investments: Investment[];
+  busy: boolean;
+  error: string;
+  onClose: () => void;
+  onSubmit: (target: Investment | null, input: { name: string; code: string; icon: string | null; icon_color: string | null; units: number; amount: number }) => Promise<boolean>;
+  closing?: boolean;
+}) {
+  const [selectedId, setSelectedId] = useState(target?.id ?? "new");
+  const [name, setName] = useState(target?.name ?? "");
+  const [code, setCode] = useState(target?.code ?? "");
+  const [icon, setIcon] = useState<string | null>(target?.icon ?? "trending-up");
+  const [iconColor, setIconColor] = useState<string | null>(target?.icon_color ?? null);
+  const [unitsText, setUnitsText] = useState("");
+  const [amountText, setAmountText] = useState("");
+
+  const selected = selectedId === "new" ? null : investments.find((item) => item.id === selectedId) ?? null;
+  const units = toFiniteNumber(unitsText);
+  const amount = toMoneyAmount(amountText);
+  const pricePerUnit = units > 0 && amount > 0 ? amount / units : null;
+
+  const submit = async () => {
+    const holdingName = selected ? selected.name : name;
+    if (!holdingName.trim() || !(units > 0) || !(amount > 0)) return;
+    const saved = await onSubmit(selected, { name: holdingName, code: selected ? (selected.code ?? "") : code, icon: selected ? selected.icon : icon, icon_color: selected ? selected.icon_color : iconColor, units, amount });
+    if (saved) onClose();
+  };
+
+  return (
+    <SheetFrame onClose={onClose} closing={closing}>
+      <div className="sheet-head">
+        <div>
+          <p className="eyebrow">พอร์ตลงทุน</p>
+          <h2>{selected ? `เพิ่มเงินลงทุนใน ${selected.name}` : "ลงทุนใหม่"}</h2>
+        </div>
+        <button onClick={onClose}>x</button>
+      </div>
+      {!target && !!investments.length && (
+        <label>
+          กองทุน/สินทรัพย์
+          <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
+            <option value="new">+ สร้างรายการใหม่</option>
+            {investments.map((item) => (
+              <option key={item.id} value={item.id}>{item.name}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      {!selected && (
+        <>
+          <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
+          <label>
+            ชื่อกองทุน/สินทรัพย์
+            <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น K-WSPEEDUP, หุ้น PTT" />
+          </label>
+          <label>
+            รหัส/สัญลักษณ์ (ถ้ามี)
+            <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="เช่น K-WSPEEDUP" />
+          </label>
+        </>
+      )}
+      <label>
+        จำนวนหน่วยที่ซื้อ
+        <input inputMode="decimal" value={unitsText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setUnitsText(event.target.value); }} placeholder="เช่น 92.6397" />
+      </label>
+      <label>
+        จำนวนเงินที่จ่ายไป
+        <input inputMode="decimal" value={amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setAmountText(event.target.value); }} placeholder="เช่น 1000" />
+      </label>
+      {pricePerUnit != null && <small className="cycle-note">ราคาต่อหน่วย {pricePerUnit.toFixed(4)}</small>}
+      {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
+      <button className="save" onClick={submit} disabled={busy || !(units > 0) || !(amount > 0) || (!selected && !name.trim())}>
+        {busy ? "กำลังบันทึก..." : "บันทึก"}
+      </button>
+    </SheetFrame>
+  );
+}
+
+function InvestmentSellSheet({
+  item,
+  busy,
+  error,
+  onClose,
+  onSubmit,
+  closing,
+}: {
+  item: Investment;
+  busy: boolean;
+  error: string;
+  onClose: () => void;
+  onSubmit: (item: Investment, unitsSold: number) => Promise<boolean>;
+  closing?: boolean;
+}) {
+  const [unitsText, setUnitsText] = useState("");
+  const units = toFiniteNumber(unitsText);
+  const valid = units > 0 && units <= item.units;
+
+  const submit = async () => {
+    if (!valid) return;
+    const saved = await onSubmit(item, units);
+    if (saved) onClose();
+  };
+
+  return (
+    <SheetFrame onClose={onClose} closing={closing}>
+      <div className="sheet-head">
+        <div>
+          <p className="eyebrow">พอร์ตลงทุน</p>
+          <h2>ขาย {item.name}</h2>
+        </div>
+        <button onClick={onClose}>x</button>
+      </div>
+      <small className="cycle-note">ถืออยู่ {item.units.toLocaleString("th-TH", { maximumFractionDigits: 4 })} หน่วย</small>
+      <label>
+        จำนวนหน่วยที่ขาย
+        <input autoFocus inputMode="decimal" value={unitsText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setUnitsText(event.target.value); }} placeholder="เช่น 20" />
+      </label>
+      <button type="button" className="text-button" onClick={() => setUnitsText(String(item.units))}>ขายทั้งหมด</button>
+      {unitsText && !valid && <StateCard tone="error" title="จำนวนไม่ถูกต้อง" detail={`ขายได้สูงสุด ${item.units.toLocaleString("th-TH", { maximumFractionDigits: 4 })} หน่วย`} />}
+      {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
+      <button className="save" onClick={submit} disabled={busy || !valid}>
+        {busy ? "กำลังบันทึก..." : "บันทึก"}
+      </button>
+    </SheetFrame>
+  );
+}
+
+function InvestmentPriceSheet({
+  item,
+  busy,
+  error,
+  onClose,
+  onSubmit,
+  closing,
+}: {
+  item: Investment;
+  busy: boolean;
+  error: string;
+  onClose: () => void;
+  onSubmit: (item: Investment, nav: number, recordedAt: string) => Promise<boolean>;
+  closing?: boolean;
+}) {
+  const [navText, setNavText] = useState("");
+  const [recordedAt, setRecordedAt] = useState(todayDateInput);
+  const nav = toFiniteNumber(navText);
+
+  const submit = async () => {
+    if (!(nav > 0)) return;
+    const saved = await onSubmit(item, nav, recordedAt);
+    if (saved) onClose();
+  };
+
+  return (
+    <SheetFrame onClose={onClose} closing={closing}>
+      <div className="sheet-head">
+        <div>
+          <p className="eyebrow">พอร์ตลงทุน</p>
+          <h2>อัปเดตราคา {item.name}</h2>
+        </div>
+        <button onClick={onClose}>x</button>
+      </div>
+      <label>
+        ราคาต่อหน่วย (NAV)
+        <input autoFocus inputMode="decimal" value={navText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setNavText(event.target.value); }} placeholder="เช่น 10.3400" />
+      </label>
+      <label>
+        ราคา ณ วันที่
+        <input type="date" value={recordedAt} max={todayDateInput()} onChange={(event) => setRecordedAt(event.target.value)} />
+      </label>
+      {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
+      <button className="save" onClick={submit} disabled={busy || !(nav > 0)}>
+        {busy ? "กำลังบันทึก..." : "บันทึก"}
+      </button>
+    </SheetFrame>
+  );
+}
+
 function ConfirmLogout({ onCancel, onConfirm, closing }: { onCancel: () => void; onConfirm: () => void; closing?: boolean }) {
   return (
     <div className={`dialog-backdrop ${closing ? "closing" : ""}`}>

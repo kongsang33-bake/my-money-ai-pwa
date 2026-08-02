@@ -53,7 +53,7 @@ type AnalyzeDebtor = {
 type AnalyzeWallet = {
   id: string;
   name: string;
-  tag: "cash" | "savings" | "investment" | "other" | "petty";
+  tag: "cash" | "savings" | "other" | "petty";
   is_default?: boolean;
 };
 
