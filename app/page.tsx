@@ -111,7 +111,7 @@ type Debtor = {
   icon: string | null;
   icon_color: string | null;
 };
-type WalletTag = "cash" | "savings" | "investment" | "other";
+type WalletTag = "cash" | "savings" | "investment" | "other" | "petty";
 type Wallet = {
   id: string;
   user_id: string;
@@ -157,10 +157,19 @@ const walletTagLabels: Record<WalletTag, string> = {
   savings: "ออมทรัพย์",
   investment: "เงินลงทุน",
   other: "อื่น ๆ",
+  petty: "เงินสดย่อย",
+};
+const walletTagHints: Record<WalletTag, string> = {
+  cash: "รวมเป็นยอดกระเป๋าหลักบนหน้าแรก",
+  savings: "แยกยอดออกจากหน้าแรก เหมาะกับเงินเก็บระยะยาว",
+  investment: "แยกยอดออกจากหน้าแรก เหมาะกับเงินที่นำไปลงทุน",
+  other: "แยกยอดออกจากหน้าแรก สำหรับเงินที่ไม่เข้าพวกไหนเลย",
+  petty: "แยกยอดออกจากหน้าแรก เหมาะกับเงินสดที่กันไว้ใช้จ่ายจิปาถะหรือทอนลูกค้า เช่น เงินทอนหน้าร้าน เงินสำรองแลกเหรียญ",
 };
 const secondaryWalletTags: { tag: WalletTag; label: string; className: string }[] = [
   { tag: "savings", label: walletTagLabels.savings, className: "savings-wallet" },
   { tag: "investment", label: walletTagLabels.investment, className: "investment-wallet" },
+  { tag: "petty", label: walletTagLabels.petty, className: "petty-wallet" },
   { tag: "other", label: walletTagLabels.other, className: "other-wallet" },
 ];
 type EntryInput = {
@@ -944,7 +953,7 @@ function transferWalletTag(entry: Entry, wallets: Wallet[]): Exclude<WalletTag, 
   if (!text) return null;
 
   for (const wallet of wallets) {
-    if (wallet.tag === "cash" || wallet.tag === "other") continue;
+    if (wallet.tag === "cash" || wallet.tag === "other" || wallet.tag === "petty") continue;
     const walletName = wallet.name.trim().toLowerCase();
     const walletLabel = walletTagLabels[wallet.tag].toLowerCase();
     if ((walletName && text.includes(walletName)) || (walletLabel && text.includes(walletLabel))) return wallet.tag;
@@ -957,7 +966,7 @@ function transferWalletTag(entry: Entry, wallets: Wallet[]): Exclude<WalletTag, 
 }
 
 function buildWalletLedger(wallets: Wallet[], entries: Entry[]) {
-  const totals: Record<WalletTag, number> = { cash: 0, savings: 0, investment: 0, other: 0 };
+  const totals: Record<WalletTag, number> = { cash: 0, savings: 0, investment: 0, other: 0, petty: 0 };
   const walletDeltas = new Map<string, number>();
   const fallbackWalletId = defaultWalletId(wallets);
 
@@ -981,7 +990,7 @@ function buildWalletLedger(wallets: Wallet[], entries: Entry[]) {
       };
     });
 
-  const nextTotals: Record<WalletTag, number> = { cash: 0, savings: 0, investment: 0, other: 0 };
+  const nextTotals: Record<WalletTag, number> = { cash: 0, savings: 0, investment: 0, other: 0, petty: 0 };
   for (const wallet of displayWallets) nextTotals[wallet.tag] += wallet.display_balance;
 
   return { totals: nextTotals, wallets: displayWallets };
@@ -6297,6 +6306,7 @@ function WalletEditSheet({
             <option key={key} value={key}>{walletTagLabels[key]}</option>
           ))}
         </select>
+        <small className="cycle-note">{walletTagHints[tag]}</small>
       </label>
       <label>
         ยอดเงิน

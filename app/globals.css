@@ -762,6 +762,7 @@ a:focus-visible {
 
 .savings-wallet strong { color: var(--cat-home); }
 .investment-wallet strong { color: var(--cat-travel); }
+.petty-wallet strong { color: var(--cat-goods); }
 .other-wallet strong { color: var(--ink-2); }
 
 .hero-wallet {
