@@ -8,6 +8,7 @@ export const TRANSACTION_TYPES = [
   "card_charge",
   "transfer",
   "gift",
+  "investment_buy",
 ] as const;
 
 export type TransactionType = (typeof TRANSACTION_TYPES)[number];

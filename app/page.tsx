@@ -68,6 +68,8 @@ type Entry = {
   note?: string | null;
   transfer_group_id?: string | null;
   transfer_to_wallet_id?: string | null;
+  investment_id?: string | null;
+  investment_units?: number | null;
 };
 
 type Draft = Omit<Entry, "id"> & { id: string };
@@ -152,6 +154,14 @@ type InvestmentPrice = {
   nav: number;
   recorded_at: string;
 };
+type InvestmentDraftItem = {
+  investment_name: string;
+  code: string;
+  amount: number;
+  date: string;
+  wallet_id: string;
+  note: string;
+};
 type ReportPeriod = "month" | "year";
 type HistoryFilters = {
   query: string;
@@ -204,6 +214,8 @@ type EntryInput = {
   note?: string | null;
   transfer_group_id?: string | null;
   transfer_to_wallet_id?: string | null;
+  investment_id?: string | null;
+  investment_units?: number | null;
 };
 
 type SlipImage = {
@@ -228,6 +240,7 @@ const transactionTypeLabels: Record<TransactionType, string> = {
   card_charge: "จ่ายด้วยบัตรเครดิต",
   transfer: "โอนเงินระหว่างกระเป๋า",
   gift: "ให้โดยไม่คิดคืน",
+  investment_buy: "ลงทุน",
 };
 
 const transactionKind: Record<TransactionType, EntryKind> = {
@@ -240,6 +253,7 @@ const transactionKind: Record<TransactionType, EntryKind> = {
   card_charge: "expense",
   transfer: "expense",
   gift: "expense",
+  investment_buy: "expense",
 };
 
 const categoryIconMap: Record<string, LucideIcon> = {
@@ -785,14 +799,14 @@ function calculateImpacts(amount: number, transactionType: TransactionType) {
   if (transactionType === "card_charge") {
     return { wallet_impact: 0, debt_impact: amount, user_share: amount, partner_share: 0 };
   }
-  if (transactionType === "transfer") {
+  if (transactionType === "transfer" || transactionType === "investment_buy") {
     return { wallet_impact: -amount, debt_impact: 0, user_share: 0, partner_share: 0 };
   }
   return { wallet_impact: -amount, debt_impact: 0, user_share: amount, partner_share: 0 };
 }
 
 function categorySpendAmount(entry: Entry): number | null {
-  if (entry.transaction_type === "transfer") return null;
+  if (entry.transaction_type === "transfer" || entry.transaction_type === "investment_buy") return null;
   if (entry.wallet_impact > 0 && entry.transaction_type !== "card_charge") return null;
   return entry.user_share > 0 ? entry.user_share : null;
 }
@@ -826,6 +840,8 @@ function normalizeEntry(input: EntryInput, applyDebtorDefault = true): Entry {
     note: input.note?.trim() || null,
     transfer_group_id: input.transfer_group_id ?? null,
     transfer_to_wallet_id: input.transfer_to_wallet_id ?? null,
+    investment_id: input.investment_id ?? null,
+    investment_units: input.investment_units ?? null,
   };
 }
 
@@ -872,6 +888,8 @@ function mapTransactionRow(row: {
   wallet_id: string | null;
   note: string | null;
   transfer_group_id?: string | null;
+  investment_id?: string | null;
+  investment_units?: number | string | null;
 }): Entry {
   return normalizeEntry({
     id: row.id,
@@ -890,6 +908,8 @@ function mapTransactionRow(row: {
     wallet_id: row.wallet_id,
     note: row.note,
     transfer_group_id: row.transfer_group_id ?? null,
+    investment_id: row.investment_id ?? null,
+    investment_units: row.investment_units == null ? null : Number(row.investment_units),
   });
 }
 
@@ -899,7 +919,7 @@ function defaultWalletId(wallets: Wallet[]) {
 
 function totalWallet(entries: Entry[], direction: EntryKind) {
   return entries
-    .filter((entry) => entry.transaction_type !== "transfer" && (direction === "income" ? entry.wallet_impact > 0 : entry.wallet_impact < 0))
+    .filter((entry) => entry.transaction_type !== "transfer" && entry.transaction_type !== "investment_buy" && (direction === "income" ? entry.wallet_impact > 0 : entry.wallet_impact < 0))
     .reduce((sum, entry) => sum + entry.wallet_impact, 0);
 }
 
@@ -1228,6 +1248,8 @@ export default function Home() {
   const [investmentBuyTarget, setInvestmentBuyTarget] = useState<Investment | null>(null);
   const [investmentSellTarget, setInvestmentSellTarget] = useState<Investment | null>(null);
   const [investmentPriceTarget, setInvestmentPriceTarget] = useState<Investment | null>(null);
+  const [investmentConfirmTarget, setInvestmentConfirmTarget] = useState<Entry | null>(null);
+  const [investmentAiSheetOpen, setInvestmentAiSheetOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1319,7 +1341,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("transactions")
-      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id")
+      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id,investment_id,investment_units")
       .order("occurred_at", { ascending: false });
 
     if (error) {
@@ -1532,6 +1554,8 @@ export default function Home() {
     investmentBuySheetOpen ||
     !!investmentSellTarget ||
     !!investmentPriceTarget ||
+    !!investmentConfirmTarget ||
+    investmentAiSheetOpen ||
     budgetSheetOpen ||
     reportSheetOpen ||
     csvImportOpen ||
@@ -1595,6 +1619,10 @@ export default function Home() {
     [walletTotals.cash],
   );
   const portfolioHoldings = useMemo(() => buildPortfolioHoldings(investments, investmentPrices), [investments, investmentPrices]);
+  const pendingInvestmentPurchases = useMemo(
+    () => entries.filter((entry) => entry.transaction_type === "investment_buy" && entry.investment_units == null),
+    [entries],
+  );
   const portfolioTrend = useMemo(() => buildPortfolioTrend(investments, investmentPrices), [investments, investmentPrices]);
   const portfolioTotalValue = useMemo(() => portfolioHoldings.reduce((sum, holding) => sum + holding.marketValue, 0), [portfolioHoldings]);
   const portfolioTotalCost = useMemo(() => portfolioHoldings.reduce((sum, holding) => sum + holding.cost_basis, 0), [portfolioHoldings]);
@@ -1935,6 +1963,70 @@ export default function Home() {
     setBusy(false);
   }
 
+  async function analyzeInvestmentText(text: string): Promise<InvestmentDraftItem[]> {
+    const response = await fetch("/api/analyze-investment", {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(await authHeaders()) },
+      body: JSON.stringify({
+        text,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        defaultDate: todayDateInput(),
+        investments: investments.map((item) => ({ id: item.id, name: item.name, code: item.code })),
+        wallets: wallets.map((wallet) => ({ id: wallet.id, name: wallet.name, tag: wallet.tag, is_default: wallet.is_default })),
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error);
+    return (data.items ?? []) as InvestmentDraftItem[];
+  }
+
+  // Always creates a *pending* purchase (investment_units left null) even
+  // though the caller might already know the units for a same-day buy —
+  // logging via AI is specifically for the DCA case where units aren't
+  // known yet, so it never tries to guess/parse units from free text.
+  async function createPendingInvestmentPurchase(input: { investmentId: string | null; name: string; walletId: string; amount: number; occurredAt: string; note?: string }) {
+    if (!supabase || !user || !(input.amount > 0) || !input.walletId) return false;
+    setBusy(true);
+    setError("");
+    const target = input.investmentId ? investments.find((item) => item.id === input.investmentId) ?? null : null;
+    const investment = await resolveInvestment(target, { name: input.name, code: "", icon: "trending-up", icon_color: null });
+    if (!investment) {
+      setBusy(false);
+      return false;
+    }
+    const { data, error } = await supabase
+      .from("transactions")
+      .insert({
+        user_id: user.id,
+        title: `ลงทุน ${investment.name}`,
+        category: "อื่น ๆ",
+        amount: input.amount,
+        kind: "expense",
+        transaction_type: "investment_buy",
+        debtor_name: unnamedDebtor,
+        wallet_impact: -input.amount,
+        debt_impact: 0,
+        user_share: 0,
+        partner_share: 0,
+        occurred_at: input.occurredAt,
+        wallet_id: input.walletId,
+        note: input.note?.trim() || null,
+        investment_id: investment.id,
+        investment_units: null,
+      })
+      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id,investment_id,investment_units")
+      .single();
+    if (error) {
+      setError(error.message);
+      setBusy(false);
+      return false;
+    }
+    setEntries((current) => [mapTransactionRow(data), ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
+    setBusy(false);
+    notify({ tone: "success", title: "บันทึกรอยืนยันหน่วยแล้ว", detail: `${investment.name} · ${moneySign}${formatMoney(input.amount)}` });
+    return true;
+  }
+
   async function saveEntries(items: Draft[]) {
     if (!supabase || !user || !items.length) return;
 
@@ -1974,7 +2066,7 @@ export default function Home() {
     const { data, error } = await supabase
       .from("transactions")
       .insert(payload)
-      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id");
+      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id,investment_id,investment_units");
 
     if (error) {
       setError(error.message);
@@ -2015,7 +2107,7 @@ export default function Home() {
       transaction_type: item.transaction_type, debtor_name: item.debtor_name, wallet_impact: item.wallet_impact,
       debt_impact: item.debt_impact, user_share: item.user_share, partner_share: item.partner_share,
       occurred_at: item.occurred_at, source_text: item.source_text, wallet_id: item.wallet_id, note: item.note,
-    }))).select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id");
+    }))).select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id,investment_id,investment_units");
     if (insertError) { setError(insertError.message); setBusy(false); return false; }
     setEntries((current) => [...(data ?? []).map(mapTransactionRow), ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
     setBusy(false);
@@ -2112,7 +2204,7 @@ export default function Home() {
           note: destLeg.note,
           transfer_group_id: destLeg.transfer_group_id,
         })
-        .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id");
+        .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id,investment_id,investment_units");
 
       if (insertError) {
         setError(insertError.message);
@@ -2780,35 +2872,17 @@ export default function Home() {
     notify({ tone: "success", title: "ย้อนคืนรายจ่ายประจำแล้ว", detail: item.name });
   }
 
-  async function buyInvestment(target: Investment | null, input: { name: string; code: string; icon: string | null; icon_color: string | null; units: number; amount: number }) {
-    if (!supabase || !user) return false;
-    const units = Math.abs(input.units);
-    const amount = Math.abs(input.amount);
-    if (!units || !amount) return false;
-    setBusy(true);
-    setError("");
-    if (target) {
-      const { error } = await supabase
-        .from("investments")
-        .update({ units: target.units + units, cost_basis: target.cost_basis + amount, updated_at: new Date().toISOString() })
-        .eq("id", target.id);
-      if (error) {
-        setError(error.message);
-        setBusy(false);
-        return false;
-      }
-      setInvestments((current) => current.map((row) => (row.id === target.id ? { ...row, units: row.units + units, cost_basis: row.cost_basis + amount } : row)));
-      setBusy(false);
-      return true;
-    }
+  async function resolveInvestment(target: Investment | null, input: { name: string; code: string; icon: string | null; icon_color: string | null }): Promise<Investment | null> {
+    if (target) return target;
+    if (!supabase || !user) return null;
     const { data, error } = await supabase
       .from("investments")
       .insert({
         user_id: user.id,
         name: input.name.trim(),
         code: input.code.trim() || null,
-        units,
-        cost_basis: amount,
+        units: 0,
+        cost_basis: 0,
         icon: input.icon,
         icon_color: input.icon_color,
       })
@@ -2816,12 +2890,105 @@ export default function Home() {
       .single();
     if (error) {
       setError(error.message);
-      setBusy(false);
-      return false;
+      return null;
     }
     const created = { ...data, units: toFiniteNumber(data.units), cost_basis: toFiniteNumber(data.cost_basis) } as Investment;
     setInvestments((current) => [...current, created]);
+    return created;
+  }
+
+  // Records the wallet debit for a purchase as a normal transaction (so
+  // history/reports see it) and, since units are known at call time, applies
+  // them to the holding immediately — this is the "confirmed" path, unlike
+  // a pending DCA purchase (see confirmInvestmentPurchase) where the wallet
+  // debit happens before the fund house reports actual units.
+  async function buyInvestment(target: Investment | null, input: { name: string; code: string; icon: string | null; icon_color: string | null; units: number; amount: number; wallet_id: string; occurred_at: string; note?: string }) {
+    if (!supabase || !user) return false;
+    const units = Math.abs(input.units);
+    const amount = Math.abs(input.amount);
+    if (!units || !amount || !input.wallet_id) return false;
+    setBusy(true);
+    setError("");
+    const investment = await resolveInvestment(target, input);
+    if (!investment) {
+      setBusy(false);
+      return false;
+    }
+    const { data, error } = await supabase
+      .from("transactions")
+      .insert({
+        user_id: user.id,
+        title: `ลงทุน ${investment.name}`,
+        category: "อื่น ๆ",
+        amount,
+        kind: "expense",
+        transaction_type: "investment_buy",
+        debtor_name: unnamedDebtor,
+        wallet_impact: -amount,
+        debt_impact: 0,
+        user_share: 0,
+        partner_share: 0,
+        occurred_at: input.occurred_at,
+        wallet_id: input.wallet_id,
+        note: input.note?.trim() || null,
+        investment_id: investment.id,
+        investment_units: units,
+      })
+      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id,investment_id,investment_units")
+      .single();
+    if (error) {
+      setError(error.message);
+      setBusy(false);
+      return false;
+    }
+    const { error: updateError } = await supabase
+      .from("investments")
+      .update({ units: investment.units + units, cost_basis: investment.cost_basis + amount, updated_at: new Date().toISOString() })
+      .eq("id", investment.id);
+    if (updateError) {
+      setError(updateError.message);
+      setBusy(false);
+      return false;
+    }
+    setInvestments((current) => current.map((row) => (row.id === investment.id ? { ...row, units: row.units + units, cost_basis: row.cost_basis + amount } : row)));
+    setEntries((current) => [mapTransactionRow(data), ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
     setBusy(false);
+    return true;
+  }
+
+  // Resolves a pending DCA purchase (the transactions row already debited the
+  // wallet with investment_units = null) once the fund house reports actual
+  // units — fills in investment_units on that row and, only now, applies the
+  // units/cost to the holding (cost is the amount already recorded, so no
+  // double-entry of the wallet debit).
+  async function confirmInvestmentPurchase(entry: Entry, units: number) {
+    if (!supabase || !entry.investment_id || !(units > 0)) return false;
+    const investment = investments.find((row) => row.id === entry.investment_id);
+    if (!investment) return false;
+    setBusy(true);
+    setError("");
+    const { error } = await supabase
+      .from("transactions")
+      .update({ investment_units: units })
+      .eq("id", entry.id);
+    if (error) {
+      setError(error.message);
+      setBusy(false);
+      return false;
+    }
+    const { error: updateError } = await supabase
+      .from("investments")
+      .update({ units: investment.units + units, cost_basis: investment.cost_basis + entry.amount, updated_at: new Date().toISOString() })
+      .eq("id", investment.id);
+    if (updateError) {
+      setError(updateError.message);
+      setBusy(false);
+      return false;
+    }
+    setInvestments((current) => current.map((row) => (row.id === investment.id ? { ...row, units: row.units + units, cost_basis: row.cost_basis + entry.amount } : row)));
+    setEntries((current) => current.map((row) => (row.id === entry.id ? { ...row, investment_units: units } : row)));
+    setBusy(false);
+    notify({ tone: "success", title: "ยืนยันหน่วยแล้ว", detail: `${investment.name} · ${units.toLocaleString("th-TH", { maximumFractionDigits: 4 })} หน่วย` });
     return true;
   }
 
@@ -2896,6 +3063,8 @@ export default function Home() {
   const investmentBuyDismiss = useDismiss(investmentBuySheetOpen, () => { setInvestmentBuySheetOpen(false); setInvestmentBuyTarget(null); });
   const investmentSellDismiss = useDismiss(!!investmentSellTarget, () => setInvestmentSellTarget(null));
   const investmentPriceDismiss = useDismiss(!!investmentPriceTarget, () => setInvestmentPriceTarget(null));
+  const investmentConfirmDismiss = useDismiss(!!investmentConfirmTarget, () => setInvestmentConfirmTarget(null));
+  const investmentAiDismiss = useDismiss(investmentAiSheetOpen, () => setInvestmentAiSheetOpen(false));
   const menuDismiss = useDismiss(menuOpen, () => setMenuOpen(false));
   const menuVisible = menuDismiss.mounted && !menuDismiss.closing;
   const profileSheetDismiss = useDismiss(profileSheetOpen, () => setProfileSheetOpen(false));
@@ -3253,11 +3422,15 @@ export default function Home() {
             totalCost={portfolioTotalCost}
             totalGain={portfolioTotalGain}
             totalGainPercent={portfolioTotalGainPercent}
+            pendingPurchases={pendingInvestmentPurchases}
             onBack={() => setTab("home")}
             onBuy={(target) => { setInvestmentBuyTarget(target); setInvestmentBuySheetOpen(true); }}
             onSell={(item) => setInvestmentSellTarget(item)}
             onUpdatePrice={(item) => setInvestmentPriceTarget(item)}
             onDelete={deleteInvestment}
+            onConfirmPending={(entry) => setInvestmentConfirmTarget(entry)}
+            onDeletePending={deleteEntry}
+            onOpenAi={() => setInvestmentAiSheetOpen(true)}
           />
         )}
 
@@ -3303,6 +3476,7 @@ export default function Home() {
           <InvestmentBuySheet
             target={investmentBuyTarget}
             investments={investments}
+            wallets={wallets}
             busy={busy}
             error={error}
             onClose={investmentBuyDismiss.requestClose}
@@ -3328,6 +3502,29 @@ export default function Home() {
             onClose={investmentPriceDismiss.requestClose}
             onSubmit={addInvestmentPrice}
             closing={investmentPriceDismiss.closing}
+          />
+        )}
+        {investmentConfirmDismiss.mounted && investmentConfirmTarget && (
+          <InvestmentConfirmUnitsSheet
+            entry={investmentConfirmTarget}
+            investmentName={investments.find((item) => item.id === investmentConfirmTarget.investment_id)?.name ?? investmentConfirmTarget.title}
+            busy={busy}
+            error={error}
+            onClose={investmentConfirmDismiss.requestClose}
+            onSubmit={confirmInvestmentPurchase}
+            closing={investmentConfirmDismiss.closing}
+          />
+        )}
+        {investmentAiDismiss.mounted && (
+          <InvestmentAiSheet
+            investments={investments}
+            wallets={wallets}
+            busy={busy}
+            error={error}
+            onClose={investmentAiDismiss.requestClose}
+            onAnalyze={analyzeInvestmentText}
+            onSave={(input) => createPendingInvestmentPurchase(input)}
+            closing={investmentAiDismiss.closing}
           />
         )}
         {menuDismiss.mounted && (
@@ -4835,6 +5032,7 @@ function ConfirmDialog({ dialog, onClose, closing = false }: { dialog: ConfirmDi
 }
 
 const decimalInputPattern = /^\d*\.?\d*$/;
+const dateInputPattern = /^\d{4}-\d{2}-\d{2}$/;
 
 function AmountInput({ value, onChange, disabled }: { value: number; onChange: (value: number) => void; disabled?: boolean }) {
   const [text, setText] = useState(() => (value ? String(value) : ""));
@@ -4961,7 +5159,7 @@ function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft:
       <div className="draft-side">
         <span className="draft-type-badge">{transactionTypeLabels[draft.transaction_type]}</span>
         <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
-          {Object.entries(transactionTypeLabels).map(([value, label]) => (
+          {Object.entries(transactionTypeLabels).filter(([value]) => value !== "investment_buy").map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
@@ -5198,7 +5396,7 @@ function ManualEntryForm({
       <label>
         ชนิดรายการ
         <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
-          {Object.entries(transactionTypeLabels).map(([value, label]) => (
+          {Object.entries(transactionTypeLabels).filter(([value]) => value !== "investment_buy").map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
@@ -5310,6 +5508,7 @@ function EditSheet({
   const [originalType] = useState(entry.transaction_type);
   const [destWalletId, setDestWalletId] = useState<string | null>(null);
   const wasTransfer = originalType === "transfer";
+  const wasInvestmentBuy = originalType === "investment_buy";
   const isTransfer = entry.transaction_type === "transfer";
   const convertingToTransfer = isTransfer && !wasTransfer;
   const transferInvalid = convertingToTransfer && (!destWalletId || destWalletId === entry.wallet_id);
@@ -5331,6 +5530,7 @@ function EditSheet({
       </div>
 
       {wasTransfer && <p className="pin-hint">รายการโอนเงินแก้ไขได้เฉพาะชื่อ วันที่ และหมายเหตุ — ลบได้ทั้งสองฝั่งพร้อมกัน</p>}
+      {wasInvestmentBuy && <p className="pin-hint">รายการลงทุนแก้ไขได้เฉพาะชื่อ วันที่ และหมายเหตุ — ลบรายการนี้จะไม่ปรับหน่วย/ทุนในพอร์ตให้อัตโนมัติ ต้องไปแก้ในหน้าพอร์ตลงทุนเอง</p>}
       {convertingToTransfer && <p className="pin-hint">เลือกกระเป๋าปลายทางก่อนบันทึกเป็นรายการโอน</p>}
 
       <label>
@@ -5349,8 +5549,8 @@ function EditSheet({
       )}
       <label>
         ชนิดรายการ
-        <select value={entry.transaction_type} disabled={wasTransfer} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
-          {Object.entries(transactionTypeLabels).map(([value, label]) => (
+        <select value={entry.transaction_type} disabled={wasTransfer || wasInvestmentBuy} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
+          {Object.entries(transactionTypeLabels).filter(([value]) => value !== "investment_buy" || wasInvestmentBuy).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
@@ -6792,11 +6992,15 @@ function PortfolioView({
   totalCost,
   totalGain,
   totalGainPercent,
+  pendingPurchases,
   onBack,
   onBuy,
   onSell,
   onUpdatePrice,
   onDelete,
+  onConfirmPending,
+  onDeletePending,
+  onOpenAi,
 }: {
   holdings: PortfolioHolding[];
   trend: { date: string; value: number }[];
@@ -6804,11 +7008,15 @@ function PortfolioView({
   totalCost: number;
   totalGain: number;
   totalGainPercent: number | null;
+  pendingPurchases: Entry[];
   onBack: () => void;
   onBuy: (target: Investment | null) => void;
   onSell: (item: Investment) => void;
   onUpdatePrice: (item: Investment) => void;
   onDelete: (item: Investment) => void;
+  onConfirmPending: (entry: Entry) => void;
+  onDeletePending: (entry: Entry) => void;
+  onOpenAi: () => void;
 }) {
   return (
     <div className="view debtor-view">
@@ -6833,6 +7041,34 @@ function PortfolioView({
           </small>
         )}
       </section>
+
+      <button type="button" className="text-button" onClick={onOpenAi}>บันทึกด้วย AI (เช่น DCA รายเดือน)</button>
+
+      {!!pendingPurchases.length && (
+        <section className="recurring-timeline" aria-label="รอยืนยันหน่วย">
+          <div className="section-title-row"><h3>รอยืนยันหน่วย</h3><small>{pendingPurchases.length} รายการ</small></div>
+          <div className="debtor-page-list">
+            {pendingPurchases.map((entry) => (
+              <article className="debtor-page-item" key={entry.id}>
+                <i className="card-accent" style={{ background: nameColor(entry.title) }} />
+                <button className="debtor-main-button" onClick={() => onConfirmPending(entry)}>
+                  <div>
+                    <span>{entry.title}</span>
+                    <small>{formatDateTime(entry.occurred_at)} · จ่ายไปแล้ว {moneySign}{formatMoney(entry.amount)} · ยังไม่รู้จำนวนหน่วย</small>
+                  </div>
+                </button>
+                <details className="kebab-menu" name="pending-kebab">
+                  <summary>⋮</summary>
+                  <menu>
+                    <button onClick={() => onConfirmPending(entry)}>ยืนยันหน่วย</button>
+                    <button onClick={() => onDeletePending(entry)}>ลบ</button>
+                  </menu>
+                </details>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       <PortfolioTrendChart trend={trend} />
 
@@ -6878,6 +7114,7 @@ function PortfolioView({
 function InvestmentBuySheet({
   target,
   investments,
+  wallets,
   busy,
   error,
   onClose,
@@ -6886,10 +7123,11 @@ function InvestmentBuySheet({
 }: {
   target: Investment | null;
   investments: Investment[];
+  wallets: Wallet[];
   busy: boolean;
   error: string;
   onClose: () => void;
-  onSubmit: (target: Investment | null, input: { name: string; code: string; icon: string | null; icon_color: string | null; units: number; amount: number }) => Promise<boolean>;
+  onSubmit: (target: Investment | null, input: { name: string; code: string; icon: string | null; icon_color: string | null; units: number; amount: number; wallet_id: string; occurred_at: string }) => Promise<boolean>;
   closing?: boolean;
 }) {
   const [selectedId, setSelectedId] = useState(target?.id ?? "new");
@@ -6899,6 +7137,8 @@ function InvestmentBuySheet({
   const [iconColor, setIconColor] = useState<string | null>(target?.icon_color ?? null);
   const [unitsText, setUnitsText] = useState("");
   const [amountText, setAmountText] = useState("");
+  const [walletId, setWalletId] = useState(defaultWalletId(wallets) ?? "");
+  const [occurredAt, setOccurredAt] = useState(todayDateInput);
 
   const selected = selectedId === "new" ? null : investments.find((item) => item.id === selectedId) ?? null;
   const units = toFiniteNumber(unitsText);
@@ -6907,8 +7147,8 @@ function InvestmentBuySheet({
 
   const submit = async () => {
     const holdingName = selected ? selected.name : name;
-    if (!holdingName.trim() || !(units > 0) || !(amount > 0)) return;
-    const saved = await onSubmit(selected, { name: holdingName, code: selected ? (selected.code ?? "") : code, icon: selected ? selected.icon : icon, icon_color: selected ? selected.icon_color : iconColor, units, amount });
+    if (!holdingName.trim() || !(units > 0) || !(amount > 0) || !walletId) return;
+    const saved = await onSubmit(selected, { name: holdingName, code: selected ? (selected.code ?? "") : code, icon: selected ? selected.icon : icon, icon_color: selected ? selected.icon_color : iconColor, units, amount, wallet_id: walletId, occurred_at: fromDateInput(occurredAt) });
     if (saved) onClose();
   };
 
@@ -6954,8 +7194,20 @@ function InvestmentBuySheet({
         <input inputMode="decimal" value={amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setAmountText(event.target.value); }} placeholder="เช่น 1000" />
       </label>
       {pricePerUnit != null && <small className="cycle-note">ราคาต่อหน่วย {pricePerUnit.toFixed(4)}</small>}
+      <label>
+        หักเงินจากกระเป๋า
+        <select value={walletId} onChange={(event) => setWalletId(event.target.value)}>
+          {wallets.map((wallet) => (
+            <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        วันที่ซื้อ
+        <input type="date" value={occurredAt} max={todayDateInput()} onChange={(event) => setOccurredAt(event.target.value)} />
+      </label>
       {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
-      <button className="save" onClick={submit} disabled={busy || !(units > 0) || !(amount > 0) || (!selected && !name.trim())}>
+      <button className="save" onClick={submit} disabled={busy || !(units > 0) || !(amount > 0) || !walletId || (!selected && !name.trim())}>
         {busy ? "กำลังบันทึก..." : "บันทึก"}
       </button>
     </SheetFrame>
@@ -7057,6 +7309,206 @@ function InvestmentPriceSheet({
       <button className="save" onClick={submit} disabled={busy || !(nav > 0)}>
         {busy ? "กำลังบันทึก..." : "บันทึก"}
       </button>
+    </SheetFrame>
+  );
+}
+
+function InvestmentConfirmUnitsSheet({
+  entry,
+  investmentName,
+  busy,
+  error,
+  onClose,
+  onSubmit,
+  closing,
+}: {
+  entry: Entry;
+  investmentName: string;
+  busy: boolean;
+  error: string;
+  onClose: () => void;
+  onSubmit: (entry: Entry, units: number) => Promise<boolean>;
+  closing?: boolean;
+}) {
+  const [unitsText, setUnitsText] = useState("");
+  const units = toFiniteNumber(unitsText);
+  const pricePerUnit = units > 0 ? entry.amount / units : null;
+
+  const submit = async () => {
+    if (!(units > 0)) return;
+    const saved = await onSubmit(entry, units);
+    if (saved) onClose();
+  };
+
+  return (
+    <SheetFrame onClose={onClose} closing={closing}>
+      <div className="sheet-head">
+        <div>
+          <p className="eyebrow">พอร์ตลงทุน</p>
+          <h2>ยืนยันหน่วย {investmentName}</h2>
+        </div>
+        <button onClick={onClose}>x</button>
+      </div>
+      <small className="cycle-note">จ่ายไปแล้ว {moneySign}{formatMoney(entry.amount)} เมื่อ {formatDateTime(entry.occurred_at)}</small>
+      <label>
+        จำนวนหน่วยที่ได้จริง
+        <input autoFocus inputMode="decimal" value={unitsText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setUnitsText(event.target.value); }} placeholder="เช่น 92.6397" />
+      </label>
+      {pricePerUnit != null && <small className="cycle-note">ราคาต่อหน่วย {pricePerUnit.toFixed(4)}</small>}
+      {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
+      <button className="save" onClick={submit} disabled={busy || !(units > 0)}>
+        {busy ? "กำลังบันทึก..." : "ยืนยัน"}
+      </button>
+    </SheetFrame>
+  );
+}
+
+type InvestmentAiDraft = {
+  investmentId: string | null;
+  investment_name: string;
+  amountText: string;
+  date: string;
+  wallet_id: string;
+  note: string;
+};
+
+function InvestmentAiSheet({
+  investments,
+  wallets,
+  busy,
+  error,
+  onClose,
+  onAnalyze,
+  onSave,
+  closing,
+}: {
+  investments: Investment[];
+  wallets: Wallet[];
+  busy: boolean;
+  error: string;
+  onClose: () => void;
+  onAnalyze: (text: string) => Promise<InvestmentDraftItem[]>;
+  onSave: (input: { investmentId: string | null; name: string; walletId: string; amount: number; occurredAt: string; note?: string }) => Promise<boolean>;
+  closing?: boolean;
+}) {
+  const [text, setText] = useState("");
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState("");
+  const [drafts, setDrafts] = useState<InvestmentAiDraft[]>([]);
+
+  const runAnalyze = async () => {
+    if (!text.trim()) return;
+    setAnalyzing(true);
+    setAnalyzeError("");
+    try {
+      const items = await onAnalyze(text);
+      if (!items.length) setAnalyzeError("AI ไม่พบรายการลงทุนในข้อความนี้ ลองพิมพ์ให้ชัดเจนขึ้น เช่น ระบุจำนวนเงิน");
+      setDrafts(items.map((item) => {
+        const matched = investments.find((inv) => inv.name.trim().toLowerCase() === item.investment_name.trim().toLowerCase());
+        return {
+          investmentId: matched?.id ?? null,
+          investment_name: matched?.name ?? item.investment_name,
+          amountText: item.amount ? String(item.amount) : "",
+          date: dateInputPattern.test(item.date) ? item.date : todayDateInput(),
+          wallet_id: wallets.some((wallet) => wallet.id === item.wallet_id) ? item.wallet_id : (defaultWalletId(wallets) ?? ""),
+          note: item.note,
+        };
+      }));
+    } catch (e) {
+      setAnalyzeError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+    }
+    setAnalyzing(false);
+  };
+
+  const updateDraft = (index: number, patch: Partial<InvestmentAiDraft>) => {
+    setDrafts((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  };
+
+  const removeDraft = (index: number) => setDrafts((current) => current.filter((_, i) => i !== index));
+
+  const saveAll = async () => {
+    for (const draft of drafts) {
+      const amount = toMoneyAmount(draft.amountText);
+      if (!(amount > 0) || !draft.wallet_id || (!draft.investmentId && !draft.investment_name.trim())) continue;
+      const saved = await onSave({
+        investmentId: draft.investmentId,
+        name: draft.investment_name,
+        walletId: draft.wallet_id,
+        amount,
+        occurredAt: fromDateInput(draft.date),
+        note: draft.note,
+      });
+      if (!saved) return;
+    }
+    onClose();
+  };
+
+  return (
+    <SheetFrame onClose={onClose} closing={closing}>
+      <div className="sheet-head">
+        <div>
+          <p className="eyebrow">พอร์ตลงทุน</p>
+          <h2>บันทึกด้วย AI</h2>
+        </div>
+        <button onClick={onClose}>x</button>
+      </div>
+      {!drafts.length && (
+        <>
+          <label>
+            พิมพ์รายการลงทุน
+            <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="เช่น DCA K-WSPEEDUP 1000 บาท จากกระเป๋าหลัก" />
+          </label>
+          {analyzeError && <StateCard tone="error" title="AI ยังวิเคราะห์ไม่ได้" detail={analyzeError} />}
+          <button className="save" onClick={runAnalyze} disabled={analyzing || !text.trim()}>
+            {analyzing ? "กำลังวิเคราะห์..." : "ให้ AI แยกรายการ"}
+          </button>
+        </>
+      )}
+      {!!drafts.length && (
+        <>
+          <p className="pin-hint">รายการนี้จะหักเงินออกจากกระเป๋าทันที แต่ยังไม่ทราบจำนวนหน่วย — ไปยืนยันหน่วยทีหลังในหน้าพอร์ตลงทุนได้เมื่อรู้ผล</p>
+          {drafts.map((draft, index) => (
+            <div className="review" key={index}>
+              <label>
+                กองทุน/สินทรัพย์
+                <select value={draft.investmentId ?? "new"} onChange={(event) => updateDraft(index, { investmentId: event.target.value === "new" ? null : event.target.value })}>
+                  <option value="new">+ {draft.investment_name.trim() || "สร้างใหม่"}</option>
+                  {investments.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+              </label>
+              {!draft.investmentId && (
+                <label>
+                  ชื่อกองทุน/สินทรัพย์ใหม่
+                  <input value={draft.investment_name} onChange={(event) => updateDraft(index, { investment_name: event.target.value })} placeholder="เช่น K-WSPEEDUP" />
+                </label>
+              )}
+              <label>
+                จำนวนเงิน
+                <input inputMode="decimal" value={draft.amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) updateDraft(index, { amountText: event.target.value }); }} />
+              </label>
+              <label>
+                กระเป๋าต้นทาง
+                <select value={draft.wallet_id} onChange={(event) => updateDraft(index, { wallet_id: event.target.value })}>
+                  {wallets.map((wallet) => (
+                    <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                วันที่
+                <input type="date" value={draft.date} max={todayDateInput()} onChange={(event) => updateDraft(index, { date: event.target.value })} />
+              </label>
+              <button type="button" className="review-cancel-all" onClick={() => removeDraft(index)}>ลบรายการนี้</button>
+            </div>
+          ))}
+          {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
+          <button className="save" onClick={saveAll} disabled={busy || !drafts.length}>
+            {busy ? "กำลังบันทึก..." : `บันทึก ${drafts.length} รายการ`}
+          </button>
+        </>
+      )}
     </SheetFrame>
   );
 }
