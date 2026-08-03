@@ -1042,9 +1042,13 @@ function buildDebtSummary(debtors: Debtor[], entries: Entry[], kind: DebtorKind,
     if (!types.includes(entry.transaction_type)) continue;
     map.set(entry.debtor_name, (map.get(entry.debtor_name) ?? 0) + entry.debt_impact);
   }
+  // No positive-amount filter here on purpose: a debtor whose balance comes
+  // out at zero or negative (overpaid, or a data-entry mistake like a wrong
+  // opening balance) should still show up with its real number rather than
+  // silently falling back to a lying "฿0" wherever this gets looked up by
+  // name and not found.
   return [...map.entries()]
     .map(([name, amount]) => ({ name, amount }))
-    .filter((item) => item.amount > 0.005)
     .sort((a, b) => b.amount - a.amount);
 }
 
