@@ -74,6 +74,18 @@
   --overlay-scrim: rgba(20, 24, 28, 0.4);
   --focus-ring: rgba(201, 122, 20, 0.35);
 
+  /* neumorphism — soft dual-directional shadow, layered on top of the
+     Ink & Amber palette (surfaces/contrast unchanged) */
+  --nm-highlight: rgba(255, 255, 255, 0.75);
+  --nm-shadow: rgba(20, 24, 28, 0.09);
+  --nm-highlight-on-ink: rgba(255, 255, 255, 0.1);
+  --nm-shadow-on-ink: rgba(0, 0, 0, 0.35);
+  --nm-soft: -2px -2px 5px var(--nm-highlight), 3px 3px 7px var(--nm-shadow);
+  --nm-raised: -4px -4px 10px var(--nm-highlight), 5px 5px 14px var(--nm-shadow);
+  --nm-inset: inset -3px -3px 6px var(--nm-highlight), inset 3px 3px 7px var(--nm-shadow);
+  --nm-raised-on-ink: -3px -3px 8px var(--nm-highlight-on-ink), 4px 4px 12px var(--nm-shadow-on-ink);
+  --nm-inset-on-ink: inset -2px -2px 5px var(--nm-highlight-on-ink), inset 2px 2px 6px var(--nm-shadow-on-ink);
+
   /* scales */
   --s-1: 4px;
   --s-2: 8px;
@@ -160,6 +172,12 @@
   --sh-3: 0 24px 56px rgba(0, 0, 0, 0.5);
   --overlay-scrim: rgba(0, 0, 0, 0.6);
   --focus-ring: rgba(232, 163, 61, 0.4);
+
+  /* neumorphism — dark surfaces catch light faintly instead of brightly */
+  --nm-highlight: rgba(255, 255, 255, 0.045);
+  --nm-shadow: rgba(0, 0, 0, 0.5);
+  --nm-highlight-on-ink: rgba(255, 255, 255, 0.5);
+  --nm-shadow-on-ink: rgba(0, 0, 0, 0.3);
 }
 
 /* -------------------------------------------------------------------------
@@ -484,7 +502,7 @@ a:focus-visible {
   border-radius: var(--r-xl);
   background: var(--surface);
   border: 1px solid var(--line);
-  box-shadow: var(--sh-2);
+  box-shadow: var(--nm-raised);
   display: grid;
   grid-template-columns: 1fr 80px 1fr;
   align-items: center;
@@ -537,8 +555,8 @@ a:focus-visible {
   display: grid;
   place-items: center;
   transform: translateY(-14px);
-  box-shadow: var(--sh-2);
-  transition: transform var(--t-2) var(--e-spring);
+  box-shadow: var(--nm-raised-on-ink);
+  transition: transform var(--t-2) var(--e-spring), box-shadow var(--t-2) var(--e-out);
 }
 
 .bottom-nav .add-button svg {
@@ -553,6 +571,7 @@ a:focus-visible {
 
 .bottom-nav .add-button:active {
   transform: translateY(-10px) scale(0.94);
+  box-shadow: var(--nm-inset-on-ink);
 }
 
 .bottom-nav button:active:not(.add-button) {
@@ -570,7 +589,8 @@ a:focus-visible {
   color: var(--primary-text);
   font-weight: 700;
   font-size: 15px;
-  transition: background var(--t-2) var(--e-out), transform var(--t-1) var(--e-out);
+  box-shadow: var(--nm-raised-on-ink);
+  transition: background var(--t-2) var(--e-out), transform var(--t-1) var(--e-out), box-shadow var(--t-2) var(--e-out);
 }
 
 .primary:hover:not(:disabled), .save:hover:not(:disabled) {
@@ -579,6 +599,7 @@ a:focus-visible {
 
 .primary:active:not(:disabled), .save:active:not(:disabled) {
   transform: scale(0.99);
+  box-shadow: var(--nm-inset-on-ink);
 }
 
 .google-button {
@@ -592,6 +613,7 @@ a:focus-visible {
   justify-content: center;
   gap: var(--s-2);
   font-weight: 700;
+  box-shadow: var(--nm-soft);
 }
 
 .side-ghost {
@@ -602,6 +624,7 @@ a:focus-visible {
   border: 1px solid var(--line);
   color: var(--ink-3);
   font-weight: 700;
+  box-shadow: var(--nm-soft);
 }
 
 .logout-button {
@@ -612,6 +635,7 @@ a:focus-visible {
   border: 1px solid var(--danger-border);
   color: var(--danger);
   font-weight: 700;
+  box-shadow: var(--nm-soft);
 }
 
 .danger {
@@ -620,6 +644,7 @@ a:focus-visible {
   border-radius: var(--r-md);
   padding: 11px;
   font-weight: 700;
+  box-shadow: var(--nm-soft);
 }
 
 /* Segmented toggles: theme switch, lend/own, month/year */
@@ -706,7 +731,7 @@ a:focus-visible {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-xl);
-  box-shadow: var(--sh-1);
+  box-shadow: var(--nm-soft);
 }
 
 .wallet-card, .summary-panel, .entry-list, .heatmap-panel, .debtor-detail-card,
@@ -727,6 +752,7 @@ a:focus-visible {
   .wallet-card:not(.primary-wallet):hover, .debtor-page-item:hover, .entry-tappable:hover,
   .quick-chip:hover, .wallet-carousel-card:hover {
     border-color: color-mix(in srgb, var(--primary) 20%, var(--line));
+    box-shadow: var(--nm-raised);
     transform: translateY(-2px);
   }
 }
@@ -738,7 +764,7 @@ a:focus-visible {
 
 .wallet-card:not(.primary-wallet):active, .debtor-page-item:active, .entry-tappable:active,
 .quick-chip:active, .wallet-carousel-card:active {
-  box-shadow: var(--sh-1);
+  box-shadow: var(--nm-inset);
   border-color: var(--line);
   transform: scale(0.985);
 }
@@ -808,7 +834,7 @@ a:focus-visible {
   color: var(--primary-text);
   border: 1px solid color-mix(in srgb, var(--primary-text) 12%, transparent);
   padding: var(--s-7) var(--s-6) var(--s-6);
-  box-shadow: var(--sh-3);
+  box-shadow: var(--sh-3), var(--nm-raised-on-ink);
   position: relative;
   overflow: hidden;
 }
@@ -2865,10 +2891,11 @@ a:focus-visible {
 .manual-entry-form label input, .manual-entry-form label select, .manual-entry-form label textarea {
   width: 100%;
   margin-top: 6px;
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   padding: 12px 14px;
   background: var(--surface-2);
+  box-shadow: var(--nm-inset);
 }
 
 .report-sheet {
