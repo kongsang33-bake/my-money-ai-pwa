@@ -11,7 +11,9 @@ import {
   Bot,
   Car,
   Cloud,
+  Check,
   CreditCard,
+  Copy,
   Delete,
   Download,
   Gift,
@@ -37,6 +39,7 @@ import {
   Sun,
   TrendingDown,
   TrendingUp,
+  Trash2,
   Tv,
   UserCog,
   Users,
@@ -83,6 +86,12 @@ type AiFinanceContext = {
   payableTotal: number;
   transactionCount: number;
   transactions: Pick<Entry, "title" | "category" | "amount" | "transaction_type" | "wallet_impact" | "occurred_at">[];
+};
+type AiChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
 };
 type Profile = {
   user_id: string;
@@ -3558,8 +3567,8 @@ export default function Home() {
             closing={reportSheetDismiss.closing}
           />
         )}
-        {askAiDismiss.mounted && (
-          <AskFinanceSheet context={aiFinanceContext} onClose={askAiDismiss.requestClose} closing={askAiDismiss.closing} />
+        {askAiDismiss.mounted && user && (
+          <AskFinanceSheet context={aiFinanceContext} userId={user.id} onClose={askAiDismiss.requestClose} closing={askAiDismiss.closing} />
         )}
         {recapDismiss.mounted && (
           <RecapSheet
@@ -6191,29 +6200,103 @@ function cleanAiAnswer(value: string) {
     .trim();
 }
 
-function AskFinanceSheet({ context, onClose, closing }: { context: AiFinanceContext; onClose: () => void; closing?: boolean }) {
+function AskFinanceSheet({ context, userId, onClose, closing }: { context: AiFinanceContext; userId: string; onClose: () => void; closing?: boolean }) {
+  const [messages, setMessages] = useState<AiChatMessage[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [copiedId, setCopiedId] = useState("");
+  const threadRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!supabase) { setLoadingHistory(false); return; }
+      const { data, error: loadError } = await supabase
+        .from("ai_chat_messages")
+        .select("id,role,content,created_at")
+        .order("created_at", { ascending: true });
+      if (cancelled) return;
+      if (loadError) setError(loadError.message);
+      else setMessages((data ?? []) as AiChatMessage[]);
+      setLoadingHistory(false);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
+  }, [messages, busy]);
+
   const ask = async () => {
-    if (!question.trim()) return;
-    setBusy(true); setError(""); setAnswer("");
+    const trimmed = question.trim();
+    if (!trimmed || busy) return;
+    setBusy(true); setError("");
+    const userMessage: AiChatMessage = { id: crypto.randomUUID(), role: "user", content: trimmed, created_at: new Date().toISOString() };
+    setMessages((prev) => [...prev, userMessage]);
+    setQuestion("");
+    const history = messages.slice(-10).map((m) => ({ role: m.role, content: m.content }));
     try {
-      const response = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json", ...(await authHeaders()) }, body: JSON.stringify({ question: question.trim(), context }) });
+      const response = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json", ...(await authHeaders()) }, body: JSON.stringify({ question: trimmed, context, history }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "AI ตอบคำถามไม่สำเร็จ");
-      setAnswer(cleanAiAnswer(data.answer || "ยังไม่มีคำตอบ"));
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "AI ตอบคำถามไม่สำเร็จ"); }
+      const answerText = cleanAiAnswer(data.answer || "ยังไม่มีคำตอบ");
+      const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: "assistant", content: answerText, created_at: new Date().toISOString() };
+      setMessages((prev) => [...prev, assistantMessage]);
+      if (supabase) {
+        await supabase.from("ai_chat_messages").insert([
+          { id: userMessage.id, user_id: userId, role: "user", content: trimmed },
+          { id: assistantMessage.id, user_id: userId, role: "assistant", content: answerText },
+        ]);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "AI ตอบคำถามไม่สำเร็จ");
+    }
     setBusy(false);
   };
+
+  const resetChat = async () => {
+    setMessages([]);
+    setError("");
+    if (supabase) await supabase.from("ai_chat_messages").delete().eq("user_id", userId);
+  };
+
+  const copyMessage = async (message: AiChatMessage) => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopiedId(message.id);
+      setTimeout(() => setCopiedId((current) => (current === message.id ? "" : current)), 1500);
+    } catch { /* clipboard unavailable, ignore */ }
+  };
+
   return <div className={`sheet-backdrop ${closing ? "closing" : ""}`}><section className={`edit-sheet ask-ai-sheet ${closing ? "closing" : ""}`}>
-    <div className="sheet-head"><div><p className="eyebrow">ผู้ช่วยการเงิน</p><h2>ถาม AI เรื่องเงิน</h2></div><button onClick={onClose}>×</button></div>
+    <div className="sheet-head">
+      <div><p className="eyebrow">ผู้ช่วยการเงิน</p><h2>ถาม AI เรื่องเงิน</h2></div>
+      <div className="ask-ai-head-actions">
+        {messages.length > 0 && <button className="ask-ai-reset" onClick={() => { void resetChat(); }} aria-label="เริ่มแชทใหม่"><Trash2 size={16} strokeWidth={2.25} /></button>}
+        <button onClick={onClose}>×</button>
+      </div>
+    </div>
     <p className="ask-ai-period">อ้างอิงตัวเลขที่แอปคำนวณไว้ใน{context.periodLabel}</p>
-    <div className="ask-ai-examples"><span>ลองถาม</span><button onClick={() => setQuestion("เดือนนี้ฉันใช้เงินกับหมวดไหนมากที่สุด")}>หมวดไหนใช้เยอะสุด</button><button onClick={() => setQuestion("ช่วงนี้เงินของฉันเหลือเป็นอย่างไร")}>เงินเหลือเป็นอย่างไร</button></div>
-    <textarea className="ask-ai-input" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="เช่น เดือนนี้มีรายจ่ายอะไรที่ควรระวังบ้าง" />
+    {messages.length === 0 && (
+      <div className="ask-ai-examples"><span>ลองถาม</span><button onClick={() => setQuestion("เดือนนี้ฉันใช้เงินกับหมวดไหนมากที่สุด")}>หมวดไหนใช้เยอะสุด</button><button onClick={() => setQuestion("ช่วงนี้เงินของฉันเหลือเป็นอย่างไร")}>เงินเหลือเป็นอย่างไร</button></div>
+    )}
+    <div className="ask-ai-thread" ref={threadRef}>
+      {loadingHistory && <p className="ask-ai-thread-hint">กำลังโหลดประวัติแชท...</p>}
+      {!loadingHistory && messages.length === 0 && <p className="ask-ai-thread-hint">เริ่มถาม AI เรื่องการเงินของคุณได้เลย</p>}
+      {messages.map((message) => (
+        <div key={message.id} className={`ask-ai-bubble ${message.role}`}>
+          <p>{message.content}</p>
+          <button className="ask-ai-copy" onClick={() => { void copyMessage(message); }} aria-label="คัดลอกข้อความ">
+            {copiedId === message.id ? <Check size={13} strokeWidth={2.5} /> : <Copy size={13} strokeWidth={2.25} />}
+          </button>
+        </div>
+      ))}
+      {busy && <div className="ask-ai-bubble assistant pending"><p>กำลังวิเคราะห์...</p></div>}
+    </div>
     {error && <StateCard tone="error" title="ถาม AI ไม่สำเร็จ" detail={error} />}
-    {answer && <div className="ask-ai-answer"><span>AI</span><p>{answer}</p></div>}
+    <textarea className="ask-ai-input" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="เช่น เดือนนี้มีรายจ่ายอะไรที่ควรระวังบ้าง" />
     <button className="save" onClick={() => { void ask(); }} disabled={busy || !question.trim()}>{busy ? "กำลังวิเคราะห์..." : "ถาม AI"}</button>
   </section></div>;
 }

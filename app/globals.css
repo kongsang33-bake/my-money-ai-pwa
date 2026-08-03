@@ -1420,10 +1420,18 @@ a:focus-visible {
 .ask-ai-period { margin: var(--s-2) 0 var(--s-3); color: var(--ink-3); font-size: 11px; }
 .ask-ai-examples span { flex: 0 0 auto; color: var(--ink-3); font-size: 11px; align-self: center; }
 .ask-ai-examples button { flex: 0 0 auto; padding: 6px 10px; border-radius: var(--r-full); background: var(--surface-2); color: var(--ink-2); font-size: 11px; }
-.ask-ai-input { width: 100%; min-height: 100px; resize: vertical; }
-.ask-ai-answer { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: var(--s-2); margin: var(--s-3) 0; padding: var(--s-3); border-radius: var(--r-md); background: var(--surface-2); }
-.ask-ai-answer > span { display: grid; place-items: center; width: 24px; height: 24px; border-radius: var(--r-full); background: var(--accent); color: var(--primary-text); font-size: 10px; font-weight: 800; }
-.ask-ai-answer p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
+.ask-ai-input { width: 100%; min-height: 72px; resize: vertical; }
+.ask-ai-head-actions { display: flex; align-items: center; gap: var(--s-2); flex-shrink: 0; }
+.ask-ai-reset { width: 36px; height: 36px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line-soft); display: grid; place-items: center; color: var(--ink-3); flex-shrink: 0; }
+.ask-ai-thread { display: flex; flex-direction: column; gap: var(--s-2); max-height: 46vh; overflow-y: auto; margin-bottom: var(--s-3); padding-right: 2px; }
+.ask-ai-thread-hint { color: var(--ink-3); font-size: 12px; text-align: center; padding: var(--s-4) 0; }
+.ask-ai-bubble { position: relative; max-width: 85%; padding: var(--s-3); padding-right: calc(var(--s-3) + 22px); border-radius: var(--r-md); }
+.ask-ai-bubble p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
+.ask-ai-bubble.user { align-self: flex-end; background: var(--primary); color: var(--primary-text); }
+.ask-ai-bubble.assistant { align-self: flex-start; background: var(--surface-2); color: var(--ink); }
+.ask-ai-bubble.pending p { color: var(--ink-3); }
+.ask-ai-copy { position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; display: grid; place-items: center; color: inherit; opacity: 0.6; }
+.ask-ai-copy:hover { opacity: 1; }
 
 .quick-chip {
   flex-shrink: 0;
