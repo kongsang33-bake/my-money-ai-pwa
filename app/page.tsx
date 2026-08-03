@@ -2040,7 +2040,7 @@ export default function Home() {
 
     const confirmed = await requestConfirm({
       title: "ยืนยันการบันทึก",
-      detail: `กำลังจะบันทึก ${items.length} รายการ รวม ${moneySign}${formatMoney(items.reduce((sum, item) => sum + item.amount, 0))}`,
+      detail: `กำลังจะบันทึก ${items.length} รายการ รวม ${moneySign}${formatMoney(items.filter((item) => item.transaction_type !== "transfer").reduce((sum, item) => sum + item.amount, 0))}`,
       confirmLabel: "บันทึกเลย",
       tone: "default",
     });
