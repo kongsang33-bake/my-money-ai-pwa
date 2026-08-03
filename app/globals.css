@@ -2898,17 +2898,6 @@ a:focus-visible {
   resize: vertical;
 }
 
-.field-pair {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--s-3);
-  margin: var(--s-3) 0;
-}
-
-.field-pair label {
-  margin: 0;
-}
-
 .edit-sheet .sheet-check-row {
   display: flex;
   align-items: center;

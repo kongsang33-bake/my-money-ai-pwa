@@ -108,8 +108,8 @@ type Debtor = {
   kind: DebtorKind;
   monthly_installment: number | null;
   total_installments: number | null;
-  paid_installments: number | null;
   credit_limit: number | null;
+  credit_card_min_payment_percent: number | null;
   icon: string | null;
   icon_color: string | null;
 };
@@ -1095,23 +1095,31 @@ function buildPortfolioTrend(investments: Investment[], prices: InvestmentPrice[
   });
 }
 
+// Always derived from the real outstanding balance rather than a manually
+// maintained counter — a stored "paid so far" count drifts the moment a
+// payment is logged in-app without someone remembering to also bump it by
+// hand, which is exactly what happened before this was changed.
 function installmentsRemaining(debtor: Debtor, outstanding: number): number | null {
   if (!debtor.monthly_installment) return null;
-  if (debtor.total_installments != null) {
-    return Math.max(0, debtor.total_installments - (debtor.paid_installments ?? 0));
-  }
-  if (outstanding <= 0.005) return null;
+  if (outstanding <= 0.005) return 0;
   return Math.ceil(outstanding / debtor.monthly_installment);
 }
 
 function installmentStatusText(debtor: Debtor, outstanding: number): string {
   if (!debtor.monthly_installment) return "";
   const remaining = installmentsRemaining(debtor, outstanding);
+  if (remaining === null) return "";
   if (debtor.total_installments != null) {
-    const paid = debtor.paid_installments ?? 0;
-    return ` · จ่ายแล้ว ${paid}/${debtor.total_installments} งวด${remaining != null ? ` (เหลือ ${remaining} งวด)` : ""}`;
+    const paid = Math.max(0, debtor.total_installments - remaining);
+    return ` · จ่ายแล้ว ${paid}/${debtor.total_installments} งวด (เหลือ ${remaining} งวด)`;
   }
-  return remaining !== null && outstanding > 0.005 ? ` · เหลืออีกประมาณ ${remaining} เดือน` : "";
+  return outstanding > 0.005 ? ` · เหลืออีกประมาณ ${remaining} เดือน` : "";
+}
+
+function monthlyDebtObligation(debtor: Debtor, outstanding: number): number {
+  if (debtor.credit_card_min_payment_percent) return outstanding * (debtor.credit_card_min_payment_percent / 100);
+  if (debtor.monthly_installment) return Math.min(debtor.monthly_installment, outstanding);
+  return outstanding;
 }
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -1376,7 +1384,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("debtors")
-      .select("id,user_id,name,note,opening_balance,kind,monthly_installment,total_installments,paid_installments,credit_limit,icon,icon_color")
+      .select("id,user_id,name,note,opening_balance,kind,monthly_installment,total_installments,credit_limit,credit_card_min_payment_percent,icon,icon_color")
       .order("name", { ascending: true });
     if (error) {
       setError(error.message);
@@ -1387,8 +1395,8 @@ export default function Home() {
       opening_balance: toMoneyAmount(row.opening_balance),
       monthly_installment: row.monthly_installment == null ? null : Number(row.monthly_installment),
       total_installments: row.total_installments == null ? null : Number(row.total_installments),
-      paid_installments: row.paid_installments == null ? null : Number(row.paid_installments),
       credit_limit: row.credit_limit == null ? null : Number(row.credit_limit),
+      credit_card_min_payment_percent: row.credit_card_min_payment_percent == null ? null : Number(row.credit_card_min_payment_percent),
     })) as Debtor[]);
   }, []);
 
@@ -2562,12 +2570,12 @@ export default function Home() {
         kind: input.kind,
         monthly_installment: input.monthly_installment,
         total_installments: input.total_installments,
-        paid_installments: input.paid_installments,
         credit_limit: input.credit_limit,
+        credit_card_min_payment_percent: input.credit_card_min_payment_percent,
         icon: input.icon,
         icon_color: input.icon_color,
       })
-      .select("id,user_id,name,note,opening_balance,kind,monthly_installment,total_installments,paid_installments,credit_limit,icon,icon_color")
+      .select("id,user_id,name,note,opening_balance,kind,monthly_installment,total_installments,credit_limit,credit_card_min_payment_percent,icon,icon_color")
       .single();
     if (error) {
       setError(error.code === "23505" ? "มีชื่อนี้อยู่แล้ว" : error.message);
@@ -2593,8 +2601,8 @@ export default function Home() {
         kind: patch.kind,
         monthly_installment: patch.monthly_installment,
         total_installments: patch.total_installments,
-        paid_installments: patch.paid_installments,
         credit_limit: patch.credit_limit,
+        credit_card_min_payment_percent: patch.credit_card_min_payment_percent,
         icon: patch.icon,
         icon_color: patch.icon_color,
         updated_at: new Date().toISOString(),
@@ -5635,7 +5643,9 @@ function DebtorsView({
         <section className="debtor-detail-card">
           <span>{selectedDebtor.kind === "own" ? "ยอดหนี้คงเหลือ" : "ยอดค้างปัจจุบัน"}</span>
           <strong><CountUpMoney value={selectedAmount} /></strong>
-          {selectedDebtor.kind === "own" && selectedDebtor.monthly_installment ? (
+          {selectedDebtor.kind === "own" && selectedDebtor.credit_card_min_payment_percent ? (
+            <small>ขั้นต่ำเดือนนี้ประมาณ {moneySign}{formatMoney(monthlyDebtObligation(selectedDebtor, selectedAmount))} ({selectedDebtor.credit_card_min_payment_percent}% ของยอดคงเหลือ)</small>
+          ) : selectedDebtor.kind === "own" && selectedDebtor.monthly_installment ? (
             <small>
               ผ่อนเดือนละ {moneySign}{formatMoney(selectedDebtor.monthly_installment)}
               {installmentStatusText(selectedDebtor, selectedAmount)}
@@ -5659,6 +5669,18 @@ function DebtorsView({
 
   const visibleDebtors = debtors.filter((debtor) => debtor.kind === activeKind);
   const summaryTotal = summary.reduce((sum, item) => sum + item.amount, 0);
+  // The headline for "หนี้ของฉัน" is what's actually due this cycle (fixed
+  // installment, credit card minimum, or the full balance for debts with
+  // neither set) rather than the full remaining balance — the total owed
+  // is still shown, just as supporting context underneath, since a debt
+  // dashboard that leads with the whole principal reads as far more urgent
+  // than what you actually need to have ready this month.
+  const monthlyObligationTotal = activeKind === "own"
+    ? visibleDebtors.reduce((sum, debtor) => {
+        const amount = summary.find((item) => item.name.trim().toLowerCase() === debtor.name.trim().toLowerCase())?.amount ?? 0;
+        return sum + monthlyDebtObligation(debtor, amount);
+      }, 0)
+    : summaryTotal;
 
   return (
     <div className="view debtor-view">
@@ -5675,8 +5697,9 @@ function DebtorsView({
         <button className={activeKind === "own" ? "active" : ""} onClick={() => onChangeActiveKind("own")}>หนี้ของฉัน</button>
       </div>
       <section className="debtor-detail-card">
-        <span>{activeKind === "own" ? "หนี้ที่ต้องผ่อนรวม" : "ยอดรวมที่ค้างรับ"}</span>
-        <strong><CountUpMoney value={summaryTotal} /></strong>
+        <span>{activeKind === "own" ? "ต้องจ่ายเดือนนี้รวม" : "ยอดรวมที่ค้างรับ"}</span>
+        <strong><CountUpMoney value={monthlyObligationTotal} /></strong>
+        {activeKind === "own" && <small>ยอดหนี้คงเหลือรวม {moneySign}{formatMoney(summaryTotal)}</small>}
       </section>
       <div className="debtor-page-list">
         {visibleDebtors.map((debtor) => {
@@ -5690,7 +5713,9 @@ function DebtorsView({
                 </span>
                 <div>
                   <span>{debtor.name}</span>
-                  {debtor.kind === "own" && debtor.monthly_installment ? (
+                  {debtor.kind === "own" && debtor.credit_card_min_payment_percent ? (
+                    <small>ขั้นต่ำเดือนนี้ประมาณ {moneySign}{formatMoney(monthlyDebtObligation(debtor, amount))} ({debtor.credit_card_min_payment_percent}%)</small>
+                  ) : debtor.kind === "own" && debtor.monthly_installment ? (
                     <small>
                       ผ่อนเดือนละ {moneySign}{formatMoney(debtor.monthly_installment)}
                       {installmentStatusText(debtor, amount)}
@@ -5868,8 +5893,8 @@ type DebtorInput = {
   kind: DebtorKind;
   monthly_installment: number | null;
   total_installments: number | null;
-  paid_installments: number | null;
   credit_limit: number | null;
+  credit_card_min_payment_percent: number | null;
   icon: string | null;
   icon_color: string | null;
 };
@@ -5898,21 +5923,23 @@ function DebtorEditSheet({
   const [openingBalanceText, setOpeningBalanceText] = useState(debtor?.opening_balance ? String(debtor.opening_balance) : "");
   const [kind, setKind] = useState<DebtorKind>(debtor?.kind ?? defaultKind);
   const [monthlyInstallmentText, setMonthlyInstallmentText] = useState(debtor?.monthly_installment ? String(debtor.monthly_installment) : "");
-  const [paidInstallmentsText, setPaidInstallmentsText] = useState(debtor?.paid_installments != null ? String(debtor.paid_installments) : "");
   const [totalInstallmentsText, setTotalInstallmentsText] = useState(debtor?.total_installments != null ? String(debtor.total_installments) : "");
   const [creditLimitText, setCreditLimitText] = useState(debtor?.credit_limit != null ? String(debtor.credit_limit) : "");
+  const [minPaymentPercentText, setMinPaymentPercentText] = useState(debtor?.credit_card_min_payment_percent != null ? String(debtor.credit_card_min_payment_percent) : "");
   const [icon, setIcon] = useState<string | null>(debtor?.icon ?? null);
   const [iconColor, setIconColor] = useState<string | null>(debtor?.icon_color ?? null);
 
-  const hasInstallment = kind === "own" && monthlyInstallmentText !== "";
+  // A credit limit is what marks this as a credit card rather than a fixed
+  // loan — cards get a minimum-payment percentage (since the bank-allowed
+  // minimum moves with the statement balance every month) instead of a
+  // fixed installment amount and a total-installment count, which only
+  // make sense for a loan with a known end date.
+  const isCreditCard = kind === "own" && creditLimitText !== "";
+  const hasInstallment = kind === "own" && !isCreditCard && monthlyInstallmentText !== "";
 
   const submit = async () => {
     if (!name.trim()) return;
     const totalInstallments = hasInstallment && totalInstallmentsText !== "" ? Math.max(0, Math.round(Number(totalInstallmentsText))) : null;
-    let paidInstallments = hasInstallment && paidInstallmentsText !== "" ? Math.max(0, Math.round(Number(paidInstallmentsText))) : null;
-    if (totalInstallments != null && paidInstallments != null && paidInstallments > totalInstallments) {
-      paidInstallments = totalInstallments;
-    }
     const payload: DebtorInput = {
       name,
       note,
@@ -5920,8 +5947,8 @@ function DebtorEditSheet({
       kind,
       monthly_installment: hasInstallment ? toMoneyAmount(monthlyInstallmentText) : null,
       total_installments: totalInstallments,
-      paid_installments: paidInstallments,
       credit_limit: kind === "own" && creditLimitText !== "" ? toMoneyAmount(creditLimitText) : null,
+      credit_card_min_payment_percent: isCreditCard && minPaymentPercentText !== "" ? Math.max(0, Math.min(100, Number(minPaymentPercentText))) : null,
       icon,
       icon_color: iconColor,
     };
@@ -5958,25 +5985,29 @@ function DebtorEditSheet({
       {kind === "own" && (
         <>
           <label>
-            ผ่อนต่อเดือน
-            <input inputMode="decimal" value={monthlyInstallmentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMonthlyInstallmentText(event.target.value); }} placeholder="เช่น 15000" />
-          </label>
-          {hasInstallment && (
-            <div className="field-pair">
-              <label>
-                จ่ายไปแล้ว (งวด)
-                <input inputMode="numeric" value={paidInstallmentsText} onChange={(event) => { if (event.target.value === "" || /^\d*$/.test(event.target.value)) setPaidInstallmentsText(event.target.value); }} placeholder="เช่น 6" />
-              </label>
-              <label>
-                ทั้งหมด (งวด)
-                <input inputMode="numeric" value={totalInstallmentsText} onChange={(event) => { if (event.target.value === "" || /^\d*$/.test(event.target.value)) setTotalInstallmentsText(event.target.value); }} placeholder="เช่น 24" />
-              </label>
-            </div>
-          )}
-          <label>
-            วงเงิน (สำหรับบัตรเครดิต)
+            วงเงิน (กรอกถ้าเป็นบัตรเครดิต)
             <input inputMode="decimal" value={creditLimitText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setCreditLimitText(event.target.value); }} placeholder="เช่น 50000" />
           </label>
+          {isCreditCard ? (
+            <label>
+              ยอดขั้นต่ำที่ต้องจ่าย (%)
+              <input inputMode="decimal" value={minPaymentPercentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMinPaymentPercentText(event.target.value); }} placeholder="เช่น 10" />
+              <small className="cycle-note">ยอดขั้นต่ำบัตรเครดิตแปรผันตามยอดคงเหลือทุกเดือน ใส่เป็น % ที่ธนาคารกำหนดแทนยอดคงที่</small>
+            </label>
+          ) : (
+            <>
+              <label>
+                ผ่อนต่อเดือน
+                <input inputMode="decimal" value={monthlyInstallmentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMonthlyInstallmentText(event.target.value); }} placeholder="เช่น 15000" />
+              </label>
+              {hasInstallment && (
+                <label>
+                  ทั้งหมด (งวด)
+                  <input inputMode="numeric" value={totalInstallmentsText} onChange={(event) => { if (event.target.value === "" || /^\d*$/.test(event.target.value)) setTotalInstallmentsText(event.target.value); }} placeholder="เช่น 24" />
+                </label>
+              )}
+            </>
+          )}
         </>
       )}
       {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
