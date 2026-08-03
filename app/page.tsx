@@ -5189,7 +5189,7 @@ function DraftImpact({ items }: { items: Draft[] }) {
 
   return (
     <div className="draft-impact">
-      <span>กระเป๋าหลัก {formatSignedMoney(wallet)}</span>
+      <span>รวมทุกกระเป๋า {formatSignedMoney(wallet)}</span>
       <span>ลูกหนี้ {formatSignedMoney(debt)}</span>
     </div>
   );
