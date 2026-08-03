@@ -76,15 +76,15 @@
 
   /* neumorphism — soft dual-directional shadow, layered on top of the
      Ink & Amber palette (surfaces/contrast unchanged) */
-  --nm-highlight: rgba(255, 255, 255, 0.75);
-  --nm-shadow: rgba(20, 24, 28, 0.09);
-  --nm-highlight-on-ink: rgba(255, 255, 255, 0.1);
-  --nm-shadow-on-ink: rgba(0, 0, 0, 0.35);
-  --nm-soft: -2px -2px 5px var(--nm-highlight), 3px 3px 7px var(--nm-shadow);
-  --nm-raised: -4px -4px 10px var(--nm-highlight), 5px 5px 14px var(--nm-shadow);
-  --nm-inset: inset -3px -3px 6px var(--nm-highlight), inset 3px 3px 7px var(--nm-shadow);
-  --nm-raised-on-ink: -3px -3px 8px var(--nm-highlight-on-ink), 4px 4px 12px var(--nm-shadow-on-ink);
-  --nm-inset-on-ink: inset -2px -2px 5px var(--nm-highlight-on-ink), inset 2px 2px 6px var(--nm-shadow-on-ink);
+  --nm-highlight: rgba(255, 255, 255, 0.8);
+  --nm-shadow: rgba(20, 24, 28, 0.08);
+  --nm-highlight-on-ink: rgba(255, 255, 255, 0.12);
+  --nm-shadow-on-ink: rgba(0, 0, 0, 0.32);
+  --nm-soft: -3px -3px 7px var(--nm-highlight), 4px 4px 11px var(--nm-shadow);
+  --nm-raised: -5px -5px 14px var(--nm-highlight), 7px 7px 20px var(--nm-shadow);
+  --nm-inset: inset -4px -4px 8px var(--nm-highlight), inset 4px 4px 10px var(--nm-shadow);
+  --nm-raised-on-ink: -4px -4px 10px var(--nm-highlight-on-ink), 6px 6px 18px var(--nm-shadow-on-ink);
+  --nm-inset-on-ink: inset -3px -3px 6px var(--nm-highlight-on-ink), inset 3px 3px 8px var(--nm-shadow-on-ink);
 
   /* scales */
   --s-1: 4px;
@@ -97,9 +97,9 @@
   --s-8: 40px;
 
   --r-sm: 8px;
-  --r-md: 12px;
-  --r-lg: 16px;
-  --r-xl: 24px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-xl: 26px;
   --r-full: 999px;
 
   --type-display: clamp(38px, 10vw, 50px);
@@ -174,10 +174,10 @@
   --focus-ring: rgba(232, 163, 61, 0.4);
 
   /* neumorphism — dark surfaces catch light faintly instead of brightly */
-  --nm-highlight: rgba(255, 255, 255, 0.045);
-  --nm-shadow: rgba(0, 0, 0, 0.5);
-  --nm-highlight-on-ink: rgba(255, 255, 255, 0.5);
-  --nm-shadow-on-ink: rgba(0, 0, 0, 0.3);
+  --nm-highlight: rgba(255, 255, 255, 0.055);
+  --nm-shadow: rgba(0, 0, 0, 0.45);
+  --nm-highlight-on-ink: rgba(255, 255, 255, 0.55);
+  --nm-shadow-on-ink: rgba(0, 0, 0, 0.28);
 }
 
 /* -------------------------------------------------------------------------
@@ -286,6 +286,7 @@ a:focus-visible {
   box-shadow: var(--sh-3);
   overflow-x: hidden;
   overflow-y: auto;
+  scroll-behavior: smooth;
   padding-bottom: calc(96px + env(safe-area-inset-bottom));
   scroll-padding-top: 82px;
 }
@@ -2896,6 +2897,7 @@ a:focus-visible {
   padding: 12px 14px;
   background: var(--surface-2);
   box-shadow: var(--nm-inset);
+  transition: box-shadow var(--t-2) var(--e-out), background var(--t-2) var(--e-out);
 }
 
 .report-sheet {
