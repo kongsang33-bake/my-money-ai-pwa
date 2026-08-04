@@ -5311,6 +5311,8 @@ const EntryList = memo(function EntryList({
 }) {
   const groups = useMemo(() => groupEntriesByDay(entries), [entries]);
 
+  if (!entries.length) return <EmptyNote glyph="▪" action={emptyAction}>ยังไม่มีรายการในช่วงนี้</EmptyNote>;
+
   return (
     <div className="entry-list">
       {groups.map((group) => (
@@ -5347,7 +5349,6 @@ const EntryList = memo(function EntryList({
           })}
         </div>
       ))}
-      {!entries.length && <EmptyNote glyph="▪" action={emptyAction}>ยังไม่มีรายการในช่วงนี้</EmptyNote>}
     </div>
   );
 });
