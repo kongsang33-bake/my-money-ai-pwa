@@ -536,6 +536,42 @@ function saveGoals(userId: string, goals: MoneyGoal[]) {
   }
 }
 
+// "full" subtracts every baht of outstanding debt principal from net worth;
+// "obligation" subtracts only what's actually due this cycle (installment /
+// card minimum), matching how the debt page already presents "หนี้ของฉัน" —
+// see monthlyDebtObligation. Full-principal net worth reads as much scarier
+// than the household's actual month-to-month position for anyone paying
+// debt down on a fixed schedule.
+type NetWorthDebtFormula = "full" | "obligation";
+type NetWorthDisplaySettings = { formula: NetWorthDebtFormula; hideCard: boolean };
+const defaultNetWorthDisplaySettings: NetWorthDisplaySettings = { formula: "full", hideCard: false };
+
+function netWorthDisplayStorageKey(userId: string) {
+  return `money-ai-net-worth-display:${userId}`;
+}
+
+function loadNetWorthDisplaySettings(userId: string): NetWorthDisplaySettings {
+  try {
+    const raw = window.localStorage.getItem(netWorthDisplayStorageKey(userId));
+    if (!raw) return defaultNetWorthDisplaySettings;
+    const parsed = JSON.parse(raw);
+    return {
+      formula: parsed?.formula === "obligation" ? "obligation" : "full",
+      hideCard: parsed?.hideCard === true,
+    };
+  } catch {
+    return defaultNetWorthDisplaySettings;
+  }
+}
+
+function saveNetWorthDisplaySettings(userId: string, settings: NetWorthDisplaySettings) {
+  try {
+    window.localStorage.setItem(netWorthDisplayStorageKey(userId), JSON.stringify(settings));
+  } catch {
+    // localStorage unavailable (private mode, quota) — setting simply won't persist
+  }
+}
+
 type QuickShortcut = { title: string; category: string; transaction_type: TransactionType; amount: number; count: number };
 type AiSuggestion = { label: string; detail: string; text: string; shortcut?: QuickShortcut };
 
@@ -962,11 +998,20 @@ function defaultDayForCycle(key: string, startDay: number) {
   return preferred.toDateString();
 }
 
-function netWorthAsOf(wallets: Wallet[], debtors: Debtor[], entriesUpToCutoff: Entry[], portfolioValue = 0) {
+function payableForDisplay(debtors: Debtor[], payableSummary: { name: string; amount: number }[], formula: NetWorthDebtFormula) {
+  if (formula === "full") return payableSummary.reduce((sum, item) => sum + item.amount, 0);
+  return payableSummary.reduce((sum, item) => {
+    const debtor = debtors.find((candidate) => candidate.name.trim().toLowerCase() === item.name.trim().toLowerCase());
+    return sum + (debtor ? monthlyDebtObligation(debtor, item.amount) : item.amount);
+  }, 0);
+}
+
+function netWorthAsOf(wallets: Wallet[], debtors: Debtor[], entriesUpToCutoff: Entry[], portfolioValue = 0, debtFormula: NetWorthDebtFormula = "full") {
   const ledger = buildWalletLedger(wallets, entriesUpToCutoff);
   const walletTotal = Object.values(ledger.totals).reduce((sum, amount) => sum + amount, 0);
   const receivable = buildDebtSummary(debtors, entriesUpToCutoff, "lend", ["lend", "split_half", "debt_repayment"]).reduce((sum, item) => sum + item.amount, 0);
-  const payable = buildDebtSummary(debtors, entriesUpToCutoff, "own", ["debt_payment", "card_charge"]).reduce((sum, item) => sum + item.amount, 0);
+  const payableSummary = buildDebtSummary(debtors, entriesUpToCutoff, "own", ["debt_payment", "card_charge"]);
+  const payable = payableForDisplay(debtors, payableSummary, debtFormula);
   return walletTotal + receivable - payable + portfolioValue;
 }
 
@@ -975,7 +1020,7 @@ function netWorthAsOf(wallets: Wallet[], debtors: Debtor[], entriesUpToCutoff: E
 // NAV is available) so at least the most recent point matches the live net
 // worth figure shown elsewhere; older points understate how much of that
 // net worth was already invested at the time.
-function buildMonthlyTrend(entries: Entry[], wallets: Wallet[], debtors: Debtor[], selectedMonth: string, monthStartDay: number, months = 6, portfolioValue = 0) {
+function buildMonthlyTrend(entries: Entry[], wallets: Wallet[], debtors: Debtor[], selectedMonth: string, monthStartDay: number, months = 6, portfolioValue = 0, debtFormula: NetWorthDebtFormula = "full") {
   return Array.from({ length: months }, (_, index) => {
     const key = shiftMonthKey(selectedMonth, index - months + 1);
     const range = cycleBounds(key, monthStartDay);
@@ -983,7 +1028,7 @@ function buildMonthlyTrend(entries: Entry[], wallets: Wallet[], debtors: Debtor[
     const income = totalWallet(monthEntries, "income");
     const outflow = Math.abs(totalWallet(monthEntries, "expense"));
     const entriesUpToCutoff = entries.filter((entry) => new Date(entry.occurred_at) < range.end);
-    const netWorth = netWorthAsOf(wallets, debtors, entriesUpToCutoff, portfolioValue);
+    const netWorth = netWorthAsOf(wallets, debtors, entriesUpToCutoff, portfolioValue, debtFormula);
     return { key, label: new Date(`${key}-01T00:00:00`).toLocaleDateString("th-TH", { month: "short" }), income, outflow, netWorth };
   });
 }
@@ -1279,6 +1324,7 @@ export default function Home() {
   const [budgets, setBudgets] = useState<Record<string, number>>({});
   const [goals, setGoals] = useState<MoneyGoal[]>([]);
   const [goalSheetOpen, setGoalSheetOpen] = useState(false);
+  const [netWorthDisplay, setNetWorthDisplay] = useState<NetWorthDisplaySettings>(defaultNetWorthDisplaySettings);
   const [budgetSheetOpen, setBudgetSheetOpen] = useState(false);
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [askAiOpen, setAskAiOpen] = useState(false);
@@ -1480,6 +1526,7 @@ export default function Home() {
       await Promise.all([loadEntries(), loadDebtors(), loadWallets(), loadRecurringExpenses(), loadInvestments(), loadInvestmentPrices()]);
       setBudgets(loadBudgets(userId));
       setGoals(loadGoals(userId));
+      setNetWorthDisplay(loadNetWorthDisplaySettings(userId));
     } finally {
       setDataLoading(false);
     }
@@ -1715,11 +1762,24 @@ export default function Home() {
   const monthlyBalance = monthlyIncome - monthlyOutflow;
   const receivableTotal = receivableSummary.reduce((sum, item) => sum + item.amount, 0);
   const payableTotal = payableSummary.reduce((sum, item) => sum + item.amount, 0);
-  const netWorth = walletBalanceTotal + receivableTotal - payableTotal + portfolioTotalValue;
+  // What's actually due this cycle across "หนี้ของฉัน" debtors — installment
+  // or card minimum where set, full balance otherwise — see monthlyDebtObligation.
+  const monthlyObligationTotal = useMemo(
+    () => payableForDisplay(debtors, payableSummary, "obligation"),
+    [debtors, payableSummary],
+  );
+  const netWorthPayable = netWorthDisplay.formula === "obligation" ? monthlyObligationTotal : payableTotal;
+  const netWorth = walletBalanceTotal + receivableTotal - netWorthPayable + portfolioTotalValue;
   const savingsRate = monthlyIncome > 0 ? (monthlyBalance / monthlyIncome) * 100 : 0;
   const walletInsight = useMemo(() => buildWalletInsight(mainWallet, monthlyOutflow, cycleRange.end), [mainWallet, monthlyOutflow, cycleRange.end]);
   const cashFlowTrend = useMemo(() => lastSevenDayCashFlow(entries, new Date()), [entries]);
-  const monthlyTrend = useMemo(() => buildMonthlyTrend(entries, wallets, debtors, selectedMonth, monthStartDay, 6, portfolioTotalValue), [entries, wallets, debtors, selectedMonth, monthStartDay, portfolioTotalValue]);
+  const monthlyTrend = useMemo(
+    () => buildMonthlyTrend(entries, wallets, debtors, selectedMonth, monthStartDay, 6, portfolioTotalValue, netWorthDisplay.formula),
+    [entries, wallets, debtors, selectedMonth, monthStartDay, portfolioTotalValue, netWorthDisplay.formula],
+  );
+  const netWorthDelta = monthlyTrend.length >= 2
+    ? monthlyTrend[monthlyTrend.length - 1].netWorth - monthlyTrend[monthlyTrend.length - 2].netWorth
+    : 0;
   const aiSuggestions = useMemo<AiSuggestion[]>(() => {
     const fromHistory = quickShortcuts.map((shortcut) => ({
       label: shortcut.title,
@@ -2326,6 +2386,12 @@ export default function Home() {
     if (!user) return;
     setBudgets(next);
     saveBudgets(user.id, next);
+  }
+
+  function updateNetWorthDisplay(next: NetWorthDisplaySettings) {
+    if (!user) return;
+    setNetWorthDisplay(next);
+    saveNetWorthDisplaySettings(user.id, next);
   }
 
   async function saveProfile(next: {
@@ -3135,8 +3201,12 @@ export default function Home() {
                 </section>
                 <HomeInsightGrid
                   netWorth={netWorth}
+                  netWorthDelta={netWorthDelta}
+                  netWorthFormula={netWorthDisplay.formula}
+                  hideNetWorthCard={netWorthDisplay.hideCard}
                   savingsRate={savingsRate}
-                  receivableTotal={receivableTotal}
+                  monthlyIncome={monthlyIncome}
+                  monthlyObligationTotal={monthlyObligationTotal}
                   payableTotal={payableTotal}
                 />
                 <QuickAddStrip shortcuts={quickShortcuts.slice(0, 4)} onSelect={(shortcut) => openAddTab("manual", shortcut)} onMore={() => openAddTab()} />
@@ -3547,7 +3617,7 @@ export default function Home() {
           />
         )}
         {profileSheetDismiss.mounted && (
-          <ProfileEditSheet profile={profile} busy={busy} error={error} onClose={profileSheetDismiss.requestClose} onSave={saveProfile} closing={profileSheetDismiss.closing} />
+          <ProfileEditSheet profile={profile} busy={busy} error={error} onClose={profileSheetDismiss.requestClose} onSave={saveProfile} closing={profileSheetDismiss.closing} netWorthDisplay={netWorthDisplay} onSaveNetWorthDisplay={updateNetWorthDisplay} />
         )}
         {budgetSheetDismiss.mounted && (
           <BudgetSheet budgets={budgets} onClose={budgetSheetDismiss.requestClose} onSave={updateBudgets} closing={budgetSheetDismiss.closing} />
@@ -4229,21 +4299,29 @@ function HeroWalletCard({
 
 function HomeInsightGrid({
   netWorth,
+  netWorthDelta,
+  netWorthFormula,
+  hideNetWorthCard,
   savingsRate,
-  receivableTotal,
+  monthlyIncome,
+  monthlyObligationTotal,
   payableTotal,
 }: {
   netWorth: number;
+  netWorthDelta: number;
+  netWorthFormula: NetWorthDebtFormula;
+  hideNetWorthCard: boolean;
   savingsRate: number;
-  receivableTotal: number;
+  monthlyIncome: number;
+  monthlyObligationTotal: number;
   payableTotal: number;
 }) {
   const savingsPositive = savingsRate >= 0;
-  const netDebt = receivableTotal - payableTotal;
-  const netDebtPositive = netDebt >= 0;
+  const dsrPercent = monthlyIncome > 0 ? Math.round((monthlyObligationTotal / monthlyIncome) * 100) : null;
+  const netWorthTone = netWorthDelta > 0 ? "income" : netWorthDelta < 0 ? "expense" : "";
   const trackRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const cardCount = 3;
+  const cardCount = hideNetWorthCard ? 2 : 3;
   const scrollFrameRef = useRef<number | null>(null);
 
   const handleScroll = () => {
@@ -4271,11 +4349,6 @@ function HomeInsightGrid({
   return (
     <section className="home-insight-wrap">
       <div className="home-insight-grid" ref={trackRef} onScroll={handleScroll} aria-label="ภาพรวมทรัพย์สิน">
-        <div className="home-insight-card net-worth">
-          <span><i className="home-insight-icon neutral"><Wallet size={13} strokeWidth={2.25} aria-hidden="true" /></i>มูลค่าสุทธิ</span>
-          <strong>{formatSignedMoney(netWorth)}</strong>
-          <small>กระเป๋า + พอร์ตลงทุน + ลูกหนี้ - หนี้ที่ต้องจ่าย</small>
-        </div>
         <div className={`home-insight-card ${savingsPositive ? "income" : "expense"}`}>
           <span>
             <i className={`home-insight-icon ${savingsPositive ? "income" : "expense"}`}>
@@ -4286,16 +4359,23 @@ function HomeInsightGrid({
           <strong>{Number.isFinite(savingsRate) ? `${Math.round(savingsRate)}%` : "0%"}</strong>
           <small>เทียบกับรายรับในรอบนี้</small>
         </div>
-        <div className={`home-insight-card ${netDebtPositive ? "income" : "expense"}`}>
-          <span>
-            <i className={`home-insight-icon ${netDebtPositive ? "income" : "expense"}`}>
-              <Users size={13} strokeWidth={2.25} aria-hidden="true" />
-            </i>
-            หนี้สุทธิ
-          </span>
-          <strong>{formatSignedMoney(netDebt)}</strong>
-          <small>ลูกหนี้ - หนี้ที่ต้องจ่าย</small>
+        <div className="home-insight-card obligation">
+          <span><i className="home-insight-icon neutral"><Users size={13} strokeWidth={2.25} aria-hidden="true" /></i>ภาระหนี้เดือนนี้</span>
+          <strong>{moneySign}{formatMoney(monthlyObligationTotal)}</strong>
+          <small>
+            จากหนี้คงเหลือรวม {moneySign}{formatMoney(payableTotal)}
+            {dsrPercent != null ? ` · ${dsrPercent}% ของรายรับ` : ""}
+          </small>
         </div>
+        {!hideNetWorthCard && (
+          <div className={`home-insight-card net-worth ${netWorthTone}`}>
+            <span><i className="home-insight-icon neutral"><Wallet size={13} strokeWidth={2.25} aria-hidden="true" /></i>มูลค่าสุทธิ</span>
+            <strong>{formatSignedMoney(netWorthDelta)}</strong>
+            <small>
+              ปัจจุบัน {formatSignedMoney(netWorth)} · {netWorthFormula === "obligation" ? "หักเฉพาะภาระเดือนนี้" : "หักหนี้เต็มจำนวน"}
+            </small>
+          </div>
+        )}
       </div>
       <div className="home-insight-dots" aria-hidden="true">
         {Array.from({ length: cardCount }, (_, index) => (
@@ -6582,6 +6662,8 @@ function ProfileEditSheet({
   onClose,
   onSave,
   closing,
+  netWorthDisplay,
+  onSaveNetWorthDisplay,
 }: {
   profile: Profile | null;
   busy: boolean;
@@ -6589,6 +6671,8 @@ function ProfileEditSheet({
   onClose: () => void;
   onSave: (next: { nickname: string; app_icon: string; app_icon_image: string; month_start_day: number }) => Promise<boolean>;
   closing?: boolean;
+  netWorthDisplay: NetWorthDisplaySettings;
+  onSaveNetWorthDisplay: (next: NetWorthDisplaySettings) => void;
 }) {
   const [nickname, setNickname] = useState(profile?.nickname ?? "");
   const app_icon = profile?.app_icon ?? "";
@@ -6646,6 +6730,38 @@ function ProfileEditSheet({
       <label>
         วันเริ่มรอบเดือน
         <input type="number" min={1} max={28} value={month_start_day} onChange={(event) => setMonthStartDay(clampInteger(event.target.value, 1, 28, 1))} />
+      </label>
+      <label>
+        มูลค่าสุทธิ นับหนี้แบบไหน
+        <div className="report-period-toggle">
+          <button
+            type="button"
+            className={netWorthDisplay.formula === "full" ? "active" : ""}
+            onClick={() => onSaveNetWorthDisplay({ ...netWorthDisplay, formula: "full" })}
+          >
+            หักหนี้เต็มจำนวน
+          </button>
+          <button
+            type="button"
+            className={netWorthDisplay.formula === "obligation" ? "active" : ""}
+            onClick={() => onSaveNetWorthDisplay({ ...netWorthDisplay, formula: "obligation" })}
+          >
+            หักเฉพาะภาระเดือนนี้
+          </button>
+        </div>
+        <small>
+          {netWorthDisplay.formula === "obligation"
+            ? "หักเฉพาะยอดผ่อน/ขั้นต่ำที่ต้องจ่ายรอบนี้ ไม่ใช่หนี้ทั้งก้อน"
+            : "หักยอดหนี้คงเหลือทั้งหมดตามหลักบัญชีมาตรฐาน"}
+        </small>
+      </label>
+      <label className="sheet-check-row">
+        <input
+          type="checkbox"
+          checked={netWorthDisplay.hideCard}
+          onChange={(event) => onSaveNetWorthDisplay({ ...netWorthDisplay, hideCard: event.target.checked })}
+        />
+        ซ่อนการ์ดมูลค่าสุทธิจากหน้าแรก
       </label>
       {(localError || error) && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={localError || error} />}
       <button className="save" onClick={submit} disabled={busy}>

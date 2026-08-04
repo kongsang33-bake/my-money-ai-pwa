@@ -660,6 +660,10 @@ a:focus-visible {
   border: 1px solid var(--line);
 }
 
+.edit-sheet label .report-period-toggle {
+  margin-top: 6px;
+}
+
 .theme-toggle button, .report-period-toggle button {
   position: relative;
   z-index: 1;
