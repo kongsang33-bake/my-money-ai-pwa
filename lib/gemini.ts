@@ -3,8 +3,10 @@ import { GoogleGenAI } from "@google/genai";
 // Pinned to a dated, stable release rather than the "-latest" alias — the
 // alias can point at a newly-promoted model whose serving capacity hasn't
 // ramped up yet, which shows up as spurious 503 UNAVAILABLE ("high demand")
-// errors.
-export const GEMINI_MODEL = "gemini-2.5-flash";
+// errors. Google retires dated releases on notice (a retired model 404s
+// with "no longer available to new users"), so this is also overridable
+// via env without a code change/redeploy when that happens.
+export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 
 export function getGeminiApiKey(): string | null {
   return process.env.GEMINI_API_KEY || null;
