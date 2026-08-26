@@ -3519,6 +3519,17 @@ a:focus-visible {
   pointer-events: none;
 }
 
+.toast > span:first-child {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+
+.toast > span:first-child svg {
+  width: 20px;
+  height: 20px;
+}
+
 .toast b {
   display: block;
   font-size: var(--fs-body);

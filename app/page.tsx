@@ -7,6 +7,7 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { CATEGORIES, type TransactionType } from "@/lib/taxonomy";
 import {
+  AlertTriangle,
   Banknote,
   Bot,
   Car,
@@ -23,6 +24,7 @@ import {
   GraduationCap,
   HeartPulse,
   Home as HomeIcon,
+  Info,
   Lightbulb,
   LineChart,
   Lock,
@@ -5065,7 +5067,9 @@ function ToastHost({ toasts, closingIds, onDismiss }: { toasts: Toast[]; closing
             onDismiss(toast.id);
           }}
         >
-          <span aria-hidden="true">{toast.tone === "success" ? "✓" : toast.tone === "error" ? "!" : "✦"}</span>
+          <span aria-hidden="true">
+            {toast.tone === "success" ? <Check /> : toast.tone === "error" ? <AlertTriangle /> : <Info />}
+          </span>
           <span>
             <b>{toast.title}</b>
             {toast.detail && <small>{toast.detail}</small>}
