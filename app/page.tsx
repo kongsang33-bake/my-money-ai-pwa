@@ -296,6 +296,27 @@ const categoryColor = (category: string) => `var(${categoryColorVar(category)})`
 const categoryTint = (category: string, alphaPercent: number) =>
   `color-mix(in srgb, var(${categoryColorVar(category)}) ${alphaPercent}%, transparent)`;
 
+function CategoryPicker({ value, onChange }: { value: string; onChange: (category: string) => void }) {
+  return (
+    <div className="category-picker" role="radiogroup">
+      {categories.map((category) => (
+        <button
+          type="button"
+          key={category}
+          role="radio"
+          aria-checked={value === category}
+          className={`category-picker-chip ${value === category ? "active" : ""}`}
+          style={value === category ? { background: categoryTint(category, 16), borderColor: categoryColor(category), color: categoryColor(category) } : undefined}
+          onClick={() => onChange(category)}
+        >
+          <CategoryIcon category={category} size={16} />
+          <span>{category}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const avatarPaletteVars = Object.values(categoryColorVars);
 function nameColor(name: string) {
   const sum = [...name.trim()].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
@@ -5142,7 +5163,7 @@ function ConfirmDialog({ dialog, onClose, closing = false }: { dialog: ConfirmDi
 const decimalInputPattern = /^\d*\.?\d*$/;
 const dateInputPattern = /^\d{4}-\d{2}-\d{2}$/;
 
-function AmountInput({ value, onChange, disabled }: { value: number; onChange: (value: number) => void; disabled?: boolean }) {
+function AmountInput({ value, onChange, disabled, autoFocus }: { value: number; onChange: (value: number) => void; disabled?: boolean; autoFocus?: boolean }) {
   const [text, setText] = useState(() => (value ? String(value) : ""));
 
   if ((Number(text) || 0) !== value) {
@@ -5155,6 +5176,7 @@ function AmountInput({ value, onChange, disabled }: { value: number; onChange: (
       inputMode="decimal"
       value={text}
       disabled={disabled}
+      autoFocus={autoFocus}
       onChange={(event) => {
         const next = event.target.value;
         if (next !== "" && !decimalInputPattern.test(next)) return;
@@ -5486,8 +5508,12 @@ function ManualEntryForm({
     ),
   );
   const [destWalletId, setDestWalletId] = useState<string | null>(null);
+  const [advancedTypeOpen, setAdvancedTypeOpen] = useState(
+    () => !["personal_expense", "income"].includes(initialPreset?.transaction_type ?? "personal_expense"),
+  );
   const update = (patch: Partial<Draft>) => setDraft(normalizeEntry({ ...draft, ...patch }, false));
   const isTransfer = draft.transaction_type === "transfer";
+  const isExpense = transactionKind[draft.transaction_type] === "expense";
   const sourceWallet = wallets.find((wallet) => wallet.id === draft.wallet_id);
   const destWallet = wallets.find((wallet) => wallet.id === destWalletId);
   const transferInvalid = isTransfer && (!destWalletId || destWalletId === draft.wallet_id);
@@ -5503,20 +5529,32 @@ function ManualEntryForm({
 
   return (
     <div className="manual-entry-form">
+      <div className="report-period-toggle entry-kind-toggle">
+        <button type="button" className={isExpense ? "active" : ""} onClick={() => update({ transaction_type: "personal_expense" })}>รายจ่าย</button>
+        <button type="button" className={!isExpense ? "active" : ""} onClick={() => update({ transaction_type: "income" })}>รายรับ</button>
+      </div>
+      <button type="button" className="text-button entry-advanced-toggle" onClick={() => setAdvancedTypeOpen((current) => !current)}>
+        {advancedTypeOpen ? "ซ่อนตัวเลือกเพิ่มเติม" : "รายการพิเศษ (ออกให้ก่อน, หารร่วม, ผ่อนหนี้, โอนเงิน ฯลฯ)"}
+      </button>
+      {advancedTypeOpen && (
+        <label>
+          ชนิดรายการ
+          <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
+            {Object.entries(transactionTypeLabels).filter(([value]) => value !== "investment_buy").map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label>
-        ชนิดรายการ
-        <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
-          {Object.entries(transactionTypeLabels).filter(([value]) => value !== "investment_buy").map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
+        จำนวนเงิน
+        <AmountInput value={draft.amount} onChange={(amount) => update({ amount })} autoFocus />
       </label>
       <label>
         ชื่อรายการ{isTransfer && <small> (เว้นว่างได้ จะตั้งชื่อให้อัตโนมัติ)</small>}
         <input
-          autoFocus
           value={draft.title}
           onChange={(event) => update({ title: event.target.value })}
           onBlur={() => {
@@ -5528,17 +5566,9 @@ function ManualEntryForm({
       {!isTransfer && (
         <label>
           หมวดหมู่
-          <select value={draft.category} onChange={(event) => update({ category: event.target.value })}>
-            {categories.map((category) => (
-              <option key={category}>{category}</option>
-            ))}
-          </select>
+          <CategoryPicker value={draft.category} onChange={(category) => update({ category })} />
         </label>
       )}
-      <label>
-        จำนวนเงิน
-        <AmountInput value={draft.amount} onChange={(amount) => update({ amount })} />
-      </label>
       {(["lend", "split_half", "debt_repayment", "debt_payment", "card_charge"] as TransactionType[]).includes(draft.transaction_type) && (
         <label>
           {draft.transaction_type === "card_charge" ? "ชื่อบัตร" : "ชื่อผู้เกี่ยวข้อง"}

@@ -2942,6 +2942,40 @@ a:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.entry-kind-toggle {
+  margin-bottom: var(--s-2);
+}
+
+.entry-advanced-toggle {
+  padding: var(--s-1) 0;
+  text-align: left;
+}
+
+.category-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: 6px;
+}
+
+.category-picker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 700;
+  transition: background var(--t-2) var(--e-out), border-color var(--t-2) var(--e-out), color var(--t-2) var(--e-out), transform var(--t-press) var(--e-out);
+}
+
+.category-picker-chip:active {
+  transform: scale(0.96);
+}
+
 .report-sheet {
   position: fixed;
   left: 50%;
