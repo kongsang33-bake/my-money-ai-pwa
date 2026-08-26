@@ -1,4 +1,4 @@
-import { createGeminiClient, getGeminiApiKey, GEMINI_MODEL, missingGeminiKeyResponse } from "@/lib/gemini";
+import { createGeminiClient, getGeminiApiKey, GEMINI_MODEL, missingGeminiKeyResponse, withGeminiRetry } from "@/lib/gemini";
 import { CATEGORIES, TRANSACTION_TYPES } from "@/lib/taxonomy";
 import { requireUser, unauthorizedResponse } from "@/lib/auth";
 
@@ -186,23 +186,25 @@ export async function POST(request: Request) {
   let response;
   try {
     const ai = createGeminiClient(apiKey);
-    response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: [
-        { text: prompt },
-        ...images.map((image) => ({
-          inlineData: {
-            data: image.data,
-            mimeType: image.mimeType,
-          },
-        })),
-      ],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: schema,
-        temperature: 0.1,
-      },
-    });
+    response = await withGeminiRetry(() =>
+      ai.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: [
+          { text: prompt },
+          ...images.map((image) => ({
+            inlineData: {
+              data: image.data,
+              mimeType: image.mimeType,
+            },
+          })),
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: schema,
+          temperature: 0.1,
+        },
+      })
+    );
   } catch (error) {
     console.error("Gemini analyze failed", error);
     const detail = error instanceof Error ? error.message : String(error);
