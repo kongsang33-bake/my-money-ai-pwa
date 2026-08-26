@@ -201,7 +201,11 @@ export async function POST(request: Request) {
         responseSchema: schema,
         temperature: 0.1,
       },
-    });
+      // A receipt photo pushes the model through OCR + per-line itemization
+      // + debtor/split matching, which genuinely takes longer than a plain
+      // text entry -- give it more room before the per-attempt timeout
+      // aborts and forces a retry/fallback cycle mid-flight.
+    }, { timeoutMs: images.length > 0 ? 25000 : 12000 });
   } catch (error) {
     return Response.json({ error: describeGeminiError(error, "วิเคราะห์รายการ") }, { status: 502 });
   }

@@ -88,8 +88,10 @@ async function withGeminiRetry<T>(call: () => Promise<T>): Promise<T> {
 // Callers pass params without `model` — this fills it in per attempt.
 export async function generateGeminiContent(
   ai: GoogleGenAI,
-  params: Omit<GenerateContentParameters, "model">
+  params: Omit<GenerateContentParameters, "model">,
+  options?: { timeoutMs?: number }
 ): Promise<GenerateContentResponse> {
+  const timeoutMs = options?.timeoutMs ?? GEMINI_ATTEMPT_TIMEOUT_MS;
   const chain = lastWorkingModel ? [lastWorkingModel, ...MODEL_CHAIN.filter((model) => model !== lastWorkingModel)] : MODEL_CHAIN;
   const startedAt = Date.now();
   const modelsAttempted: string[] = [];
@@ -100,7 +102,7 @@ export async function generateGeminiContent(
       const response = await withGeminiRetry(() => ai.models.generateContent({
         ...params,
         model,
-        config: { ...params.config, abortSignal: AbortSignal.timeout(GEMINI_ATTEMPT_TIMEOUT_MS) },
+        config: { ...params.config, abortSignal: AbortSignal.timeout(timeoutMs) },
       }));
       lastWorkingModel = model;
       console.log("Gemini request succeeded", { model, modelsAttempted, totalElapsedMs: Date.now() - startedAt });
