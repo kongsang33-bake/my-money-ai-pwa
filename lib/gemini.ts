@@ -11,6 +11,8 @@ const MODEL_CHAIN = [
   "gemini-3.6-flash",
   "gemini-2.5-flash",
   "gemini-flash-latest",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
 ].filter((model, index, all) => all.indexOf(model) === index);
 
 // Remembers the last model that actually worked, in-process, so once a
