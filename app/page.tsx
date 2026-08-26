@@ -1338,6 +1338,7 @@ export default function Home() {
   const [investmentAiSheetOpen, setInvestmentAiSheetOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [analyzeElapsedSeconds, setAnalyzeElapsedSeconds] = useState(0);
   const [error, setError] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(monthKey(new Date()));
@@ -2016,6 +2017,8 @@ export default function Home() {
 
     setBusy(true);
     setError("");
+    setAnalyzeElapsedSeconds(0);
+    const elapsedTimer = window.setInterval(() => setAnalyzeElapsedSeconds((seconds) => seconds + 1), 1000);
 
     try {
       const response = await fetch("/api/analyze", {
@@ -2063,6 +2066,7 @@ export default function Home() {
       notify({ tone: "error", title: "AI ยังวิเคราะห์ไม่ได้", detail: e instanceof Error ? e.message : undefined });
     }
 
+    window.clearInterval(elapsedTimer);
     setBusy(false);
   }
 
@@ -3352,7 +3356,7 @@ export default function Home() {
                 </div>
 
                 <button className="primary" onClick={analyze} disabled={busy || (!text.trim() && !slipImages.length)}>
-                  {busy ? "กำลังวิเคราะห์..." : "ให้ AI แยกรายการ"}
+                  {busy ? `กำลังวิเคราะห์... (${analyzeElapsedSeconds} วิ)` : "ให้ AI แยกรายการ"}
                 </button>
                 {busy && <SkeletonList rows={2} />}
                 {error && <StateCard tone="error" title="AI ยังทำรายการนี้ไม่ได้" detail={error} />}

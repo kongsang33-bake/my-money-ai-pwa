@@ -33,9 +33,24 @@ export function createGeminiClient(apiKey: string) {
   return new GoogleGenAI({ apiKey });
 }
 
+// 503/UNAVAILABLE and a per-attempt timeout firing (AbortSignal.timeout
+// rejects with a TimeoutError/AbortError DOMException, not a Gemini error
+// message) -- genuine transient conditions worth a couple of quick retries
+// on the same model. 429 is deliberately NOT here: see isRateLimitedError.
 function isRetryableGeminiError(error: unknown): boolean {
+  const name = error instanceof Error ? error.name : "";
+  if (name === "TimeoutError" || name === "AbortError") return true;
   const message = error instanceof Error ? error.message : String(error);
-  return message.includes("503") || message.includes("UNAVAILABLE") || message.includes("429") || message.includes("RESOURCE_EXHAUSTED");
+  return message.includes("503") || message.includes("UNAVAILABLE");
+}
+
+// A rate-limited model (429/RESOURCE_EXHAUSTED) won't clear within the few
+// seconds a user is waiting on this request, so retrying it on the SAME
+// model is pure wasted latency -- this should skip straight to the next
+// candidate in MODEL_CHAIN instead of going through withGeminiRetry's backoff.
+function isRateLimitedError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("429") || message.includes("RESOURCE_EXHAUSTED");
 }
 
 // A model that's retired or not yet available reports 404/NOT_FOUND (or the
@@ -46,7 +61,8 @@ function isUnavailableModelError(error: unknown): boolean {
   return message.includes("404") || message.includes("NOT_FOUND") || message.includes("no longer available");
 }
 
-const RETRY_DELAYS_MS = [1000, 2000, 4000];
+const RETRY_DELAYS_MS = [500, 1500];
+const GEMINI_ATTEMPT_TIMEOUT_MS = 12000;
 
 async function withGeminiRetry<T>(call: () => Promise<T>): Promise<T> {
   let lastError: unknown;
@@ -63,28 +79,41 @@ async function withGeminiRetry<T>(call: () => Promise<T>): Promise<T> {
 }
 
 // The single entry point every route should call instead of
-// ai.models.generateContent directly. Handles both failure modes Gemini has
-// actually thrown in this app: transient "high demand" 503s (retried with
-// backoff on the same model) and a model being retired/unavailable (falls
-// through to the next candidate in MODEL_CHAIN). Callers pass params without
-// `model` — this fills it in per attempt.
+// ai.models.generateContent directly. Handles every failure mode Gemini has
+// actually thrown in this app: transient "high demand" 503s and per-attempt
+// timeouts (a couple of quick retries on the same model), a model being
+// rate-limited or retired/unavailable (skips straight to the next candidate
+// in MODEL_CHAIN, no same-model retry), and falls through to the next model
+// even when a 503 survives its retries instead of failing the whole chain.
+// Callers pass params without `model` — this fills it in per attempt.
 export async function generateGeminiContent(
   ai: GoogleGenAI,
   params: Omit<GenerateContentParameters, "model">
 ): Promise<GenerateContentResponse> {
   const chain = lastWorkingModel ? [lastWorkingModel, ...MODEL_CHAIN.filter((model) => model !== lastWorkingModel)] : MODEL_CHAIN;
+  const startedAt = Date.now();
+  const modelsAttempted: string[] = [];
   let lastError: unknown;
   for (const model of chain) {
+    modelsAttempted.push(model);
     try {
-      const response = await withGeminiRetry(() => ai.models.generateContent({ ...params, model }));
+      const response = await withGeminiRetry(() => ai.models.generateContent({
+        ...params,
+        model,
+        config: { ...params.config, abortSignal: AbortSignal.timeout(GEMINI_ATTEMPT_TIMEOUT_MS) },
+      }));
       lastWorkingModel = model;
+      console.log("Gemini request succeeded", { model, modelsAttempted, totalElapsedMs: Date.now() - startedAt });
       return response;
     } catch (error) {
       lastError = error;
-      if (!isUnavailableModelError(error)) throw error;
+      // Rate-limited, retired, or still failing after its own retries --
+      // any of these means "try the next model", not "give up entirely".
+      if (!isUnavailableModelError(error) && !isRateLimitedError(error) && !isRetryableGeminiError(error)) throw error;
       console.error(`Gemini model ${model} unavailable, trying next candidate`, error);
     }
   }
+  console.error("Gemini request failed on every model", { modelsAttempted, totalElapsedMs: Date.now() - startedAt });
   throw lastError;
 }
 
