@@ -3356,7 +3356,12 @@ export default function Home() {
                 </div>
 
                 <button className="primary" onClick={analyze} disabled={busy || (!text.trim() && !slipImages.length)}>
-                  {busy ? `กำลังวิเคราะห์... (${analyzeElapsedSeconds} วิ)` : "ให้ AI แยกรายการ"}
+                  {busy ? (
+                    <span className="button-loading-row">
+                      <span className="loading-spinner mini on-ink" />
+                      {`กำลังวิเคราะห์... (${analyzeElapsedSeconds} วิ)`}
+                    </span>
+                  ) : "ให้ AI แยกรายการ"}
                 </button>
                 {busy && <SkeletonList rows={2} />}
                 {error && <StateCard tone="error" title="AI ยังทำรายการนี้ไม่ได้" detail={error} />}

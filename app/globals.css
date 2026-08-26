@@ -3568,6 +3568,18 @@ a:focus-visible {
   border-width: 2px;
 }
 
+.loading-spinner.on-ink {
+  border-color: var(--overlay-on-primary);
+  border-top-color: var(--accent);
+}
+
+.button-loading-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+}
+
 .error-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
