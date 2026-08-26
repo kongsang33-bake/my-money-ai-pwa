@@ -14,32 +14,43 @@
   --font-sans: var(--font-sans), "Noto Sans Thai", -apple-system, "Segoe UI", sans-serif;
 
   /* surfaces */
-  --bg: #f6f4f1;
+  --bg: #f5f3f0;
   --surface: #ffffff;
-  --surface-2: #faf8f5;
-  --surface-3: #f0ede8;
-  --line: #e4dfd8;
-  --line-soft: #edeae4;
+  --surface-2: #f9f7f4;
+  --surface-3: #efece7;
+  --line: #e2ddd5;
+  --line-soft: #ece8e2;
+  --line-strong: #d6cfc4;
 
   /* text */
-  --ink: #14181c;
-  --ink-2: #3d444b;
-  --ink-3: #6b7379;
+  --ink: #101418;
+  --ink-2: #3a4148;
+  --ink-3: #6a7278;
+  --ink-4: #949a9f;
   --ink-inverse: #ffffff;
 
   /* brand */
   --accent: #c97a14;
   --accent-strong: #a3630f;
   --accent-soft: #fbf0de;
-  --primary: #14181c;
+  --accent-line: rgba(201, 122, 20, 0.4);
+  --primary: #101418;
   --primary-hover: #24292e;
   --primary-text: #ffffff;
 
   /* fixed two-tone header (deliberately theme-invariant, both modes) */
-  --header-bg: #14181c;
+  --header-bg: #101418;
   --header-text: #ffffff;
   --header-muted: rgba(255, 255, 255, 0.64);
+  /* text on a saturated semantic-color fill (danger red, a random avatar
+     chip color, …) that doesn't itself flip with theme — always white,
+     unlike --ink-inverse which flips opposite of the theme-aware --ink */
+  --text-on-color: #ffffff;
+  --overlay-on-primary-soft: rgba(255, 255, 255, 0.08);
   --overlay-on-primary: rgba(255, 255, 255, 0.14);
+  --overlay-on-primary-strong: rgba(255, 255, 255, 0.22);
+  --overlay-on-primary-border: rgba(255, 255, 255, 0.3);
+  --shimmer-sheen: rgba(255, 255, 255, 0.35);
 
   /* semantic amounts */
   --income: #1f7a5a;
@@ -50,15 +61,15 @@
   --danger-soft: #fbe9e7;
   --danger-border: #f0c6c1;
 
-  /* category palette (CVD-safe adjacency, 7-slot) */
-  --cat-travel: #2a78d6;
-  --cat-food: #eb6834;
-  --cat-bills: #1baf7a;
-  --cat-home: #eda100;
-  --cat-entertainment: #e87ba4;
-  --cat-goods: #4a3aa7;
-  --cat-health: #e34948;
-  --cat-other: #898781;
+  /* category palette (CVD-safe adjacency, 8-slot) */
+  --cat-travel: #1f6fe0;
+  --cat-food: #ef5b28;
+  --cat-bills: #0eb37c;
+  --cat-home: #f59900;
+  --cat-entertainment: #ec5f96;
+  --cat-goods: #5433c2;
+  --cat-health: #ea2f3f;
+  --cat-other: #86807a;
 
   /* sequential ramp (heatmap) */
   --seq-0: var(--surface-3);
@@ -67,15 +78,18 @@
   --seq-3: #e19a3a;
   --seq-4: #c97a14;
 
-  /* elevation */
-  --sh-1: 0 1px 2px rgba(20, 24, 28, 0.06), 0 1px 1px rgba(20, 24, 28, 0.04);
-  --sh-2: 0 8px 24px rgba(20, 24, 28, 0.07), 0 1px 2px rgba(20, 24, 28, 0.04);
-  --sh-3: 0 28px 64px rgba(20, 24, 28, 0.16);
+  /* elevation — flat surfaces + hairline borders by default; these three
+     tiers are reserved for the few things that should visibly float
+     (floating nav, hover-lift, menus, sheets/dialogs) */
+  --sh-1: 0 1px 2px rgba(20, 24, 28, 0.05);
+  --sh-2: 0 6px 20px -6px rgba(20, 24, 28, 0.14);
+  --sh-3: 0 20px 48px -12px rgba(20, 24, 28, 0.24);
   --overlay-scrim: rgba(20, 24, 28, 0.4);
   --focus-ring: rgba(201, 122, 20, 0.35);
 
-  /* neumorphism — soft dual-directional shadow, layered on top of the
-     Ink & Amber palette (surfaces/contrast unchanged) */
+  /* neumorphism — legacy soft dual-directional shadow language, being
+     phased out in favor of the --sh-* tiers and hairline borders. Still
+     referenced by components not yet migrated; do not add new usages. */
   --nm-highlight: rgba(255, 255, 255, 0.8);
   --nm-shadow: rgba(20, 24, 28, 0.08);
   --nm-highlight-on-ink: rgba(255, 255, 255, 0.12);
@@ -87,6 +101,7 @@
   --nm-inset-on-ink: inset -3px -3px 6px var(--nm-highlight-on-ink), inset 3px 3px 8px var(--nm-shadow-on-ink);
 
   /* scales */
+  --s-0: 2px;
   --s-1: 4px;
   --s-2: 8px;
   --s-3: 12px;
@@ -95,17 +110,46 @@
   --s-6: 24px;
   --s-7: 32px;
   --s-8: 40px;
+  --s-9: 56px;
 
-  --r-sm: 8px;
+  --r-xs: 6px;
+  --r-sm: 10px;
   --r-md: 14px;
-  --r-lg: 18px;
-  --r-xl: 26px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-2xl: 34px;
   --r-full: 999px;
 
-  --type-display: clamp(38px, 10vw, 50px);
-  --type-value: clamp(24px, 6vw, 32px);
-  --type-section: 17px;
-  --type-label: 11px;
+  /* type scale — 9 steps. Body text lives at --fs-body (15px); --fs-caption
+     (13px) is the smallest size allowed for anything a user reads as
+     content (labels/timestamps can go to --fs-micro). */
+  --fs-display: clamp(40px, 11vw, 56px);
+  --fs-value: clamp(26px, 7vw, 34px);
+  --fs-h1: 22px;
+  --fs-h2: 19px;
+  --fs-h3: 17px;
+  --fs-body: 15px;
+  --fs-body-sm: 14px;
+  --fs-caption: 13px;
+  --fs-micro: 11px;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  --lh-tight: 1.15;
+  --lh-snug: 1.35;
+  --lh-body: 1.55;
+  --ls-tight: -0.02em;
+  --ls-wide: 0.06em;
+
+  /* legacy type aliases — old call sites keep working, pointed at the new
+     scale; migrate off these during the typography sweep */
+  --type-display: var(--fs-display);
+  --type-value: var(--fs-value);
+  --type-section: var(--fs-h3);
+  --type-label: var(--fs-micro);
 
   --z-nav: 5;
   --z-drawer: 20;
@@ -113,12 +157,13 @@
   --z-dialog: 30;
   --z-toast: 40;
 
-  --t-1: 120ms;
-  --t-2: 200ms;
-  --t-3: 320ms;
-  --t-4: 480ms;
-  --t-press: 90ms;
-  --e-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --t-1: 90ms;
+  --t-2: 160ms;
+  --t-3: 240ms;
+  --t-4: 380ms;
+  --t-press: 70ms;
+  --e-out: cubic-bezier(0.2, 0.9, 0.25, 1);
+  --e-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   --e-spring: cubic-bezier(0.22, 1.24, 0.36, 1);
 }
 
@@ -132,18 +177,23 @@
   --surface-3: #252a2f;
   --line: #2a3036;
   --line-soft: #232830;
+  --line-strong: #363d44;
 
   --ink: #eceff1;
   --ink-2: #c2c8cd;
   --ink-3: #8b939a;
-  --ink-inverse: #14181c;
+  --ink-4: #656d74;
+  --ink-inverse: #101418;
 
   --accent: #e8a33d;
   --accent-strong: #f2b968;
   --accent-soft: #2a2016;
+  --accent-line: rgba(232, 163, 61, 0.45);
   --primary: #eceff1;
   --primary-hover: #ffffff;
-  --primary-text: #14181c;
+  --primary-text: #101418;
+
+  --shimmer-sheen: rgba(255, 255, 255, 0.06);
 
   --income: #4abf91;
   --income-soft: #163227;
@@ -153,13 +203,13 @@
   --danger-soft: #331b18;
   --danger-border: #5c2e28;
 
-  --cat-travel: #5b9ce8;
-  --cat-food: #ff8a52;
-  --cat-bills: #3fd4a0;
-  --cat-home: #ffc247;
-  --cat-entertainment: #f5a0c0;
-  --cat-goods: #8f7ae0;
-  --cat-health: #ff6f6c;
+  --cat-travel: #5698f0;
+  --cat-food: #ff8248;
+  --cat-bills: #22d9a3;
+  --cat-home: #ffbb2e;
+  --cat-entertainment: #f78fb8;
+  --cat-goods: #9678f0;
+  --cat-health: #ff5c5c;
   --cat-other: #9aa0a6;
 
   --seq-1: #4a3a1c;
@@ -167,9 +217,9 @@
   --seq-3: #b8822e;
   --seq-4: #e8a33d;
 
-  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.2);
-  --sh-2: 0 6px 16px rgba(0, 0, 0, 0.35);
-  --sh-3: 0 24px 56px rgba(0, 0, 0, 0.5);
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --sh-2: 0 6px 20px -6px rgba(0, 0, 0, 0.5);
+  --sh-3: 0 20px 48px -12px rgba(0, 0, 0, 0.6);
   --overlay-scrim: rgba(0, 0, 0, 0.6);
   --focus-ring: rgba(232, 163, 61, 0.4);
 
@@ -196,6 +246,8 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
 }
@@ -647,7 +699,7 @@ a:focus-visible {
 
 .danger {
   background: var(--danger);
-  color: #fff;
+  color: var(--text-on-color);
   border-radius: var(--r-md);
   padding: 11px;
   font-weight: 700;
@@ -913,9 +965,9 @@ a:focus-visible {
   background: var(--overlay-on-primary);
 }
 
-.hero-danger .hero-wallet-top em { background: var(--danger); color: #fff; }
+.hero-danger .hero-wallet-top em { background: var(--danger); color: var(--text-on-color); }
 .hero-warn .hero-wallet-top em { background: var(--accent); color: var(--ink); }
-.hero-good .hero-wallet-top em, .hero-calm .hero-wallet-top em { background: rgba(255, 255, 255, 0.16); }
+.hero-good .hero-wallet-top em, .hero-calm .hero-wallet-top em { background: var(--overlay-on-primary-strong); }
 
 .hero-amount {
   display: block;
@@ -954,8 +1006,8 @@ a:focus-visible {
 }
 
 .streak-badge.strong {
-  background: rgba(255, 255, 255, 0.22);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: var(--overlay-on-primary-strong);
+  border: 1px solid var(--overlay-on-primary-border);
 }
 
 .home-insight-wrap {
@@ -1311,7 +1363,7 @@ a:focus-visible {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: #fff;
+  color: var(--text-on-color);
   font-weight: 700;
   line-height: 1;
   overflow: hidden;
@@ -1576,8 +1628,8 @@ a:focus-visible {
   height: 22px;
   border-radius: var(--r-full);
   background: var(--ink);
-  color: #fff;
-  font-size: 12px;
+  color: var(--ink-inverse);
+  font-size: var(--fs-micro);
   display: grid;
   place-items: center;
 }
@@ -3106,7 +3158,7 @@ a:focus-visible {
   gap: var(--s-3);
   padding: var(--s-3);
   border-radius: var(--r-md);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--overlay-on-primary-soft);
   margin-bottom: var(--s-3);
 }
 
@@ -3699,17 +3751,8 @@ a:focus-visible {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  background: linear-gradient(90deg, transparent, var(--shimmer-sheen), transparent);
   animation: shimmer 1.8s var(--e-out) infinite;
-}
-
-:root[data-theme="dark"] .skeleton-card.hero::after,
-:root[data-theme="dark"] .skeleton-grid span::after,
-:root[data-theme="dark"] .skeleton-panel i::after,
-:root[data-theme="dark"] .skeleton-list i::after,
-:root[data-theme="dark"] .skeleton-list b::after,
-:root[data-theme="dark"] .skeleton-list em::after {
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
 }
 
 /* -------------------------------------------------------------------------
