@@ -2288,6 +2288,8 @@ a:focus-visible {
   width: 10px;
   min-height: 6px;
   border-radius: var(--r-full) var(--r-full) 0 0;
+  transform-origin: bottom;
+  animation: grow-bar var(--t-3) var(--e-out) both;
 }
 
 .monthly-trend-bars i.income, .trend-legend i.income {

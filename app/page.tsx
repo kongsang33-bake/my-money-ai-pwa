@@ -3442,6 +3442,7 @@ export default function Home() {
             payableSummary={payableSummary}
             selectedDebtor={selectedDebtor}
             activeKind={debtorKindTab}
+            loading={dataLoading}
             onChangeActiveKind={setDebtorKindTab}
             onBack={() => selectedDebtor ? setSelectedDebtor(null) : setTab("home")}
             onAdd={() => { setEditingDebtor(null); setDebtorSheetMode("create"); }}
@@ -3455,6 +3456,7 @@ export default function Home() {
           <WalletsView
             wallets={displayWallets}
             entries={entries}
+            loading={dataLoading}
             onBack={() => setTab("home")}
             onAdd={() => { setEditingWallet(null); setWalletSheetMode("create"); }}
             onEdit={(wallet) => { setEditingWallet(wallet); setWalletSheetMode("edit"); }}
@@ -3465,6 +3467,7 @@ export default function Home() {
         {tab === "recurring" && (
           <RecurringExpensesView
             items={recurringExpenses}
+            loading={dataLoading}
             onBack={() => setTab("home")}
             onAdd={() => { setEditingRecurringExpense(null); setRecurringSheetMode("create"); }}
             onEdit={(item) => { setEditingRecurringExpense(item); setRecurringSheetMode("edit"); }}
@@ -3475,6 +3478,7 @@ export default function Home() {
         {tab === "goals" && (
           <GoalsView
             goals={goals}
+            loading={dataLoading}
             onBack={() => setTab("home")}
             onAdd={() => setGoalSheetOpen(true)}
             onDelete={removeGoal}
@@ -3490,6 +3494,7 @@ export default function Home() {
             totalGain={portfolioTotalGain}
             totalGainPercent={portfolioTotalGainPercent}
             pendingPurchases={pendingInvestmentPurchases}
+            loading={dataLoading}
             onBack={() => setTab("home")}
             onBuy={(target) => { setInvestmentBuyTarget(target); setInvestmentBuySheetOpen(true); }}
             onSell={(item) => setInvestmentSellTarget(item)}
@@ -4496,17 +4501,20 @@ function BudgetGlanceCard({
 
 function GoalsView({
   goals,
+  loading,
   onBack,
   onAdd,
   onDelete,
 }: {
   goals: MoneyGoal[];
+  loading: boolean;
   onBack: () => void;
   onAdd: () => void;
   onDelete: (goal: MoneyGoal) => void;
 }) {
   return (
     <div className="view debtor-view">
+      {loading && <SkeletonList rows={3} />}
       <div className="add-title">
         <button onClick={onBack}>‹</button>
         <div>
@@ -5725,6 +5733,7 @@ function DebtorsView({
   payableSummary,
   selectedDebtor,
   activeKind,
+  loading,
   onChangeActiveKind,
   onBack,
   onAdd,
@@ -5738,6 +5747,7 @@ function DebtorsView({
   payableSummary: { name: string; amount: number }[];
   selectedDebtor: Debtor | null;
   activeKind: DebtorKind;
+  loading: boolean;
   onChangeActiveKind: (kind: DebtorKind) => void;
   onBack: () => void;
   onAdd: () => void;
@@ -5808,6 +5818,7 @@ function DebtorsView({
 
   return (
     <div className="view debtor-view">
+      {loading && <SkeletonList rows={3} />}
       <div className="add-title">
         <button onClick={onBack}>‹</button>
         <div>
@@ -6823,6 +6834,7 @@ function ProfileEditSheet({
 function WalletsView({
   wallets,
   entries,
+  loading,
   onBack,
   onAdd,
   onEdit,
@@ -6830,6 +6842,7 @@ function WalletsView({
 }: {
   wallets: WalletDisplay[];
   entries: Entry[];
+  loading: boolean;
   onBack: () => void;
   onAdd: () => void;
   onEdit: (wallet: Wallet) => void;
@@ -6853,6 +6866,7 @@ function WalletsView({
 
   return (
     <div className="view debtor-view">
+      {loading && <SkeletonList rows={3} />}
       <div className="add-title">
         <button onClick={onBack}>‹</button>
         <div>
@@ -6999,12 +7013,14 @@ function WalletEditSheet({
 }
 function RecurringExpensesView({
   items,
+  loading,
   onBack,
   onAdd,
   onEdit,
   onDelete,
 }: {
   items: RecurringExpense[];
+  loading: boolean;
   onBack: () => void;
   onAdd: () => void;
   onEdit: (item: RecurringExpense) => void;
@@ -7022,6 +7038,7 @@ function RecurringExpensesView({
 
   return (
     <div className="view debtor-view">
+      {loading && <SkeletonList rows={3} />}
       <div className="add-title">
         <button onClick={onBack}>‹</button>
         <div>
@@ -7183,6 +7200,7 @@ function PortfolioView({
   totalGain,
   totalGainPercent,
   pendingPurchases,
+  loading,
   onBack,
   onBuy,
   onSell,
@@ -7199,6 +7217,7 @@ function PortfolioView({
   totalGain: number;
   totalGainPercent: number | null;
   pendingPurchases: Entry[];
+  loading: boolean;
   onBack: () => void;
   onBuy: (target: Investment | null) => void;
   onSell: (item: Investment) => void;
@@ -7210,6 +7229,7 @@ function PortfolioView({
 }) {
   return (
     <div className="view debtor-view">
+      {loading && <SkeletonList rows={3} />}
       <div className="add-title">
         <button onClick={onBack}>‹</button>
         <div>
