@@ -1,4 +1,4 @@
-import { createGeminiClient, getGeminiApiKey, GEMINI_MODEL, missingGeminiKeyResponse, withGeminiRetry } from "@/lib/gemini";
+import { createGeminiClient, generateGeminiContent, getGeminiApiKey, missingGeminiKeyResponse } from "@/lib/gemini";
 import { requireUser, unauthorizedResponse } from "@/lib/auth";
 
 // A separate, deliberately small schema/prompt from /api/analyze — logging
@@ -97,17 +97,14 @@ export async function POST(request: Request) {
   let response;
   try {
     const ai = createGeminiClient(apiKey);
-    response = await withGeminiRetry(() =>
-      ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: [{ text: prompt }],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: schema,
-          temperature: 0.1,
-        },
-      })
-    );
+    response = await generateGeminiContent(ai, {
+      contents: [{ text: prompt }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: schema,
+        temperature: 0.1,
+      },
+    });
   } catch (error) {
     console.error("Gemini analyze-investment failed", error);
     const detail = error instanceof Error ? error.message : String(error);
