@@ -4009,17 +4009,22 @@ a:focus-visible {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.view > *, .history-view .entry-group {
+.view > *, .history-view .entry-group,
+.debtor-page-list > .debtor-page-item, .goal-list > .goal-item {
   animation: card-in var(--t-3) var(--e-out) both;
 }
 
-.view > *:nth-child(1), .history-view .entry-group:nth-child(1) { animation-delay: 0ms; }
-.view > *:nth-child(2), .history-view .entry-group:nth-child(2) { animation-delay: 45ms; }
-.view > *:nth-child(3), .history-view .entry-group:nth-child(3) { animation-delay: 90ms; }
-.view > *:nth-child(4), .history-view .entry-group:nth-child(4) { animation-delay: 135ms; }
-.view > *:nth-child(5) { animation-delay: 180ms; }
-.view > *:nth-child(6) { animation-delay: 225ms; }
-.view > *:nth-child(7) { animation-delay: 270ms; }
+.view > *:nth-child(1), .history-view .entry-group:nth-child(1),
+.debtor-page-list > .debtor-page-item:nth-child(1), .goal-list > .goal-item:nth-child(1) { animation-delay: 0ms; }
+.view > *:nth-child(2), .history-view .entry-group:nth-child(2),
+.debtor-page-list > .debtor-page-item:nth-child(2), .goal-list > .goal-item:nth-child(2) { animation-delay: 45ms; }
+.view > *:nth-child(3), .history-view .entry-group:nth-child(3),
+.debtor-page-list > .debtor-page-item:nth-child(3), .goal-list > .goal-item:nth-child(3) { animation-delay: 90ms; }
+.view > *:nth-child(4), .history-view .entry-group:nth-child(4),
+.debtor-page-list > .debtor-page-item:nth-child(4), .goal-list > .goal-item:nth-child(4) { animation-delay: 135ms; }
+.view > *:nth-child(5), .debtor-page-list > .debtor-page-item:nth-child(5), .goal-list > .goal-item:nth-child(5) { animation-delay: 180ms; }
+.view > *:nth-child(6), .debtor-page-list > .debtor-page-item:nth-child(6), .goal-list > .goal-item:nth-child(6) { animation-delay: 225ms; }
+.view > *:nth-child(7), .debtor-page-list > .debtor-page-item:nth-child(7), .goal-list > .goal-item:nth-child(7) { animation-delay: 270ms; }
 
 @keyframes fade-in {
   from { opacity: 0; }
