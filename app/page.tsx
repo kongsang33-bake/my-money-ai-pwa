@@ -10,6 +10,8 @@ import {
   Banknote,
   Bot,
   Car,
+  ChevronDown,
+  ChevronLeft,
   Cloud,
   Check,
   CreditCard,
@@ -3286,7 +3288,7 @@ export default function Home() {
           <div className="view add-view">
             {dataLoading && <SkeletonList rows={3} />}
             <div className="add-title add-title-compact">
-              <button onClick={() => setTab("home")}>‹</button>
+              <button onClick={() => setTab("home")} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
               <div>
                 <p className="eyebrow">{addMode === "manual" ? "เพิ่มรายการ" : "AI Chat"}</p>
                 <h2>{addMode === "manual" ? "กรอกรายการด้วยตัวเอง" : busy ? "กำลังอ่านให้แบบตั้งใจสุด ๆ" : drafts.length ? "แยกข้อมูลให้แล้ว ลองตรวจอีกนิด" : "วันนี้มีรายการอะไรบ้าง?"}</h2>
@@ -3431,7 +3433,7 @@ export default function Home() {
           <div className="view history-view">
             {dataLoading && <SkeletonList rows={5} />}
             <div className="add-title">
-              <button onClick={() => setTab("home")}>‹</button>
+              <button onClick={() => setTab("home")} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
               <div>
                 <h2>รายการทั้งหมด</h2>
               </div>
@@ -4546,7 +4548,7 @@ function GoalsView({
     <div className="view debtor-view">
       {loading && <SkeletonList rows={3} />}
       <div className="add-title">
-        <button onClick={onBack}>‹</button>
+        <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
         <div>
           <p className="eyebrow">เป้าหมายการเงิน</p>
           <h2>เป้าหมายทั้งหมด</h2>
@@ -4843,21 +4845,27 @@ function HistoryFilterBar({
         <div className="history-filter-grid">
           <label>
             หมวด
-            <select value={filters.category} onChange={(event) => update({ category: event.target.value })}>
+            <div className="select-shell">
+              <select value={filters.category} onChange={(event) => update({ category: event.target.value })}>
               <option value="">ทุกหมวด</option>
               {categories.map((category) => (
                 <option key={category} value={category}>{category}</option>
               ))}
             </select>
+              <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+            </div>
           </label>
           <label>
             ประเภทรายการ
-            <select value={filters.type} onChange={(event) => update({ type: event.target.value as HistoryFilters["type"] })}>
+            <div className="select-shell">
+              <select value={filters.type} onChange={(event) => update({ type: event.target.value as HistoryFilters["type"] })}>
               <option value="all">ทุกชนิด</option>
               {Object.entries(transactionTypeLabels).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
+              <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+            </div>
           </label>
           <label>
             ยอดต่ำสุด
@@ -5290,21 +5298,27 @@ function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft:
       <span className="cat-icon" style={{ background: categoryTint(draft.category, 13) }}><CategoryIcon category={draft.category} size={18} /></span>
       <div>
         <input value={draft.title} onChange={(event) => update({ title: event.target.value })} />
-        <select value={draft.category} onChange={(event) => update({ category: event.target.value })}>
+        <div className="select-shell">
+          <select value={draft.category} onChange={(event) => update({ category: event.target.value })}>
           {categories.map((category) => (
             <option key={category}>{category}</option>
           ))}
         </select>
+          <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+        </div>
       </div>
       <div className="draft-side">
         <span className="draft-type-badge">{transactionTypeLabels[draft.transaction_type]}</span>
-        <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
+        <div className="select-shell">
+          <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
           {Object.entries(transactionTypeLabels).filter(([value]) => value !== "investment_buy").map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
         </select>
+          <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+        </div>
         <label>
           {moneySign}
           <AmountInput value={draft.amount} onChange={(amount) => update({ amount })} />
@@ -5334,19 +5348,25 @@ function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft:
       )}
       <input className="draft-date" type="date" value={toDateInput(draft.occurred_at)} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, draft.occurred_at) })} />
       {!!wallets.length && draft.transaction_type !== "card_charge" && (
-        <select className="draft-date" value={draft.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
+        <div className="select-shell">
+          <select className="draft-date" value={draft.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
           {wallets.map((wallet) => (
             <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
           ))}
         </select>
+          <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+        </div>
       )}
       {isTransfer && !!wallets.length && (
-        <select className="draft-date" aria-invalid={transferInvalid} value={draft.transfer_to_wallet_id ?? ""} onChange={(event) => update({ transfer_to_wallet_id: event.target.value || null })}>
+        <div className="select-shell">
+          <select className="draft-date" aria-invalid={transferInvalid} value={draft.transfer_to_wallet_id ?? ""} onChange={(event) => update({ transfer_to_wallet_id: event.target.value || null })}>
           <option value="">ไปกระเป๋า…</option>
           {wallets.map((wallet) => (
             <option key={wallet.id} value={wallet.id} disabled={wallet.id === draft.wallet_id}>{wallet.name}</option>
           ))}
         </select>
+          <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+        </div>
       )}
       <input className="draft-date" value={draft.note ?? ""} onChange={(event) => update({ note: event.target.value })} placeholder="หมายเหตุ" />
     </div>
@@ -5548,13 +5568,16 @@ function ManualEntryForm({
       {advancedTypeOpen && (
         <label>
           ชนิดรายการ
-          <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
+          <div className="select-shell">
+            <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
             {Object.entries(transactionTypeLabels).filter(([value]) => value !== "investment_buy").map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
           </select>
+            <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+          </div>
         </label>
       )}
       <label>
@@ -5591,22 +5614,28 @@ function ManualEntryForm({
       {!!wallets.length && draft.transaction_type !== "card_charge" && (
         <label>
           {isTransfer ? "จากกระเป๋า" : "กระเป๋า"}
-          <select value={draft.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
+          <div className="select-shell">
+            <select value={draft.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
             {wallets.map((wallet) => (
               <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
             ))}
           </select>
+            <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+          </div>
         </label>
       )}
       {isTransfer && !!wallets.length && (
         <label>
           ไปกระเป๋า
-          <select value={destWalletId ?? ""} onChange={(event) => setDestWalletId(event.target.value || null)}>
+          <div className="select-shell">
+            <select value={destWalletId ?? ""} onChange={(event) => setDestWalletId(event.target.value || null)}>
             <option value="">เลือกกระเป๋าปลายทาง</option>
             {wallets.map((wallet) => (
               <option key={wallet.id} value={wallet.id} disabled={wallet.id === draft.wallet_id}>{wallet.name}</option>
             ))}
           </select>
+            <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+          </div>
         </label>
       )}
       <label>
@@ -5689,22 +5718,28 @@ function EditSheet({
       {!isTransfer && (
         <label>
           หมวดหมู่
-          <select value={entry.category} onChange={(event) => update({ category: event.target.value })}>
+          <div className="select-shell">
+            <select value={entry.category} onChange={(event) => update({ category: event.target.value })}>
             {categories.map((category) => (
               <option key={category}>{category}</option>
             ))}
           </select>
+            <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+          </div>
         </label>
       )}
       <label>
         ชนิดรายการ
-        <select value={entry.transaction_type} disabled={wasTransfer || wasInvestmentBuy} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
+        <div className="select-shell">
+          <select value={entry.transaction_type} disabled={wasTransfer || wasInvestmentBuy} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
           {Object.entries(transactionTypeLabels).filter(([value]) => value !== "investment_buy" || wasInvestmentBuy).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
         </select>
+          <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+        </div>
       </label>
       <label>
         จำนวนเงิน
@@ -5723,22 +5758,28 @@ function EditSheet({
       {!!wallets.length && entry.transaction_type !== "card_charge" && !wasTransfer && (
         <label>
           {isTransfer ? "จากกระเป๋า" : "กระเป๋า"}
-          <select value={entry.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
+          <div className="select-shell">
+            <select value={entry.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
             {wallets.map((wallet) => (
               <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
             ))}
           </select>
+            <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+          </div>
         </label>
       )}
       {convertingToTransfer && !!wallets.length && (
         <label>
           ไปกระเป๋า
-          <select value={destWalletId ?? ""} onChange={(event) => setDestWalletId(event.target.value || null)}>
+          <div className="select-shell">
+            <select value={destWalletId ?? ""} onChange={(event) => setDestWalletId(event.target.value || null)}>
             <option value="">เลือกกระเป๋าปลายทาง</option>
             {wallets.map((wallet) => (
               <option key={wallet.id} value={wallet.id} disabled={wallet.id === entry.wallet_id}>{wallet.name}</option>
             ))}
           </select>
+            <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+          </div>
         </label>
       )}
       <label>
@@ -5804,7 +5845,7 @@ function DebtorsView({
     return (
       <div className="view debtor-view">
         <div className="add-title">
-          <button onClick={onBack}>‹</button>
+          <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
           <span className="debtor-avatar" style={{ background: selectedDebtor.icon_color ?? nameColor(selectedDebtor.name) }}>
             <WalletAvatarGlyph iconKey={selectedDebtor.icon} fallbackName={selectedDebtor.name} size={20} />
           </span>
@@ -5859,7 +5900,7 @@ function DebtorsView({
     <div className="view debtor-view">
       {loading && <SkeletonList rows={3} />}
       <div className="add-title">
-        <button onClick={onBack}>‹</button>
+        <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
         <div>
           <p className="eyebrow">จัดการหนี้</p>
           <h2>{activeKind === "own" ? "หนี้ของฉัน" : "ยืมเรา"}</h2>
@@ -6907,7 +6948,7 @@ function WalletsView({
     <div className="view debtor-view">
       {loading && <SkeletonList rows={3} />}
       <div className="add-title">
-        <button onClick={onBack}>‹</button>
+        <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
         <div>
           <p className="eyebrow">จัดการกองเงิน</p>
           <h2>กระเป๋าตังค์</h2>
@@ -7028,11 +7069,14 @@ function WalletEditSheet({
       </label>
       <label>
         ประเภท
-        <select value={tag} onChange={(event) => setTag(event.target.value as WalletTag)}>
+        <div className="select-shell">
+          <select value={tag} onChange={(event) => setTag(event.target.value as WalletTag)}>
           {(Object.keys(walletTagLabels) as WalletTag[]).map((key) => (
             <option key={key} value={key}>{walletTagLabels[key]}</option>
           ))}
         </select>
+          <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+        </div>
         <small className="cycle-note">{walletTagHints[tag]}</small>
       </label>
       <label>
@@ -7079,7 +7123,7 @@ function RecurringExpensesView({
     <div className="view debtor-view">
       {loading && <SkeletonList rows={3} />}
       <div className="add-title">
-        <button onClick={onBack}>‹</button>
+        <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
         <div>
           <p className="eyebrow">รายจ่ายประจำ</p>
           <h2>ค่าใช้จ่ายรายเดือน</h2>
@@ -7190,11 +7234,14 @@ function RecurringExpenseEditSheet({
       </label>
       <label>
         ตัดเงินทุกวันที่
-        <select value={billingDay} onChange={(event) => setBillingDay(normalizeBillingDay(event.target.value))}>
+        <div className="select-shell">
+          <select value={billingDay} onChange={(event) => setBillingDay(normalizeBillingDay(event.target.value))}>
           {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
             <option key={day} value={day}>{day}</option>
           ))}
         </select>
+          <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+        </div>
       </label>
       {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
       <button className="save" onClick={submit} disabled={busy || !name.trim()}>
@@ -7270,7 +7317,7 @@ function PortfolioView({
     <div className="view debtor-view">
       {loading && <SkeletonList rows={3} />}
       <div className="add-title">
-        <button onClick={onBack}>‹</button>
+        <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
         <div>
           <p className="eyebrow">พอร์ตลงทุน</p>
           <h2>เงินลงทุนทั้งหมด</h2>
@@ -7420,12 +7467,15 @@ function InvestmentBuySheet({
       {!target && !!investments.length && (
         <label>
           กองทุน/สินทรัพย์
-          <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
+          <div className="select-shell">
+            <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
             <option value="new">+ สร้างรายการใหม่</option>
             {investments.map((item) => (
               <option key={item.id} value={item.id}>{item.name}</option>
             ))}
           </select>
+            <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+          </div>
         </label>
       )}
       {!selected && (
@@ -7454,11 +7504,14 @@ function InvestmentBuySheet({
         : <small className="cycle-note">ถ้าเว้นจำนวนหน่วยว่างไว้ จะหักเงินออกจากกระเป๋าทันทีแล้วบันทึกเป็นรายการรอยืนยันหน่วย ไปกรอกหน่วยจริงทีหลังได้ที่หน้าพอร์ตลงทุน</small>}
       <label>
         หักเงินจากกระเป๋า
-        <select value={walletId} onChange={(event) => setWalletId(event.target.value)}>
+        <div className="select-shell">
+          <select value={walletId} onChange={(event) => setWalletId(event.target.value)}>
           {wallets.map((wallet) => (
             <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
           ))}
         </select>
+          <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+        </div>
       </label>
       <label>
         วันที่ซื้อ
@@ -7764,12 +7817,15 @@ function InvestmentAiSheet({
             <div className="review" key={index}>
               <label>
                 กองทุน/สินทรัพย์
-                <select value={draft.investmentId ?? "new"} onChange={(event) => updateDraft(index, { investmentId: event.target.value === "new" ? null : event.target.value })}>
+                <div className="select-shell">
+                  <select value={draft.investmentId ?? "new"} onChange={(event) => updateDraft(index, { investmentId: event.target.value === "new" ? null : event.target.value })}>
                   <option value="new">+ {draft.investment_name.trim() || "สร้างใหม่"}</option>
                   {investments.map((item) => (
                     <option key={item.id} value={item.id}>{item.name}</option>
                   ))}
                 </select>
+                  <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+                </div>
               </label>
               {!draft.investmentId && (
                 <label>
@@ -7783,11 +7839,14 @@ function InvestmentAiSheet({
               </label>
               <label>
                 กระเป๋าต้นทาง
-                <select value={draft.wallet_id} onChange={(event) => updateDraft(index, { wallet_id: event.target.value })}>
+                <div className="select-shell">
+                  <select value={draft.wallet_id} onChange={(event) => updateDraft(index, { wallet_id: event.target.value })}>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
                   ))}
                 </select>
+                  <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+                </div>
               </label>
               <label>
                 วันที่

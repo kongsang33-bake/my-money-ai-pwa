@@ -87,19 +87,6 @@
   --overlay-scrim: rgba(20, 24, 28, 0.4);
   --focus-ring: rgba(201, 122, 20, 0.35);
 
-  /* neumorphism — legacy soft dual-directional shadow language, being
-     phased out in favor of the --sh-* tiers and hairline borders. Still
-     referenced by components not yet migrated; do not add new usages. */
-  --nm-highlight: rgba(255, 255, 255, 0.8);
-  --nm-shadow: rgba(20, 24, 28, 0.08);
-  --nm-highlight-on-ink: rgba(255, 255, 255, 0.12);
-  --nm-shadow-on-ink: rgba(0, 0, 0, 0.32);
-  --nm-soft: -3px -3px 7px var(--nm-highlight), 4px 4px 11px var(--nm-shadow);
-  --nm-raised: -5px -5px 14px var(--nm-highlight), 7px 7px 20px var(--nm-shadow);
-  --nm-inset: inset -4px -4px 8px var(--nm-highlight), inset 4px 4px 10px var(--nm-shadow);
-  --nm-raised-on-ink: -4px -4px 10px var(--nm-highlight-on-ink), 6px 6px 18px var(--nm-shadow-on-ink);
-  --nm-inset-on-ink: inset -3px -3px 6px var(--nm-highlight-on-ink), inset 3px 3px 8px var(--nm-shadow-on-ink);
-
   /* scales */
   --s-0: 2px;
   --s-1: 4px;
@@ -222,12 +209,6 @@
   --sh-3: 0 20px 48px -12px rgba(0, 0, 0, 0.6);
   --overlay-scrim: rgba(0, 0, 0, 0.6);
   --focus-ring: rgba(232, 163, 61, 0.4);
-
-  /* neumorphism — dark surfaces catch light faintly instead of brightly */
-  --nm-highlight: rgba(255, 255, 255, 0.055);
-  --nm-shadow: rgba(0, 0, 0, 0.45);
-  --nm-highlight-on-ink: rgba(255, 255, 255, 0.55);
-  --nm-shadow-on-ink: rgba(0, 0, 0, 0.28);
 }
 
 /* -------------------------------------------------------------------------
@@ -292,6 +273,27 @@ ul, ol {
 
 input, textarea, select {
   font-size: max(16px, 1rem); /* iOS zoom guard */
+}
+
+.select-shell {
+  position: relative;
+  display: block;
+}
+
+.select-shell select {
+  appearance: none;
+  width: 100%;
+}
+
+.select-shell-chevron {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--ink-3);
+  pointer-events: none;
 }
 
 button, summary, input, textarea, select, [role="button"] {
@@ -503,10 +505,14 @@ a:focus-visible {
   border-radius: var(--r-md);
   background: var(--surface);
   border: 1px solid var(--line);
-  font-size: var(--fs-h2);
   display: grid;
   place-items: center;
   flex-shrink: 0;
+}
+
+.add-title > button:first-child svg {
+  width: 20px;
+  height: 20px;
 }
 
 .add-title h2 {
@@ -561,7 +567,7 @@ a:focus-visible {
   border-radius: var(--r-xl);
   background: var(--surface);
   border: 1px solid var(--line);
-  box-shadow: var(--nm-raised);
+  box-shadow: var(--sh-2);
   display: grid;
   grid-template-columns: 1fr 1fr 80px 1fr 1fr;
   align-items: center;
@@ -614,7 +620,8 @@ a:focus-visible {
   display: grid;
   place-items: center;
   transform: translateY(-14px);
-  box-shadow: var(--nm-raised-on-ink);
+  border: 1px solid var(--overlay-on-primary);
+  box-shadow: var(--sh-1);
   transition: transform var(--t-2) var(--e-spring), box-shadow var(--t-2) var(--e-out);
 }
 
@@ -630,7 +637,7 @@ a:focus-visible {
 
 .bottom-nav .add-button:active {
   transform: translateY(-10px) scale(0.94);
-  box-shadow: var(--nm-inset-on-ink);
+  box-shadow: none;
 }
 
 .bottom-nav button:active:not(.add-button) {
@@ -648,7 +655,7 @@ a:focus-visible {
   color: var(--primary-text);
   font-weight: var(--fw-semibold);
   font-size: var(--fs-body);
-  box-shadow: var(--nm-raised-on-ink);
+  box-shadow: var(--sh-1);
   transition: background var(--t-2) var(--e-out), transform var(--t-1) var(--e-out), box-shadow var(--t-2) var(--e-out);
 }
 
@@ -658,7 +665,7 @@ a:focus-visible {
 
 .primary:active:not(:disabled), .save:active:not(:disabled) {
   transform: scale(0.99);
-  box-shadow: var(--nm-inset-on-ink);
+  box-shadow: none;
 }
 
 .google-button {
@@ -672,7 +679,6 @@ a:focus-visible {
   justify-content: center;
   gap: var(--s-2);
   font-weight: var(--fw-semibold);
-  box-shadow: var(--nm-soft);
 }
 
 .side-ghost {
@@ -683,7 +689,6 @@ a:focus-visible {
   border: 1px solid var(--line);
   color: var(--ink-3);
   font-weight: var(--fw-semibold);
-  box-shadow: var(--nm-soft);
 }
 
 .logout-button {
@@ -694,7 +699,6 @@ a:focus-visible {
   border: 1px solid var(--danger-border);
   color: var(--danger);
   font-weight: var(--fw-semibold);
-  box-shadow: var(--nm-soft);
 }
 
 .danger {
@@ -703,7 +707,6 @@ a:focus-visible {
   border-radius: var(--r-md);
   padding: 11px;
   font-weight: var(--fw-semibold);
-  box-shadow: var(--nm-soft);
 }
 
 /* Segmented toggles: theme switch, lend/own, month/year */
@@ -794,7 +797,6 @@ a:focus-visible {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-xl);
-  box-shadow: var(--nm-soft);
 }
 
 .wallet-card, .summary-panel, .entry-list, .heatmap-panel, .debtor-detail-card,
@@ -836,7 +838,7 @@ a:focus-visible {
   .quick-chip:not(:has(.kebab-menu[open])):hover,
   .wallet-carousel-card:not(:has(.kebab-menu[open])):hover {
     border-color: color-mix(in srgb, var(--primary) 20%, var(--line));
-    box-shadow: var(--nm-raised);
+    box-shadow: var(--sh-2);
     transform: translateY(-2px);
   }
 }
@@ -851,7 +853,7 @@ a:focus-visible {
 .entry-tappable:not(:has(.kebab-menu[open])):active,
 .quick-chip:not(:has(.kebab-menu[open])):active,
 .wallet-carousel-card:not(:has(.kebab-menu[open])):active {
-  box-shadow: var(--nm-inset);
+  box-shadow: none;
   border-color: var(--line);
   transform: scale(0.985);
 }
@@ -921,7 +923,7 @@ a:focus-visible {
   color: var(--primary-text);
   border: 1px solid color-mix(in srgb, var(--primary-text) 12%, transparent);
   padding: var(--s-7) var(--s-6) var(--s-6);
-  box-shadow: var(--sh-3), var(--nm-raised-on-ink);
+  box-shadow: var(--sh-2);
   position: relative;
   overflow: hidden;
 }
@@ -1493,7 +1495,6 @@ a:focus-visible {
   border: 1px solid var(--line);
   border-radius: var(--r-xl);
   background: var(--surface);
-  box-shadow: var(--nm-soft);
   margin-bottom: var(--s-4);
 }
 
@@ -2989,11 +2990,10 @@ a:focus-visible {
 .manual-entry-form label input, .manual-entry-form label select, .manual-entry-form label textarea {
   width: 100%;
   margin-top: 6px;
-  border: 1px solid transparent;
+  border: 1px solid var(--line-soft);
   border-radius: var(--r-md);
   padding: 12px 14px;
-  background: var(--surface-2);
-  box-shadow: var(--nm-inset);
+  background: var(--surface-3);
   transition: box-shadow var(--t-2) var(--e-out), background var(--t-2) var(--e-out), border-color var(--t-2) var(--e-out);
 }
 
@@ -3069,6 +3069,14 @@ a:focus-visible {
 
 .report-sheet *, .budget-sheet * {
   min-width: 0;
+}
+
+/* Wins the cascade over the component-specific shorthand `padding` rules
+   above (.draft select, .history-filter-grid select, .edit-sheet label
+   select) by coming after them at equal specificity, so the chevron never
+   overlaps the select's own text. */
+.select-shell select {
+  padding-right: 34px;
 }
 
 .entry .entry-note {
