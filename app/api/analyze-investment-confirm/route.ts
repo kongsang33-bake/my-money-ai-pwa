@@ -1,4 +1,4 @@
-import { createGeminiClient, generateGeminiContent, getGeminiApiKey, missingGeminiKeyResponse } from "@/lib/gemini";
+import { createGeminiClient, describeGeminiError, generateGeminiContent, getGeminiApiKey, missingGeminiKeyResponse } from "@/lib/gemini";
 import { requireUser, unauthorizedResponse } from "@/lib/auth";
 
 // Reads one purchase row's unit count off a mutual-fund transaction
@@ -74,9 +74,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error("Gemini analyze-investment-confirm failed", error);
-    const detail = error instanceof Error ? error.message : String(error);
-    return Response.json({ error: `AI อ่าน statement ไม่สำเร็จ: ${detail}` }, { status: 502 });
+    return Response.json({ error: describeGeminiError(error, "อ่าน statement") }, { status: 502 });
   }
 
   try {

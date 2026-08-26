@@ -1,4 +1,4 @@
-import { createGeminiClient, generateGeminiContent, getGeminiApiKey, missingGeminiKeyResponse } from "@/lib/gemini";
+import { createGeminiClient, describeGeminiError, generateGeminiContent, getGeminiApiKey, missingGeminiKeyResponse } from "@/lib/gemini";
 import { CATEGORIES, TRANSACTION_TYPES } from "@/lib/taxonomy";
 import { requireUser, unauthorizedResponse } from "@/lib/auth";
 
@@ -203,9 +203,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error("Gemini analyze failed", error);
-    const detail = error instanceof Error ? error.message : String(error);
-    return Response.json({ error: `AI วิเคราะห์รายการไม่สำเร็จ: ${detail}` }, { status: 502 });
+    return Response.json({ error: describeGeminiError(error, "วิเคราะห์รายการ") }, { status: 502 });
   }
 
   try {

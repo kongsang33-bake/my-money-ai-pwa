@@ -1,4 +1,4 @@
-import { createGeminiClient, generateGeminiContent, getGeminiApiKey, missingGeminiKeyResponse } from "@/lib/gemini";
+import { createGeminiClient, describeGeminiError, generateGeminiContent, getGeminiApiKey, missingGeminiKeyResponse } from "@/lib/gemini";
 import { requireUser, unauthorizedResponse } from "@/lib/auth";
 
 type ChatTurn = { role: "user" | "assistant"; content: string };
@@ -51,7 +51,6 @@ export async function POST(request: Request) {
     const response = await generateGeminiContent(ai, { contents, config: { temperature: 0.2 } });
     return Response.json({ answer: response.text?.trim() || "ยังไม่มีคำตอบ" });
   } catch (error) {
-    console.error("Gemini ask failed", error);
-    return Response.json({ error: "AI ตอบคำถามไม่สำเร็จ กรุณาลองใหม่" }, { status: 502 });
+    return Response.json({ error: describeGeminiError(error, "ตอบคำถาม") }, { status: 502 });
   }
 }

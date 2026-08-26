@@ -87,3 +87,23 @@ export async function generateGeminiContent(
   }
   throw lastError;
 }
+
+// Turns a Gemini SDK error into a short Thai message safe to show a user —
+// never the raw error, which is often a stringified JSON blob from Google
+// ("{"error":{"code":503,"message":...") that reads as the app being
+// broken. Logs the real error server-side for debugging; `action` names
+// what the app was trying to do, e.g. "วิเคราะห์รายการ", "ตอบคำถาม".
+export function describeGeminiError(error: unknown, action: string): string {
+  console.error(`Gemini ${action} failed`, error);
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("429") || message.includes("RESOURCE_EXHAUSTED")) {
+    return `AI${action}ไม่สำเร็จ เพราะมีคนใช้งานเยอะในขณะนี้ กรุณาลองใหม่อีกครั้งในอีกสักครู่`;
+  }
+  if (message.includes("503") || message.includes("UNAVAILABLE")) {
+    return `AI${action}ไม่สำเร็จ เพราะระบบ AI มีผู้ใช้งานหนาแน่นในขณะนี้ กรุณาลองใหม่อีกครั้ง`;
+  }
+  if (message.includes("404") || message.includes("NOT_FOUND") || message.includes("no longer available")) {
+    return `AI${action}ไม่สำเร็จ ระบบ AI ขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง`;
+  }
+  return `AI${action}ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง`;
+}
