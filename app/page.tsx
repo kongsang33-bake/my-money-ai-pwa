@@ -1958,7 +1958,9 @@ export default function Home() {
 
   async function removeGoal(goal: MoneyGoal) {
     const confirmed = await requestConfirm({ title: "ลบเป้าหมายนี้?", detail: goal.name, confirmLabel: "ลบเป้าหมาย", tone: "danger" });
-    if (confirmed) persistGoals(goals.filter((item) => item.id !== goal.id));
+    if (!confirmed) return;
+    persistGoals(goals.filter((item) => item.id !== goal.id));
+    notify({ tone: "info", title: "ลบเป้าหมายแล้ว", detail: goal.name });
   }
 
   function addQuickShortcut(shortcut: { title: string; category: string; transaction_type: TransactionType; amount: number }) {
@@ -2427,6 +2429,7 @@ export default function Home() {
     }
     setProfile(data as Profile);
     setBusy(false);
+    notify({ tone: "success", title: "บันทึกโปรไฟล์แล้ว" });
     return true;
   }
 
@@ -3986,9 +3989,11 @@ function PinSecuritySheet({
     };
   }, []);
 
+  useEscapeToClose(onClose);
+
   return (
-    <div className={`sheet-backdrop ${closing ? "closing" : ""}`}>
-      <section className={`edit-sheet pin-edit-sheet ${closing ? "closing" : ""}`}>
+    <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
+      <section className={`edit-sheet pin-edit-sheet ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
         <div className="sheet-head">
           <div>
             <p className="eyebrow">ความปลอดภัย</p>
@@ -5032,13 +5037,7 @@ function ToastHost({ toasts, closingIds, onDismiss }: { toasts: Toast[]; closing
 }
 
 function SheetFrame({ children, onClose, className = "edit-sheet", closing = false }: { children: React.ReactNode; onClose: () => void; className?: string; closing?: boolean }) {
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  useEscapeToClose(onClose);
 
   return (
     <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
@@ -5096,14 +5095,25 @@ function useDismiss<A extends unknown[] = []>(active: boolean, onExited: (...arg
   return { mounted, closing, requestClose };
 }
 
-function ConfirmDialog({ dialog, onClose, closing = false }: { dialog: ConfirmDialogState; onClose: (confirmed: boolean) => void; closing?: boolean }) {
+/**
+ * Every sheet/dialog should close on Escape, matching SheetFrame and
+ * ConfirmDialog. Sheets that render their own backdrop (recap, budget,
+ * ask-AI, report export, PIN security, logout confirm) call this instead
+ * of duplicating the keydown listener.
+ */
+function useEscapeToClose(onClose: () => void) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose(false);
+      if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
+}
+
+function ConfirmDialog({ dialog, onClose, closing = false }: { dialog: ConfirmDialogState; onClose: (confirmed: boolean) => void; closing?: boolean }) {
+  const close = useCallback(() => onClose(false), [onClose]);
+  useEscapeToClose(close);
 
   return (
     <div className={`dialog-backdrop ${closing ? "closing" : ""}`} onMouseDown={() => onClose(false)}>
@@ -5133,6 +5143,7 @@ function AmountInput({ value, onChange, disabled }: { value: number; onChange: (
 
   return (
     <input
+      className="amount-input"
       inputMode="decimal"
       value={text}
       disabled={disabled}
@@ -6181,9 +6192,11 @@ function RecapSheet({
     }
   }
 
+  useEscapeToClose(onClose);
+
   return (
-    <div className={`sheet-backdrop ${closing ? "closing" : ""}`}>
-      <section className={`recap-card ${closing ? "closing" : ""}`}>
+    <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
+      <section className={`recap-card ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
         <button className="recap-close" onClick={onClose}>×</button>
         <p className="recap-month">{monthLabel}</p>
         <strong className={`recap-balance ${balance >= 0 ? "income" : "expense"}`}>{formatSignedMoney(balance)}</strong>
@@ -6241,9 +6254,11 @@ function BudgetSheet({
     onClose();
   };
 
+  useEscapeToClose(onClose);
+
   return (
-    <div className={`sheet-backdrop ${closing ? "closing" : ""}`}>
-      <section className={`edit-sheet budget-sheet ${closing ? "closing" : ""}`}>
+    <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
+      <section className={`edit-sheet budget-sheet ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
         <div className="sheet-head">
           <div>
             <p className="eyebrow">ตั้งค่า</p>
@@ -6370,7 +6385,9 @@ function AskFinanceSheet({ context, userId, onClose, closing }: { context: AiFin
     } catch { /* clipboard unavailable, ignore */ }
   };
 
-  return <div className={`sheet-backdrop ${closing ? "closing" : ""}`}><section className={`edit-sheet ask-ai-sheet ${closing ? "closing" : ""}`}>
+  useEscapeToClose(onClose);
+
+  return <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}><section className={`edit-sheet ask-ai-sheet ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
     <div className="sheet-head">
       <div><p className="eyebrow">ผู้ช่วยการเงิน</p><h2>ถาม AI เรื่องเงิน</h2></div>
       <div className="ask-ai-head-actions">
@@ -6445,9 +6462,11 @@ function ReportExportSheet({
     downloadCsv(`money-report-${filenamePeriod}.csv`, csv);
   }
 
+  useEscapeToClose(onClose);
+
   return (
-    <div className={`sheet-backdrop ${closing ? "closing" : ""}`}>
-      <section className={`edit-sheet report-sheet ${closing ? "closing" : ""}`}>
+    <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
+      <section className={`edit-sheet report-sheet ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
         <div className="sheet-head">
           <div>
             <p className="eyebrow">ส่งออกข้อมูล</p>
@@ -7729,9 +7748,11 @@ function InvestmentAiSheet({
 }
 
 function ConfirmLogout({ onCancel, onConfirm, closing }: { onCancel: () => void; onConfirm: () => void; closing?: boolean }) {
+  useEscapeToClose(onCancel);
+
   return (
-    <div className={`dialog-backdrop ${closing ? "closing" : ""}`}>
-      <section className={`confirm-dialog ${closing ? "closing" : ""}`}>
+    <div className={`dialog-backdrop ${closing ? "closing" : ""}`} onMouseDown={onCancel}>
+      <section className={`confirm-dialog ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
         <h2>ออกจากระบบ?</h2>
         <p>คุณสามารถกลับมาเข้าสู่ระบบและดูข้อมูลเดิมได้ทุกเมื่อ</p>
         <div>

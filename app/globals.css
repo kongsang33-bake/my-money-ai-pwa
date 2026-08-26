@@ -2847,6 +2847,14 @@ a:focus-visible {
   z-index: var(--z-sheet);
 }
 
+/* A confirm dialog opened from within an already-open sheet stacks its own
+   scrim on top of the sheet's — don't compound the dimming, let the topmost
+   backdrop (the dialog) carry it alone. */
+.sheet-backdrop:has(~ .dialog-backdrop) {
+  background: transparent;
+  backdrop-filter: none;
+}
+
 .edit-sheet {
   width: 100%;
   max-width: 100%;
@@ -2915,7 +2923,21 @@ a:focus-visible {
   padding: 12px 14px;
   background: var(--surface-2);
   box-shadow: var(--nm-inset);
-  transition: box-shadow var(--t-2) var(--e-out), background var(--t-2) var(--e-out);
+  transition: box-shadow var(--t-2) var(--e-out), background var(--t-2) var(--e-out), border-color var(--t-2) var(--e-out);
+}
+
+.edit-sheet label input:focus, .edit-sheet label select:focus,
+.edit-sheet label textarea:focus, .auth-screen form input:focus, .budget-row input:focus,
+.manual-entry-form label input:focus, .manual-entry-form label select:focus, .manual-entry-form label textarea:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.amount-input {
+  font-size: var(--type-value);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
 }
 
 .report-sheet {
