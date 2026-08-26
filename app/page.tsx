@@ -1297,6 +1297,7 @@ export default function Home() {
   const [receiptTotal, setReceiptTotal] = useState(0);
   const [editing, setEditing] = useState<Entry | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [debtorSheetMode, setDebtorSheetMode] = useState<"create" | "edit" | null>(null);
   const [editingDebtor, setEditingDebtor] = useState<Debtor | null>(null);
@@ -1611,6 +1612,7 @@ export default function Home() {
 
   const overlayOpen =
     menuOpen ||
+    moreOpen ||
     profileSheetOpen ||
     !!editing ||
     !!debtorSheetMode ||
@@ -3132,6 +3134,7 @@ export default function Home() {
   const investmentAiDismiss = useDismiss(investmentAiSheetOpen, () => setInvestmentAiSheetOpen(false));
   const menuDismiss = useDismiss(menuOpen, () => setMenuOpen(false));
   const menuVisible = menuDismiss.mounted && !menuDismiss.closing;
+  const moreDismiss = useDismiss(moreOpen, () => setMoreOpen(false));
   const profileSheetDismiss = useDismiss(profileSheetOpen, () => setProfileSheetOpen(false));
   const budgetSheetDismiss = useDismiss(budgetSheetOpen, () => setBudgetSheetOpen(false));
   const goalSheetDismiss = useDismiss(goalSheetOpen, () => setGoalSheetOpen(false));
@@ -3597,23 +3600,27 @@ export default function Home() {
             onClose={menuDismiss.requestClose}
             onLogout={() => { menuDismiss.requestClose(); setLogoutOpen(true); }}
             onOpenProfile={() => { menuDismiss.requestClose(); setProfileSheetOpen(true); }}
-            onOpenWallets={() => { menuDismiss.requestClose(); setTab("wallets"); }}
-            onOpenDebtors={() => { menuDismiss.requestClose(); setSelectedDebtor(null); setTab("debtors"); }}
-            onOpenRecurring={() => { menuDismiss.requestClose(); setTab("recurring"); }}
-            onOpenGoals={() => { menuDismiss.requestClose(); setTab("goals"); }}
-            onOpenPortfolio={() => { menuDismiss.requestClose(); setTab("portfolio"); }}
             onOpenBudgets={() => { menuDismiss.requestClose(); setBudgetSheetOpen(true); }}
             onOpenReport={() => { menuDismiss.requestClose(); setReportSheetOpen(true); }}
             onOpenAsk={() => { menuDismiss.requestClose(); setAskAiOpen(true); }}
             onOpenPin={() => { menuDismiss.requestClose(); setPinSheetOpen(true); }}
             theme={theme}
             onSetTheme={setTheme}
-            walletTotal={walletBalanceTotal}
+            closing={menuDismiss.closing}
+          />
+        )}
+        {moreDismiss.mounted && (
+          <MoreSheet
+            onClose={moreDismiss.requestClose}
+            onOpenDebtors={() => { moreDismiss.requestClose(); setSelectedDebtor(null); setTab("debtors"); }}
+            onOpenRecurring={() => { moreDismiss.requestClose(); setTab("recurring"); }}
+            onOpenGoals={() => { moreDismiss.requestClose(); setTab("goals"); }}
+            onOpenPortfolio={() => { moreDismiss.requestClose(); setTab("portfolio"); }}
             receivableTotal={receivableTotal}
             payableTotal={payableTotal}
             recurringTotal={recurringExpenses.reduce((sum, item) => sum + item.amount, 0)}
             portfolioTotal={portfolioTotalValue}
-            closing={menuDismiss.closing}
+            closing={moreDismiss.closing}
           />
         )}
         {profileSheetDismiss.mounted && (
@@ -3694,13 +3701,6 @@ export default function Home() {
               </span>
               <span className="nav-label">หน้าหลัก</span>
             </button>
-            <button className="add-button" onClick={() => openAddTab()} aria-label="เพิ่มรายการด้วย AI">
-              <span className="nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-              </span>
-            </button>
             <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")} aria-label="รายการ">
               <span className="nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24">
@@ -3709,6 +3709,25 @@ export default function Home() {
                 </svg>
               </span>
               <span className="nav-label">รายการ</span>
+            </button>
+            <button className="add-button" onClick={() => openAddTab()} aria-label="เพิ่มรายการด้วย AI">
+              <span className="nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </span>
+            </button>
+            <button className={tab === "wallets" ? "active" : ""} onClick={() => setTab("wallets")} aria-label="กระเป๋าตังค์">
+              <span className="nav-icon" aria-hidden="true">
+                <Wallet aria-hidden="true" />
+              </span>
+              <span className="nav-label">กระเป๋า</span>
+            </button>
+            <button className={moreOpen ? "active" : ""} onClick={() => setMoreOpen(true)} aria-label="เพิ่มเติม">
+              <span className="nav-icon" aria-hidden="true">
+                <MoreHorizontal aria-hidden="true" />
+              </span>
+              <span className="nav-label">อื่น ๆ</span>
             </button>
           </nav>
         )}
@@ -6522,22 +6541,12 @@ function SideMenu({
   onClose,
   onLogout,
   onOpenProfile,
-  onOpenWallets,
-  onOpenDebtors,
-  onOpenRecurring,
-  onOpenGoals,
-  onOpenPortfolio,
   onOpenBudgets,
   onOpenReport,
   onOpenAsk,
   onOpenPin,
   theme,
   onSetTheme,
-  walletTotal,
-  receivableTotal,
-  payableTotal,
-  recurringTotal,
-  portfolioTotal,
   closing,
 }: {
   user: User;
@@ -6545,22 +6554,12 @@ function SideMenu({
   onClose: () => void;
   onLogout: () => void;
   onOpenProfile: () => void;
-  onOpenWallets: () => void;
-  onOpenDebtors: () => void;
-  onOpenRecurring: () => void;
-  onOpenGoals: () => void;
-  onOpenPortfolio: () => void;
   onOpenBudgets: () => void;
   onOpenReport: () => void;
   onOpenAsk: () => void;
   onOpenPin: () => void;
   theme: Theme;
   onSetTheme: (theme: Theme) => void;
-  walletTotal: number;
-  receivableTotal: number;
-  payableTotal: number;
-  recurringTotal: number;
-  portfolioTotal: number;
   closing?: boolean;
 }) {
   const metadata = user.user_metadata ?? {};
@@ -6585,38 +6584,11 @@ function SideMenu({
 
         <nav className="side-menu-list">
           <div className="side-menu-section">
-            <p>เงินและภาระ</p>
-            <button onClick={onOpenWallets}>
-              <Wallet size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>กระเป๋าตังค์</span>
-              <b>{moneySign}{formatMoney(walletTotal)}</b>
-            </button>
-            <button onClick={onOpenDebtors}>
-              <Users size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>จัดการหนี้</span>
-              <b>{(receivableTotal - payableTotal) < 0 ? "−" : ""}{moneySign}{formatMoney(Math.abs(receivableTotal - payableTotal))}</b>
-            </button>
-            <button onClick={onOpenRecurring}>
-              <Receipt size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>รายจ่ายประจำ</span>
-              <b>{moneySign}{formatMoney(recurringTotal)}</b>
-            </button>
-            <button onClick={onOpenGoals}>
-              <PiggyBank size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>เป้าหมายการเงิน</span>
-            </button>
-            <button onClick={onOpenPortfolio}>
-              <LineChart size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>พอร์ตลงทุน</span>
-              <b>{moneySign}{formatMoney(portfolioTotal)}</b>
-            </button>
+            <p>เครื่องมือ</p>
             <button onClick={onOpenBudgets}>
               <TrendingUp size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>งบประมาณ</span>
             </button>
-          </div>
-          <div className="side-menu-section">
-            <p>เครื่องมือ</p>
             <button onClick={onOpenAsk}>
               <Lightbulb size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>ถาม AI เรื่องเงิน</span>
@@ -6653,6 +6625,64 @@ function SideMenu({
         </div>
       </aside>
     </div>
+  );
+}
+
+function MoreSheet({
+  onClose,
+  onOpenDebtors,
+  onOpenRecurring,
+  onOpenGoals,
+  onOpenPortfolio,
+  receivableTotal,
+  payableTotal,
+  recurringTotal,
+  portfolioTotal,
+  closing,
+}: {
+  onClose: () => void;
+  onOpenDebtors: () => void;
+  onOpenRecurring: () => void;
+  onOpenGoals: () => void;
+  onOpenPortfolio: () => void;
+  receivableTotal: number;
+  payableTotal: number;
+  recurringTotal: number;
+  portfolioTotal: number;
+  closing?: boolean;
+}) {
+  const debtNet = receivableTotal - payableTotal;
+  return (
+    <SheetFrame onClose={onClose} className="edit-sheet more-sheet" closing={closing}>
+      <div className="sheet-head">
+        <div>
+          <p className="eyebrow">เพิ่มเติม</p>
+          <h2>ฟีเจอร์ทั้งหมด</h2>
+        </div>
+        <button onClick={onClose} aria-label="ปิด">×</button>
+      </div>
+      <div className="more-grid">
+        <button onClick={onOpenDebtors}>
+          <span className="more-tile-icon"><Users size={20} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span>จัดการหนี้</span>
+          <b>{debtNet < 0 ? "−" : ""}{moneySign}{formatMoney(Math.abs(debtNet))}</b>
+        </button>
+        <button onClick={onOpenRecurring}>
+          <span className="more-tile-icon"><Receipt size={20} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span>รายจ่ายประจำ</span>
+          <b>{moneySign}{formatMoney(recurringTotal)}</b>
+        </button>
+        <button onClick={onOpenGoals}>
+          <span className="more-tile-icon"><PiggyBank size={20} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span>เป้าหมายการเงิน</span>
+        </button>
+        <button onClick={onOpenPortfolio}>
+          <span className="more-tile-icon"><LineChart size={20} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span>พอร์ตลงทุน</span>
+          <b>{moneySign}{formatMoney(portfolioTotal)}</b>
+        </button>
+      </div>
+    </SheetFrame>
   );
 }
 
