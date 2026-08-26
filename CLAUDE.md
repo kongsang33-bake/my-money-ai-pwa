@@ -32,15 +32,45 @@ Guidance for working on this codebase — a Thai personal-finance PWA
   (`● ◆ ฿ ✚ ▣ ↻`), matching that same family — not an emoji, not the old
   mascot.
 - **Use the token scales, never hand-picked values.** `app/globals.css`
-  defines the full system in `:root` — spacing (`--s-1`…`--s-8`), radius
-  (`--r-sm`…`--r-full`), shadow (`--sh-1`…`--sh-3`), z-index (`--z-nav`…
-  `--z-toast`), motion (`--t-1`…`--t-3`, `--e-out`, `--e-spring`). A new
-  component should compose from these, not invent a new radius or a
-  one-off box-shadow. All colors are CSS custom properties defined once in
-  `:root` (light) and `:root[data-theme="dark"]` (dark) — never a literal
-  hex/rgb in a component rule. Every hardcoded color eventually needs a
-  manually-written dark-mode override, which is easy to miss and is what
-  broke dark mode repeatedly during earlier development.
+  defines the full system in `:root` — spacing (`--s-0`…`--s-9`), radius
+  (`--r-xs`…`--r-full`), shadow (`--sh-1`…`--sh-3`), z-index (`--z-nav`…
+  `--z-toast`), motion (`--t-1`…`--t-4`, `--t-press`, `--e-out`,
+  `--e-in-out`, `--e-spring`), and type (see below). A new component should
+  compose from these, not invent a new radius, a one-off box-shadow, or a
+  hand-picked `font-size`. All colors are CSS custom properties defined
+  once in `:root` (light) and `:root[data-theme="dark"]` (dark) — never a
+  literal hex/rgb in a component rule. Every hardcoded color eventually
+  needs a manually-written dark-mode override, which is easy to miss and
+  is what broke dark mode repeatedly during earlier development. For a
+  saturated semantic fill that does *not* invert with theme (`.danger`'s
+  red background, a wallet's chosen icon-color swatch), text on top of it
+  uses the theme-invariant `--text-on-color` (always white) — not
+  `--ink-inverse`, which is specifically for surfaces using `--ink`/
+  `--primary` as background and flips with theme.
+- **Type scale — 9 steps, all tokenized.** `--fs-display` (hero balance) →
+  `--fs-value` (large money amounts) → `--fs-h1` → `--fs-h2` → `--fs-h3` →
+  `--fs-body` (15px, the default reading size) → `--fs-body-sm` →
+  `--fs-caption` (13px, labels/meta) → `--fs-micro` (11px, uppercase
+  micro-labels). Weight tokens `--fw-regular/medium/semibold/bold`: bold is
+  reserved for `<strong>`/`<b>` money-value text and `h1`-tier headings —
+  everything else (section headers, labels, badges, buttons, nav items)
+  uses `--fw-semibold`. Body text used to sit at 12–13px app-wide with
+  nothing reading as more important than anything else; don't reintroduce
+  that by hand-picking a `font-size` instead of reaching for a `--fs-*`
+  token.
+- **Elevation is flat + hairline by default.** Cards, tiles, rows, inputs,
+  and chips rest with just their existing `--surface`/border, no shadow.
+  `--sh-1` is for things that float subtly at rest (the FAB, the primary
+  button); `--sh-2` is for hover-lift, the bottom-nav pill, and kebab
+  menus; `--sh-3` is for sheets/dialogs/the drawer. There is no `--nm-*`
+  neumorphic (dual-directional soft-shadow) system any more — it was
+  removed as part of the Gen Z redesign; don't reintroduce inset/soft
+  embossed shadows on inputs or cards.
+- **Native `<select>` elements get a `.select-shell` wrapper.** Wrap
+  `<select>` in `<div className="select-shell">…</select><ChevronDown
+  className="select-shell-chevron" aria-hidden="true" /></div>` — the CSS
+  sets `appearance: none` on the select and absolutely positions the
+  chevron. Don't ship a bare `<select>` with default OS chrome.
 - **Define each component once.** The previous stylesheet redefined the
   same selectors across more than a dozen appended "layers" (`.entry-list`
   alone had 13 separate rule blocks) — changing one card meant editing

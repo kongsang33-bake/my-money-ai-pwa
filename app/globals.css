@@ -844,7 +844,7 @@ a:focus-visible {
 }
 
 .wallet-card:not(.primary-wallet), .debtor-page-item, .entry-tappable, .quick-chip,
-.secondary-wallet-card, .wallet-carousel-card {
+.wallet-carousel-card {
   transition: box-shadow var(--t-3) var(--e-out), transform var(--t-2) var(--e-out), border-color var(--t-2) var(--e-out), background var(--t-2) var(--e-out);
 }
 
@@ -876,10 +876,6 @@ a:focus-visible {
 
 .wallet-card {
   margin-bottom: 0;
-}
-
-.secondary-wallet-card {
-  width: 100%;
 }
 
 .wallet-carousel {
@@ -1498,7 +1494,6 @@ a:focus-visible {
   margin-bottom: var(--s-4);
 }
 
-.goal-empty { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); }
 .goal-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); }
 .goal-card h2 { margin: 2px 0 0; font-size: var(--fs-h3); }
 .goal-card p:not(.eyebrow) { margin: var(--s-2) 0 0; color: var(--ink-3); font-size: var(--fs-caption); }
@@ -4093,11 +4088,12 @@ a:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background var(--t-1) var(--e-out);
+  transition: background var(--t-1) var(--e-out), transform var(--t-1) var(--e-out);
 }
 
 .pin-keypad button:active:not(:disabled) {
   background: var(--surface-3);
+  transform: scale(0.94);
 }
 
 .pin-keypad-faceid, .pin-keypad-delete {
