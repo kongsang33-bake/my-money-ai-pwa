@@ -293,7 +293,13 @@ a:focus-visible {
 
 .view {
   padding: var(--s-1) var(--s-5) var(--s-7);
-  animation: view-in var(--t-3) var(--e-out) both;
+  /* backwards, not both: a translateY held after the animation ends still
+     counts as "a transform other than none" and creates a stacking
+     context, which can trap a floating popover inside a later element.
+     backwards keeps the pre-animation state during the delay but releases
+     the element back to the normal cascade once done (same visual result
+     here, since there's no other transform on .view). */
+  animation: view-in var(--t-3) var(--e-out) backwards;
 }
 
 .topbar {
@@ -767,8 +773,16 @@ a:focus-visible {
 }
 
 @media (hover: hover) {
-  .wallet-card:not(.primary-wallet):hover, .debtor-page-item:hover, .entry-tappable:hover,
-  .quick-chip:hover, .wallet-carousel-card:hover {
+  /* :not(:has(.kebab-menu[open])) -- a transform here (even a "lift" of
+     -2px) creates a new stacking context, which traps the card's own
+     kebab-menu popover (z-index: var(--z-drawer)) inside it so a later
+     sibling card paints over it. Skip the lift while that card's menu is
+     open so the popover can escape above the rest of the list. */
+  .wallet-card:not(.primary-wallet):not(:has(.kebab-menu[open])):hover,
+  .debtor-page-item:not(:has(.kebab-menu[open])):hover,
+  .entry-tappable:not(:has(.kebab-menu[open])):hover,
+  .quick-chip:not(:has(.kebab-menu[open])):hover,
+  .wallet-carousel-card:not(:has(.kebab-menu[open])):hover {
     border-color: color-mix(in srgb, var(--primary) 20%, var(--line));
     box-shadow: var(--nm-raised);
     transform: translateY(-2px);
@@ -780,8 +794,11 @@ a:focus-visible {
   transition: box-shadow var(--t-3) var(--e-out), transform var(--t-2) var(--e-out), border-color var(--t-2) var(--e-out), background var(--t-2) var(--e-out);
 }
 
-.wallet-card:not(.primary-wallet):active, .debtor-page-item:active, .entry-tappable:active,
-.quick-chip:active, .wallet-carousel-card:active {
+.wallet-card:not(.primary-wallet):not(:has(.kebab-menu[open])):active,
+.debtor-page-item:not(:has(.kebab-menu[open])):active,
+.entry-tappable:not(:has(.kebab-menu[open])):active,
+.quick-chip:not(:has(.kebab-menu[open])):active,
+.wallet-carousel-card:not(:has(.kebab-menu[open])):active {
   box-shadow: var(--nm-inset);
   border-color: var(--line);
   transform: scale(0.985);
@@ -4047,7 +4064,16 @@ a:focus-visible {
 
 .view > *, .history-view .entry-group,
 .debtor-page-list > .debtor-page-item, .goal-list > .goal-item {
-  animation: card-in var(--t-3) var(--e-out) both;
+  /* backwards, not both: holding the keyframe's `to` transform after the
+     animation ends leaves a stray `translateY(0)` on the element, which
+     still counts as "a transform other than none" and creates a stacking
+     context — silently trapping any absolutely-positioned popover inside
+     (e.g. the wallet/debtor kebab menu) so a later sibling card paints
+     over it. `backwards` keeps the pre-animation state during the delay
+     but releases the element back to the normal cascade once done, which
+     resolves to the exact same visual result (opacity 1, no transform)
+     without leaving that context behind. */
+  animation: card-in var(--t-3) var(--e-out) backwards;
 }
 
 .view > *:nth-child(1), .history-view .entry-group:nth-child(1),
