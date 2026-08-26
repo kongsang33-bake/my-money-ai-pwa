@@ -1297,6 +1297,7 @@ export default function Home() {
   const [receiptTotal, setReceiptTotal] = useState(0);
   const [editing, setEditing] = useState<Entry | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [debtorSheetMode, setDebtorSheetMode] = useState<"create" | "edit" | null>(null);
   const [editingDebtor, setEditingDebtor] = useState<Debtor | null>(null);
@@ -1611,6 +1612,7 @@ export default function Home() {
 
   const overlayOpen =
     menuOpen ||
+    moreOpen ||
     profileSheetOpen ||
     !!editing ||
     !!debtorSheetMode ||
@@ -1956,7 +1958,9 @@ export default function Home() {
 
   async function removeGoal(goal: MoneyGoal) {
     const confirmed = await requestConfirm({ title: "ลบเป้าหมายนี้?", detail: goal.name, confirmLabel: "ลบเป้าหมาย", tone: "danger" });
-    if (confirmed) persistGoals(goals.filter((item) => item.id !== goal.id));
+    if (!confirmed) return;
+    persistGoals(goals.filter((item) => item.id !== goal.id));
+    notify({ tone: "info", title: "ลบเป้าหมายแล้ว", detail: goal.name });
   }
 
   function addQuickShortcut(shortcut: { title: string; category: string; transaction_type: TransactionType; amount: number }) {
@@ -2425,6 +2429,7 @@ export default function Home() {
     }
     setProfile(data as Profile);
     setBusy(false);
+    notify({ tone: "success", title: "บันทึกโปรไฟล์แล้ว" });
     return true;
   }
 
@@ -3132,6 +3137,7 @@ export default function Home() {
   const investmentAiDismiss = useDismiss(investmentAiSheetOpen, () => setInvestmentAiSheetOpen(false));
   const menuDismiss = useDismiss(menuOpen, () => setMenuOpen(false));
   const menuVisible = menuDismiss.mounted && !menuDismiss.closing;
+  const moreDismiss = useDismiss(moreOpen, () => setMoreOpen(false));
   const profileSheetDismiss = useDismiss(profileSheetOpen, () => setProfileSheetOpen(false));
   const budgetSheetDismiss = useDismiss(budgetSheetOpen, () => setBudgetSheetOpen(false));
   const goalSheetDismiss = useDismiss(goalSheetOpen, () => setGoalSheetOpen(false));
@@ -3436,6 +3442,7 @@ export default function Home() {
             payableSummary={payableSummary}
             selectedDebtor={selectedDebtor}
             activeKind={debtorKindTab}
+            loading={dataLoading}
             onChangeActiveKind={setDebtorKindTab}
             onBack={() => selectedDebtor ? setSelectedDebtor(null) : setTab("home")}
             onAdd={() => { setEditingDebtor(null); setDebtorSheetMode("create"); }}
@@ -3449,6 +3456,7 @@ export default function Home() {
           <WalletsView
             wallets={displayWallets}
             entries={entries}
+            loading={dataLoading}
             onBack={() => setTab("home")}
             onAdd={() => { setEditingWallet(null); setWalletSheetMode("create"); }}
             onEdit={(wallet) => { setEditingWallet(wallet); setWalletSheetMode("edit"); }}
@@ -3459,6 +3467,7 @@ export default function Home() {
         {tab === "recurring" && (
           <RecurringExpensesView
             items={recurringExpenses}
+            loading={dataLoading}
             onBack={() => setTab("home")}
             onAdd={() => { setEditingRecurringExpense(null); setRecurringSheetMode("create"); }}
             onEdit={(item) => { setEditingRecurringExpense(item); setRecurringSheetMode("edit"); }}
@@ -3469,6 +3478,7 @@ export default function Home() {
         {tab === "goals" && (
           <GoalsView
             goals={goals}
+            loading={dataLoading}
             onBack={() => setTab("home")}
             onAdd={() => setGoalSheetOpen(true)}
             onDelete={removeGoal}
@@ -3484,6 +3494,7 @@ export default function Home() {
             totalGain={portfolioTotalGain}
             totalGainPercent={portfolioTotalGainPercent}
             pendingPurchases={pendingInvestmentPurchases}
+            loading={dataLoading}
             onBack={() => setTab("home")}
             onBuy={(target) => { setInvestmentBuyTarget(target); setInvestmentBuySheetOpen(true); }}
             onSell={(item) => setInvestmentSellTarget(item)}
@@ -3597,23 +3608,27 @@ export default function Home() {
             onClose={menuDismiss.requestClose}
             onLogout={() => { menuDismiss.requestClose(); setLogoutOpen(true); }}
             onOpenProfile={() => { menuDismiss.requestClose(); setProfileSheetOpen(true); }}
-            onOpenWallets={() => { menuDismiss.requestClose(); setTab("wallets"); }}
-            onOpenDebtors={() => { menuDismiss.requestClose(); setSelectedDebtor(null); setTab("debtors"); }}
-            onOpenRecurring={() => { menuDismiss.requestClose(); setTab("recurring"); }}
-            onOpenGoals={() => { menuDismiss.requestClose(); setTab("goals"); }}
-            onOpenPortfolio={() => { menuDismiss.requestClose(); setTab("portfolio"); }}
             onOpenBudgets={() => { menuDismiss.requestClose(); setBudgetSheetOpen(true); }}
             onOpenReport={() => { menuDismiss.requestClose(); setReportSheetOpen(true); }}
             onOpenAsk={() => { menuDismiss.requestClose(); setAskAiOpen(true); }}
             onOpenPin={() => { menuDismiss.requestClose(); setPinSheetOpen(true); }}
             theme={theme}
             onSetTheme={setTheme}
-            walletTotal={walletBalanceTotal}
+            closing={menuDismiss.closing}
+          />
+        )}
+        {moreDismiss.mounted && (
+          <MoreSheet
+            onClose={moreDismiss.requestClose}
+            onOpenDebtors={() => { moreDismiss.requestClose(); setSelectedDebtor(null); setTab("debtors"); }}
+            onOpenRecurring={() => { moreDismiss.requestClose(); setTab("recurring"); }}
+            onOpenGoals={() => { moreDismiss.requestClose(); setTab("goals"); }}
+            onOpenPortfolio={() => { moreDismiss.requestClose(); setTab("portfolio"); }}
             receivableTotal={receivableTotal}
             payableTotal={payableTotal}
             recurringTotal={recurringExpenses.reduce((sum, item) => sum + item.amount, 0)}
             portfolioTotal={portfolioTotalValue}
-            closing={menuDismiss.closing}
+            closing={moreDismiss.closing}
           />
         )}
         {profileSheetDismiss.mounted && (
@@ -3694,13 +3709,6 @@ export default function Home() {
               </span>
               <span className="nav-label">หน้าหลัก</span>
             </button>
-            <button className="add-button" onClick={() => openAddTab()} aria-label="เพิ่มรายการด้วย AI">
-              <span className="nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-              </span>
-            </button>
             <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")} aria-label="รายการ">
               <span className="nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24">
@@ -3709,6 +3717,25 @@ export default function Home() {
                 </svg>
               </span>
               <span className="nav-label">รายการ</span>
+            </button>
+            <button className="add-button" onClick={() => openAddTab()} aria-label="เพิ่มรายการด้วย AI">
+              <span className="nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </span>
+            </button>
+            <button className={tab === "wallets" ? "active" : ""} onClick={() => setTab("wallets")} aria-label="กระเป๋าตังค์">
+              <span className="nav-icon" aria-hidden="true">
+                <Wallet aria-hidden="true" />
+              </span>
+              <span className="nav-label">กระเป๋า</span>
+            </button>
+            <button className={moreOpen ? "active" : ""} onClick={() => setMoreOpen(true)} aria-label="เพิ่มเติม">
+              <span className="nav-icon" aria-hidden="true">
+                <MoreHorizontal aria-hidden="true" />
+              </span>
+              <span className="nav-label">อื่น ๆ</span>
             </button>
           </nav>
         )}
@@ -3967,9 +3994,11 @@ function PinSecuritySheet({
     };
   }, []);
 
+  useEscapeToClose(onClose);
+
   return (
-    <div className={`sheet-backdrop ${closing ? "closing" : ""}`}>
-      <section className={`edit-sheet pin-edit-sheet ${closing ? "closing" : ""}`}>
+    <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
+      <section className={`edit-sheet pin-edit-sheet ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
         <div className="sheet-head">
           <div>
             <p className="eyebrow">ความปลอดภัย</p>
@@ -4472,17 +4501,20 @@ function BudgetGlanceCard({
 
 function GoalsView({
   goals,
+  loading,
   onBack,
   onAdd,
   onDelete,
 }: {
   goals: MoneyGoal[];
+  loading: boolean;
   onBack: () => void;
   onAdd: () => void;
   onDelete: (goal: MoneyGoal) => void;
 }) {
   return (
     <div className="view debtor-view">
+      {loading && <SkeletonList rows={3} />}
       <div className="add-title">
         <button onClick={onBack}>‹</button>
         <div>
@@ -5013,13 +5045,7 @@ function ToastHost({ toasts, closingIds, onDismiss }: { toasts: Toast[]; closing
 }
 
 function SheetFrame({ children, onClose, className = "edit-sheet", closing = false }: { children: React.ReactNode; onClose: () => void; className?: string; closing?: boolean }) {
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  useEscapeToClose(onClose);
 
   return (
     <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
@@ -5077,14 +5103,25 @@ function useDismiss<A extends unknown[] = []>(active: boolean, onExited: (...arg
   return { mounted, closing, requestClose };
 }
 
-function ConfirmDialog({ dialog, onClose, closing = false }: { dialog: ConfirmDialogState; onClose: (confirmed: boolean) => void; closing?: boolean }) {
+/**
+ * Every sheet/dialog should close on Escape, matching SheetFrame and
+ * ConfirmDialog. Sheets that render their own backdrop (recap, budget,
+ * ask-AI, report export, PIN security, logout confirm) call this instead
+ * of duplicating the keydown listener.
+ */
+function useEscapeToClose(onClose: () => void) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose(false);
+      if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
+}
+
+function ConfirmDialog({ dialog, onClose, closing = false }: { dialog: ConfirmDialogState; onClose: (confirmed: boolean) => void; closing?: boolean }) {
+  const close = useCallback(() => onClose(false), [onClose]);
+  useEscapeToClose(close);
 
   return (
     <div className={`dialog-backdrop ${closing ? "closing" : ""}`} onMouseDown={() => onClose(false)}>
@@ -5114,6 +5151,7 @@ function AmountInput({ value, onChange, disabled }: { value: number; onChange: (
 
   return (
     <input
+      className="amount-input"
       inputMode="decimal"
       value={text}
       disabled={disabled}
@@ -5695,6 +5733,7 @@ function DebtorsView({
   payableSummary,
   selectedDebtor,
   activeKind,
+  loading,
   onChangeActiveKind,
   onBack,
   onAdd,
@@ -5708,6 +5747,7 @@ function DebtorsView({
   payableSummary: { name: string; amount: number }[];
   selectedDebtor: Debtor | null;
   activeKind: DebtorKind;
+  loading: boolean;
   onChangeActiveKind: (kind: DebtorKind) => void;
   onBack: () => void;
   onAdd: () => void;
@@ -5778,6 +5818,7 @@ function DebtorsView({
 
   return (
     <div className="view debtor-view">
+      {loading && <SkeletonList rows={3} />}
       <div className="add-title">
         <button onClick={onBack}>‹</button>
         <div>
@@ -6162,9 +6203,11 @@ function RecapSheet({
     }
   }
 
+  useEscapeToClose(onClose);
+
   return (
-    <div className={`sheet-backdrop ${closing ? "closing" : ""}`}>
-      <section className={`recap-card ${closing ? "closing" : ""}`}>
+    <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
+      <section className={`recap-card ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
         <button className="recap-close" onClick={onClose}>×</button>
         <p className="recap-month">{monthLabel}</p>
         <strong className={`recap-balance ${balance >= 0 ? "income" : "expense"}`}>{formatSignedMoney(balance)}</strong>
@@ -6222,9 +6265,11 @@ function BudgetSheet({
     onClose();
   };
 
+  useEscapeToClose(onClose);
+
   return (
-    <div className={`sheet-backdrop ${closing ? "closing" : ""}`}>
-      <section className={`edit-sheet budget-sheet ${closing ? "closing" : ""}`}>
+    <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
+      <section className={`edit-sheet budget-sheet ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
         <div className="sheet-head">
           <div>
             <p className="eyebrow">ตั้งค่า</p>
@@ -6351,7 +6396,9 @@ function AskFinanceSheet({ context, userId, onClose, closing }: { context: AiFin
     } catch { /* clipboard unavailable, ignore */ }
   };
 
-  return <div className={`sheet-backdrop ${closing ? "closing" : ""}`}><section className={`edit-sheet ask-ai-sheet ${closing ? "closing" : ""}`}>
+  useEscapeToClose(onClose);
+
+  return <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}><section className={`edit-sheet ask-ai-sheet ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
     <div className="sheet-head">
       <div><p className="eyebrow">ผู้ช่วยการเงิน</p><h2>ถาม AI เรื่องเงิน</h2></div>
       <div className="ask-ai-head-actions">
@@ -6426,9 +6473,11 @@ function ReportExportSheet({
     downloadCsv(`money-report-${filenamePeriod}.csv`, csv);
   }
 
+  useEscapeToClose(onClose);
+
   return (
-    <div className={`sheet-backdrop ${closing ? "closing" : ""}`}>
-      <section className={`edit-sheet report-sheet ${closing ? "closing" : ""}`}>
+    <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
+      <section className={`edit-sheet report-sheet ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
         <div className="sheet-head">
           <div>
             <p className="eyebrow">ส่งออกข้อมูล</p>
@@ -6522,22 +6571,12 @@ function SideMenu({
   onClose,
   onLogout,
   onOpenProfile,
-  onOpenWallets,
-  onOpenDebtors,
-  onOpenRecurring,
-  onOpenGoals,
-  onOpenPortfolio,
   onOpenBudgets,
   onOpenReport,
   onOpenAsk,
   onOpenPin,
   theme,
   onSetTheme,
-  walletTotal,
-  receivableTotal,
-  payableTotal,
-  recurringTotal,
-  portfolioTotal,
   closing,
 }: {
   user: User;
@@ -6545,22 +6584,12 @@ function SideMenu({
   onClose: () => void;
   onLogout: () => void;
   onOpenProfile: () => void;
-  onOpenWallets: () => void;
-  onOpenDebtors: () => void;
-  onOpenRecurring: () => void;
-  onOpenGoals: () => void;
-  onOpenPortfolio: () => void;
   onOpenBudgets: () => void;
   onOpenReport: () => void;
   onOpenAsk: () => void;
   onOpenPin: () => void;
   theme: Theme;
   onSetTheme: (theme: Theme) => void;
-  walletTotal: number;
-  receivableTotal: number;
-  payableTotal: number;
-  recurringTotal: number;
-  portfolioTotal: number;
   closing?: boolean;
 }) {
   const metadata = user.user_metadata ?? {};
@@ -6585,38 +6614,11 @@ function SideMenu({
 
         <nav className="side-menu-list">
           <div className="side-menu-section">
-            <p>เงินและภาระ</p>
-            <button onClick={onOpenWallets}>
-              <Wallet size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>กระเป๋าตังค์</span>
-              <b>{moneySign}{formatMoney(walletTotal)}</b>
-            </button>
-            <button onClick={onOpenDebtors}>
-              <Users size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>จัดการหนี้</span>
-              <b>{(receivableTotal - payableTotal) < 0 ? "−" : ""}{moneySign}{formatMoney(Math.abs(receivableTotal - payableTotal))}</b>
-            </button>
-            <button onClick={onOpenRecurring}>
-              <Receipt size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>รายจ่ายประจำ</span>
-              <b>{moneySign}{formatMoney(recurringTotal)}</b>
-            </button>
-            <button onClick={onOpenGoals}>
-              <PiggyBank size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>เป้าหมายการเงิน</span>
-            </button>
-            <button onClick={onOpenPortfolio}>
-              <LineChart size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>พอร์ตลงทุน</span>
-              <b>{moneySign}{formatMoney(portfolioTotal)}</b>
-            </button>
+            <p>เครื่องมือ</p>
             <button onClick={onOpenBudgets}>
               <TrendingUp size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>งบประมาณ</span>
             </button>
-          </div>
-          <div className="side-menu-section">
-            <p>เครื่องมือ</p>
             <button onClick={onOpenAsk}>
               <Lightbulb size={16} strokeWidth={2.25} aria-hidden="true" />
               <span>ถาม AI เรื่องเงิน</span>
@@ -6653,6 +6655,64 @@ function SideMenu({
         </div>
       </aside>
     </div>
+  );
+}
+
+function MoreSheet({
+  onClose,
+  onOpenDebtors,
+  onOpenRecurring,
+  onOpenGoals,
+  onOpenPortfolio,
+  receivableTotal,
+  payableTotal,
+  recurringTotal,
+  portfolioTotal,
+  closing,
+}: {
+  onClose: () => void;
+  onOpenDebtors: () => void;
+  onOpenRecurring: () => void;
+  onOpenGoals: () => void;
+  onOpenPortfolio: () => void;
+  receivableTotal: number;
+  payableTotal: number;
+  recurringTotal: number;
+  portfolioTotal: number;
+  closing?: boolean;
+}) {
+  const debtNet = receivableTotal - payableTotal;
+  return (
+    <SheetFrame onClose={onClose} className="edit-sheet more-sheet" closing={closing}>
+      <div className="sheet-head">
+        <div>
+          <p className="eyebrow">เพิ่มเติม</p>
+          <h2>ฟีเจอร์ทั้งหมด</h2>
+        </div>
+        <button onClick={onClose} aria-label="ปิด">×</button>
+      </div>
+      <div className="more-grid">
+        <button onClick={onOpenDebtors}>
+          <span className="more-tile-icon"><Users size={20} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span>จัดการหนี้</span>
+          <b>{debtNet < 0 ? "−" : ""}{moneySign}{formatMoney(Math.abs(debtNet))}</b>
+        </button>
+        <button onClick={onOpenRecurring}>
+          <span className="more-tile-icon"><Receipt size={20} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span>รายจ่ายประจำ</span>
+          <b>{moneySign}{formatMoney(recurringTotal)}</b>
+        </button>
+        <button onClick={onOpenGoals}>
+          <span className="more-tile-icon"><PiggyBank size={20} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span>เป้าหมายการเงิน</span>
+        </button>
+        <button onClick={onOpenPortfolio}>
+          <span className="more-tile-icon"><LineChart size={20} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span>พอร์ตลงทุน</span>
+          <b>{moneySign}{formatMoney(portfolioTotal)}</b>
+        </button>
+      </div>
+    </SheetFrame>
   );
 }
 
@@ -6774,6 +6834,7 @@ function ProfileEditSheet({
 function WalletsView({
   wallets,
   entries,
+  loading,
   onBack,
   onAdd,
   onEdit,
@@ -6781,6 +6842,7 @@ function WalletsView({
 }: {
   wallets: WalletDisplay[];
   entries: Entry[];
+  loading: boolean;
   onBack: () => void;
   onAdd: () => void;
   onEdit: (wallet: Wallet) => void;
@@ -6804,6 +6866,7 @@ function WalletsView({
 
   return (
     <div className="view debtor-view">
+      {loading && <SkeletonList rows={3} />}
       <div className="add-title">
         <button onClick={onBack}>‹</button>
         <div>
@@ -6950,12 +7013,14 @@ function WalletEditSheet({
 }
 function RecurringExpensesView({
   items,
+  loading,
   onBack,
   onAdd,
   onEdit,
   onDelete,
 }: {
   items: RecurringExpense[];
+  loading: boolean;
   onBack: () => void;
   onAdd: () => void;
   onEdit: (item: RecurringExpense) => void;
@@ -6973,6 +7038,7 @@ function RecurringExpensesView({
 
   return (
     <div className="view debtor-view">
+      {loading && <SkeletonList rows={3} />}
       <div className="add-title">
         <button onClick={onBack}>‹</button>
         <div>
@@ -7134,6 +7200,7 @@ function PortfolioView({
   totalGain,
   totalGainPercent,
   pendingPurchases,
+  loading,
   onBack,
   onBuy,
   onSell,
@@ -7150,6 +7217,7 @@ function PortfolioView({
   totalGain: number;
   totalGainPercent: number | null;
   pendingPurchases: Entry[];
+  loading: boolean;
   onBack: () => void;
   onBuy: (target: Investment | null) => void;
   onSell: (item: Investment) => void;
@@ -7161,6 +7229,7 @@ function PortfolioView({
 }) {
   return (
     <div className="view debtor-view">
+      {loading && <SkeletonList rows={3} />}
       <div className="add-title">
         <button onClick={onBack}>‹</button>
         <div>
@@ -7699,9 +7768,11 @@ function InvestmentAiSheet({
 }
 
 function ConfirmLogout({ onCancel, onConfirm, closing }: { onCancel: () => void; onConfirm: () => void; closing?: boolean }) {
+  useEscapeToClose(onCancel);
+
   return (
-    <div className={`dialog-backdrop ${closing ? "closing" : ""}`}>
-      <section className={`confirm-dialog ${closing ? "closing" : ""}`}>
+    <div className={`dialog-backdrop ${closing ? "closing" : ""}`} onMouseDown={onCancel}>
+      <section className={`confirm-dialog ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
         <h2>ออกจากระบบ?</h2>
         <p>คุณสามารถกลับมาเข้าสู่ระบบและดูข้อมูลเดิมได้ทุกเมื่อ</p>
         <div>
