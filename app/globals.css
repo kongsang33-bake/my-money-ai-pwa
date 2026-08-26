@@ -730,7 +730,7 @@ a:focus-visible {
 .success-pulse, .report-summary-tiles > div, .auth-card, .recap-card,
 .metric, .confirm-dialog, .skeleton-card, .skeleton-list > span,
 .skeleton-panel, .activity-timeline, .ai-input-wrap, .quick-chip,
-.home-insight-card, .home-focus-card, .first-run-card,
+.home-insight-card, .first-run-card,
 .history-search-panel, .monthly-trend-panel, .income-breakdown-panel,
 .wallet-statement-panel, .wallet-carousel-card {
   background: var(--surface);
@@ -742,10 +742,23 @@ a:focus-visible {
 .wallet-card, .summary-panel, .entry-list, .heatmap-panel, .debtor-detail-card,
 .state-card, .empty-note, .report-preview, .history-insight,
 .debtor-statement, .success-pulse, .auth-card,
-.recap-card, .activity-timeline, .ai-input-wrap, .home-focus-card,
+.recap-card, .activity-timeline, .ai-input-wrap,
 .first-run-card, .history-search-panel, .monthly-trend-panel,
 .income-breakdown-panel, .wallet-statement-panel {
   padding: var(--s-6);
+  margin-bottom: var(--s-4);
+}
+
+/* Home "at a glance" secondary cards (due soon, budget glance, cash flow,
+   spending personality) sit a visual tier below the hero balance and the
+   primary insight/goal cards — flatter and quieter so they read as
+   supporting detail rather than competing headline content. */
+.home-focus-card {
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-xl);
+  box-shadow: var(--sh-1);
+  padding: var(--s-5);
   margin-bottom: var(--s-4);
 }
 
@@ -1407,10 +1420,11 @@ a:focus-visible {
 .quick-add-chip small { color: var(--ink-3); font-size: 11px; margin-top: 2px; }
 
 .goal-card {
-  padding: var(--s-5);
+  padding: var(--s-6);
   border: 1px solid var(--line);
   border-radius: var(--r-xl);
   background: var(--surface);
+  box-shadow: var(--nm-soft);
   margin-bottom: var(--s-4);
 }
 
