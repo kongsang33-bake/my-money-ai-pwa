@@ -3319,7 +3319,7 @@ export default function Home() {
                         onClick={() => applySuggestion(suggestion.text, suggestion.shortcut)}
                       >
                         <i className="card-accent" style={{ background: suggestion.shortcut ? categoryColor(suggestion.shortcut.category) : undefined }} />
-                        <span className="cat-dot" style={{ background: suggestion.shortcut ? categoryTint(suggestion.shortcut.category, 13) : undefined }}>
+                        <span className="cat-dot" style={{ background: suggestion.shortcut ? categoryTint(suggestion.shortcut.category, 13) : undefined, color: suggestion.shortcut ? categoryColor(suggestion.shortcut.category) : undefined }}>
                           {suggestion.shortcut ? <CategoryIcon category={suggestion.shortcut.category} /> : <Lightbulb size={14} strokeWidth={2.25} aria-hidden="true" />}
                         </span>
                         <span>
@@ -4475,7 +4475,7 @@ function DueSoonCard({
         <div className="due-soon-list">
           {items.slice(0, 3).map(({ item, billingDate, daysUntil }) => (
             <div key={item.id}>
-              <i className="cat-dot" style={{ background: item.icon_color ?? nameColor(item.name) }}><WalletAvatarGlyph iconKey={item.icon} fallbackName={item.name} size={14} /></i>
+              <i className="cat-dot" style={{ background: item.icon_color ?? nameColor(item.name), color: "var(--text-on-color)" }}><WalletAvatarGlyph iconKey={item.icon} fallbackName={item.name} size={14} /></i>
               <span>{item.name}</span>
               <small>{daysUntil === 0 ? "วันนี้" : `อีก ${daysUntil} วัน`} · {billingDate.getDate()}/{billingDate.getMonth() + 1}</small>
               <b>{moneySign}{formatMoney(item.amount)}</b>
@@ -4515,7 +4515,7 @@ function BudgetGlanceCard({
           {budgetGlance.items.map((item) => (
             <div key={item.category}>
               <span>
-                <i className="cat-dot" style={{ background: categoryTint(item.category, 13) }}><CategoryIcon category={item.category} /></i>
+                <i className="cat-dot" style={{ background: categoryTint(item.category, 13), color: categoryColor(item.category) }}><CategoryIcon category={item.category} /></i>
                 {item.category}
               </span>
               <b>{moneySign}{formatMoney(item.spent)} / {moneySign}{formatMoney(item.budget)}</b>
@@ -4684,7 +4684,7 @@ function SpendingPersonalityCard({
           <strong>{hasSpend ? topCategory!.category : "ยังไม่มีข้อมูล"}</strong>
         </div>
         {hasSpend && (
-          <i className="cat-dot" style={{ background: categoryTint(topCategory!.category, 13) }}><CategoryIcon category={topCategory!.category} /></i>
+          <i className="cat-dot" style={{ background: categoryTint(topCategory!.category, 13), color: categoryColor(topCategory!.category) }}><CategoryIcon category={topCategory!.category} /></i>
         )}
       </div>
       {hasSpend ? (
@@ -4946,7 +4946,7 @@ function IncomeBreakdown({ items }: { items: { category: string; amount: number 
       <div className="income-breakdown-list">
         {items.map((item) => (
           <div key={item.category}>
-            <span className="cat-dot" style={{ background: categoryTint(item.category, 13) }}><CategoryIcon category={item.category} /></span>
+            <span className="cat-dot" style={{ background: categoryTint(item.category, 13), color: categoryColor(item.category) }}><CategoryIcon category={item.category} /></span>
             <b>{item.category}</b>
             <strong>{moneySign}{formatMoney(item.amount)}</strong>
           </div>
@@ -5014,7 +5014,7 @@ function MonthSummary({
             return (
               <div className="category-bar" key={item.category}>
                 <div>
-                  <span className="cat-dot" style={{ background: categoryTint(item.category, 13) }}><CategoryIcon category={item.category} /></span>
+                  <span className="cat-dot" style={{ background: categoryTint(item.category, 13), color: categoryColor(item.category) }}><CategoryIcon category={item.category} /></span>
                   <b>{item.category}</b>
                   {overBudget && <span className="over-budget-chip">เกินงบ</span>}
                   <small>{hasBudget ? `${moneySign}${formatMoney(item.amount)} / ${moneySign}${formatMoney(budget)}` : `${percent.toFixed(0)}%`}</small>
@@ -5299,7 +5299,7 @@ function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft:
       <button className="draft-remove" onClick={onRemove} aria-label="ลบรายการนี้ออกจากรายการที่ตรวจสอบ">
         <X size={14} strokeWidth={2.5} />
       </button>
-      <span className="cat-icon" style={{ background: categoryTint(draft.category, 13) }}><CategoryIcon category={draft.category} size={18} /></span>
+      <span className="cat-icon" style={{ background: categoryTint(draft.category, 13), color: categoryColor(draft.category) }}><CategoryIcon category={draft.category} size={18} /></span>
       <div>
         <input value={draft.title} onChange={(event) => update({ title: event.target.value })} />
         <div className="select-shell">
@@ -5421,7 +5421,7 @@ const EntryList = memo(function EntryList({
               role={onEdit ? "button" : undefined}
               tabIndex={onEdit ? 0 : undefined}
             >
-              <span className="entry-icon" style={{ background: categoryTint(entry.category, 13) }}><CategoryIcon category={entry.category} size={18} /></span>
+              <span className="entry-icon" style={{ background: categoryTint(entry.category, 13), color: categoryColor(entry.category) }}><CategoryIcon category={entry.category} size={18} /></span>
               <div>
                 <b>{entry.title}</b>
                 <small>
@@ -5456,7 +5456,7 @@ function RecentActivityTimeline({ entries, onEdit }: { entries: Entry[]; onEdit:
       <div className="activity-timeline-list">
         {recent.map((entry) => (
           <button className="activity-timeline-row" key={entry.id} onClick={() => onEdit(entry)}>
-            <i className="cat-dot" style={{ background: categoryTint(entry.category, 13) }}><CategoryIcon category={entry.category} size={14} /></i>
+            <i className="cat-dot" style={{ background: categoryTint(entry.category, 13), color: categoryColor(entry.category) }}><CategoryIcon category={entry.category} size={14} /></i>
             <span className="activity-timeline-info">
               <b>{entry.title}</b>
               <small>{entry.category} · {formatDateTime(entry.occurred_at)}</small>
@@ -5493,7 +5493,7 @@ function QuickAddStrip({
       <div className="quick-add-list">
         {shortcuts.map((shortcut) => (
           <button className="quick-add-chip" key={`${shortcut.title}|${shortcut.category}`} onClick={() => onSelect(shortcut)}>
-            <span className="cat-dot" style={{ background: categoryTint(shortcut.category, 13) }}>
+            <span className="cat-dot" style={{ background: categoryTint(shortcut.category, 13), color: categoryColor(shortcut.category) }}>
               <CategoryIcon category={shortcut.category} size={15} />
             </span>
             <span>
@@ -6307,7 +6307,7 @@ function RecapSheet({
         </div>
         {topCategory && (
           <div className="recap-top-category">
-            <span className="cat-dot" style={{ background: categoryTint(topCategory.category, 20) }}><CategoryIcon category={topCategory.category} /></span>
+            <span className="cat-dot" style={{ background: categoryTint(topCategory.category, 20), color: categoryColor(topCategory.category) }}><CategoryIcon category={topCategory.category} /></span>
             <div>
               <small>ใช้จ่ายเยอะสุด</small>
               <b>{topCategory.category} · {moneySign}{formatMoney(topCategory.amount)}</b>
@@ -6364,7 +6364,7 @@ function BudgetSheet({
         <p className="budget-hint">ตั้งวงเงินต่อหมวดหมู่ เว้นว่างไว้ถ้าไม่ต้องการจำกัด บันทึกเฉพาะในเครื่องนี้เท่านั้น</p>
         {expenseCategories.map((category) => (
           <label key={category} className="budget-row">
-            <span className="cat-dot" style={{ background: categoryTint(category, 13) }}><CategoryIcon category={category} /></span>
+            <span className="cat-dot" style={{ background: categoryTint(category, 13), color: categoryColor(category) }}><CategoryIcon category={category} /></span>
             {category}
             <input
               inputMode="decimal"

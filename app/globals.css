@@ -590,10 +590,28 @@ a:focus-visible {
 }
 
 .bottom-nav .nav-icon {
+  position: relative;
   width: 24px;
   height: 24px;
   display: grid;
   place-items: center;
+}
+
+.bottom-nav .nav-icon::before {
+  content: "";
+  position: absolute;
+  inset: -6px -15px;
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  opacity: 0;
+  transform: scale(0.75);
+  transition: opacity var(--t-2) var(--e-out), transform var(--t-2) var(--e-out);
+  z-index: -1;
+}
+
+.bottom-nav button.active .nav-icon::before {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .bottom-nav .nav-icon svg {
@@ -1347,6 +1365,10 @@ a:focus-visible {
   line-height: 0;
 }
 
+/* Category icons carry the category's own color inline (see categoryColor()
+   call sites in page.tsx) — the --ink above is only the pre-colorize
+   fallback for the rare case a caller doesn't pass one. */
+
 .entry-icon {
   width: 34px;
   height: 34px;
@@ -1973,7 +1995,7 @@ a:focus-visible {
 
 .category-bar i {
   display: block;
-  height: 6px;
+  height: 10px;
   border-radius: var(--r-full);
   background: var(--surface-3);
   overflow: hidden;
@@ -1998,6 +2020,7 @@ a:focus-visible {
 
 .cat-dot-neutral {
   background: color-mix(in srgb, var(--ink-3) 16%, transparent);
+  color: var(--ink-2);
 }
 
 .heatmap-panel .section-title {
