@@ -3227,17 +3227,17 @@ a:focus-visible {
   align-items: center;
   gap: var(--s-3);
   margin: var(--s-2) 0;
-  animation: card-in var(--t-3) var(--e-out) backwards;
+  animation: card-in var(--t-4) var(--e-out) backwards;
 }
 
-.budget-row:nth-child(1) { animation-delay: 0ms; }
-.budget-row:nth-child(2) { animation-delay: 30ms; }
-.budget-row:nth-child(3) { animation-delay: 60ms; }
-.budget-row:nth-child(4) { animation-delay: 90ms; }
-.budget-row:nth-child(5) { animation-delay: 120ms; }
-.budget-row:nth-child(6) { animation-delay: 150ms; }
-.budget-row:nth-child(7) { animation-delay: 180ms; }
-.budget-row:nth-child(8) { animation-delay: 210ms; }
+.budget-row:nth-child(1) { animation-delay: 150ms; }
+.budget-row:nth-child(2) { animation-delay: 195ms; }
+.budget-row:nth-child(3) { animation-delay: 240ms; }
+.budget-row:nth-child(4) { animation-delay: 285ms; }
+.budget-row:nth-child(5) { animation-delay: 330ms; }
+.budget-row:nth-child(6) { animation-delay: 375ms; }
+.budget-row:nth-child(7) { animation-delay: 420ms; }
+.budget-row:nth-child(8) { animation-delay: 465ms; }
 
 .budget-row input {
   width: 110px;
@@ -3256,13 +3256,13 @@ a:focus-visible {
   padding: var(--s-3);
   display: grid;
   gap: 4px;
-  animation: card-in var(--t-3) var(--e-out) backwards;
+  animation: card-in var(--t-4) var(--e-out) backwards;
 }
 
-.report-summary-tiles > div:nth-child(1) { animation-delay: 0ms; }
-.report-summary-tiles > div:nth-child(2) { animation-delay: 40ms; }
-.report-summary-tiles > div:nth-child(3) { animation-delay: 80ms; }
-.report-summary-tiles > div:nth-child(4) { animation-delay: 120ms; }
+.report-summary-tiles > div:nth-child(1) { animation-delay: 150ms; }
+.report-summary-tiles > div:nth-child(2) { animation-delay: 210ms; }
+.report-summary-tiles > div:nth-child(3) { animation-delay: 270ms; }
+.report-summary-tiles > div:nth-child(4) { animation-delay: 330ms; }
 
 .report-summary-tiles span {
   font-size: var(--fs-micro);
@@ -3453,15 +3453,15 @@ a:focus-visible {
   border: 1px solid var(--line-soft);
   text-align: left;
   transition: transform var(--t-press) var(--e-out), background var(--t-2) var(--e-out);
-  animation: card-in var(--t-3) var(--e-out) backwards;
+  animation: card-in var(--t-4) var(--e-out) backwards;
 }
 
-.more-grid button:nth-child(1) { animation-delay: 0ms; }
-.more-grid button:nth-child(2) { animation-delay: 40ms; }
-.more-grid button:nth-child(3) { animation-delay: 80ms; }
-.more-grid button:nth-child(4) { animation-delay: 120ms; }
-.more-grid button:nth-child(5) { animation-delay: 160ms; }
-.more-grid button:nth-child(6) { animation-delay: 200ms; }
+.more-grid button:nth-child(1) { animation-delay: 150ms; }
+.more-grid button:nth-child(2) { animation-delay: 210ms; }
+.more-grid button:nth-child(3) { animation-delay: 270ms; }
+.more-grid button:nth-child(4) { animation-delay: 330ms; }
+.more-grid button:nth-child(5) { animation-delay: 390ms; }
+.more-grid button:nth-child(6) { animation-delay: 450ms; }
 
 .more-grid button:hover {
   background: var(--surface-3);
