@@ -3508,7 +3508,7 @@ a:focus-visible {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: max(var(--s-4), env(safe-area-inset-bottom));
+  top: calc(100px + env(safe-area-inset-top));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -4214,13 +4214,13 @@ a:focus-visible {
 }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  from { opacity: 0; transform: translateY(-10px) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes toast-out {
   from { opacity: 1; transform: translateY(0) scale(1); }
-  to { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 0; transform: translateY(-10px) scale(0.97); }
 }
 
 @keyframes fade-out {
