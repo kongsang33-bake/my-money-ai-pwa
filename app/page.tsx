@@ -4052,21 +4052,21 @@ function PinSecuritySheet({
 
         {pinEnabled && (
           <label>
-            PIN ปัจจุบัน
-            <input inputMode="numeric" type="password" maxLength={pinLength} value={currentPin} onChange={(event) => setCurrentPin(clean(event.target.value))} />
-          </label>
+        <input placeholder=" " inputMode="numeric" type="password" maxLength={pinLength} value={currentPin} onChange={(event) => setCurrentPin(clean(event.target.value))} />
+        <span>PIN ปัจจุบัน</span>
+      </label>
         )}
 
         {mode === "change" && (
           <>
             <label>
-              PIN ใหม่
-              <input inputMode="numeric" type="password" maxLength={pinLength} value={nextPin} onChange={(event) => setNextPin(clean(event.target.value))} />
-            </label>
+        <input placeholder=" " inputMode="numeric" type="password" maxLength={pinLength} value={nextPin} onChange={(event) => setNextPin(clean(event.target.value))} />
+        <span>PIN ใหม่</span>
+      </label>
             <label>
-              ยืนยัน PIN ใหม่
-              <input inputMode="numeric" type="password" maxLength={pinLength} value={confirmPin} onChange={(event) => setConfirmPin(clean(event.target.value))} />
-            </label>
+        <input placeholder=" " inputMode="numeric" type="password" maxLength={pinLength} value={confirmPin} onChange={(event) => setConfirmPin(clean(event.target.value))} />
+        <span>ยืนยัน PIN ใหม่</span>
+      </label>
             {(mismatch || error) && <p className="pin-error">{mismatch ? "PIN ใหม่สองรอบไม่ตรงกัน" : error}</p>}
             <button className="save" onClick={() => (pinEnabled ? onChange(currentPin, nextPin) : onEnable(nextPin))} disabled={busy || !canSaveChange}>
               {busy ? "กำลังบันทึก" : pinEnabled ? "บันทึก PIN ใหม่" : "เปิดใช้ PIN"}
@@ -4607,9 +4607,18 @@ function GoalEditSheet({ onClose, onCreate, closing }: { onClose: () => void; on
   return (
     <SheetFrame onClose={onClose} closing={closing}>
       <div className="sheet-head"><div><p className="eyebrow">เป้าหมายการเงิน</p><h2>สร้างเป้าหมายใหม่</h2></div><button onClick={onClose}>×</button></div>
-      <label>ชื่อเป้าหมาย<input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น เงินฉุกเฉิน" /></label>
-      <label>ยอดเป้าหมาย<input inputMode="decimal" value={targetText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setTargetText(event.target.value); }} placeholder="50000" /></label>
-      <label>มีเงินเก็บแล้ว<input inputMode="decimal" value={savedText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setSavedText(event.target.value); }} placeholder="0" /></label>
+      <label>
+        <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น เงินฉุกเฉิน" />
+        <span>ชื่อเป้าหมาย</span>
+      </label>
+      <label>
+        <input inputMode="decimal" value={targetText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setTargetText(event.target.value); }} placeholder="50000" />
+        <span>ยอดเป้าหมาย</span>
+      </label>
+      <label>
+        <input inputMode="decimal" value={savedText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setSavedText(event.target.value); }} placeholder="0" />
+        <span>มีเงินเก็บแล้ว</span>
+      </label>
       <label>วันที่อยากบรรลุ (ถ้ามี)<input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} /></label>
       <button className="save" onClick={submit} disabled={!name.trim() || toMoneyAmount(targetText) <= 0}>สร้างเป้าหมาย</button>
     </SheetFrame>
@@ -4870,13 +4879,13 @@ function HistoryFilterBar({
             </div>
           </label>
           <label>
-            ยอดต่ำสุด
-            <input inputMode="decimal" value={filters.minAmount} onChange={(event) => update({ minAmount: event.target.value })} placeholder="0" />
-          </label>
+        <input inputMode="decimal" value={filters.minAmount} onChange={(event) => update({ minAmount: event.target.value })} placeholder="0" />
+        <span>ยอดต่ำสุด</span>
+      </label>
           <label>
-            ยอดสูงสุด
-            <input inputMode="decimal" value={filters.maxAmount} onChange={(event) => update({ maxAmount: event.target.value })} placeholder="ไม่จำกัด" />
-          </label>
+        <input inputMode="decimal" value={filters.maxAmount} onChange={(event) => update({ maxAmount: event.target.value })} placeholder="ไม่จำกัด" />
+        <span>ยอดสูงสุด</span>
+      </label>
         </div>
       )}
     </section>
@@ -5589,8 +5598,7 @@ function ManualEntryForm({
         <AmountInput value={draft.amount} onChange={(amount) => update({ amount })} autoFocus />
       </label>
       <label>
-        ชื่อรายการ{isTransfer && <small> (เว้นว่างได้ จะตั้งชื่อให้อัตโนมัติ)</small>}
-        <input
+        <input placeholder=" "
           value={draft.title}
           onChange={(event) => update({ title: event.target.value })}
           onBlur={() => {
@@ -5598,6 +5606,7 @@ function ManualEntryForm({
             if (remembered) update({ category: remembered });
           }}
         />
+        <span>ชื่อรายการ{isTransfer && <small> (เว้นว่างได้ จะตั้งชื่อให้อัตโนมัติ)</small>}</span>
       </label>
       {!isTransfer && (
         <label>
@@ -5607,9 +5616,9 @@ function ManualEntryForm({
       )}
       {(["lend", "split_half", "debt_repayment", "debt_payment", "card_charge"] as TransactionType[]).includes(draft.transaction_type) && (
         <label>
-          {draft.transaction_type === "card_charge" ? "ชื่อบัตร" : "ชื่อผู้เกี่ยวข้อง"}
-          <input type="text" placeholder={draft.transaction_type === "card_charge" ? "เช่น กรุงศรีเฟิร์สช้อย" : "เช่น เพื่อนเอ"} value={draft.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
-        </label>
+        <input type="text" placeholder={draft.transaction_type === "card_charge" ? "เช่น กรุงศรีเฟิร์สช้อย" : "เช่น เพื่อนเอ"} value={draft.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
+        <span>{draft.transaction_type === "card_charge" ? "ชื่อบัตร" : "ชื่อผู้เกี่ยวข้อง"}</span>
+      </label>
       )}
       <label>
         วันที่
@@ -5643,8 +5652,8 @@ function ManualEntryForm({
         </label>
       )}
       <label>
-        หมายเหตุ
         <textarea value={draft.note ?? ""} onChange={(event) => update({ note: event.target.value })} placeholder="รายละเอียดเพิ่มเติมของรายการนี้" />
+        <span>หมายเหตุ</span>
       </label>
 
       {isTransfer ? (
@@ -5716,8 +5725,8 @@ function EditSheet({
       {convertingToTransfer && <p className="pin-hint">เลือกกระเป๋าปลายทางก่อนบันทึกเป็นรายการโอน</p>}
 
       <label>
-        ชื่อรายการ
-        <input value={entry.title} onChange={(event) => update({ title: event.target.value })} />
+        <input placeholder=" " value={entry.title} onChange={(event) => update({ title: event.target.value })} />
+        <span>ชื่อรายการ</span>
       </label>
       {!isTransfer && (
         <label>
@@ -5751,9 +5760,9 @@ function EditSheet({
       </label>
       {(["lend", "split_half", "debt_repayment", "debt_payment", "card_charge"] as TransactionType[]).includes(entry.transaction_type) && (
         <label>
-          {entry.transaction_type === "card_charge" ? "ชื่อบัตร" : "ชื่อผู้เกี่ยวข้อง"}
-          <input type="text" placeholder={entry.transaction_type === "card_charge" ? "เช่น กรุงศรีเฟิร์สช้อย" : "เช่น เพื่อนเอ"} value={entry.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
-        </label>
+        <input type="text" placeholder={entry.transaction_type === "card_charge" ? "เช่น กรุงศรีเฟิร์สช้อย" : "เช่น เพื่อนเอ"} value={entry.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
+        <span>{entry.transaction_type === "card_charge" ? "ชื่อบัตร" : "ชื่อผู้เกี่ยวข้อง"}</span>
+      </label>
       )}
       <label>
         วันที่
@@ -5787,8 +5796,8 @@ function EditSheet({
         </label>
       )}
       <label>
-        หมายเหตุ
         <textarea value={entry.note ?? ""} onChange={(event) => update({ note: event.target.value })} placeholder="รายละเอียดเพิ่มเติมของรายการนี้" />
+        <span>หมายเหตุ</span>
       </label>
 
       {convertingToTransfer ? (
@@ -6190,40 +6199,40 @@ function DebtorEditSheet({
       </div>
       <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
       <label>
-        ชื่อ
         <input autoFocus={!debtor} value={name} onChange={(event) => setName(event.target.value)} placeholder={kind === "own" ? "เช่น ผ่อนบ้าน ผ่อนรถ" : "เช่น เพื่อนเอ"} />
+        <span>ชื่อ</span>
       </label>
       <label>
-        หมายเหตุ
         <input value={note} onChange={(event) => setNote(event.target.value)} placeholder={kind === "own" ? "เช่น ธนาคาร หรือรายละเอียดหนี้" : "เช่น เพื่อนร่วมงาน"} />
+        <span>หมายเหตุ</span>
       </label>
       <label>
-        {kind === "own" ? "ยอดหนี้คงเหลือ" : "ยอดเริ่มต้น"}
-        <input inputMode="decimal" value={openingBalanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setOpeningBalanceText(event.target.value); }} />
+        <input placeholder=" " inputMode="decimal" value={openingBalanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setOpeningBalanceText(event.target.value); }} />
+        <span>{kind === "own" ? "ยอดหนี้คงเหลือ" : "ยอดเริ่มต้น"}</span>
       </label>
       {kind === "own" && (
         <>
           <label>
-            วงเงิน (กรอกถ้าเป็นบัตรเครดิต)
-            <input inputMode="decimal" value={creditLimitText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setCreditLimitText(event.target.value); }} placeholder="เช่น 50000" />
-          </label>
+        <input inputMode="decimal" value={creditLimitText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setCreditLimitText(event.target.value); }} placeholder="เช่น 50000" />
+        <span>วงเงิน (กรอกถ้าเป็นบัตรเครดิต)</span>
+      </label>
           {isCreditCard ? (
             <label>
-              ยอดขั้นต่ำที่ต้องจ่าย (%)
-              <input inputMode="decimal" value={minPaymentPercentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMinPaymentPercentText(event.target.value); }} placeholder="เช่น 10" />
-              <small className="cycle-note">ยอดขั้นต่ำบัตรเครดิตแปรผันตามยอดคงเหลือทุกเดือน ใส่เป็น % ที่ธนาคารกำหนดแทนยอดคงที่</small>
-            </label>
+        <input inputMode="decimal" value={minPaymentPercentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMinPaymentPercentText(event.target.value); }} placeholder="เช่น 10" />
+        <span>ยอดขั้นต่ำที่ต้องจ่าย (%)</span>
+        <small className="cycle-note">ยอดขั้นต่ำบัตรเครดิตแปรผันตามยอดคงเหลือทุกเดือน ใส่เป็น % ที่ธนาคารกำหนดแทนยอดคงที่</small>
+      </label>
           ) : (
             <>
               <label>
-                ผ่อนต่อเดือน
-                <input inputMode="decimal" value={monthlyInstallmentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMonthlyInstallmentText(event.target.value); }} placeholder="เช่น 15000" />
-              </label>
+        <input inputMode="decimal" value={monthlyInstallmentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMonthlyInstallmentText(event.target.value); }} placeholder="เช่น 15000" />
+        <span>ผ่อนต่อเดือน</span>
+      </label>
               {hasInstallment && (
                 <label>
-                  ทั้งหมด (งวด)
-                  <input inputMode="numeric" value={totalInstallmentsText} onChange={(event) => { if (event.target.value === "" || /^\d*$/.test(event.target.value)) setTotalInstallmentsText(event.target.value); }} placeholder="เช่น 24" />
-                </label>
+        <input inputMode="numeric" value={totalInstallmentsText} onChange={(event) => { if (event.target.value === "" || /^\d*$/.test(event.target.value)) setTotalInstallmentsText(event.target.value); }} placeholder="เช่น 24" />
+        <span>ทั้งหมด (งวด)</span>
+      </label>
               )}
             </>
           )}
@@ -6583,9 +6592,9 @@ function ReportExportSheet({
           </label>
         ) : (
           <label>
-            เลือกปี
-            <input type="number" min={2000} max={2100} value={year} onChange={(event) => setYear(Number(event.target.value))} />
-          </label>
+        <input placeholder=" " type="number" min={2000} max={2100} value={year} onChange={(event) => setYear(Number(event.target.value))} />
+        <span>เลือกปี</span>
+      </label>
         )}
 
         <ReportSummaryTiles income={income} outflow={outflow} balance={balance} count={reportEntries.length} />
@@ -6863,8 +6872,8 @@ function ProfileEditSheet({
         </div>
       </section>
       <label>
-        ชื่อเล่น
         <input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="เช่น ก้อง" />
+        <span>ชื่อเล่น</span>
       </label>
       <label>
         เปลี่ยนรูปโปรไฟล์
@@ -6873,8 +6882,8 @@ function ProfileEditSheet({
       </label>
       {!!app_icon_image && <button className="side-ghost" onClick={() => setAppIconImage("")}>ลบรูปไอคอน</button>}
       <label>
-        วันเริ่มรอบเดือน
-        <input type="number" min={1} max={28} value={month_start_day} onChange={(event) => setMonthStartDay(clampInteger(event.target.value, 1, 28, 1))} />
+        <input placeholder=" " type="number" min={1} max={28} value={month_start_day} onChange={(event) => setMonthStartDay(clampInteger(event.target.value, 1, 28, 1))} />
+        <span>วันเริ่มรอบเดือน</span>
       </label>
       <label>
         มูลค่าสุทธิ นับหนี้แบบไหน
@@ -7068,8 +7077,8 @@ function WalletEditSheet({
       </div>
       <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
       <label>
-        ชื่อกระเป๋า
         <input autoFocus={!wallet} value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น กระเป๋าหลัก, ออมทรัพย์ SCB" />
+        <span>ชื่อกระเป๋า</span>
       </label>
       <label>
         ประเภท
@@ -7084,8 +7093,8 @@ function WalletEditSheet({
         <small className="cycle-note">{walletTagHints[tag]}</small>
       </label>
       <label>
-        ยอดเงิน
-        <input inputMode="decimal" value={balanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setBalanceText(event.target.value); }} />
+        <input placeholder=" " inputMode="decimal" value={balanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setBalanceText(event.target.value); }} />
+        <span>ยอดเงิน</span>
       </label>
       <label className="sheet-check-row">
         <input type="checkbox" checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} />
@@ -7229,12 +7238,12 @@ function RecurringExpenseEditSheet({
       </div>
       <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} iconOptions={recurringIconOptions} renderGlyph={RecurringAvatarGlyph} />
       <label>
-        ชื่อรายการ
         <input autoFocus={!item} value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น Netflix, Claude Pro, YouTube Premium" />
+        <span>ชื่อรายการ</span>
       </label>
       <label>
-        ยอดต่อเดือน
-        <input inputMode="decimal" value={amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setAmountText(event.target.value); }} />
+        <input placeholder=" " inputMode="decimal" value={amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setAmountText(event.target.value); }} />
+        <span>ยอดต่อเดือน</span>
       </label>
       <label>
         ตัดเงินทุกวันที่
@@ -7486,22 +7495,22 @@ function InvestmentBuySheet({
         <>
           <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
           <label>
-            ชื่อกองทุน/สินทรัพย์
-            <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น K-WSPEEDUP, หุ้น PTT" />
-          </label>
+        <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น K-WSPEEDUP, หุ้น PTT" />
+        <span>ชื่อกองทุน/สินทรัพย์</span>
+      </label>
           <label>
-            รหัส/สัญลักษณ์ (ถ้ามี)
-            <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="เช่น K-WSPEEDUP" />
-          </label>
+        <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="เช่น K-WSPEEDUP" />
+        <span>รหัส/สัญลักษณ์ (ถ้ามี)</span>
+      </label>
         </>
       )}
       <label>
-        จำนวนหน่วยที่ซื้อ (เว้นว่างได้ถ้ายังไม่รู้)
         <input inputMode="decimal" value={unitsText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setUnitsText(event.target.value); }} placeholder="เช่น 92.6397" />
+        <span>จำนวนหน่วยที่ซื้อ (เว้นว่างได้ถ้ายังไม่รู้)</span>
       </label>
       <label>
-        จำนวนเงินที่จ่ายไป
         <input inputMode="decimal" value={amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setAmountText(event.target.value); }} placeholder="เช่น 1000" />
+        <span>จำนวนเงินที่จ่ายไป</span>
       </label>
       {pricePerUnit != null
         ? <small className="cycle-note">ราคาต่อหน่วย {pricePerUnit.toFixed(4)}</small>
@@ -7565,8 +7574,8 @@ function InvestmentSellSheet({
       </div>
       <small className="cycle-note">ถืออยู่ {item.units.toLocaleString("th-TH", { maximumFractionDigits: 4 })} หน่วย</small>
       <label>
-        จำนวนหน่วยที่ขาย
         <input autoFocus inputMode="decimal" value={unitsText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setUnitsText(event.target.value); }} placeholder="เช่น 20" />
+        <span>จำนวนหน่วยที่ขาย</span>
       </label>
       <button type="button" className="text-button" onClick={() => setUnitsText(String(item.units))}>ขายทั้งหมด</button>
       {unitsText && !valid && <StateCard tone="error" title="จำนวนไม่ถูกต้อง" detail={`ขายได้สูงสุด ${item.units.toLocaleString("th-TH", { maximumFractionDigits: 4 })} หน่วย`} />}
@@ -7613,8 +7622,8 @@ function InvestmentPriceSheet({
         <button onClick={onClose}>x</button>
       </div>
       <label>
-        ราคาต่อหน่วย (NAV)
         <input autoFocus inputMode="decimal" value={navText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setNavText(event.target.value); }} placeholder="เช่น 10.3400" />
+        <span>ราคาต่อหน่วย (NAV)</span>
       </label>
       <label>
         ราคา ณ วันที่
@@ -7701,8 +7710,8 @@ function InvestmentConfirmUnitsSheet({
         ? <p className="pin-hint">{extractNote.text}</p>
         : <StateCard tone="error" title="ลองตรวจสอบอีกครั้ง" detail={extractNote.text} />)}
       <label>
-        จำนวนหน่วยที่ได้จริง
         <input autoFocus inputMode="decimal" value={unitsText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setUnitsText(event.target.value); }} placeholder="เช่น 92.6397" />
+        <span>จำนวนหน่วยที่ได้จริง</span>
       </label>
       {pricePerUnit != null && <small className="cycle-note">ราคาต่อหน่วย {pricePerUnit.toFixed(4)}</small>}
       {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
@@ -7805,9 +7814,9 @@ function InvestmentAiSheet({
       {!drafts.length && (
         <>
           <label>
-            พิมพ์รายการลงทุน
-            <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="เช่น DCA K-WSPEEDUP 1000 บาท จากกระเป๋าหลัก" />
-          </label>
+        <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="เช่น DCA K-WSPEEDUP 1000 บาท จากกระเป๋าหลัก" />
+        <span>พิมพ์รายการลงทุน</span>
+      </label>
           {analyzeError && <StateCard tone="error" title="AI ยังวิเคราะห์ไม่ได้" detail={analyzeError} />}
           <button className="save" onClick={runAnalyze} disabled={analyzing || !text.trim()}>
             {analyzing ? "กำลังวิเคราะห์..." : "ให้ AI แยกรายการ"}
@@ -7833,14 +7842,14 @@ function InvestmentAiSheet({
               </label>
               {!draft.investmentId && (
                 <label>
-                  ชื่อกองทุน/สินทรัพย์ใหม่
-                  <input value={draft.investment_name} onChange={(event) => updateDraft(index, { investment_name: event.target.value })} placeholder="เช่น K-WSPEEDUP" />
-                </label>
+        <input value={draft.investment_name} onChange={(event) => updateDraft(index, { investment_name: event.target.value })} placeholder="เช่น K-WSPEEDUP" />
+        <span>ชื่อกองทุน/สินทรัพย์ใหม่</span>
+      </label>
               )}
               <label>
-                จำนวนเงิน
-                <input inputMode="decimal" value={draft.amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) updateDraft(index, { amountText: event.target.value }); }} />
-              </label>
+        <input placeholder=" " inputMode="decimal" value={draft.amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) updateDraft(index, { amountText: event.target.value }); }} />
+        <span>จำนวนเงิน</span>
+      </label>
               <label>
                 กระเป๋าต้นทาง
                 <div className="select-shell">

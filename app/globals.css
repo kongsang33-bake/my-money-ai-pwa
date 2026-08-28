@@ -2996,8 +2996,14 @@ a:focus-visible {
 }
 
 .edit-sheet label, .manual-entry-form label {
+  position: relative;
   display: block;
-  margin: var(--s-3) 0;
+  margin: var(--s-4) 0;
+}
+
+/* select-wrapped labels (no floating caption — see .edit-sheet label span
+   below) keep the old static caption-above treatment. */
+.edit-sheet label:has(select), .manual-entry-form label:has(select) {
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
   color: var(--ink-3);
@@ -3020,6 +3026,68 @@ a:focus-visible {
 .manual-entry-form label input:focus, .manual-entry-form label select:focus, .manual-entry-form label textarea:focus {
   border-color: var(--accent);
   background: var(--surface);
+}
+
+/* Floating-label caption: a <span> sibling placed after the field inside
+   the same <label> (input/textarea before span, required for the ~
+   sibling selector below — implicit label association doesn't care
+   about child order, so this doesn't affect accessibility). Sits
+   centered inside the field at rest; floats to a small caption above
+   the border on focus or once the field has a value. */
+.edit-sheet label:not(:has(select)) > input,
+.edit-sheet label:not(:has(select)) > textarea,
+.manual-entry-form label:not(:has(select)) > input,
+.manual-entry-form label:not(:has(select)) > textarea {
+  margin-top: 0;
+}
+
+.edit-sheet label span, .manual-entry-form label span {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: calc(100% - 28px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-3);
+  background: var(--surface-3);
+  padding: 0 4px;
+  pointer-events: none;
+  transition: top var(--t-2) var(--e-out), font-size var(--t-2) var(--e-out), color var(--t-2) var(--e-out), background var(--t-2) var(--e-out);
+}
+
+.edit-sheet label input:focus ~ span,
+.edit-sheet label input:not(:placeholder-shown) ~ span,
+.edit-sheet label textarea:focus ~ span,
+.edit-sheet label textarea:not(:placeholder-shown) ~ span,
+.manual-entry-form label input:focus ~ span,
+.manual-entry-form label input:not(:placeholder-shown) ~ span,
+.manual-entry-form label textarea:focus ~ span,
+.manual-entry-form label textarea:not(:placeholder-shown) ~ span {
+  top: 0;
+  font-size: var(--fs-micro);
+  background: var(--surface);
+}
+
+.edit-sheet label input:focus ~ span,
+.edit-sheet label textarea:focus ~ span,
+.manual-entry-form label input:focus ~ span,
+.manual-entry-form label textarea:focus ~ span {
+  color: var(--accent);
+}
+
+.edit-sheet label input::placeholder, .edit-sheet label textarea::placeholder,
+.manual-entry-form label input::placeholder, .manual-entry-form label textarea::placeholder {
+  opacity: 0;
+  transition: opacity var(--t-2) var(--e-out);
+}
+
+.edit-sheet label input:focus::placeholder, .edit-sheet label textarea:focus::placeholder,
+.manual-entry-form label input:focus::placeholder, .manual-entry-form label textarea:focus::placeholder {
+  opacity: 1;
 }
 
 .amount-input {
