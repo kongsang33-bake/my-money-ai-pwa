@@ -2999,11 +2999,6 @@ a:focus-visible {
   position: relative;
   display: block;
   margin: var(--s-4) 0;
-}
-
-/* select-wrapped labels (no floating caption — see .edit-sheet label span
-   below) keep the old static caption-above treatment. */
-.edit-sheet label:has(select), .manual-entry-form label:has(select) {
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
   color: var(--ink-3);
@@ -3034,14 +3029,14 @@ a:focus-visible {
    about child order, so this doesn't affect accessibility). Sits
    centered inside the field at rest; floats to a small caption above
    the border on focus or once the field has a value. */
-.edit-sheet label:not(:has(select)) > input,
-.edit-sheet label:not(:has(select)) > textarea,
-.manual-entry-form label:not(:has(select)) > input,
-.manual-entry-form label:not(:has(select)) > textarea {
+.edit-sheet label:has(> span) > input,
+.edit-sheet label:has(> span) > textarea,
+.manual-entry-form label:has(> span) > input,
+.manual-entry-form label:has(> span) > textarea {
   margin-top: 0;
 }
 
-.edit-sheet label span, .manual-entry-form label span {
+.edit-sheet label > span, .manual-entry-form label > span {
   position: absolute;
   left: 14px;
   top: 50%;
