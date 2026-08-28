@@ -4382,74 +4382,36 @@ function HomeInsightGrid({
   const savingsPositive = savingsRate >= 0;
   const dsrPercent = monthlyIncome > 0 ? Math.round((monthlyObligationTotal / monthlyIncome) * 100) : null;
   const netWorthTone = netWorthDelta > 0 ? "income" : netWorthDelta < 0 ? "expense" : "";
-  const trackRef = useRef<HTMLDivElement>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const cardCount = hideNetWorthCard ? 2 : 3;
-  const scrollFrameRef = useRef<number | null>(null);
-
-  const handleScroll = () => {
-    if (scrollFrameRef.current !== null) return;
-    scrollFrameRef.current = window.requestAnimationFrame(() => {
-      scrollFrameRef.current = null;
-      const track = trackRef.current;
-      if (!track || !track.clientWidth) return;
-      const index = Math.round(track.scrollLeft / track.clientWidth);
-      setActiveIndex(Math.max(0, Math.min(cardCount - 1, index)));
-    });
-  };
-
-  useEffect(() => () => {
-    if (scrollFrameRef.current !== null) window.cancelAnimationFrame(scrollFrameRef.current);
-  }, []);
-
-  const scrollToIndex = (index: number) => {
-    const track = trackRef.current;
-    if (!track) return;
-    const reduceMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    track.scrollTo({ left: index * track.clientWidth, behavior: reduceMotion ? "auto" : "smooth" });
-  };
 
   return (
-    <section className="home-insight-wrap">
-      <div className="home-insight-grid" ref={trackRef} onScroll={handleScroll} aria-label="ภาพรวมทรัพย์สิน">
-        <div className={`home-insight-card ${savingsPositive ? "income" : "expense"}`}>
-          <span>
-            <i className={`home-insight-icon ${savingsPositive ? "income" : "expense"}`}>
-              {savingsPositive ? <TrendingUp size={13} strokeWidth={2.25} aria-hidden="true" /> : <TrendingDown size={13} strokeWidth={2.25} aria-hidden="true" />}
-            </i>
-            อัตราเงินเหลือ
-          </span>
-          <strong>{Number.isFinite(savingsRate) ? `${Math.round(savingsRate)}%` : "0%"}</strong>
-          <small>เทียบกับรายรับในรอบนี้</small>
-        </div>
-        <div className="home-insight-card obligation">
-          <span><i className="home-insight-icon neutral"><Users size={13} strokeWidth={2.25} aria-hidden="true" /></i>ภาระหนี้เดือนนี้</span>
-          <strong>{moneySign}{formatMoney(monthlyObligationTotal)}</strong>
+    <section className={`home-insight-wrap ${hideNetWorthCard ? "two-up" : ""}`} aria-label="ภาพรวมทรัพย์สิน">
+      <div className={`home-insight-card savings-rate ${savingsPositive ? "income" : "expense"}`}>
+        <span>
+          <i className={`home-insight-icon ${savingsPositive ? "income" : "expense"}`}>
+            {savingsPositive ? <TrendingUp size={13} strokeWidth={2.25} aria-hidden="true" /> : <TrendingDown size={13} strokeWidth={2.25} aria-hidden="true" />}
+          </i>
+          อัตราเงินเหลือ
+        </span>
+        <strong>{Number.isFinite(savingsRate) ? `${Math.round(savingsRate)}%` : "0%"}</strong>
+        <small>เทียบกับรายรับในรอบนี้</small>
+      </div>
+      <div className="home-insight-card obligation">
+        <span><i className="home-insight-icon neutral"><Users size={13} strokeWidth={2.25} aria-hidden="true" /></i>ภาระหนี้เดือนนี้</span>
+        <strong>{moneySign}{formatMoney(monthlyObligationTotal)}</strong>
+        <small>
+          จากหนี้คงเหลือรวม {moneySign}{formatMoney(payableTotal)}
+          {dsrPercent != null ? ` · ${dsrPercent}% ของรายรับ` : ""}
+        </small>
+      </div>
+      {!hideNetWorthCard && (
+        <div className={`home-insight-card net-worth ${netWorthTone}`}>
+          <span><i className="home-insight-icon neutral"><Wallet size={13} strokeWidth={2.25} aria-hidden="true" /></i>มูลค่าสุทธิ</span>
+          <strong>{formatSignedMoney(netWorthDelta)}</strong>
           <small>
-            จากหนี้คงเหลือรวม {moneySign}{formatMoney(payableTotal)}
-            {dsrPercent != null ? ` · ${dsrPercent}% ของรายรับ` : ""}
+            ปัจจุบัน {formatSignedMoney(netWorth)} · {netWorthFormula === "obligation" ? "หักเฉพาะภาระเดือนนี้" : "หักหนี้เต็มจำนวน"}
           </small>
         </div>
-        {!hideNetWorthCard && (
-          <div className={`home-insight-card net-worth ${netWorthTone}`}>
-            <span><i className="home-insight-icon neutral"><Wallet size={13} strokeWidth={2.25} aria-hidden="true" /></i>มูลค่าสุทธิ</span>
-            <strong>{formatSignedMoney(netWorthDelta)}</strong>
-            <small>
-              ปัจจุบัน {formatSignedMoney(netWorth)} · {netWorthFormula === "obligation" ? "หักเฉพาะภาระเดือนนี้" : "หักหนี้เต็มจำนวน"}
-            </small>
-          </div>
-        )}
-      </div>
-      <div className="home-insight-dots" aria-hidden="true">
-        {Array.from({ length: cardCount }, (_, index) => (
-          <button
-            key={index}
-            className={index === activeIndex ? "active" : ""}
-            onClick={() => scrollToIndex(index)}
-            tabIndex={-1}
-          />
-        ))}
-      </div>
+      )}
     </section>
   );
 }

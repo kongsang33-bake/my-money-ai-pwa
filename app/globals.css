@@ -1,47 +1,67 @@
 /* ==========================================================================
-   Monii — Ink & Amber design system
-   One definition per selector. All color comes from tokens below; dark mode
-   is achieved purely by re-pointing tokens in :root[data-theme="dark"] — no
-   component rule should ever need a [data-theme="dark"] override of its own.
+   Monii — Bento / Terminal design system
+   Light mode is a saturated color-blocked bento (every tile a full hue, very
+   round radius, soft colorful shadows, no hairline borders). Dark mode is a
+   near-black neon terminal (quiet dark panels, hairline borders, one glowing
+   acid accent doing the shouting, moderate "squircle" radius). The two are
+   deliberately different visual worlds, not one palette re-lit — but the
+   *mechanism* is unchanged from before: every difference, including radius,
+   shadow and border style now (not just color), lives in the token layer
+   below. No component rule should ever need a [data-theme="dark"] override
+   of its own — see --card-border/--card-shadow/--tile-edge-width for how
+   structural properties flip per theme the same way colors do.
    ========================================================================== */
 
 @import "tailwindcss";
 
 /* -------------------------------------------------------------------------
-   Tokens — light
+   Tokens — light ("Color-Blocked Bento")
    ------------------------------------------------------------------------- */
 :root {
   --font-sans: var(--font-sans), "Noto Sans Thai", -apple-system, "Segoe UI", sans-serif;
 
-  /* surfaces */
-  --bg: #f5f3f0;
+  /* surfaces — bright warm cream, never the old muted beige */
+  --bg: #fff3e1;
   --surface: #ffffff;
-  --surface-2: #f9f7f4;
-  --surface-3: #efece7;
-  --line: #e2ddd5;
-  --line-soft: #ece8e2;
-  --line-strong: #d6cfc4;
+  --surface-2: #ffead1;
+  --surface-3: #ffdfb8;
+  --line: #f0e4d2;
+  --line-soft: #f5ecdd;
+  --line-strong: #e8d2ac;
 
-  /* text */
-  --ink: #101418;
-  --ink-2: #3a4148;
-  --ink-3: #6a7278;
-  --ink-4: #949a9f;
-  --ink-inverse: #ffffff;
+  /* text — deep plum-ink (chosen, not pure black: has a violet cast) */
+  --ink: #241536;
+  --ink-2: #4a3a63;
+  --ink-3: #6f5c82;
+  --ink-4: #9c8fb0;
+  --ink-inverse: #fff3e1;
 
-  /* brand */
-  --accent: #c97a14;
-  --accent-strong: #a3630f;
-  --accent-soft: #fbf0de;
-  --accent-line: rgba(201, 122, 20, 0.4);
-  --primary: #101418;
-  --primary-hover: #24292e;
-  --primary-text: #ffffff;
+  /* brand — primary is the plum-ink used for every button/nav/CTA fill;
+     accent is the secondary citrus hue (no longer reserved for AI-only) */
+  --accent: #ffc93c;
+  --accent-strong: #e8ae1e;
+  --accent-soft: #fff3ce;
+  --accent-line: rgba(255, 201, 60, 0.45);
+  /* --accent is a bright/light hue in both themes (citrus here, electric
+     cyan in dark) — text on a full-strength --accent fill needs a genuinely
+     dark color in both themes, unlike --text-on-color (always white) or
+     --ink-inverse (flips opposite the theme, which for dark mode's citrus
+     analogue would still land near-white — wrong direction here) */
+  --accent-contrast: var(--ink);
+  --primary: #241536;
+  --primary-hover: #34204c;
+  --primary-text: #fff3e1;
 
-  /* fixed two-tone header (deliberately theme-invariant, both modes) */
-  --header-bg: #101418;
-  --header-text: #ffffff;
-  --header-muted: rgba(255, 255, 255, 0.64);
+  /* the one full-bleed "hero" identity fill (balance card) — deliberately
+     its own token, not --primary, so the hero stays a singular moment and
+     buttons elsewhere don't compete with it */
+  --hero-bg: #ff6b57;
+  --hero-text: #ffffff;
+  --hero-amount: #ffffff;
+  --hero-border: none;
+  --hero-shadow: var(--sh-2);
+  --hero-amount-glow: 0 0 0 rgba(36, 21, 54, 0);
+
   /* text on a saturated semantic-color fill (danger red, a random avatar
      chip color, …) that doesn't itself flip with theme — always white,
      unlike --ink-inverse which flips opposite of the theme-aware --ink */
@@ -53,39 +73,46 @@
   --shimmer-sheen: rgba(255, 255, 255, 0.35);
 
   /* semantic amounts */
-  --income: #1f7a5a;
-  --income-soft: #e6f2ec;
-  --expense: #c0563a;
-  --expense-soft: #fbeae5;
-  --danger: #b3261e;
-  --danger-soft: #fbe9e7;
-  --danger-border: #f0c6c1;
+  --income: #2fbf87;
+  --income-soft: #e3f7ee;
+  --expense: #e63c8c;
+  --expense-soft: #fdeaf3;
+  --danger: #d6234b;
+  --danger-soft: #fce7eb;
+  --danger-border: #f5b9c7;
 
-  /* category palette (CVD-safe adjacency, 8-slot) */
-  --cat-travel: #1f6fe0;
-  --cat-food: #ef5b28;
-  --cat-bills: #0eb37c;
-  --cat-home: #f59900;
-  --cat-entertainment: #ec5f96;
-  --cat-goods: #5433c2;
-  --cat-health: #ea2f3f;
-  --cat-other: #86807a;
+  /* category palette (8-slot, re-saturated for the bold palette) */
+  --cat-travel: #3d7cff;
+  --cat-food: #ff6a2e;
+  --cat-bills: #12c99a;
+  --cat-home: #f5a623;
+  --cat-entertainment: #c24fd1;
+  --cat-goods: #7b5cfa;
+  --cat-health: #ff4d6d;
+  --cat-other: #8a7a9e;
 
-  /* sequential ramp (heatmap) */
+  /* sequential ramp (heatmap) — citrus, matches --accent at its peak */
   --seq-0: var(--surface-3);
-  --seq-1: #f6dfb0;
-  --seq-2: #efc073;
-  --seq-3: #e19a3a;
-  --seq-4: #c97a14;
+  --seq-1: #fff0cc;
+  --seq-2: #ffde94;
+  --seq-3: #ffcb57;
+  --seq-4: #ffc93c;
 
-  /* elevation — flat surfaces + hairline borders by default; these three
-     tiers are reserved for the few things that should visibly float
-     (floating nav, hover-lift, menus, sheets/dialogs) */
-  --sh-1: 0 1px 2px rgba(20, 24, 28, 0.05);
-  --sh-2: 0 6px 20px -6px rgba(20, 24, 28, 0.14);
-  --sh-3: 0 20px 48px -12px rgba(20, 24, 28, 0.24);
-  --overlay-scrim: rgba(20, 24, 28, 0.4);
-  --focus-ring: rgba(201, 122, 20, 0.35);
+  /* elevation — the bento tiles float on soft colorful (not black) shadow;
+     --card-border/--card-shadow are what the shared card block below and
+     any future component consume, so the border-vs-shadow language for a
+     "card" is itself a token, not hardcoded per component */
+  --sh-1: 0 2px 6px rgba(36, 21, 54, 0.08);
+  --sh-2: 0 12px 26px -12px rgba(36, 21, 54, 0.28);
+  --sh-3: 0 28px 56px -18px rgba(36, 21, 54, 0.32);
+  --card-border: none;
+  --card-shadow: var(--sh-2);
+  --tile-edge-width: 0px;
+  /* a real zero-effect shadow, not the none keyword, so it can sit in a
+     comma-separated box-shadow list unconditionally (see .add-button) */
+  --glow-primary: 0 0 0 rgba(36, 21, 54, 0);
+  --overlay-scrim: rgba(36, 21, 54, 0.45);
+  --focus-ring: rgba(255, 107, 87, 0.45);
 
   /* scales */
   --s-0: 2px;
@@ -99,21 +126,25 @@
   --s-8: 40px;
   --s-9: 56px;
 
-  --r-xs: 6px;
-  --r-sm: 10px;
-  --r-md: 14px;
-  --r-lg: 20px;
-  --r-xl: 28px;
-  --r-2xl: 34px;
+  /* radius — committed to "very round" for this theme; every step is
+     rounder than the old scale, not just the large ones */
+  --r-xs: 10px;
+  --r-sm: 14px;
+  --r-md: 20px;
+  --r-lg: 28px;
+  --r-xl: 34px;
+  --r-2xl: 42px;
   --r-full: 999px;
 
-  /* type scale — 9 steps. Body text lives at --fs-body (15px); --fs-caption
-     (13px) is the smallest size allowed for anything a user reads as
-     content (labels/timestamps can go to --fs-micro). */
-  --fs-display: clamp(40px, 11vw, 56px);
-  --fs-value: clamp(26px, 7vw, 34px);
-  --fs-h1: 22px;
-  --fs-h2: 19px;
+  /* type scale — 9 steps, re-ratioed so the top of the scale can actually
+     carry hierarchy (old steps were ~1.1x apart end to end; the display/
+     value/h1/h2 jumps below are ~1.3–1.6x). Body text still lives at
+     --fs-body (15px); --fs-caption (13px) is still the smallest size
+     allowed for anything a user reads as content. */
+  --fs-display: clamp(44px, 12vw, 64px);
+  --fs-value: clamp(28px, 8vw, 40px);
+  --fs-h1: 28px;
+  --fs-h2: 21px;
   --fs-h3: 17px;
   --fs-body: 15px;
   --fs-body-sm: 14px;
@@ -128,7 +159,7 @@
   --lh-tight: 1.15;
   --lh-snug: 1.35;
   --lh-body: 1.55;
-  --ls-tight: -0.02em;
+  --ls-tight: -0.03em;
   --ls-wide: 0.06em;
 
   /* legacy type aliases — old call sites keep working, pointed at the new
@@ -155,60 +186,92 @@
 }
 
 /* -------------------------------------------------------------------------
-   Tokens — dark
+   Tokens — dark ("Neon Terminal")
    ------------------------------------------------------------------------- */
 :root[data-theme="dark"] {
-  --bg: #0f1215;
-  --surface: #171b1f;
-  --surface-2: #1d2226;
-  --surface-3: #252a2f;
-  --line: #2a3036;
-  --line-soft: #232830;
-  --line-strong: #363d44;
+  --bg: #0a0a0c;
+  --surface: #151519;
+  --surface-2: #1b1b21;
+  --surface-3: #202028;
+  --line: #232329;
+  --line-soft: #1c1c22;
+  --line-strong: #2d2d36;
 
-  --ink: #eceff1;
-  --ink-2: #c2c8cd;
-  --ink-3: #8b939a;
-  --ink-4: #656d74;
-  --ink-inverse: #101418;
+  --ink: #e7e5ee;
+  --ink-2: #c9c7d6;
+  --ink-3: #8a879c;
+  --ink-4: #6e6b80;
+  --ink-inverse: #0a0a0c;
 
-  --accent: #e8a33d;
-  --accent-strong: #f2b968;
-  --accent-soft: #2a2016;
-  --accent-line: rgba(232, 163, 61, 0.45);
-  --primary: #eceff1;
-  --primary-hover: #ffffff;
-  --primary-text: #101418;
+  /* primary is acid — the one loud color in this theme, spent on buttons,
+     the nav's active state and the FAB; accent (electric cyan) marks
+     secondary structure (insight-tile edges, the heatmap ramp) */
+  --accent: #4de8ff;
+  --accent-strong: #7eefff;
+  --accent-soft: #0f2830;
+  --accent-line: rgba(77, 232, 255, 0.35);
+  --accent-contrast: #0a0a0c;
+  --primary: #e8ff52;
+  --primary-hover: #f0ff7a;
+  --primary-text: #0a0a0c;
+
+  /* the hero has no fill at all here — it's the same near-black as the
+     page, and boldness is spent entirely on the glowing amount instead */
+  --hero-bg: #0a0a0c;
+  --hero-text: #8a879c;
+  --hero-amount: #e8ff52;
+  --hero-border: 1px dashed var(--line);
+  --hero-shadow: none;
+  --hero-amount-glow: 0 0 28px rgba(232, 255, 82, 0.35);
 
   --shimmer-sheen: rgba(255, 255, 255, 0.06);
 
-  --income: #4abf91;
-  --income-soft: #163227;
-  --expense: #e8836a;
-  --expense-soft: #33201b;
-  --danger: #e8695e;
-  --danger-soft: #331b18;
-  --danger-border: #5c2e28;
+  /* dark merges "expense" and "danger" into one hot-pink alert hue —
+     income intentionally shares --primary's acid (both read as "positive/
+     go"), which only works because they never appear in the same element */
+  --income: #e8ff52;
+  --income-soft: #1e230e;
+  --expense: #ff3d7f;
+  --expense-soft: #2b121d;
+  --danger: #ff3d7f;
+  --danger-soft: #2b121d;
+  --danger-border: #4a1f2e;
 
-  --cat-travel: #5698f0;
-  --cat-food: #ff8248;
-  --cat-bills: #22d9a3;
-  --cat-home: #ffbb2e;
-  --cat-entertainment: #f78fb8;
-  --cat-goods: #9678f0;
-  --cat-health: #ff5c5c;
-  --cat-other: #9aa0a6;
+  --cat-travel: #4de8ff;
+  --cat-food: #ff7a45;
+  --cat-bills: #3cf2c0;
+  --cat-home: #ffd23f;
+  --cat-entertainment: #ff6fc4;
+  --cat-goods: #9b7bfa;
+  --cat-health: #ff5c7a;
+  --cat-other: #6e6b80;
 
-  --seq-1: #4a3a1c;
-  --seq-2: #7a5a24;
-  --seq-3: #b8822e;
-  --seq-4: #e8a33d;
+  --seq-1: #123240;
+  --seq-2: #1b4d5e;
+  --seq-3: #2b7690;
+  --seq-4: #4de8ff;
 
-  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --sh-2: 0 6px 20px -6px rgba(0, 0, 0, 0.5);
-  --sh-3: 0 20px 48px -12px rgba(0, 0, 0, 0.6);
-  --overlay-scrim: rgba(0, 0, 0, 0.6);
-  --focus-ring: rgba(232, 163, 61, 0.4);
+  /* elevation — panels are flat and bordered, not shadowed; the only
+     shadow work left is a colored glow, reserved for the FAB/hero */
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-2: 0 10px 24px -12px rgba(0, 0, 0, 0.5);
+  --sh-3: 0 26px 54px -16px rgba(0, 0, 0, 0.6);
+  --card-border: 1px solid var(--line);
+  --card-shadow: none;
+  --tile-edge-width: 3px;
+  --glow-primary: 0 0 22px -2px rgba(232, 255, 82, 0.55);
+  --overlay-scrim: rgba(0, 0, 0, 0.65);
+  --focus-ring: rgba(232, 255, 82, 0.45);
+
+  /* radius — a flatter, "moderate squircle" scale; every step is tighter
+     than light mode's, not just re-hued */
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 16px;
+  --r-xl: 18px;
+  --r-2xl: 22px;
+  --r-full: 999px;
 }
 
 /* -------------------------------------------------------------------------
@@ -323,21 +386,28 @@ a:focus-visible {
 /* -------------------------------------------------------------------------
    Layout primitives
    ------------------------------------------------------------------------- */
+/* The app used to sit inside a rounded, drop-shadowed "phone" card centered
+   on a visibly different backdrop at every width above true mobile — a
+   real device frame reads fine on a component-showcase page, but on an app
+   people use daily every extra 40px of that framing is just proof it's a
+   mockup. .phone is now the real, edge-to-edge scroll root everywhere; the
+   only thing that still changes with width is a max-width clamp so text
+   doesn't stretch unreadably wide on desktop. */
 .shell {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: var(--s-6);
+  background: var(--bg);
 }
 
 .phone {
-  width: min(100%, 430px);
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
   height: 100dvh;
   min-height: 100dvh;
   background: var(--bg);
   position: relative;
-  border-radius: var(--r-xl);
-  box-shadow: var(--sh-3);
+  border-radius: 0;
+  box-shadow: none;
   overflow-x: hidden;
   overflow-y: auto;
   scroll-behavior: smooth;
@@ -482,8 +552,56 @@ a:focus-visible {
   transform: scale(0.92);
 }
 
-.phone.tab-home .topbar {
-  margin-bottom: var(--s-3);
+/* Below the desktop 2-column dashboard breakpoint, Home's topbar sits
+   directly on top of the hero balance card and shares its exact fill
+   color, so the two read as one continuous full-bleed zone rather than a
+   floating pill above a separate card. See .wallet-grid.single-wallet /
+   .hero-wallet for the other half of the seam. At the desktop breakpoint
+   the hero is just one tile in a grid instead of a full-width strip, so
+   the topbar goes back to its normal floating treatment there. */
+@media (max-width: 899px) {
+  .phone.tab-home .topbar {
+    top: 0;
+    margin: 0;
+    padding: max(var(--s-3), env(safe-area-inset-top)) var(--s-5) var(--s-4);
+    background: var(--hero-bg);
+    backdrop-filter: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .phone.tab-home .topbar .eyebrow,
+  .phone.tab-home .home-identity h1 {
+    color: var(--hero-text);
+  }
+
+  .phone.tab-home .home-profile-icon {
+    background: var(--overlay-on-primary);
+    color: var(--hero-text);
+  }
+
+  .phone.tab-home .menu-button {
+    color: var(--hero-text);
+    background: var(--overlay-on-primary-soft);
+  }
+
+  .phone.tab-home .menu-button:hover, .phone.tab-home .menu-button:focus-visible {
+    background: var(--overlay-on-primary);
+    color: var(--hero-text);
+  }
+
+  .phone.tab-home .view {
+    padding-top: 0;
+  }
+
+  .phone.tab-home .wallet-grid.single-wallet {
+    margin: 0 calc(-1 * var(--s-5)) var(--s-4);
+  }
+
+  .phone.tab-home .wallet-grid.single-wallet .hero-wallet {
+    border-radius: 0 0 var(--r-2xl) var(--r-2xl);
+  }
 }
 
 .add-title {
@@ -564,9 +682,9 @@ a:focus-visible {
   right: var(--s-5);
   bottom: max(var(--s-4), env(safe-area-inset-bottom));
   height: 68px;
-  border-radius: var(--r-xl);
-  background: var(--surface);
-  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  border: var(--card-border);
   box-shadow: var(--sh-2);
   display: grid;
   grid-template-columns: 1fr 1fr 80px 1fr 1fr;
@@ -585,8 +703,11 @@ a:focus-visible {
   transition: color var(--t-2) var(--e-out), transform var(--t-1) var(--e-out), background var(--t-2) var(--e-out);
 }
 
+/* Active state: a solid filled pill behind the icon (not a faint tint),
+   with the label picking up --primary as a colored accent rather than
+   just a darker neutral — a chunkier, more obvious "you are here". */
 .bottom-nav button.active {
-  color: var(--ink);
+  color: var(--primary);
 }
 
 .bottom-nav .nav-icon {
@@ -600,13 +721,17 @@ a:focus-visible {
 .bottom-nav .nav-icon::before {
   content: "";
   position: absolute;
-  inset: -6px -15px;
+  inset: -8px -18px;
   border-radius: var(--r-full);
-  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  background: var(--primary);
   opacity: 0;
   transform: scale(0.75);
   transition: opacity var(--t-2) var(--e-out), transform var(--t-2) var(--e-out);
   z-index: -1;
+}
+
+.bottom-nav button.active .nav-icon {
+  color: var(--primary-text);
 }
 
 .bottom-nav button.active .nav-icon::before {
@@ -639,7 +764,7 @@ a:focus-visible {
   place-items: center;
   transform: translateY(-14px);
   border: 1px solid var(--overlay-on-primary);
-  box-shadow: var(--sh-1);
+  box-shadow: var(--sh-1), var(--glow-primary);
   transition: transform var(--t-2) var(--e-spring), box-shadow var(--t-2) var(--e-out);
 }
 
@@ -801,30 +926,63 @@ a:focus-visible {
 }
 
 /* -------------------------------------------------------------------------
-   Card surface — one shared treatment
+   Surface tiers
+   Replaces the old single "every card is a white rounded rectangle" rule.
+   Three tiers now: tint (this block — a quiet, still-boxed surface, most
+   former card content), bold (.surface-bold utility — a full saturated
+   fill, applied per component where a tile should read as a solid block:
+   the hero, and the bento tiles built in the Home rebuild), and bare
+   (.activity-timeline below — no box at all, separated by the page's own
+   gutter and whitespace instead of a border). Tint's border/shadow come
+   from --card-border/--card-shadow so light vs dark can pick "soft shadow,
+   no border" or "hairline border, no shadow" without any component rule
+   needing a [data-theme="dark"] override.
    ------------------------------------------------------------------------- */
 .wallet-card, .summary-panel, .entry-list, .heatmap-panel, .debtor-detail-card,
 .debtor-page-item, .draft, .state-card, .empty-note, .report-preview,
 .history-insight, .debtor-statement,
 .success-pulse, .report-summary-tiles > div, .auth-card, .recap-card,
 .metric, .confirm-dialog, .skeleton-card, .skeleton-list > span,
-.skeleton-panel, .activity-timeline, .ai-input-wrap, .quick-chip,
+.skeleton-panel, .ai-input-wrap, .quick-chip,
 .home-insight-card, .first-run-card,
 .history-search-panel, .monthly-trend-panel, .income-breakdown-panel,
 .wallet-statement-panel, .wallet-carousel-card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-xl);
+  background: var(--surface-2);
+  border: var(--card-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--card-shadow);
 }
 
 .wallet-card, .summary-panel, .entry-list, .heatmap-panel, .debtor-detail-card,
 .state-card, .empty-note, .report-preview, .history-insight,
 .debtor-statement, .success-pulse, .auth-card,
-.recap-card, .activity-timeline, .ai-input-wrap,
+.recap-card, .ai-input-wrap,
 .first-run-card, .history-search-panel, .monthly-trend-panel,
 .income-breakdown-panel, .wallet-statement-panel {
   padding: var(--s-6);
   margin-bottom: var(--s-4);
+}
+
+/* Bare tier — no box. RecentActivityTimeline reads as a plain sectioned
+   list against the page background; its rows already carry their own
+   tappable affordance, so the outer card added a box with nothing to do. */
+.activity-timeline {
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  margin-bottom: var(--s-4);
+}
+
+/* Bold tier utility — a full saturated fill. The fill itself is set per
+   use site via --tile-fill/--tile-fill-text (falls back to --primary), so
+   this owns only the shared shape, not any one color. */
+.surface-bold {
+  background: var(--tile-fill, var(--primary));
+  color: var(--tile-fill-text, var(--primary-text));
+  border-radius: var(--r-lg);
+  box-shadow: var(--card-shadow);
 }
 
 /* Home "at a glance" secondary cards (due soon, budget glance, cash flow,
@@ -833,9 +991,9 @@ a:focus-visible {
    supporting detail rather than competing headline content. */
 .home-focus-card {
   background: var(--surface-2);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--r-xl);
-  box-shadow: var(--sh-1);
+  border: var(--card-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--card-shadow);
   padding: var(--s-5);
   margin-bottom: var(--s-4);
 }
@@ -933,11 +1091,12 @@ a:focus-visible {
 .other-wallet strong { color: var(--ink-2); }
 
 .hero-wallet {
-  background: var(--primary);
-  color: var(--primary-text);
-  border: 1px solid color-mix(in srgb, var(--primary-text) 12%, transparent);
-  padding: var(--s-7) var(--s-6) var(--s-6);
-  box-shadow: var(--sh-2);
+  background: var(--hero-bg);
+  color: var(--hero-text);
+  border: var(--hero-border);
+  border-radius: var(--r-2xl);
+  padding: var(--s-7) var(--s-5) var(--s-6);
+  box-shadow: var(--hero-shadow);
   position: relative;
   overflow: hidden;
 }
@@ -965,7 +1124,7 @@ a:focus-visible {
 }
 
 .hero-wallet-top span {
-  color: var(--primary-text);
+  color: var(--hero-text);
   opacity: 0.68;
   font-size: var(--fs-body);
   font-weight: var(--fw-semibold);
@@ -987,6 +1146,8 @@ a:focus-visible {
 
 .hero-amount {
   display: block;
+  color: var(--hero-amount);
+  text-shadow: var(--hero-amount-glow);
   font-size: var(--fs-display);
   font-weight: var(--fw-bold);
   margin: var(--s-3) 0 var(--s-2);
@@ -1026,47 +1187,51 @@ a:focus-visible {
   border: 1px solid var(--overlay-on-primary-border);
 }
 
+/* Asymmetric bento: the savings-rate tile is the tall, bold-filled anchor
+   (see .home-insight-card.savings-rate below); obligation and net-worth
+   stack as quieter tint tiles beside it. Was a swipeable equal-size
+   carousel — a static grid reads all three metrics at a glance instead. */
 .home-insight-wrap {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  grid-template-rows: auto auto;
+  gap: var(--s-3);
   margin-bottom: var(--s-4);
 }
 
-.home-insight-grid {
-  display: flex;
-  gap: var(--s-2);
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-
-.home-insight-grid::-webkit-scrollbar {
-  display: none;
+.home-insight-wrap.two-up {
+  grid-template-rows: auto;
 }
 
 .home-insight-card {
   padding: var(--s-4) var(--s-4) var(--s-5);
   min-width: 0;
-  flex: 0 0 84%;
-  scroll-snap-align: center;
 }
 
-.home-insight-dots {
+.home-insight-card.savings-rate {
+  grid-column: 1;
+  grid-row: 1 / 3;
   display: flex;
+  flex-direction: column;
   justify-content: center;
-  gap: 6px;
-  margin-top: var(--s-3);
 }
 
-.home-insight-dots button {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--r-full);
-  background: var(--line);
-  pointer-events: auto;
+.two-up .home-insight-card.savings-rate {
+  grid-row: 1;
 }
 
-.home-insight-dots button.active {
-  background: var(--ink-3);
+.home-insight-card.obligation {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.home-insight-card.net-worth {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.two-up .home-insight-card.obligation {
+  grid-row: 1;
 }
 
 .home-insight-icon {
@@ -1123,10 +1288,60 @@ a:focus-visible {
 .home-insight-card.income strong { color: var(--income); }
 .home-insight-card.expense strong { color: var(--expense); }
 
+/* The savings-rate tile is the one bold, fully saturated fill in this
+   grid — the other two stay quiet tints so the eye lands here first. */
+.home-insight-card.savings-rate.income { background: var(--income); }
+.home-insight-card.savings-rate.expense { background: var(--expense); }
+.home-insight-card.savings-rate.income strong,
+.home-insight-card.savings-rate.expense strong {
+  color: var(--text-on-color);
+}
+.home-insight-card.savings-rate span, .home-insight-card.savings-rate small {
+  color: var(--text-on-color);
+  opacity: 0.82;
+}
+
+.home-insight-card.savings-rate strong {
+  font-size: var(--fs-value);
+  letter-spacing: -0.04em;
+}
+.home-insight-card.savings-rate .home-insight-icon.income,
+.home-insight-card.savings-rate .home-insight-icon.expense {
+  background: var(--overlay-on-primary);
+  color: var(--text-on-color);
+}
+
 .home-focus-grid {
   display: grid;
   gap: var(--s-4);
   margin-bottom: var(--s-4);
+}
+
+/* Due-soon gets the bold fill of this pair, budget-glance stays the quiet
+   tint — the two "at a glance" tiles no longer read as one repeated shape. */
+.due-soon-card {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.due-soon-card .home-focus-head span,
+.due-soon-card .home-focus-head strong,
+.due-soon-card .due-soon-list span,
+.due-soon-card .due-soon-list small,
+.due-soon-card .due-soon-list p,
+.due-soon-card .home-compact-empty p {
+  color: var(--accent-contrast);
+}
+
+.due-soon-card .home-focus-head button {
+  color: var(--accent-contrast);
+  opacity: 0.75;
+}
+
+.due-soon-card .due-soon-list small,
+.due-soon-card .due-soon-list p,
+.due-soon-card .home-compact-empty span {
+  opacity: 0.72;
 }
 
 .spending-personality-note {
@@ -1450,11 +1665,13 @@ a:focus-visible {
   padding-bottom: 2px;
 }
 
+/* Bare — the chips underneath already carry their own tinted-pill shape,
+   so the outer strip doesn't need a second box around them. */
 .quick-add-strip {
-  padding: var(--s-5);
-  border: 1px solid var(--line);
-  border-radius: var(--r-xl);
-  background: var(--surface);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
   margin-bottom: var(--s-4);
 }
 
@@ -1510,9 +1727,10 @@ a:focus-visible {
 
 .goal-card {
   padding: var(--s-6);
-  border: 1px solid var(--line);
-  border-radius: var(--r-xl);
-  background: var(--surface);
+  border: var(--card-border);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--card-shadow);
   margin-bottom: var(--s-4);
 }
 
@@ -4400,22 +4618,10 @@ a:focus-visible {
    Responsive
    ========================================================================= */
 
-/* Small phones: no side padding around the frame */
+/* Small phones: .phone is edge-to-edge at every width now, so the nav can
+   pin to the actual viewport instead of drifting to the bottom of the
+   scrollable content when a view (e.g. History) is taller than one screen. */
 @media (max-width: 480px) {
-  .shell {
-    padding: 0;
-  }
-
-  .phone {
-    width: 100%;
-    min-height: 100dvh;
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  /* .phone is edge-to-edge here, so the nav can pin to the actual
-     viewport instead of drifting to the bottom of the scrollable
-     content when a view (e.g. History) is taller than one screen. */
   .bottom-nav {
     position: fixed;
     left: var(--s-4);
@@ -4423,37 +4629,12 @@ a:focus-visible {
   }
 }
 
-/* Tablet and up: plenty of width for the insight tiles as a static 2x2
-   grid, so the mobile-only swipe carousel reverts here. */
-@media (min-width: 600px) {
-  .home-insight-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    overflow-x: visible;
-    scroll-snap-type: none;
-  }
-
-  .home-insight-card {
-    flex: unset;
-  }
-
-  .home-insight-dots {
-    display: none;
-  }
-}
-
 /* Tablet / landscape phone — a real breakpoint that used to fall through
    to the mobile stylesheet unchanged */
 @media (min-width: 600px) and (max-width: 899px) {
-  .shell {
-    padding: var(--s-7);
-    align-items: center;
-  }
-
   .phone {
-    width: min(560px, 100%);
+    max-width: 560px;
     min-height: 720px;
-    border-radius: var(--r-xl);
   }
 
   .summary-grid, .report-summary-tiles, .debtor-page-list {
@@ -4471,16 +4652,8 @@ a:focus-visible {
     background: var(--bg);
   }
 
-  .shell {
-    padding: var(--s-8);
-    align-items: flex-start;
-  }
-
   .phone {
-    width: min(1180px, calc(100vw - 80px));
-    height: calc(100vh - 64px);
-    min-height: calc(100vh - 64px);
-    border-radius: var(--r-xl);
+    max-width: 1180px;
     padding-bottom: calc(96px + env(safe-area-inset-bottom));
     overflow-x: hidden;
     overflow-y: auto;
@@ -4595,7 +4768,7 @@ a:focus-visible {
     width: min(560px, calc(100vw - 128px));
     height: 68px;
     padding: 0;
-    border-radius: var(--r-xl);
+    border-radius: var(--r-full);
     grid-template-columns: 1fr 1fr 80px 1fr 1fr;
     transform: translateX(-50%);
   }
