@@ -205,7 +205,7 @@ export async function POST(request: Request) {
       // + debtor/split matching, which genuinely takes longer than a plain
       // text entry -- give it more room before the per-attempt timeout
       // aborts and forces a retry/fallback cycle mid-flight.
-    }, { timeoutMs: images.length > 0 ? 25000 : 12000 });
+    }, { timeoutMs: images.length > 0 ? 25000 : 7000 });
   } catch (error) {
     return Response.json({ error: describeGeminiError(error, "วิเคราะห์รายการ") }, { status: 502 });
   }

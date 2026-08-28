@@ -62,7 +62,11 @@ function isUnavailableModelError(error: unknown): boolean {
 }
 
 const RETRY_DELAYS_MS = [500, 1500];
-const GEMINI_ATTEMPT_TIMEOUT_MS = 12000;
+// Worst case per model in MODEL_CHAIN is timeout + delay + timeout + delay +
+// timeout (two same-model retries before moving on) -- lower this and a
+// stuck/overloaded first model gets abandoned for the next candidate sooner
+// instead of eating most of the user's wait on a model that isn't working.
+const GEMINI_ATTEMPT_TIMEOUT_MS = 7000;
 
 async function withGeminiRetry<T>(call: () => Promise<T>): Promise<T> {
   let lastError: unknown;
