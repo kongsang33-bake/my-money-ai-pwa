@@ -48,6 +48,11 @@
      --ink-inverse (flips opposite the theme, which for dark mode's citrus
      analogue would still land near-white — wrong direction here) */
   --accent-contrast: var(--ink);
+  /* dark mode's --income is deliberately the same acid as --primary (see the
+     dark block below) — text on a --income fill needs the same per-theme
+     contrast treatment as --accent-contrast, for the same reason. --expense
+     never gets bright enough in either theme to need this. */
+  --income-contrast: var(--text-on-color);
   --primary: #241536;
   --primary-hover: #34204c;
   --primary-text: #fff3e1;
@@ -211,6 +216,7 @@
   --accent-soft: #0f2830;
   --accent-line: rgba(77, 232, 255, 0.35);
   --accent-contrast: #0a0a0c;
+  --income-contrast: #0a0a0c;
   --primary: #e8ff52;
   --primary-hover: #f0ff7a;
   --primary-text: #0a0a0c;
@@ -1276,6 +1282,25 @@ a:focus-visible {
   margin: 4px 0;
 }
 
+/* --fs-value (28-40px, viewport-scaled) fits the wide savings-rate tile's
+   short "68%", but the obligation/net-worth tiles sit in the grid's
+   narrower right column (~115px of content width at 390px) and need to fit
+   `moneySign` (which itself has a trailing space baked in) plus a real
+   amount — at --fs-value, and even at a still-largish --fs-h1 (28px), the
+   string is wider than the column and wraps right at that space, splitting
+   ฿ onto its own line. --fs-h3 measures ~102px for a real ฿9,999.99-shaped
+   value here (vs. ~115px available) — small enough to leave margin instead
+   of sitting exactly at the edge. white-space/text-overflow are a second
+   line of defense: never break mid-symbol, and truncate gracefully instead
+   of wrapping if a value is ever longer than that margin allows for. */
+.home-insight-card.obligation strong,
+.home-insight-card.net-worth strong {
+  font-size: var(--fs-h3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .home-insight-card small {
   display: block;
   color: var(--ink-3);
@@ -1289,15 +1314,26 @@ a:focus-visible {
 .home-insight-card.expense strong { color: var(--expense); }
 
 /* The savings-rate tile is the one bold, fully saturated fill in this
-   grid — the other two stay quiet tints so the eye lands here first. */
+   grid — the other two stay quiet tints so the eye lands here first.
+   --income and --expense get different contrast treatment: dark mode's
+   --income is deliberately the same acid as --primary (see globals.css
+   token comments), so a full-tile --income fill needs --income-contrast
+   (dark text in dark mode) rather than the always-white --text-on-color —
+   plain white was unreadable on the acid fill. --expense never gets that
+   bright in either theme, so it stays on --text-on-color. */
 .home-insight-card.savings-rate.income { background: var(--income); }
 .home-insight-card.savings-rate.expense { background: var(--expense); }
 .home-insight-card.savings-rate.income strong,
-.home-insight-card.savings-rate.expense strong {
+.home-insight-card.savings-rate.income span,
+.home-insight-card.savings-rate.income small {
+  color: var(--income-contrast);
+}
+.home-insight-card.savings-rate.expense strong,
+.home-insight-card.savings-rate.expense span,
+.home-insight-card.savings-rate.expense small {
   color: var(--text-on-color);
 }
 .home-insight-card.savings-rate span, .home-insight-card.savings-rate small {
-  color: var(--text-on-color);
   opacity: 0.82;
 }
 
@@ -1305,7 +1341,10 @@ a:focus-visible {
   font-size: var(--fs-value);
   letter-spacing: -0.04em;
 }
-.home-insight-card.savings-rate .home-insight-icon.income,
+.home-insight-card.savings-rate .home-insight-icon.income {
+  background: var(--overlay-on-primary);
+  color: var(--income-contrast);
+}
 .home-insight-card.savings-rate .home-insight-icon.expense {
   background: var(--overlay-on-primary);
   color: var(--text-on-color);
