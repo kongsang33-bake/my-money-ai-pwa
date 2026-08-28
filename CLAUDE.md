@@ -4,22 +4,57 @@ Guidance for working on this codebase — a Thai personal-finance PWA
 (Next.js App Router, single-file `app/page.tsx`, design system in
 `app/globals.css`).
 
-## Design system: Ink & Amber
+## Design system: Bento (light) / Neon Terminal (dark)
 
-- **Palette**: warm paper background, near-black ink (`--ink`) as the
-  primary UI color (buttons, the FAB, the two-tone Home header all fill
-  with `--primary`, which *is* ink in light mode and inverts to light ink
-  in dark mode — always pair it with `--primary-text`, never assume white
-  or black text on it). Amber (`--accent`) is reserved for the AI-assist
-  affordance, the heatmap ramp, and small emphasis details — it is not the
-  button-fill color. `--income`/`--expense`/`--danger` carry all
-  positive/negative/destructive meaning; category chips use the 7-slot
-  `--cat-*` CVD-safe palette (`categoryColorVars` in `app/page.tsx`), never
-  a color chosen ad hoc.
+Monii is for someone who wants tracking money to feel like using a slick,
+confident consumer app, not filling out a ledger. Light mode is a genuinely
+saturated, playful color-blocked bento — full-hue tile fills, very round
+corners, soft colorful shadows, no hairline borders. Dark mode is a
+near-black neon terminal — quiet dark panels, hairline borders, moderate
+"squircle" radius, with boldness spent almost entirely on one glowing acid
+accent (the hero balance, the FAB, the active nav state) rather than on
+fills everywhere. The two are deliberately different visual worlds tied
+together by the same token names, not one palette re-lit for dark mode.
+**A rendered reference of this direction — including the two live variants
+it was chosen from — is committed at `docs/design-reference.html`; open it
+in a browser before starting a design task.**
+
+- **Palette is per-theme, not just re-hued.** Light: bright cream `--bg`,
+  deep plum-ink `--ink`/`--primary` for text and every button/nav fill, a
+  coral `--hero-bg` reserved for the one full-bleed hero moment, citrus
+  `--accent` for a second bold fill (e.g. the due-soon tile). Dark: carbon
+  `--bg`, acid-lime `--primary` (buttons, FAB, active nav, the hero
+  numeral), electric-cyan `--accent` for secondary structure. `--income`/
+  `--expense`/`--danger` carry all positive/negative/destructive meaning
+  and are picked to stay distinct from `--primary`/`--accent` in each
+  theme — don't reuse a semantic color as a decorative fill or vice versa.
+  Category chips use the 8-slot `--cat-*` palette (`categoryColorVars` in
+  `app/page.tsx`), never a color chosen ad hoc. `--accent-contrast` exists
+  because `--accent` is a bright/light hue in *both* themes — text on a
+  full-strength `--accent` fill needs it instead of `--text-on-color`
+  (always white — wrong on a light citrus fill) or `--ink-inverse` (flips
+  the wrong direction for this specific case).
+- **Radius, border and shadow are theme tokens too, not just color.**
+  `--card-border`/`--card-shadow` (tint-tier surfaces), `--hero-border`/
+  `--hero-shadow`/`--hero-amount-glow` (the hero card), and the `--r-*`
+  scale itself all have different *shapes* per theme (light: no border,
+  soft shadow, very round; dark: hairline border, no shadow, moderate
+  radius) — not just different colors. This is what makes a component rule
+  never need its own `[data-theme="dark"]` override: point a component at
+  the token, and both the color and the shape follow the theme.
+- **Three surface tiers, chosen per component, not one card rule for
+  everything.** `app/globals.css`'s "Surface tiers" section: **tint** (the
+  shared mega-selector rule — a quiet, still-boxed card; most content),
+  **bold** (`.surface-bold` utility, or a component's own bold variant like
+  `.home-insight-card.savings-rate` / `.due-soon-card` — a full saturated
+  fill, used sparingly so it stays a highlight), and **bare** (no box at
+  all — `.activity-timeline`, `.quick-add-strip` — content separated by the
+  page's own gutter and whitespace, not a border). When adding a new
+  section, decide its tier deliberately; don't default to copying the
+  nearest existing card.
 - **Font**: IBM Plex Sans Thai, loaded via `next/font/google` in
   `app/layout.tsx` and exposed as `--font-sans`. Don't add a second font or
-  fall back to a system stack without a real reason — the font was
-  previously missing entirely and was one of the biggest "unfinished" tells.
+  fall back to a system stack without a real reason.
 - **No mascot.** The `MoneyMascot` character (idle/thinking/happy/sleepy/
   oops moods, coin-wiggle, sparkles) was removed deliberately. Do not
   reintroduce a cartoon character, decorative sparkle, or "AI is listening"
@@ -41,43 +76,32 @@ Guidance for working on this codebase — a Thai personal-finance PWA
   once in `:root` (light) and `:root[data-theme="dark"]` (dark) — never a
   literal hex/rgb in a component rule. Every hardcoded color eventually
   needs a manually-written dark-mode override, which is easy to miss and
-  is what broke dark mode repeatedly during earlier development. For a
-  saturated semantic fill that does *not* invert with theme (`.danger`'s
-  red background, a wallet's chosen icon-color swatch), text on top of it
-  uses the theme-invariant `--text-on-color` (always white) — not
-  `--ink-inverse`, which is specifically for surfaces using `--ink`/
-  `--primary` as background and flips with theme.
-- **Type scale — 9 steps, all tokenized.** `--fs-display` (hero balance) →
-  `--fs-value` (large money amounts) → `--fs-h1` → `--fs-h2` → `--fs-h3` →
-  `--fs-body` (15px, the default reading size) → `--fs-body-sm` →
-  `--fs-caption` (13px, labels/meta) → `--fs-micro` (11px, uppercase
-  micro-labels). Weight tokens `--fw-regular/medium/semibold/bold`: bold is
-  reserved for `<strong>`/`<b>` money-value text and `h1`-tier headings —
-  everything else (section headers, labels, badges, buttons, nav items)
-  uses `--fw-semibold`. Body text used to sit at 12–13px app-wide with
-  nothing reading as more important than anything else; don't reintroduce
-  that by hand-picking a `font-size` instead of reaching for a `--fs-*`
-  token.
-- **Elevation is flat + hairline by default.** Cards, tiles, rows, inputs,
-  and chips rest with just their existing `--surface`/border, no shadow.
-  `--sh-1` is for things that float subtly at rest (the FAB, the primary
-  button); `--sh-2` is for hover-lift, the bottom-nav pill, and kebab
-  menus; `--sh-3` is for sheets/dialogs/the drawer. There is no `--nm-*`
-  neumorphic (dual-directional soft-shadow) system any more — it was
-  removed as part of the Gen Z redesign; don't reintroduce inset/soft
-  embossed shadows on inputs or cards.
+  is what broke dark mode repeatedly during earlier development.
+- **Type scale — 9 steps, all tokenized, re-ratioed for real hierarchy.**
+  `--fs-display` (hero balance, ~44–64px) → `--fs-value` (large money
+  amounts, ~28–40px) → `--fs-h1` (28px) → `--fs-h2` (21px) → `--fs-h3`
+  (17px) → `--fs-body` (15px, the default reading size) → `--fs-body-sm`
+  (14px) → `--fs-caption` (13px, labels/meta) → `--fs-micro` (11px,
+  uppercase micro-labels). The top of this scale used to sit only ~1.1x
+  apart step to step (22/19/17px), which meant nothing could read as more
+  important than anything else no matter what used which token — the fix
+  was widening the ratios (~1.3–1.6x through display/value/h1/h2), not
+  picking bigger arbitrary numbers. Don't flatten this scale back out by
+  routing a heading through `--fs-body` "because it looked fine here."
+  Weight tokens `--fw-regular/medium/semibold/bold`: bold is reserved for
+  `<strong>`/`<b>` money-value text and `h1`-tier headings — everything
+  else uses `--fw-semibold`.
 - **Native `<select>` elements get a `.select-shell` wrapper.** Wrap
   `<select>` in `<div className="select-shell">…</select><ChevronDown
   className="select-shell-chevron" aria-hidden="true" /></div>` — the CSS
   sets `appearance: none` on the select and absolutely positions the
   chevron. Don't ship a bare `<select>` with default OS chrome.
-- **Define each component once.** The previous stylesheet redefined the
-  same selectors across more than a dozen appended "layers" (`.entry-list`
-  alone had 13 separate rule blocks) — changing one card meant editing
-  4–8 places, and whichever was last in the file silently won. The current
-  file has no cascade layers: find the selector, edit it in place. If you
-  need a new visual variant, add a modifier class rather than a second rule
-  block for the same selector further down the file.
+- **Define each component once.** Find the selector, edit it in place. If
+  you need a new visual variant, add a modifier class rather than a second
+  rule block for the same selector further down the file — a stylesheet
+  that redefines the same selector in multiple appended "layers" means
+  changing one card requires editing 4–8 places, and whichever rule is
+  last in the file silently wins.
 - **Icon SVGs need explicit fill/stroke.** Hand-drawn inline SVGs (bottom
   nav icons, `GoogleIcon`) don't inherit sensible defaults — an SVG `<path>`
   with no `fill`/`stroke` set renders as a solid black shape (closed paths)
@@ -85,6 +109,32 @@ Guidance for working on this codebase — a Thai personal-finance PWA
   `fill: none; stroke: currentColor` set explicitly in CSS; `lucide-react`
   icons already handle this internally via their `strokeWidth` prop, so
   they don't need it.
+- **`.phone` is the real, edge-to-edge app root at every width — not a
+  device mockup.** There is no rounded-card-with-drop-shadow "phone frame"
+  centered on a differently-colored backdrop any more; that read as a
+  component showcase, not an app, on anything wider than a literal phone.
+  Widths above mobile only clamp `.phone`'s max-width for readability
+  (`min-width: 600px`/`900px` breakpoints) — they don't reintroduce a card
+  chrome. Don't add `border-radius`/`box-shadow` back onto `.shell`/`.phone`
+  as a "polish" pass.
+
+### What actually counts as a redesign
+
+Every redesign attempt before this one changed only `--token` *values*
+inside the same single shared card rule — same white-rounded-rectangle
+structure, new hex codes. The app came out of each pass looking like
+itself, because the sameness was never in the colors; it was in the
+structure. If a design change here touches only color/size values in
+`globals.css` and zero `className`s or JSX structure in `app/page.tsx`, it
+is very unlikely to be a real redesign — treat that as a signal to stop and
+reconsider, not a sign the work is efficient. A real structural change
+looks like: the Home hero merging with the topbar into one full-bleed
+zone instead of a floating pill over a separate card, or the insight row
+becoming an asymmetric bento grid instead of a swipeable carousel of
+equal-sized cards (both in `app/page.tsx` + `app/globals.css` together).
+When redesigning a screen, decide its layout and surface tiers first, the
+same way `docs/design-reference.html` did for Home, before touching any
+token value.
 
 ## Dev workflow
 

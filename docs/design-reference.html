@@ -1,0 +1,586 @@
+<title>Monii: Redesign Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  /* ==========================================================================
+     Presentation stage — this outer canvas is a deliberate, single-theme
+     "studio wall" for comparing three concept screens side by side. It is
+     not one of the three proposals; each phone frame carries its own
+     complete token system below and is what gets judged.
+     ========================================================================== */
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: #0B0A0D;
+    color: #E6E3ED;
+    font-family: "IBM Plex Sans Thai", "Noto Sans Thai", -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body { padding: 48px clamp(20px, 5vw, 64px) 96px; }
+
+  .stage-head { max-width: 720px; margin: 0 auto 56px; }
+  .stage-eyebrow {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+    color: #8A85A0; margin: 0 0 10px;
+  }
+  .stage-head h1 { font-size: clamp(26px, 4vw, 34px); font-weight: 700; margin: 0 0 14px; line-height: 1.25; text-wrap: balance; }
+  .stage-head p { font-size: 15px; line-height: 1.7; color: #B5B0C4; margin: 0 0 10px; }
+  .stage-head p b { color: #E6E3ED; font-weight: 600; }
+
+  .jump-nav {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; gap: 8px; justify-content: center;
+    max-width: 720px; margin: 0 auto 48px;
+    padding: 10px; background: rgba(11,10,13,0.85); backdrop-filter: blur(10px);
+    border: 1px solid #232028; border-radius: 999px;
+  }
+  .jump-nav a {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 12.5px; font-weight: 600; color: #C9C4D8; text-decoration: none;
+    padding: 7px 14px; border-radius: 999px;
+  }
+  .jump-nav a i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .jump-nav a:hover { background: #1B1922; }
+
+  .rack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 72px;
+  }
+  .col {
+    width: min(420px, 100%);
+    scroll-margin-top: 76px;
+  }
+  .col-head { margin-bottom: 16px; }
+  .col-tag {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+    color: #8A85A0; margin-bottom: 8px;
+  }
+  .col-tag i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .col-head h2 { font-size: 18px; font-weight: 700; margin: 0 0 8px; color: #F1EFF7; }
+  .col-head p { font-size: 13.5px; line-height: 1.65; color: #9C96AE; margin: 0; }
+
+  .frame {
+    border: 1px solid #232028;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px -24px rgba(0,0,0,0.6);
+  }
+  .frame-screen {
+    max-height: 760px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  .rationale { margin-top: 18px; font-size: 13px; line-height: 1.7; color: #9C96AE; }
+  .rationale b { color: #C9C4D8; font-weight: 600; }
+
+  .stage-foot { max-width: 720px; margin: 64px auto 0; font-size: 14px; line-height: 1.7; color: #9C96AE; }
+  .stage-foot b { color: #E6E3ED; }
+
+  /* ==========================================================================
+     Shared screen skeleton — every mock-* class below is generic layout;
+     all color, radius, weight and shadow decisions come from the tokens
+     each .dir-a / .dir-b / .dir-c block defines. This mirrors how the real
+     app already consumes CSS custom properties, so the same skeleton could
+     carry any of the three token sets.
+     ========================================================================== */
+  .screen {
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100%;
+    padding-bottom: 92px;
+    font-variant-numeric: tabular-nums;
+  }
+  .m-topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 20px 8px;
+  }
+  .m-identity { display: flex; align-items: center; gap: 10px; }
+  .m-avatar {
+    width: 38px; height: 38px; border-radius: var(--r-round, 50%);
+    background: var(--avatar-bg, var(--hero-bg)); color: var(--avatar-text, var(--hero-text));
+    display: grid; place-items: center; font-weight: 700; font-size: 14px; flex-shrink: 0;
+  }
+  .m-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .m-identity h1 { font-size: 15px; font-weight: 600; margin: 2px 0 0; color: var(--text); }
+  .m-menu {
+    width: 36px; height: 36px; border-radius: var(--r-sm); border: var(--chrome-border, none);
+    background: var(--chrome-bg, transparent); color: var(--text);
+    display: grid; place-items: center; font-size: 16px;
+  }
+
+  .m-hero { margin: 10px 16px 18px; padding: 24px 22px 22px; border-radius: var(--r-lg); background: var(--hero-bg); color: var(--hero-text); }
+  .m-hero-top { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 500; opacity: 0.85; }
+  .m-hero-top em { font-style: normal; font-weight: 600; padding: 4px 10px; border-radius: var(--r-pill, 999px); background: var(--hero-tag-bg); color: var(--hero-tag-text); font-size: 11.5px; }
+  .m-streak { display: block; margin-top: 10px; font-size: 12px; font-weight: 600; color: var(--hero-accent); }
+  .m-amount { display: block; font-size: 46px; font-weight: 700; letter-spacing: -0.02em; margin: 6px 0 4px; color: var(--hero-accent, var(--hero-text)); }
+  .m-hero-foot { margin: 0; font-size: 13px; opacity: 0.8; }
+
+  .m-insight-row { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin: 0 16px 18px; }
+  .m-insight-card { padding: 14px 12px; border-radius: var(--r-md); background: var(--tile-1); color: var(--tile-1-text); }
+  .m-insight-card span { display: block; font-size: 10.5px; font-weight: 600; opacity: 0.8; margin-bottom: 6px; line-height: 1.3; }
+  .m-insight-card strong { display: block; font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+  .m-insight-card small { display: block; font-size: 9.5px; line-height: 1.35; opacity: 0.7; }
+
+  .m-section { margin: 0 16px 18px; }
+  .m-section-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 10px; }
+  .m-section-head h2 { font-size: 16px; font-weight: 700; margin: 2px 0 0; color: var(--text); }
+  .m-section-head button { border: none; background: none; font-size: 12.5px; font-weight: 600; color: var(--muted); padding: 0; }
+
+  .m-quickadd-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+  .m-chip { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: var(--r-pill, 999px); background: var(--surface-2); border: var(--chip-border, none); }
+  .m-chip b { display: block; font-size: 12.5px; font-weight: 600; color: var(--text); }
+  .m-chip small { display: block; font-size: 11px; color: var(--muted); }
+  .m-catdot { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; color: #fff; }
+  .m-catdot svg { width: 14px; height: 14px; }
+
+  .m-goal { padding: 16px; border-radius: var(--r-lg); background: var(--surface-2); border: var(--panel-border, none); }
+  .m-goal-item + .m-goal-item { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--hairline); }
+  .m-goal-head { display: flex; justify-content: space-between; font-size: 13.5px; font-weight: 600; color: var(--text); }
+  .m-goal-values { display: flex; align-items: baseline; gap: 6px; margin-top: 6px; }
+  .m-goal-values strong { font-size: 17px; font-weight: 700; color: var(--text); }
+  .m-goal-values span { font-size: 12px; color: var(--muted); }
+  .m-goal-bar { height: 6px; border-radius: 999px; background: var(--track); margin-top: 8px; overflow: hidden; }
+  .m-goal-bar i { display: block; height: 100%; border-radius: 999px; background: var(--income); }
+  .m-goal small { display: block; margin-top: 5px; font-size: 11px; color: var(--muted); }
+
+  .m-bento { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 16px 18px; }
+  .m-focus { padding: 15px; border-radius: var(--r-md); background: var(--surface-2); border: var(--panel-border, none); }
+  .m-focus.full { grid-column: 1 / -1; }
+  .m-focus-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+  .m-focus-head span { display: block; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  .m-focus-head strong { display: block; font-size: 16px; font-weight: 700; margin-top: 3px; color: var(--text); }
+  .m-due-row { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 8px; }
+  .m-due-row .m-catdot { width: 22px; height: 22px; }
+  .m-due-row .m-due-name { flex: 1; font-weight: 600; color: var(--text); }
+  .m-due-row b { font-weight: 700; color: var(--text); }
+  .m-due-total { font-size: 11.5px; color: var(--muted); margin: 4px 0 0; }
+  .m-budget-row { margin-bottom: 10px; }
+  .m-budget-row-top { display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 5px; }
+  .m-budget-row-top span { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--text); }
+  .m-budget-row-top b { font-weight: 600; color: var(--muted); }
+  .m-budget-bar { height: 5px; border-radius: 999px; background: var(--track); overflow: hidden; }
+  .m-budget-bar i { display: block; height: 100%; border-radius: 999px; }
+
+  .m-cashflow-bars { display: flex; align-items: flex-end; gap: 6px; height: 70px; margin-top: 4px; }
+  .m-cashflow-bars > div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+  .m-cashflow-bars .bar-pair { display: flex; gap: 2px; align-items: flex-end; height: 100%; width: 100%; justify-content: center; }
+  .m-cashflow-bars i { display: block; width: 6px; border-radius: 3px 3px 0 0; }
+  .m-cashflow-bars i.inc { background: var(--income); }
+  .m-cashflow-bars i.exp { background: var(--expense); }
+  .m-cashflow-bars small { font-size: 9px; color: var(--muted); }
+
+  .m-personality p { font-size: 12.5px; line-height: 1.6; color: var(--text-2, var(--text)); margin: 0; }
+
+  .m-activity-title { font-size: 15px; font-weight: 700; margin: 0 0 10px; color: var(--text); padding: 0 16px; }
+  .m-activity-row { display: flex; align-items: center; gap: 10px; padding: 10px 16px; }
+  .m-activity-info { flex: 1; min-width: 0; }
+  .m-activity-info b { display: block; font-size: 13.5px; font-weight: 600; color: var(--text); }
+  .m-activity-info small { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .m-activity-amount { font-size: 13.5px; font-weight: 700; flex-shrink: 0; }
+  .m-activity-amount.income { color: var(--income); }
+  .m-activity-amount.expense { color: var(--text); }
+
+  .m-nav {
+    position: sticky; bottom: 10px; margin: 0 16px;
+    display: flex; align-items: center; justify-content: space-around;
+    padding: 8px 6px; border-radius: var(--r-pill, 999px);
+    background: var(--nav-bg); border: var(--nav-border, none);
+    box-shadow: var(--nav-shadow, none);
+  }
+  .m-nav button { border: none; background: none; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--nav-icon); padding: 6px 8px; }
+  .m-nav button svg { width: 19px; height: 19px; }
+  .m-nav button span { font-size: 9.5px; font-weight: 600; }
+  .m-nav button.active { color: var(--nav-icon-active); }
+  .m-nav .m-add {
+    width: 44px; height: 44px; border-radius: 50%; background: var(--nav-add-bg); color: var(--nav-add-icon);
+    display: grid; place-items: center; margin-top: -20px; box-shadow: var(--nav-add-shadow, none);
+  }
+  .m-nav .m-add svg { width: 20px; height: 20px; }
+
+  /* --------------------------------------------------------------------
+     Direction A — Neo-Brutalist Ledger
+     Sharp corners, hard 2px ink outlines, offset "sticker" shadows instead
+     of blur, one acid-volt accent doing all the shouting against ink/paper.
+     -------------------------------------------------------------------- */
+  .dir-a {
+    --bg: #F4EFE2; --text: #14121A; --text-2: #14121A; --muted: #625C6E;
+    --hero-bg: #14121A; --hero-text: #F4EFE2; --hero-accent: #C6FF3D;
+    --hero-tag-bg: #C6FF3D; --hero-tag-text: #14121A;
+    --surface-2: #FFFFFF; --tile-1: #FFFFFF; --tile-1-text: #14121A;
+    --hairline: #14121A; --track: #E4DFD0;
+    --income: #17B37E; --expense: #FF5A36;
+    --avatar-bg: #C6FF3D; --avatar-text: #14121A;
+    --chrome-bg: #FFFFFF; --chrome-border: 2px solid #14121A;
+    --panel-border: 2px solid #14121A; --chip-border: 2px solid #14121A;
+    --nav-bg: #14121A; --nav-icon: #F4EFE2; --nav-icon-active: #C6FF3D; --nav-border: none;
+    --nav-add-bg: #C6FF3D; --nav-add-icon: #14121A; --nav-add-shadow: 3px 3px 0 #14121A;
+    --r-lg: 4px; --r-md: 4px; --r-sm: 4px; --r-round: 4px; --r-pill: 4px;
+  }
+  .dir-a .m-hero, .dir-a .m-goal, .dir-a .m-focus, .dir-a .m-chip, .dir-a .m-insight-card {
+    box-shadow: 4px 4px 0 #14121A;
+  }
+  .dir-a .m-insight-card { border: 2px solid #14121A; }
+  .dir-a .m-insight-card:nth-child(2) { background: #7B5CFA; color: #FFFFFF; }
+  .dir-a .m-insight-card:nth-child(2) strong, .dir-a .m-insight-card:nth-child(2) span { color: #FFFFFF; }
+  .dir-a .m-insight-card:nth-child(3) { background: #FF5A36; color: #14121A; }
+  .dir-a .m-budget-bar i.over { background: #FF2D55 !important; }
+  .dir-a .m-amount { text-shadow: none; }
+  .dir-a .m-avatar { border-radius: 4px; }
+
+  /* --------------------------------------------------------------------
+     Direction B — Color-Blocked Bento
+     Fully saturated fills on every tile (no white cards anywhere), very
+     round radius, soft colorful shadows. The "maximalist Gen-Z" answer.
+     -------------------------------------------------------------------- */
+  .dir-b {
+    --bg: #FFF3E1; --text: #241536; --text-2: #241536; --muted: #6F5C82;
+    --hero-bg: #FF6B57; --hero-text: #FFFFFF; --hero-accent: #FFFFFF;
+    --hero-tag-bg: rgba(255,255,255,0.28); --hero-tag-text: #FFFFFF;
+    --surface-2: #FFFFFF; --tile-1: #FFC93C; --tile-1-text: #241536;
+    --hairline: #F0E4D2; --track: #F1E6D6;
+    --income: #2FBF87; --expense: #E63C8C;
+    --avatar-bg: #241536; --avatar-text: #FFF3E1;
+    --chrome-bg: #FFFFFF; --chrome-border: none;
+    --panel-border: none; --chip-border: none;
+    --nav-bg: #FFFFFF; --nav-icon: #B7A9C9; --nav-icon-active: #241536; --nav-border: none;
+    --nav-add-bg: #241536; --nav-add-icon: #FFC93C; --nav-add-shadow: 0 10px 20px -6px rgba(36,21,54,.45);
+    --r-lg: 28px; --r-md: 22px; --r-sm: 14px; --r-round: 50%; --r-pill: 999px;
+  }
+  .dir-b .m-hero, .dir-b .m-goal, .dir-b .m-focus, .dir-b .m-chip {
+    box-shadow: 0 12px 26px -12px rgba(36,21,54,.28);
+  }
+  .dir-b .m-insight-card:nth-child(2) { background: #E63C8C; color: #FFFFFF; }
+  .dir-b .m-insight-card:nth-child(2) strong, .dir-b .m-insight-card:nth-child(2) span { color: #FFFFFF; }
+  .dir-b .m-insight-card:nth-child(3) { background: #4D7CFF; color: #FFFFFF; }
+  .dir-b .m-insight-card:nth-child(3) strong, .dir-b .m-insight-card:nth-child(3) span { color: #FFFFFF; }
+  .dir-b .m-focus:nth-of-type(1) { background: #2FBF87; color: #FFFFFF; }
+  .dir-b .m-focus:nth-of-type(1) .m-focus-head span, .dir-b .m-focus:nth-of-type(1) .m-focus-head strong,
+  .dir-b .m-focus:nth-of-type(1) .m-due-name, .dir-b .m-focus:nth-of-type(1) b, .dir-b .m-focus:nth-of-type(1) .m-due-total { color: #FFFFFF; opacity: 1; }
+  .dir-b .m-budget-bar i.over { background: #D6234B !important; }
+
+  /* --------------------------------------------------------------------
+     Direction C — Neon Terminal (dark)
+     Near-black throughout, no white surface at all. Boldness is spent
+     entirely on the acid hero numeral and a colored edge-stripe per tile;
+     everything else stays quiet dark panels.
+     -------------------------------------------------------------------- */
+  .dir-c {
+    --bg: #0A0A0C; --text: #E7E5EE; --text-2: #C9C7D6; --muted: #6E6B80;
+    --hero-bg: #0A0A0C; --hero-text: #8A879C; --hero-accent: #E8FF52;
+    --hero-tag-bg: rgba(232,255,82,0.14); --hero-tag-text: #E8FF52;
+    --surface-2: #151519; --tile-1: #151519; --tile-1-text: #E7E5EE;
+    --hairline: #232329; --track: #232329;
+    --income: #E8FF52; --expense: #FF3D7F;
+    --avatar-bg: #1D1D22; --avatar-text: #E8FF52;
+    --chrome-bg: #151519; --chrome-border: 1px solid #232329;
+    --panel-border: 1px solid #232329; --chip-border: 1px solid #232329;
+    --nav-bg: #151519; --nav-icon: #6E6B80; --nav-icon-active: #E8FF52; --nav-border: 1px solid #232329;
+    --nav-add-bg: #E8FF52; --nav-add-icon: #0A0A0C; --nav-add-shadow: 0 0 22px -2px rgba(232,255,82,.55);
+    --r-lg: 16px; --r-md: 14px; --r-sm: 10px; --r-round: 50%; --r-pill: 999px;
+  }
+  .dir-c .m-hero { border: 1px dashed #232329; }
+  .dir-c .m-amount { text-shadow: 0 0 28px rgba(232,255,82,.35); }
+  .dir-c .m-insight-card { border-left: 3px solid #4DE8FF; }
+  .dir-c .m-insight-card:nth-child(2) { border-left-color: #9B7BFF; }
+  .dir-c .m-insight-card:nth-child(3) { border-left-color: #E8FF52; }
+  .dir-c .m-focus:nth-of-type(1) { border-left: 3px solid #FF3D7F; }
+  .dir-c .m-focus:nth-of-type(2) { border-left: 3px solid #9B7BFF; }
+  .dir-c .m-focus.full.cashflow { border-left: 3px solid #4DE8FF; }
+  .dir-c .m-focus.full.personality { border-left: 3px solid #FF3D7F; }
+  .dir-c .m-budget-bar i.over { background: #FF3D7F !important; }
+  .dir-c .m-goal-bar i { background: #E8FF52; }
+
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+
+  /* Merged decision preview — light = B, dark = C, same markup, class swap only */
+  .decision { max-width: 720px; margin: 0 auto 24px; text-align: center; }
+  .decision-badge {
+    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+    color: #0B0A0D; background: #E8FF52; padding: 5px 12px; border-radius: 999px; margin-bottom: 16px;
+  }
+  .theme-toggle {
+    display: inline-flex; gap: 3px; padding: 4px; margin: 24px 0 4px;
+    border-radius: 999px; background: #17161B; border: 1px solid #232028;
+  }
+  .theme-toggle button {
+    border: none; background: none; color: #9C96AE; font-size: 13px; font-weight: 600;
+    padding: 9px 20px; border-radius: 999px; cursor: pointer;
+  }
+  .theme-toggle button.active.is-light { background: #FFF3E1; color: #241536; }
+  .theme-toggle button.active.is-dark { background: #151519; color: #E8FF52; }
+  .decision-frame-wrap { display: flex; justify-content: center; margin-top: 8px; }
+  .decision-frame-wrap .frame { width: min(420px, 100%); }
+
+  .divider {
+    max-width: 720px; margin: 72px auto 48px; padding-top: 40px;
+    border-top: 1px solid #232028; text-align: center;
+  }
+  .divider p { font-size: 13.5px; color: #75708A; margin: 0; }
+</style>
+
+<div class="stage-head">
+  <p class="stage-eyebrow">Redesign pitch — merged decision</p>
+  <h1>สว่าง = B, มืด = C</h1>
+  <p>สรุปตามที่เลือก: <b>โหมดสว่างใช้จานสี Color-Blocked Bento (B)</b> ที่สนุกจัดจ้าน และ <b>โหมดมืดใช้ Neon Terminal (C)</b> ที่ดูจริงจังกว่า — สลับปุ่มด้านล่างเพื่อดูจอเดียวกันในสองธีมนี้ (ใช้ HTML/โครงหน้าเดียวกันเป๊ะ ต่างกันแค่ชุด token ที่แม็พเข้าไป เหมือนวิธีที่จะทำจริงใน globals.css)</p>
+  <p>ข้อควรรู้: B และ C ต่างกันมากกว่าแค่สี — รัศมีขอบ (โค้งมนมาก vs โค้งพอดี), เงา (นุ่มสีสัน vs เรืองแสงเฉพาะจุด), และวิธีเน้นหมวดหมู่ (เติมสีเต็มบล็อก vs เส้นขอบสี) ก็ต่างกันด้วย งั้น token ที่ทำใน Step 1 จะต้องรวมค่าพวกนี้เข้าไปด้วย ไม่ใช่แค่สีอย่างเดียว — ยังอยู่ในกฎเดิมของ CLAUDE.md ที่ว่า &laquo;ธีมมืดเกิดจากการชี้ token ใหม่ ไม่ต้องเขียนกฎ dark-mode แยกทีละคอมโพเนนต์&raquo; เพราะเราจะยัดค่าที่ไม่ใช่สีเข้าไปเป็น token ด้วยเหมือนกัน</p>
+</div>
+
+<div class="decision">
+  <div class="theme-toggle" id="theme-toggle"></div>
+</div>
+<div class="decision-frame-wrap">
+  <div class="frame">
+    <div class="frame-screen">
+      <div class="screen dir-b" id="decision-screen"></div>
+    </div>
+  </div>
+</div>
+
+<div class="divider">
+  <p>ทางเลือกทั้งหมดที่สำรวจไว้ก่อนสรุป — เผื่ออยากหยิบรายละเอียดจากแบบอื่นเพิ่ม</p>
+</div>
+
+<nav class="jump-nav" id="jump-nav"></nav>
+
+<div class="rack" id="rack"></div>
+
+<div class="stage-foot">
+  <p><b>หมายเหตุ:</b> ฟอนต์ยังคงเป็น IBM Plex Sans Thai ตามที่ล็อกไว้ — ความต่างทั้งหมดมาจากโครงและสี ไม่ใช่ตัวอักษร</p>
+</div>
+
+<script>
+  const ICONS = {
+    food: '<path d="M6 3h10l-1 9a4 4 0 0 1-8 0L6 3Z"/><path d="M8 21h6"/>',
+    transit: '<rect x="4" y="6" width="16" height="10" rx="2"/><path d="M4 12h16M8 16v2M16 16v2"/>',
+    goods: '<path d="M6 8h12l-1 12H7L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+    home: '<path d="M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-8Z"/>',
+    health: '<path d="M12 20s-7-4.35-9.5-8.5C.5 8 2 4.5 5.5 4.5c2 0 3.5 1.2 4.5 2.7C11 5.7 12.5 4.5 14.5 4.5 18 4.5 19.5 8 17.5 11.5 15 15.65 12 20 12 20Z"/>',
+    fun: '<circle cx="7" cy="17" r="2.3"/><path d="M9.3 17V5.5l8.7-2v10.5"/><circle cx="16.5" cy="13.5" r="2.3"/>',
+    bills: '<path d="M6 3h12v18l-2-1.5L14 21l-2-1.5L10 21l-2-1.5L6 21V3Z"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4"/>',
+    income: '<rect x="3" y="7" width="18" height="10" rx="2"/><circle cx="12" cy="12" r="2.3"/>',
+    home_svg: '',
+    nav_home: '<path d="M4 10.8 12 4l8 6.8v8.7a1.5 1.5 0 0 1-1.5 1.5H15v-6H9v6H5.5A1.5 1.5 0 0 1 4 19.5v-8.7Z" fill="currentColor" stroke="none"/>',
+    nav_history: '<rect x="5.5" y="4.5" width="13" height="15" rx="1.5"/><path d="M8.5 8.5h7M8.5 11.5h7M8.5 14.5h4"/>',
+    nav_add: '<path d="M12 5v14M5 12h14"/>',
+    nav_wallet: '<rect x="3.5" y="6.5" width="17" height="12" rx="2"/><path d="M3.5 10.5h17"/><circle cx="16.5" cy="14.5" r="1.2" fill="currentColor" stroke="none"/>',
+    nav_more: '<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
+  };
+  const CAT_ICON = { "อาหาร": "food", "เดินทาง": "transit", "ของใช้": "goods", "ที่อยู่อาศัย": "home", "สุขภาพ": "health", "บันเทิง": "fun", "บิลประจำ": "bills", "รายได้": "income" };
+
+  const svg = (key, extra = "") => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${extra}>${ICONS[key]}</svg>`;
+
+  const CAT_COLORS = {
+    "อาหาร": "#FF5A36", "เดินทาง": "#4D7CFF", "บันเทิง": "#E63C8C", "รายได้": "#17B37E",
+    "ที่อยู่อาศัย": "#F5A623", "ของใช้": "#7B5CFA", "สุขภาพ": "#FF3D7F", "บิลประจำ": "#17D9A3",
+  };
+
+  const DATA = {
+    name: "คุณเอิร์ธ",
+    hero: { label: "สมดุลดี", amount: "18,420", perDay: "614", streak: 5 },
+    insights: [
+      { label: "อัตราเงินเหลือ", value: "24%", note: "เทียบกับรายรับในรอบนี้" },
+      { label: "ภาระหนี้เดือนนี้", value: "฿3,200", note: "จากหนี้คงเหลือรวม ฿42,000 · 10% ของรายรับ" },
+      { label: "มูลค่าสุทธิ", value: "+฿2,150", note: "ปัจจุบัน ฿186,400 · หักเฉพาะภาระเดือนนี้" },
+    ],
+    chips: [
+      { title: "กาแฟ", amount: "65", cat: "อาหาร" },
+      { title: "BTS", amount: "44", cat: "เดินทาง" },
+      { title: "มื้อเที่ยง", amount: "120", cat: "อาหาร" },
+      { title: "Netflix", amount: "219", cat: "บันเทิง" },
+    ],
+    goals: [
+      { name: "ทริปญี่ปุ่น", saved: "24,000", target: "60,000", pct: 40 },
+      { name: "กองทุนฉุกเฉิน", saved: "15,000", target: "30,000", pct: 50 },
+    ],
+    dueSoon: [
+      { name: "ค่าเน็ตบ้าน", cat: "บิลประจำ", when: "อีก 2 วัน · 30/8", amount: "590" },
+      { name: "ประกันรถ", cat: "บิลประจำ", when: "วันนี้ · 28/8", amount: "1,200" },
+    ],
+    dueSoonTotal: "1,790",
+    budget: [
+      { cat: "อาหาร", spent: "3,400", budget: "5,000", pct: 68, over: false },
+      { cat: "บันเทิง", spent: "1,800", budget: "1,500", pct: 100, over: true },
+    ],
+    cashflow: [
+      { d: "จ", inc: 0, exp: 320 }, { d: "อ", inc: 0, exp: 180 }, { d: "พ", inc: 0, exp: 450 },
+      { d: "พฤ", inc: 0, exp: 90 }, { d: "ศ", inc: 300, exp: 640 }, { d: "ส", inc: 2500, exp: 1200 },
+      { d: "อา", inc: 4500, exp: 300 },
+    ],
+    cashflowNet: "+฿4,120",
+    personality: "คุณใช้จ่ายด้านอาหารมากที่สุด (ไม่รวมบิลประจำ) — ฿3,400 หรือ 38% ของรายจ่ายทั้งหมดเดือนนี้ (เยอะกว่าค่าเฉลี่ย 3 เดือนก่อน 12%)",
+    activity: [
+      { title: "ส้มตำมื้อเที่ยง", cat: "อาหาร", time: "วันนี้ 12:30", amount: "−฿120", income: false },
+      { title: "BTS", cat: "เดินทาง", time: "วันนี้ 09:10", amount: "−฿44", income: false },
+      { title: "เงินเดือน", cat: "รายได้", time: "เมื่อวาน 09:00", amount: "+฿32,000", income: true },
+      { title: "Netflix", cat: "บันเทิง", time: "เมื่อวาน 20:15", amount: "−฿219", income: false },
+    ],
+  };
+
+  const catDot = (cat, size = 26) =>
+    `<span class="m-catdot" style="background:${CAT_COLORS[cat]};width:${size}px;height:${size}px">${svg(CAT_ICON[cat])}</span>`;
+
+  function buildScreen() {
+    const maxInc = Math.max(...DATA.cashflow.map(d => d.inc), 1);
+    const maxExp = Math.max(...DATA.cashflow.map(d => d.exp), 1);
+    return `
+      <div class="m-topbar">
+        <div class="m-identity">
+          <span class="m-avatar">อ</span>
+          <div><p class="m-eyebrow">สวัสดี</p><h1>${DATA.name}</h1></div>
+        </div>
+        <button class="m-menu">${svg("nav_more")}</button>
+      </div>
+
+      <section class="m-hero">
+        <div class="m-hero-top"><span>เงินพร้อมใช้สุทธิ</span><em>${DATA.hero.label}</em></div>
+        <small class="m-streak">● ${DATA.hero.streak} วันติดต่อกัน</small>
+        <strong class="m-amount">฿${DATA.hero.amount}</strong>
+        <p class="m-hero-foot">เหลือใช้ได้อีก ฿${DATA.hero.perDay} ต่อวัน</p>
+      </section>
+
+      <div class="m-insight-row">
+        ${DATA.insights.map(i => `<div class="m-insight-card"><span>${i.label}</span><strong>${i.value}</strong><small>${i.note}</small></div>`).join("")}
+      </div>
+
+      <section class="m-section">
+        <div class="m-section-head"><div><p class="m-eyebrow">บันทึกให้เร็วขึ้น</p><h2>รายการที่ใช้บ่อย</h2></div><button>รายการอื่น</button></div>
+        <div class="m-quickadd-list">
+          ${DATA.chips.map(c => `<button class="m-chip">${catDot(c.cat)}<span><b>${c.title}</b><small>฿${c.amount}</small></span></button>`).join("")}
+        </div>
+      </section>
+
+      <section class="m-section m-goal">
+        <div class="m-section-head"><div><p class="m-eyebrow">เป้าหมายการเงิน</p><h2>${DATA.goals.length} เป้าหมาย</h2></div><button>เพิ่มเป้าหมาย</button></div>
+        ${DATA.goals.map(g => `
+          <div class="m-goal-item">
+            <div class="m-goal-head"><b>${g.name}</b></div>
+            <div class="m-goal-values"><strong>฿${g.saved}</strong><span>จาก ฿${g.target}</span></div>
+            <div class="m-goal-bar"><i style="width:${g.pct}%"></i></div>
+            <small>${g.pct}%</small>
+          </div>`).join("")}
+      </section>
+
+      <div class="m-bento">
+        <section class="m-focus due-soon">
+          <div class="m-focus-head"><div><span>ใกล้ถึงกำหนด</span><strong>${DATA.dueSoon.length} รายการ</strong></div></div>
+          ${DATA.dueSoon.map(d => `
+            <div class="m-due-row">${catDot(d.cat, 22)}<span class="m-due-name">${d.name}</span></div>
+            <div class="m-due-total" style="margin-bottom:8px">${d.when} · ฿${d.amount}</div>`).join("")}
+          <p class="m-due-total">รวม ฿${DATA.dueSoonTotal}</p>
+        </section>
+        <section class="m-focus budget">
+          <div class="m-focus-head"><div><span>งบประมาณ</span><strong>68%</strong></div></div>
+          ${DATA.budget.map(b => `
+            <div class="m-budget-row">
+              <div class="m-budget-row-top"><span>${catDot(b.cat, 16)}${b.cat}</span><b>฿${b.spent}/฿${b.budget}</b></div>
+              <div class="m-budget-bar"><i class="${b.over ? "over" : ""}" style="width:${Math.min(100, b.pct)}%;background:${b.over ? "" : CAT_COLORS[b.cat]}"></i></div>
+            </div>`).join("")}
+        </section>
+      </div>
+
+      <section class="m-section m-focus full cashflow">
+        <div class="m-focus-head"><div><span>กระแสเงินสด 7 วันล่าสุด</span><strong style="color:var(--income)">${DATA.cashflowNet}</strong></div></div>
+        <div class="m-cashflow-bars">
+          ${DATA.cashflow.map(d => `
+            <div>
+              <div class="bar-pair">
+                <i class="inc" style="height:${d.inc ? Math.max(6, (d.inc / maxInc) * 60) : 0}px"></i>
+                <i class="exp" style="height:${d.exp ? Math.max(6, (d.exp / maxExp) * 60) : 0}px"></i>
+              </div>
+              <small>${d.d}</small>
+            </div>`).join("")}
+        </div>
+      </section>
+
+      <section class="m-section m-focus full personality">
+        <div class="m-focus-head"><div><span>นิสัยการใช้เงินเดือนนี้</span><strong>อาหาร</strong></div>${catDot("อาหาร")}</div>
+        <p>${DATA.personality}</p>
+      </section>
+
+      <section class="m-section">
+        <p class="m-activity-title" style="padding:0">รายการล่าสุด</p>
+        ${DATA.activity.map(a => `
+          <div class="m-activity-row">
+            ${catDot(a.cat)}
+            <span class="m-activity-info"><b>${a.title}</b><small>${a.cat} · ${a.time}</small></span>
+            <span class="m-activity-amount ${a.income ? "income" : "expense"}">${a.amount}</span>
+          </div>`).join("")}
+      </section>
+
+      <nav class="m-nav">
+        <button class="active">${svg("nav_home")}<span>หน้าหลัก</span></button>
+        <button>${svg("nav_history")}<span>รายการ</span></button>
+        <button class="m-add">${svg("nav_add")}</button>
+        <button>${svg("nav_wallet")}<span>กระเป๋า</span></button>
+        <button>${svg("nav_more")}<span>อื่น ๆ</span></button>
+      </nav>
+    `;
+  }
+
+  const DIRECTIONS = [
+    {
+      cls: "dir-a", dot: "#C6FF3D",
+      title: "A — Neo-Brutalist Ledger",
+      desc: "ขอบหนา 2px สีหมึกล้วน เงาแบบสติกเกอร์ออฟเซ็ต ไม่มี blur เลย มุมเกือบเหลี่ยม สีจัดเดียวที่ตะโกนคือเขียว volt บนพื้นดำ",
+      rationale: "<b>สี:</b> ดำหมึก + กระดาษครีมสว่าง + volt เขียวเดียวเป็นตัวเอก, ม่วง/ส้มโผล่เฉพาะจุด (การ์ด insight) &nbsp;·&nbsp; <b>โครง:</b> การ์ดทุกใบมีเส้นขอบหนาแทนเงานุ่ม ทำให้จอรู้สึกเป็น &laquo;สมุดบัญชี&raquo; ที่แข็งแรง ไม่ใช่กระดาษสีขาวลอย",
+    },
+    {
+      cls: "dir-b", dot: "#FF6B57",
+      title: "B — Color-Blocked Bento",
+      desc: "ทุกช่องคือสีอิ่มตัวเต็ม ไม่มีพื้นขาวเลยสักบล็อก มุมโค้งมนมาก เงานุ่มสีสัน ตรงตามคำว่า &laquo;สีจัด Gen Z&raquo; ที่สุดในสามแบบ",
+      rationale: "<b>สี:</b> คอรัลเป็นฮีโร่, เหลืองซิตรัส/ชมพูฟูเชีย/เขียวสด/ฟ้าหมุนเวียนในบล็อกต่าง ๆ &nbsp;·&nbsp; <b>โครง:</b> บล็อก bento ขนาดต่างกัน สีต่างกันทุกใบ ทำให้จอสนุกและอ่านง่ายเพราะแต่ละบล็อกแยกออกจากกันชัดด้วยสี ไม่ใช่แค่เส้นขอบ",
+    },
+    {
+      cls: "dir-c", dot: "#E8FF52",
+      title: "C — Neon Terminal (มืด)",
+      desc: "พื้นดำสนิททั้งจอ ไม่มีพื้นขาวเลย ความจัดจ้านทุ่มไปที่ตัวเลขยอดเงินสีเขียวอาซิดใหญ่ยักษ์ ที่เหลือเงียบ แยกด้วยเส้นสีข้างการ์ด",
+      rationale: "<b>สี:</b> ดำคาร์บอน + ตัวเลขอาซิดเขียวเรือง + เส้นขอบสี (ฟ้า/ม่วง/ชมพู) บอกหมวดแทนไอคอนสี &nbsp;·&nbsp; <b>โครง:</b> เหมือน terminal การเงิน ดูซีเรียสแต่โดดเด่นมาก เหมาะถ้าอยากให้แอปดู &laquo;pro/แรง&raquo; มากกว่าน่ารัก",
+    },
+  ];
+
+  document.getElementById("jump-nav").innerHTML = DIRECTIONS.map(dir =>
+    `<a href="#${dir.cls}"><i style="background:${dir.dot}"></i>${dir.title.split(" — ")[0]}</a>`
+  ).join("");
+
+  document.getElementById("rack").innerHTML = DIRECTIONS.map(dir => `
+    <div class="col" id="${dir.cls}">
+      <div class="col-head">
+        <span class="col-tag"><i style="background:${dir.dot}"></i>${dir.title}</span>
+        <p>${dir.desc}</p>
+      </div>
+      <div class="frame">
+        <div class="frame-screen">
+          <div class="screen ${dir.cls}">${buildScreen()}</div>
+        </div>
+      </div>
+      <p class="rationale">${dir.rationale}</p>
+    </div>
+  `).join("");
+
+  // Merged decision preview: same buildScreen() markup, class swap only.
+  const decisionScreen = document.getElementById("decision-screen");
+  decisionScreen.innerHTML = buildScreen();
+  const themeToggle = document.getElementById("theme-toggle");
+  const THEME_OPTS = [
+    { key: "dir-b", label: "โหมดสว่าง · B", variant: "is-light" },
+    { key: "dir-c", label: "โหมดมืด · C", variant: "is-dark" },
+  ];
+  function renderToggle(active) {
+    themeToggle.innerHTML = THEME_OPTS.map(opt =>
+      `<button data-key="${opt.key}" class="${opt.key === active ? "active " + opt.variant : ""}">${opt.label}</button>`
+    ).join("");
+    themeToggle.querySelectorAll("button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        decisionScreen.className = "screen " + btn.dataset.key;
+        renderToggle(btn.dataset.key);
+      });
+    });
+  }
+  renderToggle("dir-b");
+</script>
