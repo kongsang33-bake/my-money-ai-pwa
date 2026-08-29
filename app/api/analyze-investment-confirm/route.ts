@@ -1,5 +1,6 @@
 import { createGeminiClient, describeGeminiError, generateGeminiContent, getGeminiApiKey, missingGeminiKeyResponse } from "@/lib/gemini";
 import { requireUser, unauthorizedResponse } from "@/lib/auth";
+import { GEMINI_EXTRACTION_TEMPERATURE, MAX_IMAGE_BYTES, imageBytes } from "@/lib/constants";
 
 // Reads one purchase row's unit count off a mutual-fund transaction
 // statement photo — nothing else. The app already knows which pending
@@ -27,12 +28,6 @@ type AnalyzeInvestmentConfirmBody = {
   targetAmount?: number;
 };
 
-const maxImageBytes = 5 * 1024 * 1024;
-
-function imageBytes(base64: string) {
-  return Math.floor((base64.length * 3) / 4);
-}
-
 function buildPrompt(targetAmount?: number) {
   return [
     "รูปที่แนบมาคือ statement ประวัติการซื้อขายหน่วยลงทุนจากธนาคาร/บลจ. อ่านเฉพาะแถวที่เป็นรายการ \"ซื้อ\"/Purchase เท่านั้น ห้ามนับแถวยอดยกมา (Beginning Balance) หรือยอดคงเหลือ (Ending Balance) เป็นรายการซื้อ",
@@ -54,7 +49,7 @@ export async function POST(request: Request) {
   const image = body.image;
   if (!image?.data || !image.mimeType) return Response.json({ error: "กรุณาแนบรูป statement ก่อน" }, { status: 400 });
   if (!image.mimeType.startsWith("image/")) return Response.json({ error: "รองรับเฉพาะไฟล์รูปภาพเท่านั้น" }, { status: 400 });
-  if (imageBytes(image.data) > maxImageBytes) return Response.json({ error: "รูปภาพต้องมีขนาดไม่เกิน 5MB" }, { status: 400 });
+  if (imageBytes(image.data) > MAX_IMAGE_BYTES) return Response.json({ error: "รูปภาพต้องมีขนาดไม่เกิน 5MB" }, { status: 400 });
 
   const targetAmount = typeof body.targetAmount === "number" && Number.isFinite(body.targetAmount) ? body.targetAmount : undefined;
   const prompt = buildPrompt(targetAmount);
@@ -70,7 +65,7 @@ export async function POST(request: Request) {
       config: {
         responseMimeType: "application/json",
         responseSchema: schema,
-        temperature: 0.1,
+        temperature: GEMINI_EXTRACTION_TEMPERATURE,
       },
       // A confirmation slip photo goes through OCR like the main receipt
       // path in /api/analyze -- give it the same longer per-attempt window

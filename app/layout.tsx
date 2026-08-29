@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Sans_Thai } from "next/font/google";
+import { THEME_STORAGE_KEY } from "@/lib/constants";
 import "./globals.css";
 
 const ibmPlexSansThai = IBM_Plex_Sans_Thai({
@@ -32,7 +33,7 @@ export const viewport: Viewport = {
   themeColor: "#14181C",
 };
 
-const themeInitScript = `(function(){try{var t=localStorage.getItem("money-ai-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}catch(e){}window.__splashStartedAt=Date.now();var el=document.getElementById("app-splash");if(el)el.classList.add("app-splash-play");})();`;
+const themeInitScript = `(function(){try{var t=localStorage.getItem("${THEME_STORAGE_KEY}");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}catch(e){}window.__splashStartedAt=Date.now();var el=document.getElementById("app-splash");if(el)el.classList.add("app-splash-play");})();`;
 
 export default function RootLayout({
   children,

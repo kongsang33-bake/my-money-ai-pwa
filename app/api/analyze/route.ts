@@ -1,6 +1,7 @@
 import { createGeminiClient, describeGeminiError, generateGeminiContent, getGeminiApiKey, missingGeminiKeyResponse } from "@/lib/gemini";
-import { CATEGORIES, TRANSACTION_TYPES } from "@/lib/taxonomy";
+import { CATEGORIES, TRANSACTION_TYPES, type WalletTag } from "@/lib/taxonomy";
 import { requireUser, unauthorizedResponse } from "@/lib/auth";
+import { DATE_INPUT_PATTERN, DEFAULT_TIMEZONE, GEMINI_EXTRACTION_TEMPERATURE, MAX_IMAGE_BYTES, MAX_SLIP_IMAGES, imageBytes } from "@/lib/constants";
 
 const itemSchema = {
   type: "object",
@@ -53,7 +54,7 @@ type AnalyzeDebtor = {
 type AnalyzeWallet = {
   id: string;
   name: string;
-  tag: "cash" | "savings" | "other" | "petty";
+  tag: WalletTag;
   is_default?: boolean;
 };
 
@@ -65,14 +66,6 @@ type AnalyzeBody = {
   debtors?: AnalyzeDebtor[];
   wallets?: AnalyzeWallet[];
 };
-
-const dateInputPattern = /^\d{4}-\d{2}-\d{2}$/;
-
-const maxImageBytes = 5 * 1024 * 1024;
-
-function imageBytes(base64: string) {
-  return Math.floor((base64.length * 3) / 4);
-}
 
 function buildPrompt(input: string, today: string, hasImages: boolean, debtors: AnalyzeDebtor[], wallets: AnalyzeWallet[]) {
   const lendNames = debtors.filter((debtor) => debtor.kind === "lend").map((debtor) => debtor.name);
@@ -170,17 +163,17 @@ export async function POST(request: Request) {
 
   if (!input && images.length === 0) return Response.json({ error: "กรุณาพิมพ์ข้อความหรือแนบรูปสลิปก่อน" }, { status: 400 });
   if (input.length > 2000) return Response.json({ error: "ข้อความยาวเกินไป" }, { status: 400 });
-  if (images.length > 3) return Response.json({ error: "แนบรูปได้สูงสุด 3 รูปต่อครั้ง" }, { status: 400 });
+  if (images.length > MAX_SLIP_IMAGES) return Response.json({ error: `แนบรูปได้สูงสุด ${MAX_SLIP_IMAGES} รูปต่อครั้ง` }, { status: 400 });
 
   for (const image of images) {
     if (!image.mimeType.startsWith("image/")) return Response.json({ error: "รองรับเฉพาะไฟล์รูปภาพเท่านั้น" }, { status: 400 });
-    if (imageBytes(image.data) > maxImageBytes) return Response.json({ error: "รูปภาพต้องมีขนาดไม่เกิน 5MB ต่อรูป" }, { status: 400 });
+    if (imageBytes(image.data) > MAX_IMAGE_BYTES) return Response.json({ error: "รูปภาพต้องมีขนาดไม่เกิน 5MB ต่อรูป" }, { status: 400 });
   }
 
   const today =
-    body.defaultDate && dateInputPattern.test(body.defaultDate)
+    body.defaultDate && DATE_INPUT_PATTERN.test(body.defaultDate)
       ? body.defaultDate
-      : new Intl.DateTimeFormat("en-CA", { timeZone: body.timezone || "Asia/Bangkok" }).format(new Date());
+      : new Intl.DateTimeFormat("en-CA", { timeZone: body.timezone || DEFAULT_TIMEZONE }).format(new Date());
   const prompt = buildPrompt(input, today, images.length > 0, debtors, wallets);
 
   let response;
@@ -199,7 +192,7 @@ export async function POST(request: Request) {
       config: {
         responseMimeType: "application/json",
         responseSchema: schema,
-        temperature: 0.1,
+        temperature: GEMINI_EXTRACTION_TEMPERATURE,
       },
       // A receipt photo pushes the model through OCR + per-line itemization
       // + debtor/split matching, which genuinely takes longer than a plain

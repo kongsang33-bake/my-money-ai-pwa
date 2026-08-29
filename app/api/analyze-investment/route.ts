@@ -1,5 +1,6 @@
 import { createGeminiClient, describeGeminiError, generateGeminiContent, getGeminiApiKey, missingGeminiKeyResponse } from "@/lib/gemini";
 import { requireUser, unauthorizedResponse } from "@/lib/auth";
+import { DATE_INPUT_PATTERN, DEFAULT_TIMEZONE, GEMINI_EXTRACTION_TEMPERATURE } from "@/lib/constants";
 
 // A separate, deliberately small schema/prompt from /api/analyze — logging
 // an investment purchase only ever needs an amount, which fund, which
@@ -36,8 +37,6 @@ type AnalyzeInvestmentBody = {
   investments?: { id: string; name: string; code: string | null }[];
   wallets?: { id: string; name: string; tag: string; is_default?: boolean }[];
 };
-
-const dateInputPattern = /^\d{4}-\d{2}-\d{2}$/;
 
 function buildPrompt(input: string, today: string, investments: { id: string; name: string; code: string | null }[], wallets: { id: string; name: string; tag: string; is_default?: boolean }[]) {
   const knownInvestments = investments.length
@@ -89,9 +88,9 @@ export async function POST(request: Request) {
   if (input.length > 500) return Response.json({ error: "ข้อความยาวเกินไป" }, { status: 400 });
 
   const today =
-    body.defaultDate && dateInputPattern.test(body.defaultDate)
+    body.defaultDate && DATE_INPUT_PATTERN.test(body.defaultDate)
       ? body.defaultDate
-      : new Intl.DateTimeFormat("en-CA", { timeZone: body.timezone || "Asia/Bangkok" }).format(new Date());
+      : new Intl.DateTimeFormat("en-CA", { timeZone: body.timezone || DEFAULT_TIMEZONE }).format(new Date());
   const prompt = buildPrompt(input, today, investments, wallets);
 
   let response;
@@ -102,7 +101,7 @@ export async function POST(request: Request) {
       config: {
         responseMimeType: "application/json",
         responseSchema: schema,
-        temperature: 0.1,
+        temperature: GEMINI_EXTRACTION_TEMPERATURE,
       },
     });
   } catch (error) {

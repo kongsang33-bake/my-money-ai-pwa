@@ -5,7 +5,19 @@ import { createPortal } from "react-dom";
 import NextImage from "next/image";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-import { CATEGORIES, type TransactionType } from "@/lib/taxonomy";
+import { CATEGORIES, DEBT_TYPES, TYPES_OWED_TO_USER, TYPES_USER_OWES, type TransactionType, type WalletTag } from "@/lib/taxonomy";
+import {
+  CATEGORY_DOT_TINT_ALPHA,
+  MAX_SLIP_IMAGES,
+  MONTH_START_DAY_MAX,
+  MONTH_START_DAY_MIN,
+  MS_PER_DAY,
+  PROFILE_COLUMNS,
+  TABLES,
+  THEME_STORAGE_KEY,
+  TRANSACTION_COLUMNS,
+  WEBAUTHN_TIMEOUT_MS,
+} from "@/lib/constants";
 import {
   AlertTriangle,
   Banknote,
@@ -126,7 +138,6 @@ type Debtor = {
   icon: string | null;
   icon_color: string | null;
 };
-type WalletTag = "cash" | "savings" | "other" | "petty";
 type Wallet = {
   id: string;
   user_id: string;
@@ -447,7 +458,7 @@ async function registerFaceId(user: User): Promise<string | null> {
           { type: "public-key", alg: -257 },
         ],
         authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
-        timeout: 60000,
+        timeout: WEBAUTHN_TIMEOUT_MS,
       },
     }) as PublicKeyCredential | null;
     return credential?.id ?? null;
@@ -465,7 +476,7 @@ async function verifyFaceId(credentialId: string): Promise<boolean> {
         challenge,
         allowCredentials: [{ id: base64UrlToBytes(credentialId), type: "public-key" }],
         userVerification: "required",
-        timeout: 60000,
+        timeout: WEBAUTHN_TIMEOUT_MS,
       },
     });
     return !!assertion;
@@ -494,7 +505,7 @@ function startOfDay(date: Date) {
 }
 
 function dayLabel(value: string) {
-  const diffDays = Math.round((startOfDay(new Date()) - startOfDay(new Date(value))) / 86400000);
+  const diffDays = Math.round((startOfDay(new Date()) - startOfDay(new Date(value))) / MS_PER_DAY);
   if (diffDays === 0) return "วันนี้";
   if (diffDays === 1) return "เมื่อวาน";
   return new Date(value).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
@@ -601,7 +612,7 @@ type QuickShortcut = { title: string; category: string; transaction_type: Transa
 type AiSuggestion = { label: string; detail: string; text: string; shortcut?: QuickShortcut };
 
 function deriveQuickShortcuts(entries: Entry[]): QuickShortcut[] {
-  const cutoff = Date.now() - 90 * 86400000;
+  const cutoff = Date.now() - 90 * MS_PER_DAY;
   const map = new Map<string, QuickShortcut>();
   for (const entry of entries) {
     if (entry.transaction_type !== "personal_expense" && entry.transaction_type !== "income") continue;
@@ -621,11 +632,11 @@ function deriveQuickShortcuts(entries: Entry[]): QuickShortcut[] {
 function computeStreak(entries: Entry[]) {
   const days = new Set(entries.map((entry) => startOfDay(new Date(entry.occurred_at))));
   let cursor = startOfDay(new Date());
-  if (!days.has(cursor)) cursor -= 86400000;
+  if (!days.has(cursor)) cursor -= MS_PER_DAY;
   let streak = 0;
   while (days.has(cursor)) {
     streak += 1;
-    cursor -= 86400000;
+    cursor -= MS_PER_DAY;
   }
   return streak;
 }
@@ -633,7 +644,7 @@ function computeStreak(entries: Entry[]) {
 function daysRemainingInCycle(end: Date) {
   const today = startOfDay(new Date());
   const endDay = startOfDay(new Date(end.getTime() - 1));
-  return Math.max(1, Math.round((endDay - today) / 86400000) + 1);
+  return Math.max(1, Math.round((endDay - today) / MS_PER_DAY) + 1);
 }
 
 function buildWalletInsight(balance: number, outflow: number, cycleEnd: Date) {
@@ -674,7 +685,7 @@ function buildWalletInsight(balance: number, outflow: number, cycleEnd: Date) {
 function lastSevenDayCashFlow(entries: Entry[], anchorDate: Date) {
   const today = startOfDay(anchorDate);
   return Array.from({ length: 7 }, (_, index) => {
-    const time = today - (6 - index) * 86400000;
+    const time = today - (6 - index) * MS_PER_DAY;
     const dayEntries = entries.filter((entry) => startOfDay(new Date(entry.occurred_at)) === time && entry.transaction_type !== "transfer");
     const income = dayEntries.filter((entry) => entry.wallet_impact > 0).reduce((sum, entry) => sum + entry.wallet_impact, 0);
     const expense = dayEntries.filter((entry) => entry.wallet_impact < 0).reduce((sum, entry) => sum + Math.abs(entry.wallet_impact), 0);
@@ -776,7 +787,7 @@ function buildReportCsv({
   const outflow = Math.abs(totalWallet(reportEntries, "expense"));
   const balance = income - outflow;
   const debtChange = reportEntries
-    .filter((entry) => (["lend", "split_half", "debt_repayment"] as TransactionType[]).includes(entry.transaction_type))
+    .filter((entry) => TYPES_OWED_TO_USER.includes(entry.transaction_type))
     .reduce((sum, entry) => sum + entry.debt_impact, 0);
   const categoryMap = new Map<string, number>();
 
@@ -1034,8 +1045,8 @@ function payableForDisplay(debtors: Debtor[], payableSummary: { name: string; am
 function netWorthAsOf(wallets: Wallet[], debtors: Debtor[], entriesUpToCutoff: Entry[], portfolioValue = 0, debtFormula: NetWorthDebtFormula = "full") {
   const ledger = buildWalletLedger(wallets, entriesUpToCutoff);
   const walletTotal = Object.values(ledger.totals).reduce((sum, amount) => sum + amount, 0);
-  const receivable = buildDebtSummary(debtors, entriesUpToCutoff, "lend", ["lend", "split_half", "debt_repayment"]).reduce((sum, item) => sum + item.amount, 0);
-  const payableSummary = buildDebtSummary(debtors, entriesUpToCutoff, "own", ["debt_payment", "card_charge"]);
+  const receivable = buildDebtSummary(debtors, entriesUpToCutoff, "lend", TYPES_OWED_TO_USER).reduce((sum, item) => sum + item.amount, 0);
+  const payableSummary = buildDebtSummary(debtors, entriesUpToCutoff, "own", TYPES_USER_OWES);
   const payable = payableForDisplay(debtors, payableSummary, debtFormula);
   return walletTotal + receivable - payable + portfolioValue;
 }
@@ -1415,7 +1426,7 @@ export default function Home() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const saved = window.localStorage.getItem("money-ai-theme");
+      const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
       if (saved === "light" || saved === "dark") setTheme(saved);
       themeLoadedRef.current = true;
     }, 0);
@@ -1424,15 +1435,15 @@ export default function Home() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    if (themeLoadedRef.current) window.localStorage.setItem("money-ai-theme", theme);
+    if (themeLoadedRef.current) window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
 
   const loadEntries = useCallback(async () => {
     if (!supabase) return;
 
     const { data, error } = await supabase
-      .from("transactions")
-      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id,investment_id,investment_units")
+      .from(TABLES.transactions)
+      .select(TRANSACTION_COLUMNS)
       .order("occurred_at", { ascending: false });
 
     if (error) {
@@ -1447,8 +1458,8 @@ export default function Home() {
     if (!supabase) return;
 
     const { data, error } = await supabase
-      .from("profiles")
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
+      .from(TABLES.profiles)
+      .select(PROFILE_COLUMNS)
       .maybeSingle();
     if (error) {
       setError(error.message);
@@ -1457,7 +1468,7 @@ export default function Home() {
     const nextProfile = data
       ? {
           ...data,
-          month_start_day: clampInteger(data.month_start_day, 1, 28, 1),
+          month_start_day: clampInteger(data.month_start_day, MONTH_START_DAY_MIN, MONTH_START_DAY_MAX, 1),
           pin_failed_attempts: clampInteger(data.pin_failed_attempts, 0, pinMaxAttempts, 0),
         } as Profile
       : null;
@@ -1469,7 +1480,7 @@ export default function Home() {
     if (!supabase) return;
 
     const { data, error } = await supabase
-      .from("debtors")
+      .from(TABLES.debtors)
       .select("id,user_id,name,note,opening_balance,kind,monthly_installment,total_installments,credit_limit,credit_card_min_payment_percent,icon,icon_color")
       .order("name", { ascending: true });
     if (error) {
@@ -1490,7 +1501,7 @@ export default function Home() {
     if (!supabase) return;
 
     const { data, error } = await supabase
-      .from("wallets")
+      .from(TABLES.wallets)
       .select("id,user_id,name,tag,balance,icon,icon_color,is_default")
       .order("created_at", { ascending: true });
     if (error) {
@@ -1504,7 +1515,7 @@ export default function Home() {
     if (!supabase) return;
 
     const { data, error } = await supabase
-      .from("recurring_expenses")
+      .from(TABLES.recurringExpenses)
       .select("id,user_id,name,amount,billing_day,icon,icon_color")
       .order("billing_day", { ascending: true });
     if (error) {
@@ -1518,7 +1529,7 @@ export default function Home() {
     if (!supabase) return;
 
     const { data, error } = await supabase
-      .from("investments")
+      .from(TABLES.investments)
       .select("id,user_id,name,code,units,cost_basis,icon,icon_color")
       .order("created_at", { ascending: true });
     if (error) {
@@ -1536,7 +1547,7 @@ export default function Home() {
     if (!supabase) return;
 
     const { data, error } = await supabase
-      .from("investment_prices")
+      .from(TABLES.investmentPrices)
       .select("id,investment_id,nav,recorded_at")
       .order("recorded_at", { ascending: true });
     if (error) {
@@ -1724,11 +1735,11 @@ export default function Home() {
   const streak = useMemo(() => computeStreak(entries), [entries]);
   const quickShortcuts = useMemo(() => deriveQuickShortcuts(entries), [entries]);
   const receivableSummary = useMemo(
-    () => buildDebtSummary(debtors, entries, "lend", ["lend", "split_half", "debt_repayment"]),
+    () => buildDebtSummary(debtors, entries, "lend", TYPES_OWED_TO_USER),
     [debtors, entries],
   );
   const payableSummary = useMemo(
-    () => buildDebtSummary(debtors, entries, "own", ["debt_payment", "card_charge"]),
+    () => buildDebtSummary(debtors, entries, "own", TYPES_USER_OWES),
     [debtors, entries],
   );
 
@@ -1743,7 +1754,7 @@ export default function Home() {
           const daysInNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0).getDate();
           billingDate = new Date(now.getFullYear(), now.getMonth() + 1, Math.min(item.billing_day, daysInNextMonth));
         }
-        const daysUntil = Math.round((billingDate.getTime() - startOfToday.getTime()) / 86400000);
+        const daysUntil = Math.round((billingDate.getTime() - startOfToday.getTime()) / MS_PER_DAY);
         return { item, billingDate, daysUntil };
       })
       .filter(({ daysUntil }) => daysUntil >= 0 && daysUntil <= 3)
@@ -1783,7 +1794,7 @@ export default function Home() {
   const monthlyDebtChange = useMemo(
     () =>
       monthlyEntries
-        .filter((entry) => (["lend", "split_half", "debt_repayment"] as TransactionType[]).includes(entry.transaction_type))
+        .filter((entry) => TYPES_OWED_TO_USER.includes(entry.transaction_type))
         .reduce((sum, entry) => sum + entry.debt_impact, 0),
     [monthlyEntries],
   );
@@ -1941,7 +1952,7 @@ export default function Home() {
     if (!files?.length) return;
     setError("");
 
-    const nextFiles = [...files].slice(0, 3 - slipImages.length);
+    const nextFiles = [...files].slice(0, MAX_SLIP_IMAGES - slipImages.length);
     if (nextFiles.some((file) => !file.type.startsWith("image/"))) {
       setError("รองรับเฉพาะไฟล์รูปภาพเท่านั้น");
       return;
@@ -1949,7 +1960,7 @@ export default function Home() {
 
     try {
       const images = await Promise.all(nextFiles.map(compressSlipImage));
-      setSlipImages((current) => [...current, ...images].slice(0, 3));
+      setSlipImages((current) => [...current, ...images].slice(0, MAX_SLIP_IMAGES));
       notify({ tone: "success", title: "แนบสลิปแล้ว", detail: `${images.length} รูปพร้อมให้ AI อ่าน` });
     } catch (e) {
       setError(e instanceof Error ? e.message : "แนบรูปไม่สำเร็จ");
@@ -2117,7 +2128,7 @@ export default function Home() {
       return false;
     }
     const { data, error } = await supabase
-      .from("transactions")
+      .from(TABLES.transactions)
       .insert({
         user_id: user.id,
         title: `ลงทุน ${investment.name}`,
@@ -2136,7 +2147,7 @@ export default function Home() {
         investment_id: investment.id,
         investment_units: null,
       })
-      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id,investment_id,investment_units")
+      .select(TRANSACTION_COLUMNS)
       .single();
     if (error) {
       setError(error.message);
@@ -2186,9 +2197,9 @@ export default function Home() {
     }));
 
     const { data, error } = await supabase
-      .from("transactions")
+      .from(TABLES.transactions)
       .insert(payload)
-      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id,investment_id,investment_units");
+      .select(TRANSACTION_COLUMNS);
 
     if (error) {
       setError(error.message);
@@ -2211,17 +2222,16 @@ export default function Home() {
   async function createMissingDebtors(items: Entry[]) {
     if (!supabase || !user) return;
     const known = new Set(debtors.map((debtor) => debtor.name.trim().toLowerCase()));
-    const debtTypes: TransactionType[] = ["lend", "split_half", "debt_repayment", "debt_payment", "card_charge"];
     const nameKinds = new Map<string, DebtorKind>();
     for (const item of items) {
-      if (!debtTypes.includes(item.transaction_type)) continue;
+      if (!DEBT_TYPES.includes(item.transaction_type)) continue;
       const name = item.debtor_name.trim();
       if (!name || name === unnamedDebtor || known.has(name.toLowerCase())) continue;
-      if (!nameKinds.has(name)) nameKinds.set(name, (["debt_payment", "card_charge"] as TransactionType[]).includes(item.transaction_type) ? "own" : "lend");
+      if (!nameKinds.has(name)) nameKinds.set(name, TYPES_USER_OWES.includes(item.transaction_type) ? "own" : "lend");
     }
 
     for (const [name, kind] of nameKinds) {
-      const { error } = await supabase.from("debtors").insert({ user_id: user.id, name, kind });
+      const { error } = await supabase.from(TABLES.debtors).insert({ user_id: user.id, name, kind });
       if (error && error.code !== "23505") {
         setError(error.message);
         return;
@@ -2252,7 +2262,7 @@ export default function Home() {
       );
 
       const { error: updateError } = await supabase
-        .from("transactions")
+        .from(TABLES.transactions)
         .update({
           title: sourceLeg.title.trim(),
           category: sourceLeg.category,
@@ -2278,7 +2288,7 @@ export default function Home() {
       }
 
       const { data, error: insertError } = await supabase
-        .from("transactions")
+        .from(TABLES.transactions)
         .insert({
           user_id: user.id,
           title: destLeg.title.trim(),
@@ -2296,7 +2306,7 @@ export default function Home() {
           note: destLeg.note,
           transfer_group_id: destLeg.transfer_group_id,
         })
-        .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id,investment_id,investment_units");
+        .select(TRANSACTION_COLUMNS);
 
       if (insertError) {
         setError(insertError.message);
@@ -2317,7 +2327,7 @@ export default function Home() {
     const resolvedWalletId = normalized.wallet_id ?? defaultWalletId(wallets);
 
     const { error } = await supabase
-      .from("transactions")
+      .from(TABLES.transactions)
       .update({
         title: normalized.title.trim(),
         category: normalized.category,
@@ -2349,7 +2359,7 @@ export default function Home() {
 
   const restoreEntries = useCallback(async (entriesToRestore: Entry[]) => {
     if (!supabase || !user || !entriesToRestore.length) return;
-    const { error } = await supabase.from("transactions").insert(entriesToRestore.map((entry) => ({
+    const { error } = await supabase.from(TABLES.transactions).insert(entriesToRestore.map((entry) => ({
       id: entry.id,
       user_id: user.id,
       title: entry.title,
@@ -2396,7 +2406,7 @@ export default function Home() {
     setBusy(true);
     setError("");
 
-    const { error } = await supabase.from("transactions").delete().in("id", entriesToDelete.map((item) => item.id));
+    const { error } = await supabase.from(TABLES.transactions).delete().in("id", entriesToDelete.map((item) => item.id));
     if (error) setError(error.message);
     else {
       const deletedIds = new Set(entriesToDelete.map((item) => item.id));
@@ -2442,13 +2452,13 @@ export default function Home() {
       nickname: next.nickname.trim() || null,
       app_icon: next.app_icon.trim() || null,
       app_icon_image: next.app_icon_image.trim() || null,
-      month_start_day: clampInteger(next.month_start_day, 1, 28, 1),
+      month_start_day: clampInteger(next.month_start_day, MONTH_START_DAY_MIN, MONTH_START_DAY_MAX, 1),
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await supabase
-      .from("profiles")
+      .from(TABLES.profiles)
       .upsert(payload, { onConflict: "user_id" })
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
+      .select(PROFILE_COLUMNS)
       .single();
 
     if (error) {
@@ -2469,7 +2479,7 @@ export default function Home() {
     const pin_salt = createPinSalt();
     const pin_hash = await hashPin(pin, pin_salt);
     const { data, error } = await supabase
-      .from("profiles")
+      .from(TABLES.profiles)
       .upsert({
         user_id: user.id,
         pin_hash,
@@ -2478,7 +2488,7 @@ export default function Home() {
         pin_blocked_until: null,
         updated_at: new Date().toISOString(),
       }, { onConflict: "user_id" })
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
+      .select(PROFILE_COLUMNS)
       .single();
 
     if (error) {
@@ -2512,10 +2522,10 @@ export default function Home() {
     const candidateHash = await hashPin(pin, latestProfile.pin_salt);
     if (timingSafeEqual(candidateHash, latestProfile.pin_hash)) {
       const { data, error } = await supabase
-        .from("profiles")
+        .from(TABLES.profiles)
         .update({ pin_failed_attempts: 0, pin_blocked_until: null, updated_at: new Date().toISOString() })
         .eq("user_id", user.id)
-        .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
+        .select(PROFILE_COLUMNS)
         .single();
       if (error) {
         setPinError(error.message);
@@ -2532,17 +2542,17 @@ export default function Home() {
     const nextAttempts = clampInteger(latestProfile.pin_failed_attempts + 1, 0, pinMaxAttempts, 1);
     const blockedUntil = nextAttempts >= pinMaxAttempts ? new Date(Date.now() + pinBlockMs).toISOString() : null;
     const { data, error } = await supabase
-      .from("profiles")
+      .from(TABLES.profiles)
       .update({ pin_failed_attempts: nextAttempts, pin_blocked_until: blockedUntil, updated_at: new Date().toISOString() })
       .eq("user_id", user.id)
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
+      .select(PROFILE_COLUMNS)
       .single();
     if (data) setProfile(data as Profile);
     if (blockedUntil) {
       setPinSheetOpen(false);
       setPinMode("locked");
     }
-    setPinError(error ? error.message : blockedUntil ? "ใส่ PIN ผิดครบ 5 ครั้ง บล็อกการเข้าใช้งาน 1 ชั่วโมง" : `PIN ไม่ถูกต้อง เหลือ ${pinMaxAttempts - nextAttempts} ครั้ง`);
+    setPinError(error ? error.message : blockedUntil ? `ใส่ PIN ผิดครบ ${pinMaxAttempts} ครั้ง บล็อกการเข้าใช้งาน ${pinBlockMs / 3_600_000} ชั่วโมง` : `PIN ไม่ถูกต้อง เหลือ ${pinMaxAttempts - nextAttempts} ครั้ง`);
     setBusy(false);
     return false;
   }
@@ -2558,10 +2568,10 @@ export default function Home() {
       return false;
     }
     const { data, error } = await supabase
-      .from("profiles")
+      .from(TABLES.profiles)
       .update({ pin_failed_attempts: 0, pin_blocked_until: null, updated_at: new Date().toISOString() })
       .eq("user_id", user.id)
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
+      .select(PROFILE_COLUMNS)
       .single();
     if (error) {
       setPinError(error.message);
@@ -2589,10 +2599,10 @@ export default function Home() {
     setBusy(true);
     setPinError("");
     const { data, error } = await supabase
-      .from("profiles")
+      .from(TABLES.profiles)
       .update({ pin_hash: null, pin_salt: null, pin_failed_attempts: 0, pin_blocked_until: null, webauthn_credential_id: null, webauthn_enabled: false, updated_at: new Date().toISOString() })
       .eq("user_id", user.id)
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
+      .select(PROFILE_COLUMNS)
       .single();
     if (error) {
       setPinError(error.message);
@@ -2619,10 +2629,10 @@ export default function Home() {
       return false;
     }
     const { data, error } = await supabase
-      .from("profiles")
+      .from(TABLES.profiles)
       .update({ webauthn_credential_id: credentialId, webauthn_enabled: true, updated_at: new Date().toISOString() })
       .eq("user_id", user.id)
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
+      .select(PROFILE_COLUMNS)
       .single();
     if (error) {
       setPinError(error.message);
@@ -2642,10 +2652,10 @@ export default function Home() {
     setBusy(true);
     setPinError("");
     const { data, error } = await supabase
-      .from("profiles")
+      .from(TABLES.profiles)
       .update({ webauthn_credential_id: null, webauthn_enabled: false, updated_at: new Date().toISOString() })
       .eq("user_id", user.id)
-      .select("user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled")
+      .select(PROFILE_COLUMNS)
       .single();
     if (error) {
       setPinError(error.message);
@@ -2662,7 +2672,7 @@ export default function Home() {
     if (!supabase || !user) return;
     setBusy(true);
     await supabase
-      .from("profiles")
+      .from(TABLES.profiles)
       .update({ pin_hash: null, pin_salt: null, pin_failed_attempts: 0, pin_blocked_until: null, updated_at: new Date().toISOString() })
       .eq("user_id", user.id);
     await supabase.auth.signOut();
@@ -2674,7 +2684,7 @@ export default function Home() {
     setBusy(true);
     setError("");
     const { data, error } = await supabase
-      .from("debtors")
+      .from(TABLES.debtors)
       .insert({
         user_id: user.id,
         name: input.name.trim(),
@@ -2706,7 +2716,7 @@ export default function Home() {
     setError("");
     const openingBalance = toMoneyAmount(patch.opening_balance);
     const { error } = await supabase
-      .from("debtors")
+      .from(TABLES.debtors)
       .update({
         name: patch.name.trim(),
         note: patch.note.trim() || null,
@@ -2748,7 +2758,7 @@ export default function Home() {
     if (!confirmed) return;
     setBusy(true);
     setError("");
-    const { error } = await supabase.from("debtors").delete().eq("id", debtor.id);
+    const { error } = await supabase.from(TABLES.debtors).delete().eq("id", debtor.id);
     if (error) setError(error.message);
     else {
       if (selectedDebtor?.id === debtor.id) setSelectedDebtor(null);
@@ -2765,7 +2775,7 @@ export default function Home() {
 
   async function restoreDebtor(debtor: Debtor) {
     if (!supabase) return;
-    const { error } = await supabase.from("debtors").insert(debtor);
+    const { error } = await supabase.from(TABLES.debtors).insert(debtor);
     if (error) {
       setError(error.message);
       notify({ tone: "error", title: "ย้อนคืนรายชื่อไม่สำเร็จ", detail: error.message });
@@ -2779,9 +2789,9 @@ export default function Home() {
     if (!supabase || !user || !input.name.trim()) return false;
     setBusy(true);
     setError("");
-    if (input.is_default) await supabase.from("wallets").update({ is_default: false, updated_at: new Date().toISOString() }).eq("user_id", user.id);
+    if (input.is_default) await supabase.from(TABLES.wallets).update({ is_default: false, updated_at: new Date().toISOString() }).eq("user_id", user.id);
     const { data, error } = await supabase
-      .from("wallets")
+      .from(TABLES.wallets)
       .insert({
         user_id: user.id,
         name: input.name.trim(),
@@ -2810,9 +2820,9 @@ export default function Home() {
     if (!supabase) return false;
     setBusy(true);
     setError("");
-    if (patch.is_default) await supabase.from("wallets").update({ is_default: false, updated_at: new Date().toISOString() }).eq("user_id", wallet.user_id).neq("id", wallet.id);
+    if (patch.is_default) await supabase.from(TABLES.wallets).update({ is_default: false, updated_at: new Date().toISOString() }).eq("user_id", wallet.user_id).neq("id", wallet.id);
     const { error } = await supabase
-      .from("wallets")
+      .from(TABLES.wallets)
       .update({
         name: patch.name.trim(),
         tag: patch.tag,
@@ -2853,7 +2863,7 @@ export default function Home() {
     if (!confirmed) return;
     setBusy(true);
     setError("");
-    const { error } = await supabase.from("wallets").delete().eq("id", wallet.id);
+    const { error } = await supabase.from(TABLES.wallets).delete().eq("id", wallet.id);
     if (error) setError(error.message);
     else {
       setWallets((current) => current.filter((item) => item.id !== wallet.id));
@@ -2869,7 +2879,7 @@ export default function Home() {
 
   async function restoreWallet(wallet: Wallet) {
     if (!supabase) return;
-    const { error } = await supabase.from("wallets").insert(wallet);
+    const { error } = await supabase.from(TABLES.wallets).insert(wallet);
     if (error) {
       setError(error.message);
       notify({ tone: "error", title: "ย้อนคืนกระเป๋าไม่สำเร็จ", detail: error.message });
@@ -2887,7 +2897,7 @@ export default function Home() {
     setBusy(true);
     setError("");
     const { data, error } = await supabase
-      .from("recurring_expenses")
+      .from(TABLES.recurringExpenses)
       .insert({
         user_id: user.id,
         name: input.name.trim(),
@@ -2914,7 +2924,7 @@ export default function Home() {
     setError("");
     const billingDay = normalizeBillingDay(patch.billing_day);
     const { error } = await supabase
-      .from("recurring_expenses")
+      .from(TABLES.recurringExpenses)
       .update({
         name: patch.name.trim(),
         amount: toMoneyAmount(patch.amount),
@@ -2945,7 +2955,7 @@ export default function Home() {
     if (!confirmed) return;
     setBusy(true);
     setError("");
-    const { error } = await supabase.from("recurring_expenses").delete().eq("id", item.id);
+    const { error } = await supabase.from(TABLES.recurringExpenses).delete().eq("id", item.id);
     if (error) setError(error.message);
     else {
       setRecurringExpenses((current) => current.filter((row) => row.id !== item.id));
@@ -2961,7 +2971,7 @@ export default function Home() {
 
   async function restoreRecurringExpense(item: RecurringExpense) {
     if (!supabase) return;
-    const { error } = await supabase.from("recurring_expenses").insert(item);
+    const { error } = await supabase.from(TABLES.recurringExpenses).insert(item);
     if (error) {
       setError(error.message);
       notify({ tone: "error", title: "ย้อนคืนรายจ่ายประจำไม่สำเร็จ", detail: error.message });
@@ -2975,7 +2985,7 @@ export default function Home() {
     if (target) return target;
     if (!supabase || !user) return null;
     const { data, error } = await supabase
-      .from("investments")
+      .from(TABLES.investments)
       .insert({
         user_id: user.id,
         name: input.name.trim(),
@@ -3014,7 +3024,7 @@ export default function Home() {
       return false;
     }
     const { data, error } = await supabase
-      .from("transactions")
+      .from(TABLES.transactions)
       .insert({
         user_id: user.id,
         title: `ลงทุน ${investment.name}`,
@@ -3033,7 +3043,7 @@ export default function Home() {
         investment_id: investment.id,
         investment_units: units,
       })
-      .select("id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id,investment_id,investment_units")
+      .select(TRANSACTION_COLUMNS)
       .single();
     if (error) {
       setError(error.message);
@@ -3041,7 +3051,7 @@ export default function Home() {
       return false;
     }
     const { error: updateError } = await supabase
-      .from("investments")
+      .from(TABLES.investments)
       .update({ units: investment.units + units, cost_basis: investment.cost_basis + amount, updated_at: new Date().toISOString() })
       .eq("id", investment.id);
     if (updateError) {
@@ -3067,7 +3077,7 @@ export default function Home() {
     setBusy(true);
     setError("");
     const { error } = await supabase
-      .from("transactions")
+      .from(TABLES.transactions)
       .update({ investment_units: units })
       .eq("id", entry.id);
     if (error) {
@@ -3076,7 +3086,7 @@ export default function Home() {
       return false;
     }
     const { error: updateError } = await supabase
-      .from("investments")
+      .from(TABLES.investments)
       .update({ units: investment.units + units, cost_basis: investment.cost_basis + entry.amount, updated_at: new Date().toISOString() })
       .eq("id", investment.id);
     if (updateError) {
@@ -3101,7 +3111,7 @@ export default function Home() {
     setBusy(true);
     setError("");
     const { error } = await supabase
-      .from("investments")
+      .from(TABLES.investments)
       .update({ units: nextUnits, cost_basis: nextCostBasis, updated_at: new Date().toISOString() })
       .eq("id", item.id);
     if (error) {
@@ -3119,7 +3129,7 @@ export default function Home() {
     setBusy(true);
     setError("");
     const { data, error } = await supabase
-      .from("investment_prices")
+      .from(TABLES.investmentPrices)
       .upsert({ investment_id: item.id, user_id: user.id, nav, recorded_at: recordedAt }, { onConflict: "investment_id,recorded_at" })
       .select("id,investment_id,nav,recorded_at")
       .single();
@@ -3145,7 +3155,7 @@ export default function Home() {
     if (!confirmed) return;
     setBusy(true);
     setError("");
-    const { error } = await supabase.from("investments").delete().eq("id", item.id);
+    const { error } = await supabase.from(TABLES.investments).delete().eq("id", item.id);
     if (error) setError(error.message);
     else {
       setInvestments((current) => current.filter((row) => row.id !== item.id));
@@ -3319,7 +3329,7 @@ export default function Home() {
                         onClick={() => applySuggestion(suggestion.text, suggestion.shortcut)}
                       >
                         <i className="card-accent" style={{ background: suggestion.shortcut ? categoryColor(suggestion.shortcut.category) : undefined }} />
-                        <span className="cat-dot" style={{ background: suggestion.shortcut ? categoryTint(suggestion.shortcut.category, 13) : undefined, color: suggestion.shortcut ? categoryColor(suggestion.shortcut.category) : undefined }}>
+                        <span className="cat-dot" style={{ background: suggestion.shortcut ? categoryTint(suggestion.shortcut.category, CATEGORY_DOT_TINT_ALPHA) : undefined, color: suggestion.shortcut ? categoryColor(suggestion.shortcut.category) : undefined }}>
                           {suggestion.shortcut ? <CategoryIcon category={suggestion.shortcut.category} /> : <Lightbulb size={14} strokeWidth={2.25} aria-hidden="true" />}
                         </span>
                         <span>
@@ -3355,7 +3365,7 @@ export default function Home() {
                       แนบสลิป
                       <input type="file" accept="image/*" multiple onChange={(event) => { void addSlipFiles(event.target.files); event.currentTarget.value = ""; }} />
                     </label>
-                    <span>{slipImages.length ? `${slipImages.length}/3 รูป` : "Gemini ช่วยอ่านรูปและข้อความ"}</span>
+                    <span>{slipImages.length ? `${slipImages.length}/${MAX_SLIP_IMAGES} รูป` : "Gemini ช่วยอ่านรูปและข้อความ"}</span>
                   </div>
                 </div>
 
@@ -3937,7 +3947,7 @@ function PinGate({
               </div>
 
               <div className="pin-status">
-                {mode === "locked" && blocked && <p className="pin-error">ใส่ผิดครบ 5 ครั้ง กรุณารอประมาณ {remainingMinutes} นาที</p>}
+                {mode === "locked" && blocked && <p className="pin-error">ใส่ผิดครบ {pinMaxAttempts} ครั้ง กรุณารอประมาณ {remainingMinutes} นาที</p>}
                 {mode === "locked" && !blocked && error && <p className="pin-error">{error}</p>}
                 {mode === "locked" && !blocked && !error && remainingAttempts < pinMaxAttempts && <p className="pin-hint">ใส่ผิดได้อีก {remainingAttempts} ครั้ง</p>}
                 {mode === "setup" && (setupError || error) && <p className="pin-error">{setupError || error}</p>}
@@ -4485,7 +4495,7 @@ function BudgetGlanceCard({
           {budgetGlance.items.map((item) => (
             <div key={item.category}>
               <span>
-                <i className="cat-dot" style={{ background: categoryTint(item.category, 13), color: categoryColor(item.category) }}><CategoryIcon category={item.category} /></i>
+                <i className="cat-dot" style={{ background: categoryTint(item.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(item.category) }}><CategoryIcon category={item.category} /></i>
                 {item.category}
               </span>
               <b>{moneySign}{formatMoney(item.spent)} / {moneySign}{formatMoney(item.budget)}</b>
@@ -4663,7 +4673,7 @@ function SpendingPersonalityCard({
           <strong>{hasSpend ? topCategory!.category : "ยังไม่มีข้อมูล"}</strong>
         </div>
         {hasSpend && (
-          <i className="cat-dot" style={{ background: categoryTint(topCategory!.category, 13), color: categoryColor(topCategory!.category) }}><CategoryIcon category={topCategory!.category} /></i>
+          <i className="cat-dot" style={{ background: categoryTint(topCategory!.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(topCategory!.category) }}><CategoryIcon category={topCategory!.category} /></i>
         )}
       </div>
       {hasSpend ? (
@@ -4925,7 +4935,7 @@ function IncomeBreakdown({ items }: { items: { category: string; amount: number 
       <div className="income-breakdown-list">
         {items.map((item) => (
           <div key={item.category}>
-            <span className="cat-dot" style={{ background: categoryTint(item.category, 13), color: categoryColor(item.category) }}><CategoryIcon category={item.category} /></span>
+            <span className="cat-dot" style={{ background: categoryTint(item.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(item.category) }}><CategoryIcon category={item.category} /></span>
             <b>{item.category}</b>
             <strong>{moneySign}{formatMoney(item.amount)}</strong>
           </div>
@@ -4993,7 +5003,7 @@ function MonthSummary({
             return (
               <div className="category-bar" key={item.category}>
                 <div>
-                  <span className="cat-dot" style={{ background: categoryTint(item.category, 13), color: categoryColor(item.category) }}><CategoryIcon category={item.category} /></span>
+                  <span className="cat-dot" style={{ background: categoryTint(item.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(item.category) }}><CategoryIcon category={item.category} /></span>
                   <b>{item.category}</b>
                   {overBudget && <span className="over-budget-chip">เกินงบ</span>}
                   <small>{hasBudget ? `${moneySign}${formatMoney(item.amount)} / ${moneySign}${formatMoney(budget)}` : `${percent.toFixed(0)}%`}</small>
@@ -5265,8 +5275,8 @@ function Metric({ label, value, tone, showPositiveSign = false }: { label: strin
 
 function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft: Draft; knownDebtors: Debtor[]; wallets: Wallet[]; onChange: (draft: Draft) => void; onRemove: () => void }) {
   const update = (patch: Partial<Draft>) => onChange(normalizeEntry({ ...draft, ...patch }, false));
-  const isDebtType = (["lend", "split_half", "debt_repayment", "debt_payment", "card_charge"] as TransactionType[]).includes(draft.transaction_type);
-  const isOwnDebtType = (["debt_payment", "card_charge"] as TransactionType[]).includes(draft.transaction_type);
+  const isDebtType = DEBT_TYPES.includes(draft.transaction_type);
+  const isOwnDebtType = TYPES_USER_OWES.includes(draft.transaction_type);
   const relevantKind: DebtorKind = isOwnDebtType ? "own" : "lend";
   const knownNames = knownDebtors.filter((debtor) => debtor.kind === relevantKind).map((debtor) => debtor.name);
   const isNewDebtor = isDebtType && !!draft.debtor_name.trim() && draft.debtor_name !== unnamedDebtor && !knownNames.some((name) => name.trim().toLowerCase() === draft.debtor_name.trim().toLowerCase());
@@ -5278,7 +5288,7 @@ function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft:
       <button className="draft-remove" onClick={onRemove} aria-label="ลบรายการนี้ออกจากรายการที่ตรวจสอบ">
         <X size={14} strokeWidth={2.5} />
       </button>
-      <span className="cat-icon" style={{ background: categoryTint(draft.category, 13), color: categoryColor(draft.category) }}><CategoryIcon category={draft.category} size={18} /></span>
+      <span className="cat-icon" style={{ background: categoryTint(draft.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(draft.category) }}><CategoryIcon category={draft.category} size={18} /></span>
       <div>
         <input value={draft.title} onChange={(event) => update({ title: event.target.value })} />
         <div className="select-shell">
@@ -5400,7 +5410,7 @@ const EntryList = memo(function EntryList({
               role={onEdit ? "button" : undefined}
               tabIndex={onEdit ? 0 : undefined}
             >
-              <span className="entry-icon" style={{ background: categoryTint(entry.category, 13), color: categoryColor(entry.category) }}><CategoryIcon category={entry.category} size={18} /></span>
+              <span className="entry-icon" style={{ background: categoryTint(entry.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(entry.category) }}><CategoryIcon category={entry.category} size={18} /></span>
               <div>
                 <b>{entry.title}</b>
                 <small>
@@ -5435,7 +5445,7 @@ function RecentActivityTimeline({ entries, onEdit }: { entries: Entry[]; onEdit:
       <div className="activity-timeline-list">
         {recent.map((entry) => (
           <button className="activity-timeline-row" key={entry.id} onClick={() => onEdit(entry)}>
-            <i className="cat-dot" style={{ background: categoryTint(entry.category, 13), color: categoryColor(entry.category) }}><CategoryIcon category={entry.category} size={14} /></i>
+            <i className="cat-dot" style={{ background: categoryTint(entry.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(entry.category) }}><CategoryIcon category={entry.category} size={14} /></i>
             <span className="activity-timeline-info">
               <b>{entry.title}</b>
               <small>{entry.category} · {formatDateTime(entry.occurred_at)}</small>
@@ -5472,7 +5482,7 @@ function QuickAddStrip({
       <div className="quick-add-list">
         {shortcuts.map((shortcut) => (
           <button className="quick-add-chip" key={`${shortcut.title}|${shortcut.category}`} onClick={() => onSelect(shortcut)}>
-            <span className="cat-dot" style={{ background: categoryTint(shortcut.category, 13), color: categoryColor(shortcut.category) }}>
+            <span className="cat-dot" style={{ background: categoryTint(shortcut.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(shortcut.category) }}>
               <CategoryIcon category={shortcut.category} size={15} />
             </span>
             <span>
@@ -5584,7 +5594,7 @@ function ManualEntryForm({
           <CategoryPicker value={draft.category} onChange={(category) => update({ category })} />
         </label>
       )}
-      {(["lend", "split_half", "debt_repayment", "debt_payment", "card_charge"] as TransactionType[]).includes(draft.transaction_type) && (
+      {DEBT_TYPES.includes(draft.transaction_type) && (
         <label>
         <input type="text" placeholder={draft.transaction_type === "card_charge" ? "เช่น กรุงศรีเฟิร์สช้อย" : "เช่น เพื่อนเอ"} value={draft.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
         <span>{draft.transaction_type === "card_charge" ? "ชื่อบัตร" : "ชื่อผู้เกี่ยวข้อง"}</span>
@@ -5728,7 +5738,7 @@ function EditSheet({
         จำนวนเงิน
         <AmountInput value={entry.amount} onChange={(amount) => update({ amount })} disabled={wasTransfer} />
       </label>
-      {(["lend", "split_half", "debt_repayment", "debt_payment", "card_charge"] as TransactionType[]).includes(entry.transaction_type) && (
+      {DEBT_TYPES.includes(entry.transaction_type) && (
         <label>
         <input type="text" placeholder={entry.transaction_type === "card_charge" ? "เช่น กรุงศรีเฟิร์สช้อย" : "เช่น เพื่อนเอ"} value={entry.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
         <span>{entry.transaction_type === "card_charge" ? "ชื่อบัตร" : "ชื่อผู้เกี่ยวข้อง"}</span>
@@ -6343,7 +6353,7 @@ function BudgetSheet({
         <p className="budget-hint">ตั้งวงเงินต่อหมวดหมู่ เว้นว่างไว้ถ้าไม่ต้องการจำกัด บันทึกเฉพาะในเครื่องนี้เท่านั้น</p>
         {expenseCategories.map((category) => (
           <label key={category} className="budget-row">
-            <span className="cat-dot" style={{ background: categoryTint(category, 13), color: categoryColor(category) }}><CategoryIcon category={category} /></span>
+            <span className="cat-dot" style={{ background: categoryTint(category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(category) }}><CategoryIcon category={category} /></span>
             {category}
             <input
               inputMode="decimal"
@@ -6403,7 +6413,7 @@ function AskFinanceSheet({ context, userId, onClose, closing }: { context: AiFin
     (async () => {
       if (!supabase) { setLoadingHistory(false); return; }
       const { data, error: loadError } = await supabase
-        .from("ai_chat_messages")
+        .from(TABLES.aiChatMessages)
         .select("id,role,content,created_at")
         .order("created_at", { ascending: true });
       if (cancelled) return;
@@ -6434,7 +6444,7 @@ function AskFinanceSheet({ context, userId, onClose, closing }: { context: AiFin
       const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: "assistant", content: answerText, created_at: new Date().toISOString() };
       setMessages((prev) => [...prev, assistantMessage]);
       if (supabase) {
-        await supabase.from("ai_chat_messages").insert([
+        await supabase.from(TABLES.aiChatMessages).insert([
           { id: userMessage.id, user_id: userId, role: "user", content: trimmed },
           { id: assistantMessage.id, user_id: userId, role: "assistant", content: answerText },
         ]);
@@ -6448,7 +6458,7 @@ function AskFinanceSheet({ context, userId, onClose, closing }: { context: AiFin
   const resetChat = async () => {
     setMessages([]);
     setError("");
-    if (supabase) await supabase.from("ai_chat_messages").delete().eq("user_id", userId);
+    if (supabase) await supabase.from(TABLES.aiChatMessages).delete().eq("user_id", userId);
   };
 
   const copyMessage = async (message: AiChatMessage) => {
@@ -6852,7 +6862,7 @@ function ProfileEditSheet({
       </label>
       {!!app_icon_image && <button className="side-ghost" onClick={() => setAppIconImage("")}>ลบรูปไอคอน</button>}
       <label>
-        <input placeholder=" " type="number" min={1} max={28} value={month_start_day} onChange={(event) => setMonthStartDay(clampInteger(event.target.value, 1, 28, 1))} />
+        <input placeholder=" " type="number" min={MONTH_START_DAY_MIN} max={MONTH_START_DAY_MAX} value={month_start_day} onChange={(event) => setMonthStartDay(clampInteger(event.target.value, MONTH_START_DAY_MIN, MONTH_START_DAY_MAX, 1))} />
         <span>วันเริ่มรอบเดือน</span>
       </label>
       <label>
@@ -7099,7 +7109,7 @@ function RecurringExpensesView({
     const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
     let date = new Date(today.getFullYear(), today.getMonth(), Math.min(item.billing_day, daysInMonth));
     if (date < startOfToday) date = new Date(today.getFullYear(), today.getMonth() + 1, Math.min(item.billing_day, new Date(today.getFullYear(), today.getMonth() + 2, 0).getDate()));
-    return { item, date, days: Math.round((date.getTime() - startOfToday.getTime()) / 86400000) };
+    return { item, date, days: Math.round((date.getTime() - startOfToday.getTime()) / MS_PER_DAY) };
   }).sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 4);
 
   return (
