@@ -757,6 +757,21 @@ function entriesInRange(entries: Entry[], start: Date, end: Date) {
   });
 }
 
+// Recurring expenses bill on a fixed day-of-month, clamped to whatever the
+// current/next month actually has (e.g. billing_day 31 bills on the 30th in
+// a 30-day month) — rolls to next month once this month's date has passed.
+function nextBillingInfo(item: RecurringExpense, now: Date): { billingDate: Date; daysUntil: number } {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const daysInThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  let billingDate = new Date(now.getFullYear(), now.getMonth(), Math.min(item.billing_day, daysInThisMonth));
+  if (billingDate < startOfToday) {
+    const daysInNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0).getDate();
+    billingDate = new Date(now.getFullYear(), now.getMonth() + 1, Math.min(item.billing_day, daysInNextMonth));
+  }
+  const daysUntil = Math.round((billingDate.getTime() - startOfToday.getTime()) / MS_PER_DAY);
+  return { billingDate, daysUntil };
+}
+
 function csvCell(value: string | number | null | undefined) {
   const text = value == null ? "" : String(value);
   return `"${text.replace(/"/g, '""')}"`;
@@ -1750,18 +1765,8 @@ export default function Home() {
 
   const dueSoonRecurring = useMemo(() => {
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     return recurringExpenses
-      .map((item) => {
-        const daysInThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-        let billingDate = new Date(now.getFullYear(), now.getMonth(), Math.min(item.billing_day, daysInThisMonth));
-        if (billingDate < startOfToday) {
-          const daysInNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0).getDate();
-          billingDate = new Date(now.getFullYear(), now.getMonth() + 1, Math.min(item.billing_day, daysInNextMonth));
-        }
-        const daysUntil = Math.round((billingDate.getTime() - startOfToday.getTime()) / MS_PER_DAY);
-        return { item, billingDate, daysUntil };
-      })
+      .map((item) => ({ item, ...nextBillingInfo(item, now) }))
       .filter(({ daysUntil }) => daysUntil >= 0 && daysUntil <= 3)
       .sort((a, b) => a.daysUntil - b.daysUntil);
   }, [recurringExpenses]);
@@ -1786,13 +1791,10 @@ export default function Home() {
     setSelectedMonth(value);
     setSelectedDay(defaultDayForCycle(value, monthStartDay));
   }, [monthStartDay]);
-  const monthlyEntries = useMemo(() => {
-    const { start, end } = cycleRange;
-    return entries.filter((entry) => {
-      const occurred = new Date(entry.occurred_at);
-      return occurred >= start && occurred < end;
-    });
-  }, [entries, cycleRange]);
+  const monthlyEntries = useMemo(
+    () => entriesInRange(entries, cycleRange.start, cycleRange.end),
+    [entries, cycleRange],
+  );
   const filteredMonthlyEntries = useMemo(() => filterEntries(monthlyEntries, historyFilters), [monthlyEntries, historyFilters]);
   const monthlyIncome = useMemo(() => totalWallet(monthlyEntries, "income"), [monthlyEntries]);
   const monthlyOutflow = useMemo(() => Math.abs(totalWallet(monthlyEntries, "expense")), [monthlyEntries]);
@@ -1888,10 +1890,8 @@ export default function Home() {
     const pastAmounts: number[] = [];
     for (let offset = 1; offset <= 3; offset++) {
       const { start, end } = cycleBounds(shiftMonthKey(selectedMonth, -offset), monthStartDay);
-      const amount = entries.reduce((sum, entry) => {
+      const amount = entriesInRange(entries, start, end).reduce((sum, entry) => {
         if (entry.category !== category) return sum;
-        const occurred = new Date(entry.occurred_at);
-        if (occurred < start || occurred >= end) return sum;
         const spend = categorySpendAmount(entry);
         return spend != null ? sum + spend : sum;
       }, 0);
@@ -2142,10 +2142,7 @@ export default function Home() {
         kind: "expense",
         transaction_type: "investment_buy",
         debtor_name: unnamedDebtor,
-        wallet_impact: -input.amount,
-        debt_impact: 0,
-        user_share: 0,
-        partner_share: 0,
+        ...calculateImpacts(input.amount, "investment_buy"),
         occurred_at: input.occurredAt,
         wallet_id: input.walletId,
         note: input.note?.trim() || null,
@@ -3038,10 +3035,7 @@ export default function Home() {
         kind: "expense",
         transaction_type: "investment_buy",
         debtor_name: unnamedDebtor,
-        wallet_impact: -amount,
-        debt_impact: 0,
-        user_share: 0,
-        partner_share: 0,
+        ...calculateImpacts(amount, "investment_buy"),
         occurred_at: input.occurred_at,
         wallet_id: input.wallet_id,
         note: input.note?.trim() || null,
@@ -4518,6 +4512,22 @@ function BudgetGlanceCard({
   );
 }
 
+function goalProgress(goal: MoneyGoal): number {
+  return Math.min(100, Math.max(0, (goal.saved / goal.target) * 100));
+}
+
+function GoalItem({ goal, onDelete }: { goal: MoneyGoal; onDelete: (goal: MoneyGoal) => void }) {
+  const progress = goalProgress(goal);
+  return (
+    <div className="goal-item">
+      <div className="goal-item-head"><b>{goal.name}</b><button className="icon-button" onClick={() => onDelete(goal)} aria-label={`ลบเป้าหมาย ${goal.name}`}>×</button></div>
+      <div className="goal-card-values"><strong>{moneySign}{formatMoney(goal.saved)}</strong><span>จาก {moneySign}{formatMoney(goal.target)}</span></div>
+      <div className="goal-progress" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${progress}%` }} /></div>
+      <small>{Math.round(progress)}%{goal.deadline ? ` · เป้าหมาย ${formatShortDate(`${goal.deadline}T00:00:00`)}` : ""}</small>
+    </div>
+  );
+}
+
 function GoalsView({
   goals,
   loading,
@@ -4543,17 +4553,9 @@ function GoalsView({
         <button className="header-add-button" onClick={onAdd}>เพิ่ม</button>
       </div>
       <div className="goal-list">
-        {goals.map((goal) => {
-          const progress = Math.min(100, Math.max(0, (goal.saved / goal.target) * 100));
-          return (
-            <div className="goal-item" key={goal.id}>
-              <div className="goal-item-head"><b>{goal.name}</b><button className="icon-button" onClick={() => onDelete(goal)} aria-label={`ลบเป้าหมาย ${goal.name}`}>×</button></div>
-              <div className="goal-card-values"><strong>{moneySign}{formatMoney(goal.saved)}</strong><span>จาก {moneySign}{formatMoney(goal.target)}</span></div>
-              <div className="goal-progress" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${progress}%` }} /></div>
-              <small>{Math.round(progress)}%{goal.deadline ? ` · เป้าหมาย ${formatShortDate(`${goal.deadline}T00:00:00`)}` : ""}</small>
-            </div>
-          );
-        })}
+        {goals.map((goal) => (
+          <GoalItem key={goal.id} goal={goal} onDelete={onDelete} />
+        ))}
         {!goals.length && <EmptyNote glyph="●" action={{ label: "สร้างเป้าหมาย", onClick: onAdd }}>ตั้งเป้าหมายแรก แล้วติดตามความคืบหน้าได้จากที่นี่</EmptyNote>}
       </div>
     </div>
@@ -4565,15 +4567,9 @@ function GoalCard({ goals, onAdd, onDelete }: { goals: MoneyGoal[]; onAdd: () =>
     <section className="goal-card">
       <div className="goal-card-head"><div><p className="eyebrow">เป้าหมายการเงิน</p><h2>{goals.length} เป้าหมาย</h2></div><button className="text-button" onClick={onAdd}>เพิ่มเป้าหมาย</button></div>
       <div className="goal-list">
-        {goals.slice(0, 3).map((goal) => {
-          const progress = Math.min(100, Math.max(0, (goal.saved / goal.target) * 100));
-          return <div className="goal-item" key={goal.id}>
-            <div className="goal-item-head"><b>{goal.name}</b><button className="icon-button" onClick={() => onDelete(goal)} aria-label={`ลบเป้าหมาย ${goal.name}`}>×</button></div>
-            <div className="goal-card-values"><strong>{moneySign}{formatMoney(goal.saved)}</strong><span>จาก {moneySign}{formatMoney(goal.target)}</span></div>
-            <div className="goal-progress" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${progress}%` }} /></div>
-            <small>{Math.round(progress)}%{goal.deadline ? ` · เป้าหมาย ${formatShortDate(`${goal.deadline}T00:00:00`)}` : ""}</small>
-          </div>;
-        })}
+        {goals.slice(0, 3).map((goal) => (
+          <GoalItem key={goal.id} goal={goal} onDelete={onDelete} />
+        ))}
       </div>
     </section>
   );
@@ -5888,10 +5884,7 @@ function DebtorsView({
   // dashboard that leads with the whole principal reads as far more urgent
   // than what you actually need to have ready this month.
   const monthlyObligationTotal = activeKind === "own"
-    ? visibleDebtors.reduce((sum, debtor) => {
-        const amount = summary.find((item) => item.name.trim().toLowerCase() === debtor.name.trim().toLowerCase())?.amount ?? 0;
-        return sum + monthlyDebtObligation(debtor, amount);
-      }, 0)
+    ? payableForDisplay(debtors, payableSummary, "obligation")
     : summaryTotal;
 
   return (
@@ -7109,13 +7102,13 @@ function RecurringExpensesView({
 }) {
   const total = items.reduce((sum, item) => sum + item.amount, 0);
   const today = new Date();
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const upcoming = items.map((item) => {
-    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-    let date = new Date(today.getFullYear(), today.getMonth(), Math.min(item.billing_day, daysInMonth));
-    if (date < startOfToday) date = new Date(today.getFullYear(), today.getMonth() + 1, Math.min(item.billing_day, new Date(today.getFullYear(), today.getMonth() + 2, 0).getDate()));
-    return { item, date, days: Math.round((date.getTime() - startOfToday.getTime()) / MS_PER_DAY) };
-  }).sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 4);
+  const upcoming = items
+    .map((item) => {
+      const { billingDate, daysUntil } = nextBillingInfo(item, today);
+      return { item, date: billingDate, days: daysUntil };
+    })
+    .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .slice(0, 4);
 
   return (
     <div className="view debtor-view">
