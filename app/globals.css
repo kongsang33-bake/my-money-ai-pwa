@@ -701,48 +701,62 @@ a:focus-visible {
 .bottom-nav button {
   height: 100%;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
   color: var(--ink-3);
   transition: color var(--t-2) var(--e-out), transform var(--t-1) var(--e-out), background var(--t-2) var(--e-out);
 }
 
-/* Active state: a solid filled pill behind the icon (not a faint tint),
-   with the label picking up --primary as a colored accent rather than
-   just a darker neutral — a chunkier, more obvious "you are here". */
-.bottom-nav button.active {
-  color: var(--primary);
+/* Active state: a solid filled pill behind icon *and* label together (not
+   just the icon) — a chunkier, more obvious "you are here" that reads as
+   one selected-tab capsule instead of a highlight that stops halfway. */
+.bottom-nav .nav-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 14px;
+  border-radius: var(--r-full);
+}
+
+.bottom-nav .nav-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--primary);
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity var(--t-2) var(--e-out), transform var(--t-3) var(--e-spring);
+  z-index: -1;
 }
 
 .bottom-nav .nav-icon {
-  position: relative;
   width: 24px;
   height: 24px;
   display: grid;
   place-items: center;
 }
 
-.bottom-nav .nav-icon::before {
-  content: "";
-  position: absolute;
-  inset: -8px -18px;
-  border-radius: var(--r-full);
-  background: var(--primary);
-  opacity: 0;
-  transform: scale(0.75);
-  transition: opacity var(--t-2) var(--e-out), transform var(--t-2) var(--e-out);
-  z-index: -1;
+@keyframes nav-pop {
+  0% { transform: scale(0.7); }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); }
 }
 
-.bottom-nav button.active .nav-icon {
+.bottom-nav button.active .nav-item::before {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.bottom-nav button.active .nav-icon,
+.bottom-nav button.active .nav-label {
   color: var(--primary-text);
 }
 
-.bottom-nav button.active .nav-icon::before {
-  opacity: 1;
-  transform: scale(1);
+.bottom-nav button.active .nav-icon {
+  animation: nav-pop var(--t-3) var(--e-spring);
 }
 
 .bottom-nav .nav-icon svg {

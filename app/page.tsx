@@ -3736,21 +3736,25 @@ export default function Home() {
         {!overlayOpen && (
           <nav className="bottom-nav">
             <button className={tab === "home" ? "active" : ""} onClick={() => setTab("home")} aria-label="หน้าหลัก">
-              <span className="nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                  <path d="M4 10.8 12 4l8 6.8v8.7a1.5 1.5 0 0 1-1.5 1.5H15v-6H9v6H5.5A1.5 1.5 0 0 1 4 19.5v-8.7Z" />
-                </svg>
+              <span className="nav-item">
+                <span className="nav-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M4 10.8 12 4l8 6.8v8.7a1.5 1.5 0 0 1-1.5 1.5H15v-6H9v6H5.5A1.5 1.5 0 0 1 4 19.5v-8.7Z" />
+                  </svg>
+                </span>
+                <span className="nav-label">หน้าหลัก</span>
               </span>
-              <span className="nav-label">หน้าหลัก</span>
             </button>
             <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")} aria-label="รายการ">
-              <span className="nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                  <path d="M6.5 5.5h11v13h-11z" />
-                  <path d="M9.5 9h5M9.5 12h5M9.5 15h3" />
-                </svg>
+              <span className="nav-item">
+                <span className="nav-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M6.5 5.5h11v13h-11z" />
+                    <path d="M9.5 9h5M9.5 12h5M9.5 15h3" />
+                  </svg>
+                </span>
+                <span className="nav-label">รายการ</span>
               </span>
-              <span className="nav-label">รายการ</span>
             </button>
             <button className="add-button" onClick={() => openAddTab()} aria-label="เพิ่มรายการด้วย AI">
               <span className="nav-icon" aria-hidden="true">
@@ -3760,16 +3764,20 @@ export default function Home() {
               </span>
             </button>
             <button className={tab === "wallets" ? "active" : ""} onClick={() => setTab("wallets")} aria-label="กระเป๋าตังค์">
-              <span className="nav-icon" aria-hidden="true">
-                <Wallet aria-hidden="true" />
+              <span className="nav-item">
+                <span className="nav-icon" aria-hidden="true">
+                  <Wallet aria-hidden="true" />
+                </span>
+                <span className="nav-label">กระเป๋า</span>
               </span>
-              <span className="nav-label">กระเป๋า</span>
             </button>
             <button className={moreOpen ? "active" : ""} onClick={() => setMoreOpen(true)} aria-label="เพิ่มเติม">
-              <span className="nav-icon" aria-hidden="true">
-                <MoreHorizontal aria-hidden="true" />
+              <span className="nav-item">
+                <span className="nav-icon" aria-hidden="true">
+                  <MoreHorizontal aria-hidden="true" />
+                </span>
+                <span className="nav-label">อื่น ๆ</span>
               </span>
-              <span className="nav-label">อื่น ๆ</span>
             </button>
           </nav>
         )}
