@@ -2042,10 +2042,29 @@ a:focus-visible {
   background: var(--ink-3);
 }
 
-.draft-income::before, .draft-debt_repayment::before { background: var(--income); }
+.draft-income::before, .draft-debt_repayment::before, .draft-borrow::before { background: var(--income); }
 .draft-personal_expense::before, .draft-gift::before, .draft-card_charge::before { background: var(--expense); }
 .draft-lend::before, .draft-split_half::before, .draft-debt_payment::before { background: var(--cat-travel); }
 .draft-transfer::before { background: var(--accent); }
+
+/* A person's name in the text but no clear "free or must-be-repaid" signal
+   (e.g. "พี่แอนให้เงิน 200 บาท") — the AI still picks a best-guess type but
+   flags the row so the review step visibly asks the user to confirm instead
+   of silently trusting a guess between income/gift and lend/borrow. Uses
+   --accent, the same token the AI-parse UI already uses elsewhere for "AI
+   attention" (the ai-input-wrap glow, the AI status dot). */
+.draft-needs-review {
+  border: 1px solid var(--accent-line);
+  background: var(--accent-soft);
+}
+
+.draft-ambiguous-hint {
+  grid-column: 1 / -1;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--accent-strong);
+  margin: 0;
+}
 
 /* Reusable per-row color accent (categories, per-item icon colors) for
    cards whose color isn't a fixed enum, so it can't be a CSS class like

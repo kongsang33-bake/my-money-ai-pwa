@@ -91,7 +91,11 @@ type Entry = {
   investment_units?: number | null;
 };
 
-type Draft = Omit<Entry, "id"> & { id: string };
+// `ambiguous` is a transient, client-only hint from the AI-parse step (the
+// model wasn't sure whether a named person gave/received money for free or
+// as a loan) — it never gets persisted; saveEntries builds its Supabase
+// payload from an explicit field list that doesn't include it.
+type Draft = Omit<Entry, "id"> & { id: string; ambiguous?: boolean };
 type AiFinanceContext = {
   periodLabel: string;
   totals: { income: number; outflow: number; balance: number; cashAvailable: number; walletBalance: number; netWorth: number };
@@ -256,6 +260,7 @@ const transactionTypeLabels: Record<TransactionType, string> = {
   income: "รายรับ",
   personal_expense: "จ่ายเอง",
   lend: "ออกให้ก่อน",
+  borrow: "ยืมเงินมา",
   split_half: "หารร่วมกัน",
   debt_repayment: "รับชำระหนี้",
   debt_payment: "ผ่อนชำระหนี้",
@@ -268,6 +273,7 @@ const transactionTypeLabels: Record<TransactionType, string> = {
 const transactionKind: Record<TransactionType, EntryKind> = {
   income: "income",
   debt_repayment: "income",
+  borrow: "income",
   personal_expense: "expense",
   lend: "expense",
   split_half: "expense",
@@ -885,6 +891,9 @@ function calculateImpacts(amount: number, transactionType: TransactionType) {
   }
   if (transactionType === "lend") {
     return { wallet_impact: -amount, debt_impact: amount, user_share: 0, partner_share: amount };
+  }
+  if (transactionType === "borrow") {
+    return { wallet_impact: amount, debt_impact: amount, user_share: 0, partner_share: 0 };
   }
   if (transactionType === "split_half") {
     return { wallet_impact: -amount, debt_impact: amount / 2, user_share: amount / 2, partner_share: amount / 2 };
@@ -2058,24 +2067,27 @@ export default function Home() {
 
       const source = [text.trim(), slipImages.length ? `แนบรูปสลิป ${slipImages.length} รูป` : ""].filter(Boolean).join(" | ");
       setDrafts(
-        data.items.map((item: { title: string; category: string; amount: number; transaction_type: TransactionType; debtor_name?: string; date: string; note?: string; wallet_id?: string | null; transfer_to_wallet_id?: string | null }, index: number) =>
+        data.items.map((item: { title: string; category: string; amount: number; transaction_type: TransactionType; debtor_name?: string; date: string; note?: string; wallet_id?: string | null; transfer_to_wallet_id?: string | null; ambiguous?: boolean }, index: number) =>
           {
             const aiWalletId = item.wallet_id && wallets.some((wallet) => wallet.id === item.wallet_id) ? item.wallet_id : null;
             const aiDestWalletId = item.transfer_to_wallet_id && wallets.some((wallet) => wallet.id === item.transfer_to_wallet_id) ? item.transfer_to_wallet_id : null;
             const rememberedCategory = categoryMemory.get(item.title.trim().toLowerCase());
-            return normalizeEntry({
-            id: `${Date.now()}-${index}`,
-            title: item.title,
-            category: rememberedCategory ?? item.category,
-            amount: item.amount,
-            transaction_type: item.transaction_type,
-            debtor_name: item.debtor_name,
-            occurred_at: fromDateInput(item.date),
-            source_text: source,
-            wallet_id: aiWalletId || defaultWalletId(wallets),
-            note: item.note,
-            transfer_to_wallet_id: aiDestWalletId,
-            }, false);
+            return {
+              ...normalizeEntry({
+                id: `${Date.now()}-${index}`,
+                title: item.title,
+                category: rememberedCategory ?? item.category,
+                amount: item.amount,
+                transaction_type: item.transaction_type,
+                debtor_name: item.debtor_name,
+                occurred_at: fromDateInput(item.date),
+                source_text: source,
+                wallet_id: aiWalletId || defaultWalletId(wallets),
+                note: item.note,
+                transfer_to_wallet_id: aiDestWalletId,
+              }, false),
+              ambiguous: !!item.ambiguous,
+            };
           },
         ),
       );
@@ -5285,7 +5297,7 @@ function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft:
   const transferInvalid = isTransfer && (!draft.transfer_to_wallet_id || draft.transfer_to_wallet_id === draft.wallet_id);
 
   return (
-    <div className={`draft draft-${draft.transaction_type}`}>
+    <div className={`draft draft-${draft.transaction_type}${draft.ambiguous ? " draft-needs-review" : ""}`}>
       <button className="draft-remove" onClick={onRemove} aria-label="ลบรายการนี้ออกจากรายการที่ตรวจสอบ">
         <X size={14} strokeWidth={2.5} />
       </button>
@@ -5304,7 +5316,7 @@ function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft:
       <div className="draft-side">
         <span className="draft-type-badge">{transactionTypeLabels[draft.transaction_type]}</span>
         <div className="select-shell">
-          <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
+          <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType, ambiguous: false })}>
           {Object.entries(transactionTypeLabels).filter(([value]) => value !== "investment_buy").map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -5318,6 +5330,7 @@ function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft:
           <AmountInput value={draft.amount} onChange={(amount) => update({ amount })} />
         </label>
       </div>
+      {draft.ambiguous && <p className="draft-ambiguous-hint">AI ไม่แน่ใจว่าให้เปล่าหรือให้ยืม โปรดเลือกประเภทที่ถูกต้องด้านบน</p>}
       {isTransfer ? (
         <div className="impact-row">
           <span>โอนออก {formatSignedMoney(-draft.amount)}</span>
@@ -5333,7 +5346,11 @@ function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft:
         <div className="draft-debtor-field">
           <input
             className="draft-date"
-            placeholder={draft.transaction_type === "card_charge" ? "ชื่อบัตร เช่น กรุงศรีเฟิร์สช้อย" : relevantKind === "own" ? "ชื่อหนี้ เช่น ผ่อนบ้าน ผ่อนรถ" : "ชื่อผู้เกี่ยวข้อง เช่น แฟน หรือ เพื่อนเอ"}
+            placeholder={
+              draft.transaction_type === "card_charge" ? "ชื่อบัตร เช่น กรุงศรีเฟิร์สช้อย" :
+              draft.transaction_type === "borrow" ? "ชื่อคนที่ให้เรายืม เช่น พี่แอน" :
+              relevantKind === "own" ? "ชื่อหนี้ เช่น ผ่อนบ้าน ผ่อนรถ" : "ชื่อผู้เกี่ยวข้อง เช่น แฟน หรือ เพื่อนเอ"
+            }
             value={draft.debtor_name}
             onChange={(event) => update({ debtor_name: event.target.value })}
           />
