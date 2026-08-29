@@ -154,3 +154,23 @@ token value.
   label element `display: block` explicitly, or make the parent
   `display: grid`/`flex-column` — plain sibling inline elements will run
   together on one line instead of stacking.
+
+## Single source of truth
+
+Before adding a new constant or helper, search whether one already exists —
+this app already centralizes money formatting (`formatMoney` family,
+page.tsx), category color/icon lookup (`categoryColor`/`categoryIconMap`),
+the transaction-type taxonomy (`lib/taxonomy.ts`), and cross-cutting limits/
+config (`lib/constants.ts`). If something you need isn't there, say so
+explicitly (don't just add a new local literal) and add it to the right
+shared location instead of typing the value inline.
+
+Don't duplicate: hex colors (must be a CSS custom property in
+`app/globals.css`), Supabase table names and `.select(...)` column lists
+(`lib/constants.ts`'s `TABLES` / the `*_COLUMNS` constants), any numeric
+limit or threshold, or a calculation that already has a named function.
+Before writing a new one, grep for it — if you find an existing version that
+looks close but not identical, check whether the two genuinely need to
+change together (if yes, consolidate; if the difference is intentional —
+e.g. "current" vs "as of a past date" — say why in a comment and leave them
+separate, don't force a merge just because they look similar).
