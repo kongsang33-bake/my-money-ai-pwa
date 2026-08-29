@@ -364,6 +364,11 @@ const monthKey = (date: Date) => localDateInput(date).slice(0, 7);
 const formatMoney = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const formatSignedMoney = (value: number) => `${value >= 0 ? "+" : "−"}${moneySign}${formatMoney(Math.abs(value))}`;
 const formatDateTime = (value: string) => new Date(value).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+const formatUnits = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 4 });
+const formatPercent = (value: number, digits = 0) => `${digits === 0 ? Math.round(value) : value.toFixed(digits)}%`;
+const formatSignedPercent = (value: number, digits = 1) => `${value >= 0 ? "+" : ""}${value.toFixed(digits)}%`;
+const formatShortDate = (value: Date | string, { year = false }: { year?: boolean } = {}) =>
+  (typeof value === "string" ? new Date(value) : value).toLocaleDateString("th-TH", { day: "numeric", month: "short", ...(year ? { year: "numeric" as const } : {}) });
 const toDateInput = (value: string) => localDateInput(new Date(value));
 const toFiniteNumber = (value: unknown, fallback = 0) => {
   const number = Number(value);
@@ -508,7 +513,7 @@ function dayLabel(value: string) {
   const diffDays = Math.round((startOfDay(new Date()) - startOfDay(new Date(value))) / MS_PER_DAY);
   if (diffDays === 0) return "วันนี้";
   if (diffDays === 1) return "เมื่อวาน";
-  return new Date(value).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+  return formatShortDate(value, { year: true });
 }
 
 function groupEntriesByDay(entries: Entry[]) {
@@ -740,8 +745,8 @@ function reportBounds(period: ReportPeriod, selectedMonth: string, selectedYear:
 function reportLabel(period: ReportPeriod, selectedMonth: string, selectedYear: number, startDay: number) {
   if (period === "year") return `รายปี ${selectedYear}`;
   const range = cycleBounds(selectedMonth, startDay);
-  const start = range.start.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
-  const end = new Date(range.end.getTime() - 1).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+  const start = formatShortDate(range.start, { year: true });
+  const end = formatShortDate(new Date(range.end.getTime() - 1), { year: true });
   return `รายเดือน ${start} - ${end}`;
 }
 
@@ -799,7 +804,7 @@ function buildReportCsv({
 
   const lines = [
     csvRow(["รายงาน", reportLabel(period, selectedMonth, selectedYear, monthStartDay)]),
-    csvRow(["วันที่สร้างไฟล์", new Date().toLocaleString("th-TH")]),
+    csvRow(["วันที่สร้างไฟล์", formatDateTime(new Date().toISOString())]),
     csvRow([""]),
     csvRow(["สรุปยอด"]),
     csvRow(["รายการ", "จำนวนเงิน"]),
@@ -3097,7 +3102,7 @@ export default function Home() {
     setInvestments((current) => current.map((row) => (row.id === investment.id ? { ...row, units: row.units + units, cost_basis: row.cost_basis + entry.amount } : row)));
     setEntries((current) => current.map((row) => (row.id === entry.id ? { ...row, investment_units: units } : row)));
     setBusy(false);
-    notify({ tone: "success", title: "ยืนยันหน่วยแล้ว", detail: `${investment.name} · ${units.toLocaleString("th-TH", { maximumFractionDigits: 4 })} หน่วย` });
+    notify({ tone: "success", title: "ยืนยันหน่วยแล้ว", detail: `${investment.name} · ${formatUnits(units)} หน่วย` });
     return true;
   }
 
@@ -4410,7 +4415,7 @@ function HomeInsightGrid({
           </i>
           อัตราเงินเหลือ
         </span>
-        <strong>{Number.isFinite(savingsRate) ? `${Math.round(savingsRate)}%` : "0%"}</strong>
+        <strong>{Number.isFinite(savingsRate) ? formatPercent(savingsRate) : "0%"}</strong>
         <small>เทียบกับรายรับในรอบนี้</small>
       </div>
       <div className="home-insight-card obligation">
@@ -4545,7 +4550,7 @@ function GoalsView({
               <div className="goal-item-head"><b>{goal.name}</b><button className="icon-button" onClick={() => onDelete(goal)} aria-label={`ลบเป้าหมาย ${goal.name}`}>×</button></div>
               <div className="goal-card-values"><strong>{moneySign}{formatMoney(goal.saved)}</strong><span>จาก {moneySign}{formatMoney(goal.target)}</span></div>
               <div className="goal-progress" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${progress}%` }} /></div>
-              <small>{Math.round(progress)}%{goal.deadline ? ` · เป้าหมาย ${new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("th-TH", { day: "numeric", month: "short" })}` : ""}</small>
+              <small>{Math.round(progress)}%{goal.deadline ? ` · เป้าหมาย ${formatShortDate(`${goal.deadline}T00:00:00`)}` : ""}</small>
             </div>
           );
         })}
@@ -4566,7 +4571,7 @@ function GoalCard({ goals, onAdd, onDelete }: { goals: MoneyGoal[]; onAdd: () =>
             <div className="goal-item-head"><b>{goal.name}</b><button className="icon-button" onClick={() => onDelete(goal)} aria-label={`ลบเป้าหมาย ${goal.name}`}>×</button></div>
             <div className="goal-card-values"><strong>{moneySign}{formatMoney(goal.saved)}</strong><span>จาก {moneySign}{formatMoney(goal.target)}</span></div>
             <div className="goal-progress" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${progress}%` }} /></div>
-            <small>{Math.round(progress)}%{goal.deadline ? ` · เป้าหมาย ${new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("th-TH", { day: "numeric", month: "short" })}` : ""}</small>
+            <small>{Math.round(progress)}%{goal.deadline ? ` · เป้าหมาย ${formatShortDate(`${goal.deadline}T00:00:00`)}` : ""}</small>
           </div>;
         })}
       </div>
@@ -5006,7 +5011,7 @@ function MonthSummary({
                   <span className="cat-dot" style={{ background: categoryTint(item.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(item.category) }}><CategoryIcon category={item.category} /></span>
                   <b>{item.category}</b>
                   {overBudget && <span className="over-budget-chip">เกินงบ</span>}
-                  <small>{hasBudget ? `${moneySign}${formatMoney(item.amount)} / ${moneySign}${formatMoney(budget)}` : `${percent.toFixed(0)}%`}</small>
+                  <small>{hasBudget ? `${moneySign}${formatMoney(item.amount)} / ${moneySign}${formatMoney(budget)}` : formatPercent(percent)}</small>
                   {!hasBudget && <strong>{moneySign}{formatMoney(item.amount)}</strong>}
                 </div>
                 <i style={{ width: `${Math.max(4, Math.min(100, percent))}%`, background: color }} />
@@ -5021,7 +5026,7 @@ function MonthSummary({
             <div>
               <span className="cat-dot cat-dot-neutral"><Users size={14} strokeWidth={2.25} aria-hidden="true" /></span>
               <b>ให้คนอื่นยืม/หารก่อน</b>
-              <small>{outflow > 0 ? `${((lentOut / outflow) * 100).toFixed(0)}%` : "0%"}</small>
+              <small>{outflow > 0 ? formatPercent((lentOut / outflow) * 100) : "0%"}</small>
               <strong>{moneySign}{formatMoney(lentOut)}</strong>
             </div>
             <i style={{ width: `${Math.max(4, Math.min(100, outflow > 0 ? (lentOut / outflow) * 100 : 0))}%` }} />
@@ -5966,7 +5971,7 @@ function CreditLimitMeter({ outstanding, creditLimit }: { outstanding: number; c
       <div className="credit-limit-meter-track">
         <div className="credit-limit-meter-fill" style={{ width: `${pct}%` }} />
       </div>
-      <small>ใช้ไป {moneySign}{formatMoney(outstanding)} จากวงเงิน {moneySign}{formatMoney(creditLimit)} ({Math.round(pct)}%)</small>
+      <small>ใช้ไป {moneySign}{formatMoney(outstanding)} จากวงเงิน {moneySign}{formatMoney(creditLimit)} ({formatPercent(pct)})</small>
       <small className="credit-limit-remaining">เหลือวงเงินใช้ได้ {moneySign}{formatMoney(remaining)}</small>
     </div>
   );
@@ -7261,9 +7266,9 @@ function PortfolioTrendChart({ trend }: { trend: { date: string; value: number }
         {trend.map((point, index) => (
           <div key={point.date} className={index === trend.length - 1 ? "current" : ""}>
             <span>
-              <i className="networth" style={{ height: `${Math.max(6, ((point.value - min) / range) * 100)}%` }} title={`${new Date(`${point.date}T00:00:00`).toLocaleDateString("th-TH", { day: "numeric", month: "short" })} · ${moneySign}${formatMoney(point.value)}`} />
+              <i className="networth" style={{ height: `${Math.max(6, ((point.value - min) / range) * 100)}%` }} title={`${formatShortDate(`${point.date}T00:00:00`)} · ${moneySign}${formatMoney(point.value)}`} />
             </span>
-            <small>{new Date(`${point.date}T00:00:00`).toLocaleDateString("th-TH", { day: "numeric", month: "short" })}</small>
+            <small>{formatShortDate(`${point.date}T00:00:00`)}</small>
           </div>
         ))}
       </div>
@@ -7325,7 +7330,7 @@ function PortfolioView({
           <small>
             ทุน {moneySign}{formatMoney(totalCost)} ·{" "}
             <b className={totalGain >= 0 ? "income" : "expense"}>
-              {formatSignedMoney(totalGain)}{totalGainPercent != null ? ` (${totalGainPercent >= 0 ? "+" : ""}${totalGainPercent.toFixed(1)}%)` : ""}
+              {formatSignedMoney(totalGain)}{totalGainPercent != null ? ` (${formatSignedPercent(totalGainPercent)})` : ""}
             </b>
           </small>
         )}
@@ -7375,7 +7380,7 @@ function PortfolioView({
               <div>
                 <span>{holding.name}{holding.code && holding.code !== holding.name ? ` (${holding.code})` : ""}</span>
                 <small>
-                  {holding.units.toLocaleString("th-TH", { maximumFractionDigits: 4 })} หน่วย · ทุน {holding.avgCost.toFixed(4)}
+                  {formatUnits(holding.units)} หน่วย · ทุน {holding.avgCost.toFixed(4)}
                   {holding.latestNav != null ? ` · ล่าสุด ${holding.latestNav.toFixed(4)}` : " · ยังไม่มีราคา"}
                 </small>
               </div>
@@ -7383,7 +7388,7 @@ function PortfolioView({
             <div className="portfolio-holding-value">
               <strong>{moneySign}{formatMoney(holding.marketValue)}</strong>
               <span className={holding.gain >= 0 ? "income" : "expense"}>
-                {formatSignedMoney(holding.gain)}{holding.gainPercent != null ? ` (${holding.gainPercent >= 0 ? "+" : ""}${holding.gainPercent.toFixed(1)}%)` : ""}
+                {formatSignedMoney(holding.gain)}{holding.gainPercent != null ? ` (${formatSignedPercent(holding.gainPercent)})` : ""}
               </span>
             </div>
             <details className="kebab-menu" name="portfolio-kebab">
@@ -7552,13 +7557,13 @@ function InvestmentSellSheet({
         </div>
         <button onClick={onClose}>x</button>
       </div>
-      <small className="cycle-note">ถืออยู่ {item.units.toLocaleString("th-TH", { maximumFractionDigits: 4 })} หน่วย</small>
+      <small className="cycle-note">ถืออยู่ {formatUnits(item.units)} หน่วย</small>
       <label>
         <input autoFocus inputMode="decimal" value={unitsText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setUnitsText(event.target.value); }} placeholder="เช่น 20" />
         <span>จำนวนหน่วยที่ขาย</span>
       </label>
       <button type="button" className="text-button" onClick={() => setUnitsText(String(item.units))}>ขายทั้งหมด</button>
-      {unitsText && !valid && <StateCard tone="error" title="จำนวนไม่ถูกต้อง" detail={`ขายได้สูงสุด ${item.units.toLocaleString("th-TH", { maximumFractionDigits: 4 })} หน่วย`} />}
+      {unitsText && !valid && <StateCard tone="error" title="จำนวนไม่ถูกต้อง" detail={`ขายได้สูงสุด ${formatUnits(item.units)} หน่วย`} />}
       {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
       <button className="save" onClick={submit} disabled={busy || !valid}>
         {busy ? "กำลังบันทึก..." : "บันทึก"}
@@ -7656,9 +7661,9 @@ function InvestmentConfirmUnitsSheet({
       setUnitsText(String(result.units));
       const amountDiff = Math.abs(result.amount - entry.amount);
       if (amountDiff > 1) {
-        setExtractNote({ tone: "warning", text: `อ่านได้ ${result.units.toLocaleString("th-TH", { maximumFractionDigits: 4 })} หน่วย แต่ยอดเงินในรูป (${moneySign}${formatMoney(result.amount)}) ไม่ตรงกับยอดที่จ่ายไป (${moneySign}${formatMoney(entry.amount)}) เท่าไหร่ — เช็คให้แน่ใจก่อนกดยืนยัน` });
+        setExtractNote({ tone: "warning", text: `อ่านได้ ${formatUnits(result.units)} หน่วย แต่ยอดเงินในรูป (${moneySign}${formatMoney(result.amount)}) ไม่ตรงกับยอดที่จ่ายไป (${moneySign}${formatMoney(entry.amount)}) เท่าไหร่ — เช็คให้แน่ใจก่อนกดยืนยัน` });
       } else {
-        setExtractNote({ tone: "success", text: `อ่านได้ ${result.units.toLocaleString("th-TH", { maximumFractionDigits: 4 })} หน่วย ตรงกับยอด ${moneySign}${formatMoney(result.amount)} — ตรวจอีกครั้งก่อนกดยืนยัน` });
+        setExtractNote({ tone: "success", text: `อ่านได้ ${formatUnits(result.units)} หน่วย ตรงกับยอด ${moneySign}${formatMoney(result.amount)} — ตรวจอีกครั้งก่อนกดยืนยัน` });
       }
     } catch (e) {
       setExtractNote({ tone: "error", text: e instanceof Error ? e.message : "อ่านรูปไม่สำเร็จ" });
