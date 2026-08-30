@@ -62,3 +62,8 @@ export const INVESTMENT_COLUMNS = "id,user_id,name,code,units,cost_basis,icon,ic
 export const INVESTMENT_PRICE_COLUMNS = "id,investment_id,nav,recorded_at";
 
 export const AI_CHAT_MESSAGE_COLUMNS = "id,role,content,created_at";
+
+// Caps how many rows a cross-month search result renders -- searching spans
+// every entry ever recorded (not just the selected cycle), so this keeps a
+// broad query from dumping years of history into the DOM at once.
+export const SEARCH_RESULT_LIMIT = 200;

@@ -2471,6 +2471,15 @@ a:focus-visible {
   gap: var(--s-3);
 }
 
+/* Bare tier on purpose (CLAUDE.md surface tiers) -- this is a one-line
+   status caption above search results, not a card. */
+.history-search-summary {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-3);
+  margin: 0;
+}
+
 .compact-disclosure {
   display: block;
 }

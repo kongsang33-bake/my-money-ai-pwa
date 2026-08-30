@@ -61,6 +61,7 @@ import {
   MONTH_START_DAY_MIN,
   PROFILE_COLUMNS,
   RECURRING_EXPENSE_COLUMNS,
+  SEARCH_RESULT_LIMIT,
   TABLES,
   THEME_STORAGE_KEY,
   TRANSACTION_COLUMNS,
@@ -128,8 +129,6 @@ const secondaryWalletTags: { tag: WalletTag; label: string; className: string }[
   { tag: "petty", label: walletTagLabels.petty, className: "petty-wallet" },
   { tag: "other", label: walletTagLabels.other, className: "other-wallet" },
 ];
-
-const historyFiltersEnabled = false;
 
 function budgetStorageKey(userId: string) {
   return `money-ai-budgets:${userId}`;
@@ -678,6 +677,19 @@ export default function Home() {
     [entries, cycleRange],
   );
   const filteredMonthlyEntries = useMemo(() => filterEntries(monthlyEntries, historyFilters), [monthlyEntries, historyFilters]);
+  // Any active filter switches History from "this cycle's calendar" into a
+  // flat search-results mode that runs across every entry ever recorded,
+  // not just the selected month -- see the tab === "history" JSX below.
+  const searchActive =
+    historyFilters.query.trim() !== "" ||
+    historyFilters.category !== "" ||
+    historyFilters.type !== "all" ||
+    historyFilters.minAmount !== "" ||
+    historyFilters.maxAmount !== "";
+  const searchResults = useMemo(
+    () => (searchActive ? filterEntries(entries, historyFilters).slice(0, SEARCH_RESULT_LIMIT) : []),
+    [searchActive, entries, historyFilters],
+  );
   const monthlyIncome = useMemo(() => totalWallet(monthlyEntries, "income"), [monthlyEntries]);
   const monthlyOutflow = useMemo(() => Math.abs(totalWallet(monthlyEntries, "expense")), [monthlyEntries]);
   const monthlyDebtChange = useMemo(
@@ -2274,30 +2286,41 @@ export default function Home() {
               </div>
               <button className="header-add-button" onClick={() => setRecapOpen(true)}>สรุปเดือนนี้</button>
             </div>
-            <MonthSummary
-              selectedMonth={selectedMonth}
-              setSelectedMonth={selectHistoryMonth}
-              income={monthlyIncome}
-              outflow={monthlyOutflow}
-              debtChange={monthlyDebtChange}
-              balance={monthlyBalance}
-              categories={categorySummary}
-              lentOut={monthlyLentOut}
-              monthStartDay={monthStartDay}
-              budgets={budgets}
+            <HistoryFilterBar
+              filters={historyFilters}
+              onChange={setHistoryFilters}
+              onClear={() => setHistoryFilters({ query: "", category: "", type: "all", minAmount: "", maxAmount: "" })}
             />
-            <MonthlyTrendChart trend={monthlyTrend} />
-            <IncomeBreakdown items={incomeSummary} />
-            {historyFiltersEnabled && (
-              <HistoryFilterBar
-                filters={historyFilters}
-                onChange={setHistoryFilters}
-                onClear={() => setHistoryFilters({ query: "", category: "", type: "all", minAmount: "", maxAmount: "" })}
-              />
+            {searchActive ? (
+              <>
+                <p className="history-search-summary">
+                  {searchResults.length >= SEARCH_RESULT_LIMIT
+                    ? `แสดง ${SEARCH_RESULT_LIMIT} รายการแรกจากทุกเดือน · ลองใส่ตัวกรองเพิ่มเพื่อจำกัดผลลัพธ์`
+                    : `พบ ${searchResults.length} รายการจากทุกเดือน`}
+                </p>
+                <EntryList entries={searchResults} onEdit={openSheet(setEditing)} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+              </>
+            ) : (
+              <>
+                <MonthSummary
+                  selectedMonth={selectedMonth}
+                  setSelectedMonth={selectHistoryMonth}
+                  income={monthlyIncome}
+                  outflow={monthlyOutflow}
+                  debtChange={monthlyDebtChange}
+                  balance={monthlyBalance}
+                  categories={categorySummary}
+                  lentOut={monthlyLentOut}
+                  monthStartDay={monthStartDay}
+                  budgets={budgets}
+                />
+                <MonthlyTrendChart trend={monthlyTrend} />
+                <IncomeBreakdown items={incomeSummary} />
+                <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedMonth={selectedMonth} onChangeMonth={selectHistoryMonth} selectedDay={selectedDay} defaultDay={defaultHistoryDay} onSelectDay={setSelectedDay} />
+                {activeDay && <HistoryInsight entries={dayEntries} />}
+                <EntryList entries={dayEntries} onEdit={openSheet(setEditing)} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+              </>
             )}
-            <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedMonth={selectedMonth} onChangeMonth={selectHistoryMonth} selectedDay={selectedDay} defaultDay={defaultHistoryDay} onSelectDay={setSelectedDay} />
-            {activeDay && <HistoryInsight entries={dayEntries} />}
-            <EntryList entries={dayEntries} onEdit={openSheet(setEditing)} onDelete={deleteEntry} emptyAction={addWithAiAction} />
           </div>
         )}
 
