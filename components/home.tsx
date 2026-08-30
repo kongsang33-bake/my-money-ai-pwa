@@ -207,9 +207,11 @@ export function HomeInsightGrid({
 export function DueSoonCard({
   items,
   onManage,
+  onLogNow,
 }: {
-  items: { item: RecurringExpense; billingDate: Date; daysUntil: number }[];
+  items: { item: RecurringExpense; billingDate: Date; daysUntil: number; isLogged: boolean }[];
   onManage: () => void;
+  onLogNow: (item: RecurringExpense, billingDate: Date) => void;
 }) {
   const total = items.reduce((sum, { item }) => sum + item.amount, 0);
   return (
@@ -223,12 +225,19 @@ export function DueSoonCard({
       </div>
       {items.length ? (
         <div className="due-soon-list">
-          {items.slice(0, 3).map(({ item, billingDate, daysUntil }) => (
+          {items.slice(0, 3).map(({ item, billingDate, daysUntil, isLogged }) => (
             <div key={item.id}>
               <i className="cat-dot" style={{ background: item.icon_color ?? nameColor(item.name), color: "var(--text-on-color)" }}><WalletAvatarGlyph iconKey={item.icon} fallbackName={item.name} size={14} /></i>
               <span>{item.name}</span>
               <small>{daysUntil === 0 ? "วันนี้" : `อีก ${daysUntil} วัน`} · {billingDate.getDate()}/{billingDate.getMonth() + 1}</small>
-              <b>{moneySign}{formatMoney(item.amount)}</b>
+              <div className="due-soon-action">
+                <b>{moneySign}{formatMoney(item.amount)}</b>
+                {isLogged ? (
+                  <span className="due-soon-logged">บันทึกแล้ว</span>
+                ) : (
+                  <button className="due-soon-log-btn" onClick={() => onLogNow(item, billingDate)}>บันทึกเลย</button>
+                )}
+              </div>
             </div>
           ))}
           <p>รวม <CountUpMoney value={total} /></p>

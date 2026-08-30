@@ -3,8 +3,8 @@
 // blurb, and the 7-day cash flow sparkline data.
 import { MS_PER_DAY } from "./constants.ts";
 import { formatMoney, moneySign } from "./format.ts";
-import { daysRemainingInCycle, startOfDay } from "./cycle.ts";
-import type { Entry } from "./types.ts";
+import { daysRemainingInCycle, entriesInRange, startOfDay } from "./cycle.ts";
+import type { Entry, RecurringExpense } from "./types.ts";
 import type { TransactionType } from "./taxonomy.ts";
 
 export type QuickShortcut = { title: string; category: string; transaction_type: TransactionType; amount: number; count: number };
@@ -72,6 +72,16 @@ export function buildWalletInsight(balance: number, outflow: number, cycleEnd: D
     text: `เหลือใช้ได้ประมาณ ${moneySign}${formatMoney(perDay)} ต่อวัน`,
     perDay,
   };
+}
+
+// A recurring item counts as "already logged" this cycle once a matching
+// title+amount entry exists in the cycle range -- not by any stored link to
+// the recurring row, since one-tap logging (DueSoonCard) just inserts a
+// plain transaction like a manual entry would.
+export function isRecurringLogged(item: RecurringExpense, entries: Entry[], cycleRange: { start: Date; end: Date }) {
+  return entriesInRange(entries, cycleRange.start, cycleRange.end).some(
+    (entry) => entry.title.trim() === item.name.trim() && entry.amount === item.amount,
+  );
 }
 
 export function lastSevenDayCashFlow(entries: Entry[], anchorDate: Date) {

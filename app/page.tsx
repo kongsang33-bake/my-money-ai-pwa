@@ -46,7 +46,7 @@ import {
   totalWallet,
   unnamedDebtor,
 } from "@/lib/money";
-import { buildWalletInsight, computeStreak, deriveQuickShortcuts, lastSevenDayCashFlow, type QuickShortcut } from "@/lib/insights";
+import { buildWalletInsight, computeStreak, deriveQuickShortcuts, isRecurringLogged, lastSevenDayCashFlow, type QuickShortcut } from "@/lib/insights";
 import { categoryColor, categoryTint, nameColor } from "@/lib/category";
 import { createPinSalt, hashPin, isSixDigitPin, pinBackgroundLockMs, pinBlockMs, pinBlocked, pinMaxAttempts, registerFaceId, timingSafeEqual, verifyFaceId } from "@/lib/pin";
 import { compressSlipImage } from "@/lib/image";
@@ -646,11 +646,12 @@ export default function Home() {
 
   const dueSoonRecurring = useMemo(() => {
     const now = new Date();
+    const currentCycleRange = cycleBounds(currentCycleMonthKey(monthStartDay, now), monthStartDay);
     return recurringExpenses
-      .map((item) => ({ item, ...nextBillingInfo(item, now) }))
+      .map((item) => ({ item, ...nextBillingInfo(item, now), isLogged: isRecurringLogged(item, entries, currentCycleRange) }))
       .filter(({ daysUntil }) => daysUntil >= 0 && daysUntil <= 3)
       .sort((a, b) => a.daysUntil - b.daysUntil);
-  }, [recurringExpenses]);
+  }, [recurringExpenses, entries, monthStartDay]);
 
   useEffect(() => {
     if (!user || !dueSoonRecurring.length) return;
@@ -1204,7 +1205,31 @@ export default function Home() {
     const savedEntry = { ...normalized, wallet_id: core.wallet_id };
     setEntries((current) => current.map((item) => (item.id === savedEntry.id ? savedEntry : item)));
     setBusy(false);
+    if (original) {
+      notify({
+        tone: "success",
+        title: "บันทึกการแก้ไขแล้ว",
+        detail: savedEntry.title,
+        action: { label: "ย้อนคืน", onClick: () => { void revertEntryEdit(original); } },
+      });
+    }
     return true;
+  }
+
+  // Mirrors updateEntry's plain-edit path in reverse, writing the pre-edit
+  // field values straight back with no confirm prompt -- tapping "ย้อนคืน"
+  // on the just-shown toast IS the confirmation, same as undoLoggedRecurring.
+  // Only the plain-edit path offers this; convertingToTransfer creates a new
+  // row via a different shape and is out of scope here.
+  async function revertEntryEdit(original: Entry) {
+    if (!supabase) return;
+    const core = buildTransactionCore(original, wallets);
+    const { error } = await supabase.from(TABLES.transactions).update(core).eq("id", original.id);
+    if (error) {
+      notify({ tone: "error", title: "ย้อนคืนไม่สำเร็จ", detail: error.message });
+      return;
+    }
+    setEntries((current) => current.map((item) => (item.id === original.id ? { ...original, wallet_id: core.wallet_id } : item)));
   }
 
   const restoreEntries = useCallback(async (entriesToRestore: Entry[]) => {
@@ -1262,6 +1287,52 @@ export default function Home() {
 
     setBusy(false);
   }, [entries, requestConfirm, notify, restoreEntries]);
+
+  // Undo for one-tap recurring logging skips deleteEntry's confirm prompt on
+  // purpose -- tapping "ย้อนคืน" right after the toast appears IS the
+  // confirmation, the same way restoreEntries has no prompt of its own.
+  const undoLoggedRecurring = useCallback(async (entry: Entry) => {
+    if (!supabase) return;
+    const { error } = await supabase.from(TABLES.transactions).delete().eq("id", entry.id);
+    if (error) {
+      notify({ tone: "error", title: "ย้อนคืนไม่สำเร็จ", detail: error.message });
+      return;
+    }
+    setEntries((current) => current.filter((item) => item.id !== entry.id));
+  }, [notify]);
+
+  const logRecurringNow = useCallback(async (item: RecurringExpense, billingDate: Date) => {
+    if (!supabase || !user) return;
+    setBusy(true);
+    setError("");
+    const normalized = normalizeEntry({
+      id: crypto.randomUUID(),
+      title: item.name,
+      category: "บิลประจำ",
+      amount: item.amount,
+      transaction_type: "personal_expense",
+      occurred_at: billingDate.toISOString(),
+      wallet_id: defaultWalletId(wallets),
+    });
+    const { data, error } = await supabase
+      .from(TABLES.transactions)
+      .insert({ id: normalized.id, user_id: user.id, ...buildTransactionCore(normalized, wallets) })
+      .select(TRANSACTION_COLUMNS);
+
+    if (error) {
+      setError(error.message);
+    } else {
+      const inserted = data?.[0] ? mapTransactionRow(data[0]) : normalized;
+      setEntries((current) => [inserted, ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
+      notify({
+        tone: "success",
+        title: "บันทึกรายจ่ายประจำแล้ว",
+        detail: `${item.name} ${moneySign}${formatMoney(item.amount)}`,
+        action: { label: "ย้อนคืน", onClick: () => { void undoLoggedRecurring(inserted); } },
+      });
+    }
+    setBusy(false);
+  }, [user, wallets, notify, undoLoggedRecurring]);
 
   function updateBudgets(next: Record<string, number>) {
     if (!user) return;
@@ -2093,7 +2164,7 @@ export default function Home() {
                 {!!goals.length && <GoalCard goals={goals} onAdd={() => setGoalSheetOpen(true)} onDelete={removeGoal} />}
                 {(dueSoonRecurring.length > 0 || budgetGlance.totalBudget > 0) && (
                   <div className="home-focus-grid">
-                    {dueSoonRecurring.length > 0 && <DueSoonCard items={dueSoonRecurring} onManage={() => setTab("recurring")} />}
+                    {dueSoonRecurring.length > 0 && <DueSoonCard items={dueSoonRecurring} onManage={() => setTab("recurring")} onLogNow={logRecurringNow} />}
                     {budgetGlance.totalBudget > 0 && <BudgetGlanceCard budgetGlance={budgetGlance} onManage={() => setBudgetSheetOpen(true)} />}
                   </div>
                 )}
