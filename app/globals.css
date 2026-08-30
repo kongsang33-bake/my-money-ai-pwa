@@ -2883,12 +2883,9 @@ a:focus-visible {
 }
 
 .entry {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto auto;
-  grid-template-rows: auto;
+  display: flex;
   align-items: center;
-  column-gap: var(--s-2);
-  row-gap: 4px;
+  gap: var(--s-2);
   padding: var(--s-3) 0;
   border-bottom: 1px solid var(--line-soft);
 }
@@ -2897,7 +2894,27 @@ a:focus-visible {
   border-bottom: 0;
 }
 
-.entry > div {
+.entry-main {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--s-2);
+  row-gap: 4px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+
+button.entry-main {
+  cursor: pointer;
+}
+
+.entry-main > div {
   min-width: 0;
 }
 

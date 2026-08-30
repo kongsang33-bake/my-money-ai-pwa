@@ -1443,6 +1443,15 @@ export default function Home() {
     });
   }, []);
 
+  // `error` is shared across every sheet (see the `error={error}` props
+  // below) so an old failure -- e.g. a delete that errored -- doesn't stay
+  // visible when a different, unrelated sheet is opened next. Wrap every
+  // sheet-opening action with this instead of calling its setter directly.
+  const openSheet = useCallback(<Args extends unknown[]>(action: (...args: Args) => void) => (...args: Args) => {
+    setError("");
+    action(...args);
+  }, []);
+
   useEffect(() => {
     const next = toasts.find((toast) => !closingToastIds.includes(toast.id));
     if (!next) return;
@@ -1983,6 +1992,7 @@ export default function Home() {
   }
 
   const openAddTab = useCallback((mode: "ai" | "manual" = "ai", shortcut?: QuickShortcut) => {
+    setError("");
     setEntryDate(todayDateInput());
     setAddMode(mode);
     setQuickAddPreset(shortcut ?? null);
@@ -3280,7 +3290,7 @@ export default function Home() {
 
             {!dataLoading && !wallets.length && !entries.length && !debtors.length && (
               <FirstRunHomeState
-                onCreateWallet={() => { setEditingWallet(null); setWalletSheetMode("create"); }}
+                onCreateWallet={openSheet(() => { setEditingWallet(null); setWalletSheetMode("create"); })}
                 onSetBudget={() => setBudgetSheetOpen(true)}
                 onAddEntry={() => openAddTab()}
               />
@@ -3300,7 +3310,7 @@ export default function Home() {
               </div>
             )}
 
-            {!dataLoading && <RecentActivityTimeline entries={entries} onEdit={setEditing} />}
+            {!dataLoading && <RecentActivityTimeline entries={entries} onEdit={openSheet(setEditing)} />}
 
             {error && <ErrorActions onRetry={retrySync} onDismiss={() => setError("")} />}
             {error && <StateCard tone="error" title="มีบางอย่างไม่สำเร็จ" detail={error} />}
@@ -3319,8 +3329,8 @@ export default function Home() {
             </div>
 
             <div className="report-period-toggle">
-              <button className={addMode === "ai" ? "active" : ""} onClick={() => setAddMode("ai")}>ให้ AI ช่วยจด</button>
-              <button className={addMode === "manual" ? "active" : ""} onClick={() => setAddMode("manual")}>เขียนเอง</button>
+              <button className={addMode === "ai" ? "active" : ""} onClick={() => { setError(""); setAddMode("ai"); }}>ให้ AI ช่วยจด</button>
+              <button className={addMode === "manual" ? "active" : ""} onClick={() => { setError(""); setAddMode("manual"); }}>เขียนเอง</button>
             </div>
 
             {addMode === "ai" && (
@@ -3485,7 +3495,7 @@ export default function Home() {
             )}
             <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedMonth={selectedMonth} onChangeMonth={selectHistoryMonth} selectedDay={selectedDay} defaultDay={defaultHistoryDay} onSelectDay={setSelectedDay} />
             {activeDay && <HistoryInsight entries={dayEntries} />}
-            <EntryList entries={dayEntries} onEdit={setEditing} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+            <EntryList entries={dayEntries} onEdit={openSheet(setEditing)} onDelete={deleteEntry} emptyAction={addWithAiAction} />
           </div>
         )}
 
@@ -3500,9 +3510,9 @@ export default function Home() {
             loading={dataLoading}
             onChangeActiveKind={setDebtorKindTab}
             onBack={() => selectedDebtor ? setSelectedDebtor(null) : setTab("home")}
-            onAdd={() => { setEditingDebtor(null); setDebtorSheetMode("create"); }}
+            onAdd={openSheet(() => { setEditingDebtor(null); setDebtorSheetMode("create"); })}
             onSelect={(debtor) => setSelectedDebtor(debtor)}
-            onEdit={(debtor) => { setEditingDebtor(debtor); setDebtorSheetMode("edit"); }}
+            onEdit={openSheet((debtor: Debtor) => { setEditingDebtor(debtor); setDebtorSheetMode("edit"); })}
             onDelete={deleteDebtor}
           />
         )}
@@ -3513,8 +3523,8 @@ export default function Home() {
             entries={entries}
             loading={dataLoading}
             onBack={() => setTab("home")}
-            onAdd={() => { setEditingWallet(null); setWalletSheetMode("create"); }}
-            onEdit={(wallet) => { setEditingWallet(wallet); setWalletSheetMode("edit"); }}
+            onAdd={openSheet(() => { setEditingWallet(null); setWalletSheetMode("create"); })}
+            onEdit={openSheet((wallet: Wallet) => { setEditingWallet(wallet); setWalletSheetMode("edit"); })}
             onDelete={deleteWallet}
           />
         )}
@@ -3524,8 +3534,8 @@ export default function Home() {
             items={recurringExpenses}
             loading={dataLoading}
             onBack={() => setTab("home")}
-            onAdd={() => { setEditingRecurringExpense(null); setRecurringSheetMode("create"); }}
-            onEdit={(item) => { setEditingRecurringExpense(item); setRecurringSheetMode("edit"); }}
+            onAdd={openSheet(() => { setEditingRecurringExpense(null); setRecurringSheetMode("create"); })}
+            onEdit={openSheet((item: RecurringExpense) => { setEditingRecurringExpense(item); setRecurringSheetMode("edit"); })}
             onDelete={deleteRecurringExpense}
           />
         )}
@@ -3551,13 +3561,13 @@ export default function Home() {
             pendingPurchases={pendingInvestmentPurchases}
             loading={dataLoading}
             onBack={() => setTab("home")}
-            onBuy={(target) => { setInvestmentBuyTarget(target); setInvestmentBuySheetOpen(true); }}
-            onSell={(item) => setInvestmentSellTarget(item)}
-            onUpdatePrice={(item) => setInvestmentPriceTarget(item)}
+            onBuy={openSheet((target: Investment | null) => { setInvestmentBuyTarget(target); setInvestmentBuySheetOpen(true); })}
+            onSell={openSheet((item: Investment) => setInvestmentSellTarget(item))}
+            onUpdatePrice={openSheet((item: Investment) => setInvestmentPriceTarget(item))}
             onDelete={deleteInvestment}
-            onConfirmPending={(entry) => setInvestmentConfirmTarget(entry)}
+            onConfirmPending={openSheet((entry: Entry) => setInvestmentConfirmTarget(entry))}
             onDeletePending={deleteEntry}
-            onOpenAi={() => setInvestmentAiSheetOpen(true)}
+            onOpenAi={openSheet(() => setInvestmentAiSheetOpen(true))}
           />
         )}
 
@@ -3662,7 +3672,7 @@ export default function Home() {
             profile={profile}
             onClose={menuDismiss.requestClose}
             onLogout={() => { menuDismiss.requestClose(); setLogoutOpen(true); }}
-            onOpenProfile={() => { menuDismiss.requestClose(); setProfileSheetOpen(true); }}
+            onOpenProfile={openSheet(() => { menuDismiss.requestClose(); setProfileSheetOpen(true); })}
             onOpenBudgets={() => { menuDismiss.requestClose(); setBudgetSheetOpen(true); }}
             onOpenReport={() => { menuDismiss.requestClose(); setReportSheetOpen(true); }}
             onOpenAsk={() => { menuDismiss.requestClose(); setAskAiOpen(true); }}
@@ -4057,11 +4067,8 @@ function PinSecuritySheet({
     };
   }, []);
 
-  useEscapeToClose(onClose);
-
   return (
-    <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
-      <section className={`edit-sheet pin-edit-sheet ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
+    <SheetFrame onClose={onClose} className="edit-sheet pin-edit-sheet" closing={closing}>
         <div className="sheet-head">
           <div>
             <p className="eyebrow">ความปลอดภัย</p>
@@ -4133,8 +4140,7 @@ function PinSecuritySheet({
             )}
           </>
         )}
-      </section>
-    </div>
+    </SheetFrame>
   );
 }
 
@@ -5090,10 +5096,18 @@ function ToastHost({ toasts, closingIds, onDismiss }: { toasts: Toast[]; closing
 
 function SheetFrame({ children, onClose, className = "edit-sheet", closing = false }: { children: React.ReactNode; onClose: () => void; className?: string; closing?: boolean }) {
   useEscapeToClose(onClose);
+  const dialogRef = useFocusTrap<HTMLElement>(!closing);
 
   return (
     <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
-      <section className={`${className} ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
+      <section
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
+        className={`${className} ${closing ? "closing" : ""}`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         {children}
       </section>
     </div>
@@ -5148,10 +5162,10 @@ function useDismiss<A extends unknown[] = []>(active: boolean, onExited: (...arg
 }
 
 /**
- * Every sheet/dialog should close on Escape, matching SheetFrame and
- * ConfirmDialog. Sheets that render their own backdrop (recap, budget,
- * ask-AI, report export, PIN security, logout confirm) call this instead
- * of duplicating the keydown listener.
+ * Every sheet/dialog should close on Escape. SheetFrame calls this for
+ * every sheet it wraps; the few overlays with their own backdrop
+ * (side menu, confirm dialogs) call it directly instead of duplicating
+ * the keydown listener.
  */
 function useEscapeToClose(onClose: () => void) {
   useEffect(() => {
@@ -5163,13 +5177,67 @@ function useEscapeToClose(onClose: () => void) {
   }, [onClose]);
 }
 
+const focusableSelector = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Traps Tab focus inside the returned ref's element while `active`, moves
+ * focus into it on mount, and restores focus to whatever was focused
+ * before on unmount/deactivate. Pairs with useEscapeToClose on every
+ * sheet/dialog in the app so none of them leak keyboard focus to the page
+ * underneath, or strand it once closed.
+ */
+function useFocusTrap<T extends HTMLElement>(active: boolean) {
+  const containerRef = useRef<T | null>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!active) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+    const focusables = () => Array.from(container.querySelectorAll<HTMLElement>(focusableSelector));
+    (focusables()[0] ?? container).focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const items = focusables();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    container.addEventListener("keydown", onKeyDown);
+    return () => {
+      container.removeEventListener("keydown", onKeyDown);
+      previouslyFocusedRef.current?.focus();
+    };
+  }, [active]);
+
+  return containerRef;
+}
+
 function ConfirmDialog({ dialog, onClose, closing = false }: { dialog: ConfirmDialogState; onClose: (confirmed: boolean) => void; closing?: boolean }) {
   const close = useCallback(() => onClose(false), [onClose]);
   useEscapeToClose(close);
+  const dialogRef = useFocusTrap<HTMLElement>(!closing);
 
   return (
     <div className={`dialog-backdrop ${closing ? "closing" : ""}`} onMouseDown={() => onClose(false)}>
-      <section className={`confirm-dialog ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
+      <section
+        ref={dialogRef}
+        role="alertdialog"
+        aria-modal="true"
+        tabIndex={-1}
+        className={`confirm-dialog ${closing ? "closing" : ""}`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <h2>{dialog.title}</h2>
         <p>{dialog.detail}</p>
         <div>
@@ -5454,26 +5522,31 @@ const EntryList = memo(function EntryList({
           <p className="entry-day">{group.label}</p>
           {group.items.map((entry) => {
             const impact = amountField === "debt" ? entry.debt_impact : entryDisplayImpact(entry);
+            const entryContent = (
+              <>
+                <span className="entry-icon" style={{ background: categoryTint(entry.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(entry.category) }}><CategoryIcon category={entry.category} size={18} /></span>
+                <div>
+                  <b>{entry.title}</b>
+                  <small>
+                    {transactionTypeLabels[entry.transaction_type]} · {entry.category} · {formatDateTime(entry.occurred_at)}
+                    {entry.debt_impact !== 0 ? ` · ${entry.debtor_name}` : ""}
+                  </small>
+                  {entry.note && <small className="entry-note" title={entry.note}>{entry.note}</small>}
+                </div>
+                <strong className={impact >= 0 ? "income" : "expense"}>{formatSignedMoney(impact)}</strong>
+              </>
+            );
             return (
-            <article
-              className={onEdit ? "entry entry-tappable" : "entry"}
-              key={entry.id}
-              onClick={onEdit ? () => onEdit(entry) : undefined}
-              role={onEdit ? "button" : undefined}
-              tabIndex={onEdit ? 0 : undefined}
-            >
-              <span className="entry-icon" style={{ background: categoryTint(entry.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(entry.category) }}><CategoryIcon category={entry.category} size={18} /></span>
-              <div>
-                <b>{entry.title}</b>
-                <small>
-                  {transactionTypeLabels[entry.transaction_type]} · {entry.category} · {formatDateTime(entry.occurred_at)}
-                  {entry.debt_impact !== 0 ? ` · ${entry.debtor_name}` : ""}
-                </small>
-                {entry.note && <small className="entry-note" title={entry.note}>{entry.note}</small>}
-              </div>
-              <strong className={impact >= 0 ? "income" : "expense"}>{formatSignedMoney(impact)}</strong>
+            <article className="entry" key={entry.id}>
+              {onEdit ? (
+                <button type="button" className="entry-main entry-tappable" onClick={() => onEdit(entry)}>
+                  {entryContent}
+                </button>
+              ) : (
+                <div className="entry-main">{entryContent}</div>
+              )}
               {(onEdit || onDelete) && (
-                <menu onClick={(event) => event.stopPropagation()}>
+                <menu>
                   {onEdit && <button onClick={() => onEdit(entry)} title="แก้ไข">แก้</button>}
                   {onDelete && <button onClick={() => onDelete(entry)} title="ลบ">ลบ</button>}
                 </menu>
@@ -6325,11 +6398,8 @@ function RecapSheet({
     }
   }
 
-  useEscapeToClose(onClose);
-
   return (
-    <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
-      <section className={`recap-card ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
+    <SheetFrame onClose={onClose} className="recap-card" closing={closing}>
         <button className="recap-close" onClick={onClose}>×</button>
         <p className="recap-month">{monthLabel}</p>
         <strong className={`recap-balance ${balance >= 0 ? "income" : "expense"}`}>{formatSignedMoney(balance)}</strong>
@@ -6356,8 +6426,7 @@ function RecapSheet({
         <p className="recap-line">{closingLine}</p>
         {shareMessage && <p className="recap-line">{shareMessage}</p>}
         <button className="recap-share" onClick={share}>แชร์สรุปเดือนนี้</button>
-      </section>
-    </div>
+    </SheetFrame>
   );
 }
 
@@ -6387,11 +6456,8 @@ function BudgetSheet({
     onClose();
   };
 
-  useEscapeToClose(onClose);
-
   return (
-    <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
-      <section className={`edit-sheet budget-sheet ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
+    <SheetFrame onClose={onClose} className="edit-sheet budget-sheet" closing={closing}>
         <div className="sheet-head">
           <div>
             <p className="eyebrow">ตั้งค่า</p>
@@ -6415,8 +6481,7 @@ function BudgetSheet({
         <button className="save" onClick={submit}>
           บันทึกงบประมาณ
         </button>
-      </section>
-    </div>
+    </SheetFrame>
   );
 }
 
@@ -6518,9 +6583,7 @@ function AskFinanceSheet({ context, userId, onClose, closing }: { context: AiFin
     } catch { /* clipboard unavailable, ignore */ }
   };
 
-  useEscapeToClose(onClose);
-
-  return <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}><section className={`edit-sheet ask-ai-sheet ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
+  return <SheetFrame onClose={onClose} className="edit-sheet ask-ai-sheet" closing={closing}>
     <div className="sheet-head">
       <div><p className="eyebrow">ผู้ช่วยการเงิน</p><h2>ถาม AI เรื่องเงิน</h2></div>
       <div className="ask-ai-head-actions">
@@ -6548,7 +6611,7 @@ function AskFinanceSheet({ context, userId, onClose, closing }: { context: AiFin
     {error && <StateCard tone="error" title="ถาม AI ไม่สำเร็จ" detail={error} />}
     <textarea className="ask-ai-input" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="เช่น เดือนนี้มีรายจ่ายอะไรที่ควรระวังบ้าง" />
     <button className="save" onClick={() => { void ask(); }} disabled={busy || !question.trim()}>{busy ? "กำลังวิเคราะห์..." : "ถาม AI"}</button>
-  </section></div>;
+  </SheetFrame>;
 }
 
 function ReportExportSheet({
@@ -6595,11 +6658,8 @@ function ReportExportSheet({
     downloadCsv(`money-report-${filenamePeriod}.csv`, csv);
   }
 
-  useEscapeToClose(onClose);
-
   return (
-    <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
-      <section className={`edit-sheet report-sheet ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
+    <SheetFrame onClose={onClose} className="edit-sheet report-sheet" closing={closing}>
         <div className="sheet-head">
           <div>
             <p className="eyebrow">ส่งออกข้อมูล</p>
@@ -6659,8 +6719,7 @@ function ReportExportSheet({
         <button className="save" onClick={submit}>
           ดาวน์โหลดไฟล์ CSV
         </button>
-      </section>
-    </div>
+    </SheetFrame>
   );
 }
 
@@ -6719,9 +6778,19 @@ function SideMenu({
   const appIcon = profile?.app_icon || user.email?.[0]?.toUpperCase() || "฿";
   const appIconImage = profile?.app_icon_image || "";
 
+  useEscapeToClose(onClose);
+  const asideRef = useFocusTrap<HTMLElement>(!closing);
+
   return (
     <div className={`side-menu-backdrop ${closing ? "closing" : ""}`} onClick={onClose}>
-      <aside className={`side-menu ${closing ? "closing" : ""}`} onClick={(event) => event.stopPropagation()}>
+      <aside
+        ref={asideRef}
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
+        className={`side-menu ${closing ? "closing" : ""}`}
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="profile-head drawer-account">
           <div className={`avatar ${appIconImage ? "has-image" : ""}`}>
             {appIconImage && <NextImage className="profile-image" src={appIconImage} alt="" width={44} height={44} unoptimized />}
@@ -7909,10 +7978,18 @@ function InvestmentAiSheet({
 
 function ConfirmLogout({ onCancel, onConfirm, closing }: { onCancel: () => void; onConfirm: () => void; closing?: boolean }) {
   useEscapeToClose(onCancel);
+  const dialogRef = useFocusTrap<HTMLElement>(!closing);
 
   return (
     <div className={`dialog-backdrop ${closing ? "closing" : ""}`} onMouseDown={onCancel}>
-      <section className={`confirm-dialog ${closing ? "closing" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
+      <section
+        ref={dialogRef}
+        role="alertdialog"
+        aria-modal="true"
+        tabIndex={-1}
+        className={`confirm-dialog ${closing ? "closing" : ""}`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <h2>ออกจากระบบ?</h2>
         <p>คุณสามารถกลับมาเข้าสู่ระบบและดูข้อมูลเดิมได้ทุกเมื่อ</p>
         <div>

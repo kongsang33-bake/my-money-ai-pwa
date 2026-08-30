@@ -25,12 +25,15 @@ export const metadata: Metadata = {
   },
 };
 
+// Kept in sync with --bg in app/globals.css (:root and :root[data-theme="dark"])
+// by hand -- metadata here can't read CSS custom properties.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  themeColor: "#14181C",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fff3e1" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0c" },
+  ],
 };
 
 const themeInitScript = `(function(){try{var t=localStorage.getItem("${THEME_STORAGE_KEY}");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}catch(e){}window.__splashStartedAt=Date.now();var el=document.getElementById("app-splash");if(el)el.classList.add("app-splash-play");})();`;
