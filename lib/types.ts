@@ -1,7 +1,9 @@
-// Core money-tracking domain types shared by lib/money.ts, lib/cycle.ts, and
-// lib/insights.ts. UI-only types (Tab, Theme, Toast, sheet input shapes,
-// etc.) stay in app/page.tsx next to the components that use them -- these
-// are only the shapes the calculation/formatting logic itself needs.
+// Core money-tracking domain types shared by lib/money.ts, lib/cycle.ts,
+// and lib/insights.ts, plus the handful of UI-facing types (Profile, Toast,
+// sheet input shapes, ...) that more than one components/*.tsx file needs
+// to import. A type used by exactly one file stays declared right there
+// instead of being added here -- Tab is the main example, since only
+// app/page.tsx's own routing state needs it.
 import type { EntryKind, TransactionType, WalletTag } from "./taxonomy.ts";
 
 export type { EntryKind };
@@ -143,3 +145,75 @@ export type ReportPeriod = "month" | "year";
 // as much scarier than the household's actual month-to-month position for
 // anyone paying debt down on a fixed schedule.
 export type NetWorthDebtFormula = "full" | "obligation";
+
+export type NetWorthDisplaySettings = { formula: NetWorthDebtFormula; hideCard: boolean };
+
+export type Theme = "light" | "dark";
+
+export type PinMode = "checking" | "setup" | "locked" | "unlocked";
+
+export type Profile = {
+  user_id: string;
+  nickname: string | null;
+  app_icon: string | null;
+  app_icon_image: string | null;
+  month_start_day: number;
+  pin_hash: string | null;
+  pin_salt: string | null;
+  pin_failed_attempts: number;
+  pin_blocked_until: string | null;
+  webauthn_credential_id: string | null;
+  webauthn_enabled: boolean;
+};
+
+export type AiFinanceContext = {
+  periodLabel: string;
+  totals: { income: number; outflow: number; balance: number; cashAvailable: number; walletBalance: number; netWorth: number };
+  walletBalances: { name: string; balance: number }[];
+  categories: { category: string; amount: number }[];
+  recurringTotal: number;
+  receivableTotal: number;
+  payableTotal: number;
+  transactionCount: number;
+  transactions: Pick<Entry, "title" | "category" | "amount" | "transaction_type" | "wallet_impact" | "occurred_at">[];
+};
+
+export type AiChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+};
+
+export type InvestmentDraftItem = {
+  investment_name: string;
+  code: string;
+  amount: number;
+  date: string;
+  wallet_id: string;
+  note: string;
+};
+
+export type Toast = { id: number; tone: "success" | "info" | "error"; title: string; detail?: string; action?: { label: string; onClick: () => void } };
+
+export type ConfirmDialogState = {
+  title: string;
+  detail: string;
+  confirmLabel: string;
+  tone?: "danger" | "default";
+  resolve: (confirmed: boolean) => void;
+};
+
+export type EmptyAction = { label: string; onClick: () => void };
+
+export type SlipImage = {
+  id: string;
+  name: string;
+  mimeType: string;
+  data: string;
+  preview: string;
+};
+
+// "target"/"saved" are plain baht amounts the user types in -- no cents
+// tracking, no currency conversion, this is a simple visual progress goal.
+export type MoneyGoal = { id: string; name: string; target: number; saved: number; deadline: string };
