@@ -5,7 +5,91 @@ import { createPortal } from "react-dom";
 import NextImage from "next/image";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-import { CATEGORIES, DEBT_TYPES, TYPES_OWED_TO_USER, TYPES_USER_OWES, type TransactionType, type WalletTag } from "@/lib/taxonomy";
+import {
+  CATEGORIES,
+  DEBT_TYPES,
+  TYPES_OWED_TO_USER,
+  TYPES_USER_OWES,
+  transactionKind,
+  transactionTypeLabels,
+  walletTagHints,
+  walletTagLabels,
+  type TransactionType,
+  type WalletTag,
+} from "@/lib/taxonomy";
+import type {
+  Debtor,
+  DebtorKind,
+  Draft,
+  Entry,
+  HistoryFilters,
+  Investment,
+  InvestmentPrice,
+  NetWorthDebtFormula,
+  PortfolioHolding,
+  RecurringExpense,
+  ReportPeriod,
+  Wallet,
+  WalletDisplay,
+} from "@/lib/types";
+import {
+  clampInteger,
+  formatDateTime,
+  formatMoney,
+  formatPercent,
+  formatShortDate,
+  formatSignedMoney,
+  formatSignedPercent,
+  formatUnits,
+  monthKey,
+  moneySign,
+  normalizeBillingDay,
+  toDateInput,
+  toFiniteNumber,
+  toMoneyAmount,
+} from "@/lib/format";
+import {
+  currentCycleMonthKey,
+  cycleBounds,
+  defaultDayForCycle,
+  entriesInRange,
+  fromDateInput,
+  groupEntriesByDay,
+  nextBillingInfo,
+  reportBounds,
+  reportLabel,
+  shiftMonthKey,
+  todayDateInput,
+  withDateKeepingTime,
+} from "@/lib/cycle";
+import {
+  buildDebtSummary,
+  buildMonthlyTrend,
+  buildPortfolioHoldings,
+  buildPortfolioTrend,
+  buildTransactionCore,
+  buildWalletLedger,
+  calculateImpacts,
+  categorySpendAmount,
+  defaultWalletId,
+  entryDisplayImpact,
+  expandTransferDraft,
+  filterEntries,
+  installmentStatusText,
+  mapTransactionRow,
+  monthlyDebtObligation,
+  normalizeEntry,
+  payableForDisplay,
+  totalWallet,
+  unnamedDebtor,
+} from "@/lib/money";
+import {
+  buildWalletInsight,
+  computeStreak,
+  deriveQuickShortcuts,
+  lastSevenDayCashFlow,
+  type QuickShortcut,
+} from "@/lib/insights";
 import {
   AI_CHAT_MESSAGE_COLUMNS,
   CATEGORY_DOT_TINT_ALPHA,
@@ -16,7 +100,6 @@ import {
   MAX_SLIP_IMAGES,
   MONTH_START_DAY_MAX,
   MONTH_START_DAY_MIN,
-  MS_PER_DAY,
   PROFILE_COLUMNS,
   RECURRING_EXPENSE_COLUMNS,
   TABLES,
@@ -67,42 +150,14 @@ import {
   UserCog,
   Users,
   Utensils,
-  Wallet,
+  Wallet as WalletIcon,
   X,
   type LucideIcon,
 } from "lucide-react";
 
-type EntryKind = "expense" | "income";
 type Tab = "home" | "add" | "history" | "debtors" | "wallets" | "recurring" | "goals" | "portfolio";
 type Theme = "light" | "dark";
 
-type Entry = {
-  id: string;
-  title: string;
-  category: string;
-  amount: number;
-  type: EntryKind;
-  transaction_type: TransactionType;
-  wallet_impact: number;
-  debt_impact: number;
-  user_share: number;
-  partner_share: number;
-  debtor_name: string;
-  occurred_at: string;
-  source_text?: string | null;
-  wallet_id?: string | null;
-  note?: string | null;
-  transfer_group_id?: string | null;
-  transfer_to_wallet_id?: string | null;
-  investment_id?: string | null;
-  investment_units?: number | null;
-};
-
-// `ambiguous` is a transient, client-only hint from the AI-parse step (the
-// model wasn't sure whether a named person gave/received money for free or
-// as a loan) — it never gets persisted; saveEntries builds its Supabase
-// payload from an explicit field list that doesn't include it.
-type Draft = Omit<Entry, "id"> & { id: string; ambiguous?: boolean };
 type AiFinanceContext = {
   periodLabel: string;
   totals: { income: number; outflow: number; balance: number; cashAvailable: number; walletBalance: number; netWorth: number };
@@ -134,60 +189,6 @@ type Profile = {
   webauthn_enabled: boolean;
 };
 type PinMode = "checking" | "setup" | "locked" | "unlocked";
-type DebtorKind = "lend" | "own";
-type Debtor = {
-  id: string;
-  user_id: string;
-  name: string;
-  note: string | null;
-  opening_balance: number;
-  kind: DebtorKind;
-  monthly_installment: number | null;
-  total_installments: number | null;
-  credit_limit: number | null;
-  credit_card_min_payment_percent: number | null;
-  icon: string | null;
-  icon_color: string | null;
-};
-type Wallet = {
-  id: string;
-  user_id: string;
-  name: string;
-  tag: WalletTag;
-  balance: number;
-  icon: string | null;
-  icon_color: string | null;
-  is_default: boolean;
-};
-type WalletDisplay = Wallet & {
-  display_balance: number;
-  transaction_delta: number;
-};
-type RecurringExpense = {
-  id: string;
-  user_id: string;
-  name: string;
-  amount: number;
-  billing_day: number;
-  icon: string | null;
-  icon_color: string | null;
-};
-type Investment = {
-  id: string;
-  user_id: string;
-  name: string;
-  code: string | null;
-  units: number;
-  cost_basis: number;
-  icon: string | null;
-  icon_color: string | null;
-};
-type InvestmentPrice = {
-  id: string;
-  investment_id: string;
-  nav: number;
-  recorded_at: string;
-};
 type InvestmentDraftItem = {
   investment_name: string;
   code: string;
@@ -195,14 +196,6 @@ type InvestmentDraftItem = {
   date: string;
   wallet_id: string;
   note: string;
-};
-type ReportPeriod = "month" | "year";
-type HistoryFilters = {
-  query: string;
-  category: string;
-  type: "all" | TransactionType;
-  minAmount: string;
-  maxAmount: string;
 };
 type Toast = { id: number; tone: "success" | "info" | "error"; title: string; detail?: string; action?: { label: string; onClick: () => void } };
 type ConfirmDialogState = {
@@ -213,45 +206,11 @@ type ConfirmDialogState = {
   resolve: (confirmed: boolean) => void;
 };
 type EmptyAction = { label: string; onClick: () => void };
-const walletTagLabels: Record<WalletTag, string> = {
-  cash: "เงินสด",
-  savings: "ออมทรัพย์",
-  other: "อื่น ๆ",
-  petty: "เงินสดย่อย",
-};
-const walletTagHints: Record<WalletTag, string> = {
-  cash: "รวมเป็นยอดกระเป๋าหลักบนหน้าแรก",
-  savings: "แยกยอดออกจากหน้าแรก เหมาะกับเงินเก็บระยะยาว",
-  other: "แยกยอดออกจากหน้าแรก สำหรับเงินที่ไม่เข้าพวกไหนเลย",
-  petty: "แยกยอดออกจากหน้าแรก เหมาะกับเงินสดที่กันไว้ใช้จ่ายจิปาถะหรือทอนลูกค้า เช่น เงินทอนหน้าร้าน เงินสำรองแลกเหรียญ",
-};
 const secondaryWalletTags: { tag: WalletTag; label: string; className: string }[] = [
   { tag: "savings", label: walletTagLabels.savings, className: "savings-wallet" },
   { tag: "petty", label: walletTagLabels.petty, className: "petty-wallet" },
   { tag: "other", label: walletTagLabels.other, className: "other-wallet" },
 ];
-type EntryInput = {
-  id: string;
-  title: string;
-  category: string;
-  amount: number;
-  type?: EntryKind;
-  transaction_type?: TransactionType;
-  wallet_impact?: number;
-  debt_impact?: number;
-  user_share?: number;
-  partner_share?: number;
-  debtor_name?: string | null;
-  occurred_at: string;
-  source_text?: string | null;
-  wallet_id?: string | null;
-  note?: string | null;
-  transfer_group_id?: string | null;
-  transfer_to_wallet_id?: string | null;
-  investment_id?: string | null;
-  investment_units?: number | null;
-};
-
 type SlipImage = {
   id: string;
   name: string;
@@ -262,34 +221,6 @@ type SlipImage = {
 
 const categories: string[] = [...CATEGORIES];
 const historyFiltersEnabled = false;
-
-const transactionTypeLabels: Record<TransactionType, string> = {
-  income: "รายรับ",
-  personal_expense: "จ่ายเอง",
-  lend: "ออกให้ก่อน",
-  borrow: "ยืมเงินมา",
-  split_half: "หารร่วมกัน",
-  debt_repayment: "รับชำระหนี้",
-  debt_payment: "ผ่อนชำระหนี้",
-  card_charge: "จ่ายด้วยบัตรเครดิต",
-  transfer: "โอนเงินระหว่างกระเป๋า",
-  gift: "ให้โดยไม่คิดคืน",
-  investment_buy: "ลงทุน",
-};
-
-const transactionKind: Record<TransactionType, EntryKind> = {
-  income: "income",
-  debt_repayment: "income",
-  borrow: "income",
-  personal_expense: "expense",
-  lend: "expense",
-  split_half: "expense",
-  debt_payment: "expense",
-  card_charge: "expense",
-  transfer: "expense",
-  gift: "expense",
-  investment_buy: "expense",
-};
 
 const categoryIconMap: Record<string, LucideIcon> = {
   อาหาร: Utensils,
@@ -354,8 +285,6 @@ function nameInitial(name: string) {
   return name.trim().slice(0, 1).toUpperCase() || "?";
 }
 
-const moneySign = "฿ ";
-const unnamedDebtor = "ไม่ระบุ";
 const profileImageMaxInputBytes = 10 * 1024 * 1024;
 const profileImageMaxStoredBytes = 1.5 * 1024 * 1024;
 const profileImageSize = 512;
@@ -367,32 +296,6 @@ const pinMaxAttempts = 5;
 const pinBlockMs = 60 * 60 * 1000;
 const pinBackgroundLockMs = 2 * 60 * 1000;
 const pinHashIterations = 150000;
-const localDateInput = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-const monthKey = (date: Date) => localDateInput(date).slice(0, 7);
-const formatMoney = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
-const formatSignedMoney = (value: number) => `${value >= 0 ? "+" : "−"}${moneySign}${formatMoney(Math.abs(value))}`;
-const formatDateTime = (value: string) => new Date(value).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
-const formatUnits = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 4 });
-const formatPercent = (value: number, digits = 0) => `${digits === 0 ? Math.round(value) : value.toFixed(digits)}%`;
-const formatSignedPercent = (value: number, digits = 1) => `${value >= 0 ? "+" : ""}${value.toFixed(digits)}%`;
-const formatShortDate = (value: Date | string, { year = false }: { year?: boolean } = {}) =>
-  (typeof value === "string" ? new Date(value) : value).toLocaleDateString("th-TH", { day: "numeric", month: "short", ...(year ? { year: "numeric" as const } : {}) });
-const toDateInput = (value: string) => localDateInput(new Date(value));
-const toFiniteNumber = (value: unknown, fallback = 0) => {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
-};
-const toMoneyAmount = (value: unknown) => Math.max(0, toFiniteNumber(value));
-const clampInteger = (value: unknown, min: number, max: number, fallback: number) => {
-  const number = Math.trunc(toFiniteNumber(value, fallback));
-  return Math.min(max, Math.max(min, number));
-};
-const normalizeBillingDay = (value: unknown) => clampInteger(value, 1, 31, 1);
 const isSixDigitPin = (value: string) => /^\d{6}$/.test(value);
 function bytesToBase64(bytes: Uint8Array) {
   let binary = "";
@@ -502,46 +405,6 @@ async function verifyFaceId(credentialId: string): Promise<boolean> {
     return false;
   }
 }
-function withDate(dateInput: string, hours: number, minutes: number, seconds: number) {
-  const [year, month, day] = dateInput.split("-").map(Number);
-  return new Date(year, month - 1, day, hours, minutes, seconds).toISOString();
-}
-const fromDateInput = (value: string) => {
-  const now = new Date();
-  return withDate(value, now.getHours(), now.getMinutes(), now.getSeconds());
-};
-const withDateKeepingTime = (value: string, referenceIso: string) => {
-  const reference = new Date(referenceIso);
-  return withDate(value, reference.getHours(), reference.getMinutes(), reference.getSeconds());
-};
-const todayDateInput = () => localDateInput(new Date());
-
-function startOfDay(date: Date) {
-  const copy = new Date(date);
-  copy.setHours(0, 0, 0, 0);
-  return copy.getTime();
-}
-
-function dayLabel(value: string) {
-  const diffDays = Math.round((startOfDay(new Date()) - startOfDay(new Date(value))) / MS_PER_DAY);
-  if (diffDays === 0) return "วันนี้";
-  if (diffDays === 1) return "เมื่อวาน";
-  return formatShortDate(value, { year: true });
-}
-
-function groupEntriesByDay(entries: Entry[]) {
-  const byDay = new Map<number, Entry[]>();
-  for (const entry of entries) {
-    const key = startOfDay(new Date(entry.occurred_at));
-    const list = byDay.get(key);
-    if (list) list.push(entry);
-    else byDay.set(key, [entry]);
-  }
-  return [...byDay.entries()]
-    .sort(([a], [b]) => b - a)
-    .map(([, items]) => ({ label: dayLabel(items[0].occurred_at), items }));
-}
-
 function budgetStorageKey(userId: string) {
   return `money-ai-budgets:${userId}`;
 }
@@ -590,13 +453,6 @@ function saveGoals(userId: string, goals: MoneyGoal[]) {
   }
 }
 
-// "full" subtracts every baht of outstanding debt principal from net worth;
-// "obligation" subtracts only what's actually due this cycle (installment /
-// card minimum), matching how the debt page already presents "หนี้ของฉัน" —
-// see monthlyDebtObligation. Full-principal net worth reads as much scarier
-// than the household's actual month-to-month position for anyone paying
-// debt down on a fixed schedule.
-type NetWorthDebtFormula = "full" | "obligation";
 type NetWorthDisplaySettings = { formula: NetWorthDebtFormula; hideCard: boolean };
 const defaultNetWorthDisplaySettings: NetWorthDisplaySettings = { formula: "full", hideCard: false };
 
@@ -626,164 +482,7 @@ function saveNetWorthDisplaySettings(userId: string, settings: NetWorthDisplaySe
   }
 }
 
-type QuickShortcut = { title: string; category: string; transaction_type: TransactionType; amount: number; count: number };
 type AiSuggestion = { label: string; detail: string; text: string; shortcut?: QuickShortcut };
-
-function deriveQuickShortcuts(entries: Entry[]): QuickShortcut[] {
-  const cutoff = Date.now() - 90 * MS_PER_DAY;
-  const map = new Map<string, QuickShortcut>();
-  for (const entry of entries) {
-    if (entry.transaction_type !== "personal_expense" && entry.transaction_type !== "income") continue;
-    if (new Date(entry.occurred_at).getTime() < cutoff) continue;
-    const title = entry.title.trim();
-    const key = `${title.toLowerCase()}|${entry.category}|${entry.transaction_type}`;
-    const existing = map.get(key);
-    if (existing) existing.count += 1;
-    else map.set(key, { title, category: entry.category, transaction_type: entry.transaction_type, amount: entry.amount, count: 1 });
-  }
-  return [...map.values()]
-    .filter((item) => item.count >= 2)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 4);
-}
-
-function computeStreak(entries: Entry[]) {
-  const days = new Set(entries.map((entry) => startOfDay(new Date(entry.occurred_at))));
-  let cursor = startOfDay(new Date());
-  if (!days.has(cursor)) cursor -= MS_PER_DAY;
-  let streak = 0;
-  while (days.has(cursor)) {
-    streak += 1;
-    cursor -= MS_PER_DAY;
-  }
-  return streak;
-}
-
-function daysRemainingInCycle(end: Date) {
-  const today = startOfDay(new Date());
-  const endDay = startOfDay(new Date(end.getTime() - 1));
-  return Math.max(1, Math.round((endDay - today) / MS_PER_DAY) + 1);
-}
-
-function buildWalletInsight(balance: number, outflow: number, cycleEnd: Date) {
-  const remainingDays = daysRemainingInCycle(cycleEnd);
-  const perDay = balance / remainingDays;
-  if (balance < 0) {
-    return {
-      tone: "danger",
-      label: "ต้องระวัง",
-      text: `ยอดสุทธิติดลบ ${moneySign}${formatMoney(Math.abs(balance))} ในรอบนี้`,
-      perDay,
-    };
-  }
-  if (outflow <= 0) {
-    return {
-      tone: "calm",
-      label: "เริ่มรอบใหม่",
-      text: `ยังไม่มีรายจ่ายในรอบนี้ เหลืออีก ${remainingDays} วัน`,
-      perDay,
-    };
-  }
-  if (perDay < 200) {
-    return {
-      tone: "warn",
-      label: "ใช้แบบประคอง",
-      text: `เฉลี่ยใช้ได้ประมาณ ${moneySign}${formatMoney(perDay)} ต่อวัน`,
-      perDay,
-    };
-  }
-  return {
-    tone: "good",
-    label: "ยังดูดี",
-    text: `เหลือใช้ได้ประมาณ ${moneySign}${formatMoney(perDay)} ต่อวัน`,
-    perDay,
-  };
-}
-
-function lastSevenDayCashFlow(entries: Entry[], anchorDate: Date) {
-  const today = startOfDay(anchorDate);
-  return Array.from({ length: 7 }, (_, index) => {
-    const time = today - (6 - index) * MS_PER_DAY;
-    const dayEntries = entries.filter((entry) => startOfDay(new Date(entry.occurred_at)) === time && entry.transaction_type !== "transfer");
-    const income = dayEntries.filter((entry) => entry.wallet_impact > 0).reduce((sum, entry) => sum + entry.wallet_impact, 0);
-    const expense = dayEntries.filter((entry) => entry.wallet_impact < 0).reduce((sum, entry) => sum + Math.abs(entry.wallet_impact), 0);
-    return {
-      key: String(time),
-      label: new Date(time).toLocaleDateString("th-TH", { weekday: "short" }),
-      income,
-      expense,
-    };
-  });
-}
-
-// A cycle spans from `startDay` of one calendar month to `startDay` (excl.) of
-// the next, so it always straddles two months. `startMonthCycleBounds` keys it
-// by the month it *starts* in; `cycleBounds` below keys it by whichever month
-// holds the majority of its days instead, since that's the month users expect
-// to see it labeled as (e.g. a 25th-start cycle is mostly next month).
-function startMonthCycleBounds(startMonthKey: string, startDay: number) {
-  const [year, month] = startMonthKey.split("-").map(Number);
-  const safeDay = Math.min(28, Math.max(1, startDay || 1));
-  const start = new Date(year, month - 1, safeDay, 0, 0, 0, 0);
-  const end = new Date(year, month, safeDay, 0, 0, 0, 0);
-  return { start, end };
-}
-
-function cycleMajorityMonthKey(start: Date, end: Date) {
-  return monthKey(new Date((start.getTime() + end.getTime()) / 2));
-}
-
-function cycleBounds(majorityMonthKey: string, startDay: number) {
-  const candidate = startMonthCycleBounds(majorityMonthKey, startDay);
-  if (cycleMajorityMonthKey(candidate.start, candidate.end) === majorityMonthKey) return candidate;
-  return startMonthCycleBounds(shiftMonthKey(majorityMonthKey, -1), startDay);
-}
-
-function currentCycleMonthKey(startDay: number, now = new Date()) {
-  const safeStartDay = Math.min(28, Math.max(1, startDay || 1));
-  const startMonthKey = monthKey(new Date(now.getFullYear(), now.getMonth() - (now.getDate() < safeStartDay ? 1 : 0), 1));
-  const { start, end } = startMonthCycleBounds(startMonthKey, startDay);
-  return cycleMajorityMonthKey(start, end);
-}
-
-function reportBounds(period: ReportPeriod, selectedMonth: string, selectedYear: number, startDay: number) {
-  if (period === "month") return cycleBounds(selectedMonth, startDay);
-  const safeYear = Number.isFinite(selectedYear) ? selectedYear : new Date().getFullYear();
-  return {
-    start: new Date(safeYear, 0, 1, 0, 0, 0, 0),
-    end: new Date(safeYear + 1, 0, 1, 0, 0, 0, 0),
-  };
-}
-
-function reportLabel(period: ReportPeriod, selectedMonth: string, selectedYear: number, startDay: number) {
-  if (period === "year") return `รายปี ${selectedYear}`;
-  const range = cycleBounds(selectedMonth, startDay);
-  const start = formatShortDate(range.start, { year: true });
-  const end = formatShortDate(new Date(range.end.getTime() - 1), { year: true });
-  return `รายเดือน ${start} - ${end}`;
-}
-
-function entriesInRange(entries: Entry[], start: Date, end: Date) {
-  return entries.filter((entry) => {
-    const occurredAt = new Date(entry.occurred_at);
-    return occurredAt >= start && occurredAt < end;
-  });
-}
-
-// Recurring expenses bill on a fixed day-of-month, clamped to whatever the
-// current/next month actually has (e.g. billing_day 31 bills on the 30th in
-// a 30-day month) — rolls to next month once this month's date has passed.
-function nextBillingInfo(item: RecurringExpense, now: Date): { billingDate: Date; daysUntil: number } {
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const daysInThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  let billingDate = new Date(now.getFullYear(), now.getMonth(), Math.min(item.billing_day, daysInThisMonth));
-  if (billingDate < startOfToday) {
-    const daysInNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0).getDate();
-    billingDate = new Date(now.getFullYear(), now.getMonth() + 1, Math.min(item.billing_day, daysInNextMonth));
-  }
-  const daysUntil = Math.round((billingDate.getTime() - startOfToday.getTime()) / MS_PER_DAY);
-  return { billingDate, daysUntil };
-}
 
 function csvCell(value: string | number | null | undefined) {
   const text = value == null ? "" : String(value);
@@ -890,390 +589,6 @@ function downloadCsv(filename: string, csv: string) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
-}
-
-function calculateImpacts(amount: number, transactionType: TransactionType) {
-  if (transactionType === "income") {
-    return { wallet_impact: amount, debt_impact: 0, user_share: amount, partner_share: 0 };
-  }
-  if (transactionType === "lend") {
-    return { wallet_impact: -amount, debt_impact: amount, user_share: 0, partner_share: amount };
-  }
-  if (transactionType === "borrow") {
-    return { wallet_impact: amount, debt_impact: amount, user_share: 0, partner_share: 0 };
-  }
-  if (transactionType === "split_half") {
-    return { wallet_impact: -amount, debt_impact: amount / 2, user_share: amount / 2, partner_share: amount / 2 };
-  }
-  if (transactionType === "debt_repayment") {
-    return { wallet_impact: amount, debt_impact: -amount, user_share: 0, partner_share: 0 };
-  }
-  if (transactionType === "debt_payment") {
-    return { wallet_impact: -amount, debt_impact: -amount, user_share: amount, partner_share: 0 };
-  }
-  if (transactionType === "card_charge") {
-    return { wallet_impact: 0, debt_impact: amount, user_share: amount, partner_share: 0 };
-  }
-  if (transactionType === "transfer" || transactionType === "investment_buy") {
-    return { wallet_impact: -amount, debt_impact: 0, user_share: 0, partner_share: 0 };
-  }
-  return { wallet_impact: -amount, debt_impact: 0, user_share: amount, partner_share: 0 };
-}
-
-function categorySpendAmount(entry: Entry): number | null {
-  if (entry.transaction_type === "transfer" || entry.transaction_type === "investment_buy") return null;
-  if (entry.wallet_impact > 0 && entry.transaction_type !== "card_charge") return null;
-  return entry.user_share > 0 ? entry.user_share : null;
-}
-
-function entryDisplayImpact(entry: Entry): number {
-  return entry.transaction_type === "card_charge" ? -entry.amount : entry.wallet_impact;
-}
-
-function normalizeEntry(input: EntryInput, applyDebtorDefault = true): Entry {
-  const transaction_type = input.transaction_type ?? (input.type === "income" ? "income" : "personal_expense");
-  const amount = toMoneyAmount(input.amount);
-  // A transfer's direction (which wallet loses money vs. gains it) can't be
-  // derived from amount + type alone the way every other type can — the
-  // caller (building one of the two linked legs) must supply the signed
-  // wallet_impact explicitly, so it's trusted here instead of recomputed.
-  const impacts = transaction_type === "transfer"
-    ? { wallet_impact: input.wallet_impact ?? -amount, debt_impact: 0, user_share: 0, partner_share: 0 }
-    : calculateImpacts(amount, transaction_type);
-  const trimmedDebtorName = input.debtor_name?.trim() ?? "";
-  return {
-    ...input,
-    amount,
-    type: transactionKind[transaction_type],
-    transaction_type,
-    wallet_impact: impacts.wallet_impact,
-    debt_impact: impacts.debt_impact,
-    user_share: impacts.user_share,
-    partner_share: impacts.partner_share,
-    debtor_name: trimmedDebtorName || (applyDebtorDefault ? unnamedDebtor : trimmedDebtorName),
-    wallet_id: input.wallet_id ?? null,
-    note: input.note?.trim() || null,
-    transfer_group_id: input.transfer_group_id ?? null,
-    transfer_to_wallet_id: input.transfer_to_wallet_id ?? null,
-    investment_id: input.investment_id ?? null,
-    investment_units: input.investment_units ?? null,
-  };
-}
-
-// A transfer draft carries one wallet_impact but needs to land as two linked
-// rows (one negative leg on the source wallet, one positive on the
-// destination) sharing a transfer_group_id — this expands it right before
-// saving so both the AI-parsed path and manual entry can share the logic.
-function expandTransferDraft(draft: Draft, wallets: Wallet[]): Draft[] {
-  if (draft.transaction_type !== "transfer" || !draft.transfer_to_wallet_id) return [draft];
-
-  const sourceWallet = wallets.find((wallet) => wallet.id === draft.wallet_id);
-  const destWallet = wallets.find((wallet) => wallet.id === draft.transfer_to_wallet_id);
-  const groupId = crypto.randomUUID();
-  const title = draft.title.trim();
-
-  const sourceLeg = normalizeEntry({
-    id: `${groupId}-out`, title: title || `โอนไป${destWallet?.name ?? "กระเป๋าอื่น"}`, category: "อื่น ๆ",
-    amount: draft.amount, transaction_type: "transfer", debtor_name: "", occurred_at: draft.occurred_at,
-    wallet_id: draft.wallet_id, wallet_impact: -draft.amount, note: draft.note, transfer_group_id: groupId,
-  }, false);
-  const destLeg = normalizeEntry({
-    id: `${groupId}-in`, title: title || `โอนจาก${sourceWallet?.name ?? "กระเป๋าอื่น"}`, category: "อื่น ๆ",
-    amount: draft.amount, transaction_type: "transfer", debtor_name: "", occurred_at: draft.occurred_at,
-    wallet_id: draft.transfer_to_wallet_id, wallet_impact: draft.amount, note: draft.note, transfer_group_id: groupId,
-  }, false);
-
-  return [sourceLeg, destLeg];
-}
-
-// The fields every transactions insert/update sends, shared by saveEntries,
-// updateEntry (both its transfer-conversion legs and its plain-edit path),
-// and restoreEntries -- each of those then spreads in only the handful of
-// fields it actually needs beyond this (user_id, id, source_text,
-// transfer_group_id), which differ by call site (e.g. a plain edit must
-// NOT touch transfer_group_id, so it doesn't spread it in).
-function buildTransactionCore(entry: Draft, wallets: Wallet[]) {
-  return {
-    title: entry.title.trim(),
-    category: entry.category,
-    amount: entry.amount,
-    kind: entry.type,
-    transaction_type: entry.transaction_type,
-    debtor_name: entry.debtor_name,
-    wallet_impact: entry.wallet_impact,
-    debt_impact: entry.debt_impact,
-    user_share: entry.user_share,
-    partner_share: entry.partner_share,
-    occurred_at: entry.occurred_at,
-    wallet_id: entry.wallet_id ?? defaultWalletId(wallets),
-    note: entry.note,
-  };
-}
-
-function mapTransactionRow(row: {
-  id: string;
-  title: string;
-  category: string;
-  amount: number | string;
-  kind: string;
-  transaction_type: string | null;
-  wallet_impact: number | string | null;
-  debt_impact: number | string | null;
-  user_share: number | string | null;
-  partner_share: number | string | null;
-  debtor_name: string | null;
-  occurred_at: string;
-  source_text: string | null;
-  wallet_id: string | null;
-  note: string | null;
-  transfer_group_id?: string | null;
-  investment_id?: string | null;
-  investment_units?: number | string | null;
-}): Entry {
-  return normalizeEntry({
-    id: row.id,
-    title: row.title,
-    category: row.category,
-    amount: Number(row.amount),
-    type: row.kind as EntryKind,
-    transaction_type: (row.transaction_type as TransactionType | null) ?? undefined,
-    wallet_impact: row.wallet_impact == null ? undefined : Number(row.wallet_impact),
-    debt_impact: row.debt_impact == null ? undefined : Number(row.debt_impact),
-    user_share: row.user_share == null ? undefined : Number(row.user_share),
-    partner_share: row.partner_share == null ? undefined : Number(row.partner_share),
-    debtor_name: row.debtor_name,
-    occurred_at: row.occurred_at,
-    source_text: row.source_text,
-    wallet_id: row.wallet_id,
-    note: row.note,
-    transfer_group_id: row.transfer_group_id ?? null,
-    investment_id: row.investment_id ?? null,
-    investment_units: row.investment_units == null ? null : Number(row.investment_units),
-  });
-}
-
-function defaultWalletId(wallets: Wallet[]) {
-  return wallets.find((wallet) => wallet.is_default)?.id ?? wallets.find((wallet) => wallet.tag === "cash")?.id ?? wallets[0]?.id ?? null;
-}
-
-function totalWallet(entries: Entry[], direction: EntryKind) {
-  return entries
-    .filter((entry) => entry.transaction_type !== "transfer" && entry.transaction_type !== "investment_buy" && (direction === "income" ? entry.wallet_impact > 0 : entry.wallet_impact < 0))
-    .reduce((sum, entry) => sum + entry.wallet_impact, 0);
-}
-
-function filterEntries(entries: Entry[], filters: HistoryFilters) {
-  const query = filters.query.trim().toLowerCase();
-  const minAmount = filters.minAmount === "" ? null : toFiniteNumber(filters.minAmount, NaN);
-  const maxAmount = filters.maxAmount === "" ? null : toFiniteNumber(filters.maxAmount, NaN);
-
-  return entries.filter((entry) => {
-    const amount = Math.abs(entry.wallet_impact);
-    if (query && !`${entry.title} ${entry.category} ${entry.debtor_name} ${entry.note ?? ""}`.toLowerCase().includes(query)) return false;
-    if (filters.category && entry.category !== filters.category) return false;
-    if (filters.type !== "all" && entry.transaction_type !== filters.type) return false;
-    if (minAmount !== null && Number.isFinite(minAmount) && amount < minAmount) return false;
-    if (maxAmount !== null && Number.isFinite(maxAmount) && amount > maxAmount) return false;
-    return true;
-  });
-}
-
-function shiftMonthKey(key: string, delta: number) {
-  const [year, month] = key.split("-").map(Number);
-  return monthKey(new Date(year, month - 1 + delta, 1));
-}
-
-function defaultDayForCycle(key: string, startDay: number) {
-  const [year, month] = key.split("-").map(Number);
-  const today = new Date();
-  const range = cycleBounds(key, startDay);
-  const day = Math.min(today.getDate(), new Date(year, month, 0).getDate());
-  const preferred = new Date(year, month - 1, day);
-  if (preferred < range.start) return range.start.toDateString();
-  if (preferred >= range.end) return new Date(range.end.getTime() - 1).toDateString();
-  return preferred.toDateString();
-}
-
-function payableForDisplay(debtors: Debtor[], payableSummary: { name: string; amount: number }[], formula: NetWorthDebtFormula) {
-  if (formula === "full") return payableSummary.reduce((sum, item) => sum + item.amount, 0);
-  return payableSummary.reduce((sum, item) => {
-    const debtor = debtors.find((candidate) => candidate.name.trim().toLowerCase() === item.name.trim().toLowerCase());
-    return sum + (debtor ? monthlyDebtObligation(debtor, item.amount) : item.amount);
-  }, 0);
-}
-
-function netWorthAsOf(wallets: Wallet[], debtors: Debtor[], entriesUpToCutoff: Entry[], portfolioValue = 0, debtFormula: NetWorthDebtFormula = "full") {
-  const ledger = buildWalletLedger(wallets, entriesUpToCutoff);
-  const walletTotal = Object.values(ledger.totals).reduce((sum, amount) => sum + amount, 0);
-  const receivable = buildDebtSummary(debtors, entriesUpToCutoff, "lend", TYPES_OWED_TO_USER).reduce((sum, item) => sum + item.amount, 0);
-  const payableSummary = buildDebtSummary(debtors, entriesUpToCutoff, "own", TYPES_USER_OWES);
-  const payable = payableForDisplay(debtors, payableSummary, debtFormula);
-  return walletTotal + receivable - payable + portfolioValue;
-}
-
-// portfolioValue is today's portfolio market value, held constant across every
-// past point in the trend (no historical per-day reconstruction of holdings/
-// NAV is available) so at least the most recent point matches the live net
-// worth figure shown elsewhere; older points understate how much of that
-// net worth was already invested at the time.
-function buildMonthlyTrend(entries: Entry[], wallets: Wallet[], debtors: Debtor[], selectedMonth: string, monthStartDay: number, months = 6, portfolioValue = 0, debtFormula: NetWorthDebtFormula = "full") {
-  return Array.from({ length: months }, (_, index) => {
-    const key = shiftMonthKey(selectedMonth, index - months + 1);
-    const range = cycleBounds(key, monthStartDay);
-    const monthEntries = entriesInRange(entries, range.start, range.end);
-    const income = totalWallet(monthEntries, "income");
-    const outflow = Math.abs(totalWallet(monthEntries, "expense"));
-    const entriesUpToCutoff = entries.filter((entry) => new Date(entry.occurred_at) < range.end);
-    const netWorth = netWorthAsOf(wallets, debtors, entriesUpToCutoff, portfolioValue, debtFormula);
-    return { key, label: new Date(`${key}-01T00:00:00`).toLocaleDateString("th-TH", { month: "short" }), income, outflow, netWorth };
-  });
-}
-
-function matchesAnyKeyword(value: string, keywords: string[]) {
-  return keywords.some((keyword) => value.includes(keyword));
-}
-
-function transferWalletTag(entry: Entry, wallets: Wallet[]): Exclude<WalletTag, "cash"> | null {
-  if (entry.wallet_impact >= 0 || entry.transaction_type !== "personal_expense") return null;
-
-  const text = `${entry.title} ${entry.category} ${entry.source_text ?? ""}`.trim().toLowerCase();
-  if (!text) return null;
-
-  for (const wallet of wallets) {
-    if (wallet.tag === "cash" || wallet.tag === "other" || wallet.tag === "petty") continue;
-    const walletName = wallet.name.trim().toLowerCase();
-    const walletLabel = walletTagLabels[wallet.tag].toLowerCase();
-    if ((walletName && text.includes(walletName)) || (walletLabel && text.includes(walletLabel))) return wallet.tag;
-  }
-
-  if (matchesAnyKeyword(text, ["\u0e2d\u0e2d\u0e21", "\u0e40\u0e01\u0e47\u0e1a\u0e40\u0e07\u0e34\u0e19", "\u0e40\u0e07\u0e34\u0e19\u0e40\u0e01\u0e47\u0e1a"])) return "savings";
-
-  return null;
-}
-
-function buildWalletLedger(wallets: Wallet[], entries: Entry[]) {
-  const totals: Record<WalletTag, number> = { cash: 0, savings: 0, other: 0, petty: 0 };
-  const walletDeltas = new Map<string, number>();
-  const fallbackWalletId = defaultWalletId(wallets);
-
-  for (const wallet of wallets) {
-    totals[wallet.tag] += wallet.balance;
-    walletDeltas.set(wallet.id, 0);
-  }
-
-  for (const entry of entries) {
-    const transferTag = transferWalletTag(entry, wallets);
-    const walletId = entry.wallet_id ?? (transferTag ? wallets.find((wallet) => wallet.tag === transferTag)?.id : fallbackWalletId);
-    if (walletId) walletDeltas.set(walletId, (walletDeltas.get(walletId) ?? 0) + entry.wallet_impact);
-  }
-
-  const displayWallets = wallets.map((wallet) => {
-      const transaction_delta = walletDeltas.get(wallet.id) ?? 0;
-      return {
-        ...wallet,
-        transaction_delta,
-        display_balance: wallet.balance + transaction_delta,
-      };
-    });
-
-  const nextTotals: Record<WalletTag, number> = { cash: 0, savings: 0, other: 0, petty: 0 };
-  for (const wallet of displayWallets) nextTotals[wallet.tag] += wallet.display_balance;
-
-  return { totals: nextTotals, wallets: displayWallets };
-}
-
-function buildDebtSummary(debtors: Debtor[], entries: Entry[], kind: DebtorKind, types: TransactionType[]) {
-  const map = new Map<string, number>();
-  for (const debtor of debtors) {
-    if (debtor.kind !== kind) continue;
-    if (debtor.opening_balance) map.set(debtor.name, (map.get(debtor.name) ?? 0) + debtor.opening_balance);
-  }
-  for (const entry of entries) {
-    if (!types.includes(entry.transaction_type)) continue;
-    map.set(entry.debtor_name, (map.get(entry.debtor_name) ?? 0) + entry.debt_impact);
-  }
-  // No positive-amount filter here on purpose: a debtor whose balance comes
-  // out at zero or negative (overpaid, or a data-entry mistake like a wrong
-  // opening balance) should still show up with its real number rather than
-  // silently falling back to a lying "฿0" wherever this gets looked up by
-  // name and not found.
-  return [...map.entries()]
-    .map(([name, amount]) => ({ name, amount }))
-    .sort((a, b) => b.amount - a.amount);
-}
-
-type PortfolioHolding = Investment & {
-  avgCost: number;
-  latestNav: number | null;
-  latestNavDate: string | null;
-  marketValue: number;
-  gain: number;
-  gainPercent: number | null;
-};
-
-function latestPriceFor(investmentId: string, prices: InvestmentPrice[]): InvestmentPrice | null {
-  let latest: InvestmentPrice | null = null;
-  for (const price of prices) {
-    if (price.investment_id !== investmentId) continue;
-    if (!latest || price.recorded_at > latest.recorded_at) latest = price;
-  }
-  return latest;
-}
-
-function buildPortfolioHoldings(investments: Investment[], prices: InvestmentPrice[]): PortfolioHolding[] {
-  return investments.map((investment) => {
-    const avgCost = investment.units > 0 ? investment.cost_basis / investment.units : 0;
-    const latest = latestPriceFor(investment.id, prices);
-    const latestNav = latest?.nav ?? null;
-    const marketValue = latestNav != null ? latestNav * investment.units : investment.cost_basis;
-    const gain = marketValue - investment.cost_basis;
-    const gainPercent = investment.cost_basis > 0 ? (gain / investment.cost_basis) * 100 : null;
-    return { ...investment, avgCost, latestNav, latestNavDate: latest?.recorded_at ?? null, marketValue, gain, gainPercent };
-  });
-}
-
-// Approximates portfolio value over time using each holding's CURRENT unit
-// count against its historical NAV on each date a price was logged — not a
-// true point-in-time reconstruction (units held may have changed since),
-// but enough to show whether the trend is up or down.
-function buildPortfolioTrend(investments: Investment[], prices: InvestmentPrice[]) {
-  const dates = [...new Set(prices.map((price) => price.recorded_at))].sort();
-  return dates.map((date) => {
-    const value = investments.reduce((sum, investment) => {
-      const pricesUpToDate = prices.filter((price) => price.investment_id === investment.id && price.recorded_at <= date);
-      if (!pricesUpToDate.length) return sum;
-      const nav = pricesUpToDate.reduce((latest, price) => (price.recorded_at > latest.recorded_at ? price : latest)).nav;
-      return sum + nav * investment.units;
-    }, 0);
-    return { date, value };
-  });
-}
-
-// Always derived from the real outstanding balance rather than a manually
-// maintained counter — a stored "paid so far" count drifts the moment a
-// payment is logged in-app without someone remembering to also bump it by
-// hand, which is exactly what happened before this was changed.
-function installmentsRemaining(debtor: Debtor, outstanding: number): number | null {
-  if (!debtor.monthly_installment) return null;
-  if (outstanding <= 0.005) return 0;
-  return Math.ceil(outstanding / debtor.monthly_installment);
-}
-
-function installmentStatusText(debtor: Debtor, outstanding: number): string {
-  if (!debtor.monthly_installment) return "";
-  const remaining = installmentsRemaining(debtor, outstanding);
-  if (remaining === null) return "";
-  if (debtor.total_installments != null) {
-    const paid = Math.max(0, debtor.total_installments - remaining);
-    return ` · จ่ายแล้ว ${paid}/${debtor.total_installments} งวด (เหลือ ${remaining} งวด)`;
-  }
-  return outstanding > 0.005 ? ` · เหลืออีกประมาณ ${remaining} เดือน` : "";
-}
-
-function monthlyDebtObligation(debtor: Debtor, outstanding: number): number {
-  if (debtor.credit_card_min_payment_percent) return outstanding * (debtor.credit_card_min_payment_percent / 100);
-  if (debtor.monthly_installment) return Math.min(debtor.monthly_installment, outstanding);
-  return outstanding;
 }
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -3766,7 +3081,7 @@ export default function Home() {
             <button className={tab === "wallets" ? "active" : ""} onClick={() => setTab("wallets")} aria-label="กระเป๋าตังค์">
               <span className="nav-item">
                 <span className="nav-icon" aria-hidden="true">
-                  <Wallet aria-hidden="true" />
+                  <WalletIcon aria-hidden="true" />
                 </span>
                 <span className="nav-label">กระเป๋า</span>
               </span>
@@ -4409,7 +3724,7 @@ function HomeInsightGrid({
       </div>
       {!hideNetWorthCard && (
         <div className={`home-insight-card net-worth ${netWorthTone}`}>
-          <span><i className="home-insight-icon neutral"><Wallet size={13} strokeWidth={2.25} aria-hidden="true" /></i>มูลค่าสุทธิ</span>
+          <span><i className="home-insight-icon neutral"><WalletIcon size={13} strokeWidth={2.25} aria-hidden="true" /></i>มูลค่าสุทธิ</span>
           <strong>{formatSignedMoney(netWorthDelta)}</strong>
           <small>
             ปัจจุบัน {formatSignedMoney(netWorth)} · {netWorthFormula === "obligation" ? "หักเฉพาะภาระเดือนนี้" : "หักหนี้เต็มจำนวน"}
@@ -6087,7 +5402,7 @@ function DebtorStatementSummary({ entries, kind }: { entries: Entry[]; kind: Deb
 }
 
 const walletIconOptions: { key: string; label: string; Icon: LucideIcon }[] = [
-  { key: "wallet", label: "กระเป๋าเงิน", Icon: Wallet },
+  { key: "wallet", label: "กระเป๋าเงิน", Icon: WalletIcon },
   { key: "piggy-bank", label: "เงินออม", Icon: PiggyBank },
   { key: "trending-up", label: "เงินลงทุน", Icon: TrendingUp },
   { key: "banknote", label: "เงินสด", Icon: Banknote },
