@@ -7,15 +7,22 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { CATEGORIES, DEBT_TYPES, TYPES_OWED_TO_USER, TYPES_USER_OWES, type TransactionType, type WalletTag } from "@/lib/taxonomy";
 import {
+  AI_CHAT_MESSAGE_COLUMNS,
   CATEGORY_DOT_TINT_ALPHA,
+  DATE_INPUT_PATTERN,
+  DEBTOR_COLUMNS,
+  INVESTMENT_COLUMNS,
+  INVESTMENT_PRICE_COLUMNS,
   MAX_SLIP_IMAGES,
   MONTH_START_DAY_MAX,
   MONTH_START_DAY_MIN,
   MS_PER_DAY,
   PROFILE_COLUMNS,
+  RECURRING_EXPENSE_COLUMNS,
   TABLES,
   THEME_STORAGE_KEY,
   TRANSACTION_COLUMNS,
+  WALLET_COLUMNS,
   WEBAUTHN_TIMEOUT_MS,
 } from "@/lib/constants";
 import {
@@ -979,6 +986,30 @@ function expandTransferDraft(draft: Draft, wallets: Wallet[]): Draft[] {
   return [sourceLeg, destLeg];
 }
 
+// The fields every transactions insert/update sends, shared by saveEntries,
+// updateEntry (both its transfer-conversion legs and its plain-edit path),
+// and restoreEntries -- each of those then spreads in only the handful of
+// fields it actually needs beyond this (user_id, id, source_text,
+// transfer_group_id), which differ by call site (e.g. a plain edit must
+// NOT touch transfer_group_id, so it doesn't spread it in).
+function buildTransactionCore(entry: Draft, wallets: Wallet[]) {
+  return {
+    title: entry.title.trim(),
+    category: entry.category,
+    amount: entry.amount,
+    kind: entry.type,
+    transaction_type: entry.transaction_type,
+    debtor_name: entry.debtor_name,
+    wallet_impact: entry.wallet_impact,
+    debt_impact: entry.debt_impact,
+    user_share: entry.user_share,
+    partner_share: entry.partner_share,
+    occurred_at: entry.occurred_at,
+    wallet_id: entry.wallet_id ?? defaultWalletId(wallets),
+    note: entry.note,
+  };
+}
+
 function mapTransactionRow(row: {
   id: string;
   title: string;
@@ -1519,7 +1550,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from(TABLES.debtors)
-      .select("id,user_id,name,note,opening_balance,kind,monthly_installment,total_installments,credit_limit,credit_card_min_payment_percent,icon,icon_color")
+      .select(DEBTOR_COLUMNS)
       .order("name", { ascending: true });
     if (error) {
       setError(error.message);
@@ -1540,7 +1571,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from(TABLES.wallets)
-      .select("id,user_id,name,tag,balance,icon,icon_color,is_default")
+      .select(WALLET_COLUMNS)
       .order("created_at", { ascending: true });
     if (error) {
       setError(error.message);
@@ -1554,7 +1585,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from(TABLES.recurringExpenses)
-      .select("id,user_id,name,amount,billing_day,icon,icon_color")
+      .select(RECURRING_EXPENSE_COLUMNS)
       .order("billing_day", { ascending: true });
     if (error) {
       setError(error.message);
@@ -1568,7 +1599,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from(TABLES.investments)
-      .select("id,user_id,name,code,units,cost_basis,icon,icon_color")
+      .select(INVESTMENT_COLUMNS)
       .order("created_at", { ascending: true });
     if (error) {
       setError(error.message);
@@ -1586,7 +1617,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from(TABLES.investmentPrices)
-      .select("id,investment_id,nav,recorded_at")
+      .select(INVESTMENT_PRICE_COLUMNS)
       .order("recorded_at", { ascending: true });
     if (error) {
       setError(error.message);
@@ -2203,20 +2234,8 @@ export default function Home() {
 
     const payload = normalizedItems.map((normalized) => ({
       user_id: user.id,
-      title: normalized.title.trim(),
-      category: normalized.category,
-      amount: normalized.amount,
-      kind: normalized.type,
-      transaction_type: normalized.transaction_type,
-      debtor_name: normalized.debtor_name,
-      wallet_impact: normalized.wallet_impact,
-      debt_impact: normalized.debt_impact,
-      user_share: normalized.user_share,
-      partner_share: normalized.partner_share,
-      occurred_at: normalized.occurred_at,
+      ...buildTransactionCore(normalized, wallets),
       source_text: normalized.source_text,
-      wallet_id: normalized.wallet_id ?? defaultWalletId(wallets),
-      note: normalized.note,
       transfer_group_id: normalized.transfer_group_id,
     }));
 
@@ -2288,19 +2307,7 @@ export default function Home() {
       const { error: updateError } = await supabase
         .from(TABLES.transactions)
         .update({
-          title: sourceLeg.title.trim(),
-          category: sourceLeg.category,
-          amount: sourceLeg.amount,
-          kind: sourceLeg.type,
-          transaction_type: sourceLeg.transaction_type,
-          debtor_name: sourceLeg.debtor_name,
-          wallet_impact: sourceLeg.wallet_impact,
-          debt_impact: sourceLeg.debt_impact,
-          user_share: sourceLeg.user_share,
-          partner_share: sourceLeg.partner_share,
-          occurred_at: sourceLeg.occurred_at,
-          wallet_id: sourceLeg.wallet_id,
-          note: sourceLeg.note,
+          ...buildTransactionCore(sourceLeg, wallets),
           transfer_group_id: sourceLeg.transfer_group_id,
         })
         .eq("id", editing.id);
@@ -2315,19 +2322,7 @@ export default function Home() {
         .from(TABLES.transactions)
         .insert({
           user_id: user.id,
-          title: destLeg.title.trim(),
-          category: destLeg.category,
-          amount: destLeg.amount,
-          kind: destLeg.type,
-          transaction_type: destLeg.transaction_type,
-          debtor_name: destLeg.debtor_name,
-          wallet_impact: destLeg.wallet_impact,
-          debt_impact: destLeg.debt_impact,
-          user_share: destLeg.user_share,
-          partner_share: destLeg.partner_share,
-          occurred_at: destLeg.occurred_at,
-          wallet_id: destLeg.wallet_id,
-          note: destLeg.note,
+          ...buildTransactionCore(destLeg, wallets),
           transfer_group_id: destLeg.transfer_group_id,
         })
         .select(TRANSACTION_COLUMNS);
@@ -2348,25 +2343,11 @@ export default function Home() {
     }
 
     const normalized = normalizeEntry(editing);
-    const resolvedWalletId = normalized.wallet_id ?? defaultWalletId(wallets);
+    const core = buildTransactionCore(normalized, wallets);
 
     const { error } = await supabase
       .from(TABLES.transactions)
-      .update({
-        title: normalized.title.trim(),
-        category: normalized.category,
-        amount: normalized.amount,
-        kind: normalized.type,
-        transaction_type: normalized.transaction_type,
-        debtor_name: normalized.debtor_name,
-        wallet_impact: normalized.wallet_impact,
-        debt_impact: normalized.debt_impact,
-        user_share: normalized.user_share,
-        partner_share: normalized.partner_share,
-        occurred_at: normalized.occurred_at,
-        wallet_id: resolvedWalletId,
-        note: normalized.note,
-      })
+      .update(core)
       .eq("id", normalized.id);
 
     if (error) {
@@ -2375,7 +2356,7 @@ export default function Home() {
       return false;
     }
 
-    const savedEntry = { ...normalized, wallet_id: resolvedWalletId };
+    const savedEntry = { ...normalized, wallet_id: core.wallet_id };
     setEntries((current) => current.map((item) => (item.id === savedEntry.id ? savedEntry : item)));
     setBusy(false);
     return true;
@@ -2386,20 +2367,8 @@ export default function Home() {
     const { error } = await supabase.from(TABLES.transactions).insert(entriesToRestore.map((entry) => ({
       id: entry.id,
       user_id: user.id,
-      title: entry.title,
-      category: entry.category,
-      amount: entry.amount,
-      kind: entry.type,
-      transaction_type: entry.transaction_type,
-      debtor_name: entry.debtor_name,
-      wallet_impact: entry.wallet_impact,
-      debt_impact: entry.debt_impact,
-      user_share: entry.user_share,
-      partner_share: entry.partner_share,
-      occurred_at: entry.occurred_at,
+      ...buildTransactionCore(entry, wallets),
       source_text: entry.source_text,
-      wallet_id: entry.wallet_id ?? defaultWalletId(wallets),
-      note: entry.note,
       transfer_group_id: entry.transfer_group_id,
     })));
     if (error) {
@@ -2722,7 +2691,7 @@ export default function Home() {
         icon: input.icon,
         icon_color: input.icon_color,
       })
-      .select("id,user_id,name,note,opening_balance,kind,monthly_installment,total_installments,credit_limit,credit_card_min_payment_percent,icon,icon_color")
+      .select(DEBTOR_COLUMNS)
       .single();
     if (error) {
       setError(error.code === "23505" ? "มีชื่อนี้อยู่แล้ว" : error.message);
@@ -2825,7 +2794,7 @@ export default function Home() {
         icon_color: input.icon_color,
         is_default: input.is_default,
       })
-      .select("id,user_id,name,tag,balance,icon,icon_color,is_default")
+      .select(WALLET_COLUMNS)
       .single();
     if (error) {
       setError(error.message);
@@ -2930,7 +2899,7 @@ export default function Home() {
         icon: input.icon,
         icon_color: input.icon_color,
       })
-      .select("id,user_id,name,amount,billing_day,icon,icon_color")
+      .select(RECURRING_EXPENSE_COLUMNS)
       .single();
     if (error) {
       setError(error.message);
@@ -3019,7 +2988,7 @@ export default function Home() {
         icon: input.icon,
         icon_color: input.icon_color,
       })
-      .select("id,user_id,name,code,units,cost_basis,icon,icon_color")
+      .select(INVESTMENT_COLUMNS)
       .single();
     if (error) {
       setError(error.message);
@@ -3152,7 +3121,7 @@ export default function Home() {
     const { data, error } = await supabase
       .from(TABLES.investmentPrices)
       .upsert({ investment_id: item.id, user_id: user.id, nav, recorded_at: recordedAt }, { onConflict: "investment_id,recorded_at" })
-      .select("id,investment_id,nav,recorded_at")
+      .select(INVESTMENT_PRICE_COLUMNS)
       .single();
     if (error) {
       setError(error.message);
@@ -5252,7 +5221,6 @@ function ConfirmDialog({ dialog, onClose, closing = false }: { dialog: ConfirmDi
 }
 
 const decimalInputPattern = /^\d*\.?\d*$/;
-const dateInputPattern = /^\d{4}-\d{2}-\d{2}$/;
 
 function AmountInput({ value, onChange, disabled, autoFocus }: { value: number; onChange: (value: number) => void; disabled?: boolean; autoFocus?: boolean }) {
   const [text, setText] = useState(() => (value ? String(value) : ""));
@@ -6528,7 +6496,7 @@ function AskFinanceSheet({ context, userId, onClose, closing }: { context: AiFin
       if (!supabase) { setLoadingHistory(false); return; }
       const { data, error: loadError } = await supabase
         .from(TABLES.aiChatMessages)
-        .select("id,role,content,created_at")
+        .select(AI_CHAT_MESSAGE_COLUMNS)
         .order("created_at", { ascending: true });
       if (cancelled) return;
       if (loadError) setError(loadError.message);
@@ -7866,7 +7834,7 @@ function InvestmentAiSheet({
           investmentId: matched?.id ?? null,
           investment_name: matched?.name ?? item.investment_name,
           amountText: item.amount ? String(item.amount) : "",
-          date: dateInputPattern.test(item.date) ? item.date : todayDateInput(),
+          date: DATE_INPUT_PATTERN.test(item.date) ? item.date : todayDateInput(),
           wallet_id: wallets.some((wallet) => wallet.id === item.wallet_id) ? item.wallet_id : (defaultWalletId(wallets) ?? ""),
           note: item.note,
         };

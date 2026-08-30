@@ -49,3 +49,16 @@ export const TRANSACTION_COLUMNS =
 
 export const PROFILE_COLUMNS =
   "user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled";
+
+export const DEBTOR_COLUMNS =
+  "id,user_id,name,note,opening_balance,kind,monthly_installment,total_installments,credit_limit,credit_card_min_payment_percent,icon,icon_color";
+
+export const WALLET_COLUMNS = "id,user_id,name,tag,balance,icon,icon_color,is_default";
+
+export const RECURRING_EXPENSE_COLUMNS = "id,user_id,name,amount,billing_day,icon,icon_color";
+
+export const INVESTMENT_COLUMNS = "id,user_id,name,code,units,cost_basis,icon,icon_color";
+
+export const INVESTMENT_PRICE_COLUMNS = "id,investment_id,nav,recorded_at";
+
+export const AI_CHAT_MESSAGE_COLUMNS = "id,role,content,created_at";
