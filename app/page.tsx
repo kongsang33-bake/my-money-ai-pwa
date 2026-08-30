@@ -216,6 +216,7 @@ export default function Home() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   const [text, setText] = useState("");
   const [slipImages, setSlipImages] = useState<SlipImage[]>([]);
   const [entryDate, setEntryDate] = useState(todayDateInput);
@@ -322,6 +323,18 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [toasts, closingToastIds, dismissToast]);
 
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    const timer = window.setTimeout(() => setIsOnline(navigator.onLine), 0);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
 
   const themeLoadedRef = useRef(false);
 
@@ -2141,6 +2154,8 @@ export default function Home() {
           </button>
         </header>
 
+        {!isOnline && <StateCard tone="error" title="ออฟไลน์อยู่" detail="ข้อมูลอาจไม่อัปเดต และบันทึก/วิเคราะห์รายการใหม่ไม่ได้จนกว่าจะกลับมาออนไลน์" />}
+
         {tab === "home" && (
           <div className="view">
             {dataLoading && <SkeletonDashboard />}
@@ -2275,7 +2290,7 @@ export default function Home() {
                   </div>
                 </div>
 
-                <button className="primary" onClick={analyze} disabled={busy || (!text.trim() && !slipImages.length)}>
+                <button className="primary" onClick={analyze} disabled={busy || !isOnline || (!text.trim() && !slipImages.length)}>
                   {busy ? (
                     <span className="button-loading-row">
                       <span className="loading-spinner mini on-ink" />
@@ -2322,7 +2337,7 @@ export default function Home() {
                     <button
                       className="save"
                       onClick={() => saveEntries(drafts)}
-                      disabled={busy || drafts.some((draft) => draft.transaction_type === "transfer" && (!draft.transfer_to_wallet_id || draft.transfer_to_wallet_id === draft.wallet_id))}
+                      disabled={busy || !isOnline || drafts.some((draft) => draft.transaction_type === "transfer" && (!draft.transfer_to_wallet_id || draft.transfer_to_wallet_id === draft.wallet_id))}
                     >
                       บันทึก {drafts.length} รายการ
                     </button>

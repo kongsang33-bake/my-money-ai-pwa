@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Sans_Thai } from "next/font/google";
 import { THEME_STORAGE_KEY } from "@/lib/constants";
+import { ServiceWorkerRegistrar } from "./service-worker-registrar";
 import "./globals.css";
 
 const ibmPlexSansThai = IBM_Plex_Sans_Thai({
@@ -58,6 +59,7 @@ export default function RootLayout({
           </div>
         </div>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <ServiceWorkerRegistrar />
         {children}
       </body>
     </html>
