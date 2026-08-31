@@ -166,6 +166,10 @@ export type Profile = {
   webauthn_enabled: boolean;
   net_worth_formula: NetWorthDebtFormula;
   net_worth_hide_card: boolean;
+  // Free-text vocabulary/business context the user writes for the AI —
+  // injected into the parsing prompt and the finance chat. See
+  // AI_CONTEXT_MAX_LENGTH in lib/constants.ts.
+  ai_context: string | null;
 };
 
 export type AiFinanceContext = {

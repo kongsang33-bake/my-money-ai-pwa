@@ -18,6 +18,23 @@ export function imageBytes(base64: string) {
 
 export const GEMINI_EXTRACTION_TEMPERATURE = 0.1;
 
+// Free-text personal context (profiles.ai_context) the user writes for the
+// AI. Long enough for a paragraph of household/business vocabulary, short
+// enough that it can't crowd out the parsing rules in the prompt itself.
+export const AI_CONTEXT_MAX_LENGTH = 1000;
+
+// How many past entries of the user's own get replayed to the model as
+// "you recorded something like this before" examples, and how similar the
+// wording has to be to qualify -- see lib/ai-memory.ts. Few and strict on
+// purpose: these examples outrank the model's own guess, so a loose match
+// would teach it the wrong pattern.
+export const AI_EXAMPLE_LIMIT = 5;
+export const AI_EXAMPLE_MIN_SIMILARITY = 0.3;
+
+// Cap on the example text sent per past entry (its title) -- an entry title
+// is short by nature, this only guards against a pathological one.
+export const AI_EXAMPLE_TEXT_MAX_LENGTH = 120;
+
 export const WEBAUTHN_TIMEOUT_MS = 60_000;
 
 export const MONTH_START_DAY_MIN = 1;
@@ -50,7 +67,7 @@ export const TRANSACTION_COLUMNS =
   "id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id,investment_id,investment_units";
 
 export const PROFILE_COLUMNS =
-  "user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled,net_worth_formula,net_worth_hide_card";
+  "user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled,net_worth_formula,net_worth_hide_card,ai_context";
 
 export const DEBTOR_COLUMNS =
   "id,user_id,name,note,opening_balance,kind,monthly_installment,total_installments,credit_limit,credit_card_min_payment_percent,icon,icon_color";

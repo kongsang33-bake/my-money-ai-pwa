@@ -21,7 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { AI_CHAT_MESSAGE_COLUMNS, MONTH_START_DAY_MAX, MONTH_START_DAY_MIN, TABLES } from "@/lib/constants";
+import { AI_CHAT_MESSAGE_COLUMNS, AI_CONTEXT_MAX_LENGTH, MONTH_START_DAY_MAX, MONTH_START_DAY_MIN, TABLES } from "@/lib/constants";
 import { authHeaders } from "@/lib/api";
 import { formatMoney, formatSignedMoney, moneySign, clampInteger } from "@/lib/format";
 import { entriesInRange, reportBounds, reportLabel } from "@/lib/cycle";
@@ -55,7 +55,7 @@ export function cleanAiAnswer(value: string) {
     .trim();
 }
 
-export function AskFinanceSheet({ context, userId, onClose, closing }: { context: AiFinanceContext; userId: string; onClose: () => void; closing?: boolean }) {
+export function AskFinanceSheet({ context, userId, aiContext, onClose, closing }: { context: AiFinanceContext; userId: string; aiContext: string; onClose: () => void; closing?: boolean }) {
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [question, setQuestion] = useState("");
@@ -93,7 +93,7 @@ export function AskFinanceSheet({ context, userId, onClose, closing }: { context
     setQuestion("");
     const history = messages.slice(-10).map((m) => ({ role: m.role, content: m.content }));
     try {
-      const response = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json", ...(await authHeaders()) }, body: JSON.stringify({ question: trimmed, context, history }) });
+      const response = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json", ...(await authHeaders()) }, body: JSON.stringify({ question: trimmed, context, history, aiContext }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "AI ตอบคำถามไม่สำเร็จ");
       const answerText = cleanAiAnswer(data.answer || "ยังไม่มีคำตอบ");
@@ -449,6 +449,20 @@ export function MoreSheet({
   );
 }
 
+// Starter text for the "บริบทของฉันสำหรับ AI" field. The field's placeholder
+// is invisible until focus (the sheet's floating-label CSS), and an empty box
+// tells a first-time user nothing about what's worth writing -- so this doubles
+// as the placeholder and as one-tap starter content they edit in place. The
+// coin-swap line is the case that motivated the field: a tenant trading notes
+// for laundry coins is a wallet-to-wallet transfer, which no generic parsing
+// rule would guess.
+const aiContextTemplate = [
+  "ผมดูแลอพาร์ทเมนท์ มีเครื่องซักผ้าและตู้กดน้ำหยอดเหรียญเป็นรายได้เสริม",
+  "ลูกบ้าน = ผู้เช่าในอพาร์ทเมนท์",
+  "ลูกบ้านแลกเหรียญ = ลูกบ้านเอาแบงก์มาแลกเหรียญ เงินรวมเท่าเดิม ไม่ใช่รายรับ ให้โอนจากกระเป๋าเหรียญสำรองเข้ากระแสเงินสด",
+  "เก็บเหรียญ = เปิดเครื่องเก็บรายได้ เป็นรายรับเข้ากระเป๋าเหรียญสำรอง",
+].join("\n");
+
 export function ProfileEditSheet({
   profile,
   busy,
@@ -463,7 +477,7 @@ export function ProfileEditSheet({
   busy: boolean;
   error: string;
   onClose: () => void;
-  onSave: (next: { nickname: string; app_icon: string; app_icon_image: string; month_start_day: number }) => Promise<boolean>;
+  onSave: (next: { nickname: string; app_icon: string; app_icon_image: string; month_start_day: number; ai_context: string }) => Promise<boolean>;
   closing?: boolean;
   netWorthDisplay: NetWorthDisplaySettings;
   onSaveNetWorthDisplay: (next: NetWorthDisplaySettings) => void;
@@ -472,6 +486,7 @@ export function ProfileEditSheet({
   const app_icon = profile?.app_icon ?? "";
   const [app_icon_image, setAppIconImage] = useState(profile?.app_icon_image ?? "");
   const [month_start_day, setMonthStartDay] = useState(profile?.month_start_day ?? 1);
+  const [ai_context, setAiContext] = useState(profile?.ai_context ?? "");
   const [localError, setLocalError] = useState("");
   const profileName = nickname.trim() || "ผู้ใช้";
 
@@ -488,7 +503,7 @@ export function ProfileEditSheet({
   }
 
   const submit = async () => {
-    const saved = await onSave({ nickname, app_icon, app_icon_image, month_start_day });
+    const saved = await onSave({ nickname, app_icon, app_icon_image, month_start_day, ai_context });
     if (saved) onClose();
   };
 
@@ -525,6 +540,22 @@ export function ProfileEditSheet({
         <input placeholder=" " type="number" min={MONTH_START_DAY_MIN} max={MONTH_START_DAY_MAX} value={month_start_day} onChange={(event) => setMonthStartDay(clampInteger(event.target.value, MONTH_START_DAY_MIN, MONTH_START_DAY_MAX, 1))} />
         <span>วันเริ่มรอบเดือน</span>
       </label>
+      <label>
+        บริบทของฉันสำหรับ AI
+        <textarea
+          value={ai_context}
+          maxLength={AI_CONTEXT_MAX_LENGTH}
+          onChange={(event) => setAiContext(event.target.value)}
+          placeholder={aiContextTemplate}
+        />
+        <small>
+          บอก AI ว่าคุณทำอาชีพอะไร และคำที่คุณใช้ประจำแปลว่าอะไร เช่น &quot;ลูกบ้านแลกเหรียญ = แลกแบงก์เป็นเหรียญ ไม่ใช่รายรับ&quot;
+          AI จะอ่านทุกครั้งที่ช่วยแยกรายการและตอบคำถามการเงิน ({ai_context.length}/{AI_CONTEXT_MAX_LENGTH})
+        </small>
+      </label>
+      {!ai_context.trim() && (
+        <button className="side-ghost" onClick={() => setAiContext(aiContextTemplate)}>ใส่ตัวอย่างให้แล้วแก้เอง</button>
+      )}
       <label>
         มูลค่าสุทธิ นับหนี้แบบไหน
         <div className="report-period-toggle">

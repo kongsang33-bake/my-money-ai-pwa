@@ -47,11 +47,13 @@ import {
   unnamedDebtor,
 } from "@/lib/money";
 import { buildWalletInsight, computeStreak, deriveQuickShortcuts, isRecurringLogged, lastSevenDayCashFlow, type QuickShortcut } from "@/lib/insights";
+import { buildAiExamples, buildCategoryMemory } from "@/lib/ai-memory";
 import { categoryColor, categoryTint, nameColor } from "@/lib/category";
 import { createPinSalt, hashPin, isSixDigitPin, pinBackgroundLockMs, pinBlockMs, pinBlocked, pinMaxAttempts, registerFaceId, timingSafeEqual, verifyFaceId } from "@/lib/pin";
 import { compressSlipImage } from "@/lib/image";
 import { authHeaders } from "@/lib/api";
 import {
+  AI_CONTEXT_MAX_LENGTH,
   BUDGET_COLUMNS,
   CATEGORY_DOT_TINT_ALPHA,
   DEBTOR_COLUMNS,
@@ -815,15 +817,7 @@ export default function Home() {
     [activeDay, filteredMonthlyEntries],
   );
 
-  const categoryMemory = useMemo(() => {
-    const map = new Map<string, string>();
-    const byRecency = [...entries].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1));
-    for (const entry of byRecency) {
-      const key = entry.title.trim().toLowerCase();
-      if (key && !map.has(key)) map.set(key, entry.category);
-    }
-    return map;
-  }, [entries]);
+  const categoryMemory = useMemo(() => buildCategoryMemory(entries), [entries]);
 
   const categorySummary = useMemo(() => {
     const map = new Map<string, number>();
@@ -1029,6 +1023,11 @@ export default function Home() {
           images: slipImages.map(({ data, mimeType, name }) => ({ data, mimeType, name })),
           debtors: debtors.map((debtor) => ({ name: debtor.name, kind: debtor.kind })),
           wallets: wallets.map((wallet) => ({ id: wallet.id, name: wallet.name, tag: wallet.tag, is_default: wallet.is_default })),
+          // How the user themselves handled wording like this before, plus the
+          // vocabulary they wrote in their profile — both let the parser learn
+          // this household's own terms instead of guessing them again.
+          examples: buildAiExamples(entries, text),
+          aiContext: profile?.ai_context ?? "",
         }),
       });
       const data = await response.json();
@@ -1457,6 +1456,7 @@ export default function Home() {
     app_icon: string;
     app_icon_image: string;
     month_start_day: number;
+    ai_context: string;
   }) {
     if (!supabase || !user) return false;
     setBusy(true);
@@ -1468,6 +1468,7 @@ export default function Home() {
       app_icon: next.app_icon.trim() || null,
       app_icon_image: next.app_icon_image.trim() || null,
       month_start_day: clampInteger(next.month_start_day, MONTH_START_DAY_MIN, MONTH_START_DAY_MAX, 1),
+      ai_context: next.ai_context.trim().slice(0, AI_CONTEXT_MAX_LENGTH) || null,
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await supabase
@@ -2722,7 +2723,7 @@ export default function Home() {
           />
         )}
         {askAiDismiss.mounted && user && (
-          <AskFinanceSheet context={aiFinanceContext} userId={user.id} onClose={askAiDismiss.requestClose} closing={askAiDismiss.closing} />
+          <AskFinanceSheet context={aiFinanceContext} userId={user.id} aiContext={profile?.ai_context ?? ""} onClose={askAiDismiss.requestClose} closing={askAiDismiss.closing} />
         )}
         {recapDismiss.mounted && (
           <RecapSheet
