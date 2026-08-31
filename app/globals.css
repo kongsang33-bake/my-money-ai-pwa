@@ -352,6 +352,12 @@ input, textarea, select {
 .select-shell select {
   appearance: none;
   width: 100%;
+  /* A wallet can be named "เหรียญสำรอง (เครื่องซักผ้า/ตู้กดน้ำ)" -- in a
+     half-width grid cell that has to end in an ellipsis, not a glyph sliced
+     in half by the chevron. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .select-shell-chevron {
@@ -2132,13 +2138,70 @@ a:focus-visible {
   margin-bottom: var(--s-3);
 }
 
+/* Grid items default to min-width:auto, which lets a long select push its
+   column wider than 1fr instead of shrinking and truncating. */
+.draft-grid > label {
+  min-width: 0;
+}
+
+/* A transfer's two wallets are one fact -- where the money left and where it
+   landed -- so they stack as a route with the direction drawn between them.
+   Stacked rather than side by side at every width on purpose: these are the
+   longest strings in the app, and half a card's width truncates them. */
+.draft-route {
+  display: grid;
+  gap: var(--s-1);
+  margin-bottom: var(--s-3);
+}
+
+.draft-route-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  width: 22px;
+  height: 22px;
+  margin: 2px 0;
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.draft-route-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  color: var(--accent-strong);
+}
+
+/* Stands in for .cat-icon's per-category tint on a transfer, which has no
+   category of its own to take a color from (expandTransferDraft files both
+   legs under "อื่น ๆ"). */
+.draft-transfer-icon {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
 .draft-field-full {
   grid-column: 1 / -1;
 }
 
+/* Reads as bold label text otherwise -- the chevron is what says "this is a
+   control that opens something", and rotating it says which way it is now. */
 .draft-details-toggle {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin-bottom: var(--s-3);
+}
+
+.draft-details-toggle svg {
+  transition: transform var(--t-2) var(--e-out);
+}
+
+.draft-details-toggle.is-open svg {
+  transform: rotate(180deg);
 }
 
 .draft-grid-secondary {
@@ -2173,16 +2236,27 @@ a:focus-visible {
   margin-bottom: 4px;
 }
 
+/* Both impact summaries name wallets now, and a wallet name can be longer
+   than half a card -- so they wrap to their own line instead of pushing the
+   card into a horizontal scroll. */
 .impact-row {
   display: flex;
-  gap: var(--s-4);
+  flex-wrap: wrap;
+  gap: 4px var(--s-4);
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
   color: var(--ink-2);
 }
 
+.impact-row > span, .draft-impact > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .draft-impact {
   display: flex;
+  flex-wrap: wrap;
+  gap: 4px var(--s-4);
   justify-content: space-between;
   padding: var(--s-3) var(--s-4);
   border-radius: var(--r-md);
@@ -3511,7 +3585,7 @@ button.entry-main {
    select) by coming after them at equal specificity, so the chevron never
    overlaps the select's own text. */
 .select-shell select {
-  padding-right: 34px;
+  padding-right: 36px;
 }
 
 .entry .entry-note {

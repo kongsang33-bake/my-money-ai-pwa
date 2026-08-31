@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useMemo, useState } from "react";
-import { ChevronDown, X } from "lucide-react";
+import { ArrowDown, ArrowLeftRight, ChevronDown, X } from "lucide-react";
 import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
 import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
 import { todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
@@ -39,7 +39,11 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
         <X size={14} strokeWidth={2.5} />
       </button>
       <div className="draft-header">
-        <span className="cat-icon" style={{ background: categoryTint(draft.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(draft.category) }}><CategoryIcon category={draft.category} size={18} /></span>
+        {isTransfer ? (
+          <span className="cat-icon draft-transfer-icon"><ArrowLeftRight size={18} strokeWidth={2.25} aria-hidden="true" /></span>
+        ) : (
+          <span className="cat-icon" style={{ background: categoryTint(draft.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(draft.category) }}><CategoryIcon category={draft.category} size={18} /></span>
+        )}
         <label className="draft-title-field">
           <input placeholder=" " value={draft.title} onChange={(event) => update({ title: event.target.value })} />
           <span>ชื่อรายการ</span>
@@ -60,22 +64,57 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
         </div>
       </label>
       <div className="draft-grid">
-        <label>
-          หมวดหมู่
-          <div className="select-shell">
-            <select value={draft.category} onChange={(event) => update({ category: event.target.value })}>
-            {categories.map((category) => (
-              <option key={category}>{category}</option>
-            ))}
-          </select>
-            <ChevronDown className="select-shell-chevron" aria-hidden="true" />
-          </div>
-        </label>
-        <label>
+        {!isTransfer && (
+          <label>
+            หมวดหมู่
+            <div className="select-shell">
+              <select value={draft.category} onChange={(event) => update({ category: event.target.value })}>
+              {categories.map((category) => (
+                <option key={category}>{category}</option>
+              ))}
+            </select>
+              <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+            </div>
+          </label>
+        )}
+        <label className={isTransfer ? "draft-field-full" : undefined}>
           จำนวนเงิน
           <AmountInput value={draft.amount} onChange={(amount) => update({ amount })} />
         </label>
       </div>
+      {isTransfer && !!wallets.length && (
+        // Which two wallets the money moved between IS the transfer -- it
+        // doesn't belong behind the "edit date/wallet/note" toggle with the
+        // optional fields, and the two legs read as one route rather than as
+        // two dropdowns that happen to sit near each other.
+        <div className="draft-route">
+          <label>
+            จากกระเป๋า
+            <div className="select-shell">
+              <select value={draft.wallet_id || defaultWalletId(wallets) || ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
+                {wallets.map((wallet) => (
+                  <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+            </div>
+          </label>
+          <span className="draft-route-arrow" aria-hidden="true"><ArrowDown size={16} strokeWidth={2.5} /></span>
+          <label>
+            ไปกระเป๋า
+            <div className="select-shell">
+              <select aria-invalid={transferInvalid} value={draft.transfer_to_wallet_id ?? ""} onChange={(event) => update({ transfer_to_wallet_id: event.target.value || null })}>
+                <option value="">เลือกกระเป๋าปลายทาง</option>
+                {wallets.map((wallet) => (
+                  <option key={wallet.id} value={wallet.id} disabled={wallet.id === draft.wallet_id}>{wallet.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+            </div>
+          </label>
+          {transferInvalid && <small className="draft-route-hint">เลือกกระเป๋าปลายทางก่อนบันทึก</small>}
+        </div>
+      )}
       {isDebtType && (
         <div className="draft-debtor-field">
           <label>
@@ -85,8 +124,14 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
           {isNewDebtor && <small>{relevantKind === "own" ? "หนี้ใหม่" : "ลูกหนี้ใหม่"} · จะสร้างให้อัตโนมัติเมื่อบันทึก</small>}
         </div>
       )}
-      <button type="button" className="text-button draft-details-toggle" onClick={() => setDetailsOpen((current) => !current)}>
-        {showDetails ? "ซ่อนวันที่ / กระเป๋า / หมายเหตุ" : "แก้ไขวันที่ / กระเป๋า / หมายเหตุ"}
+      <button
+        type="button"
+        className={`text-button draft-details-toggle${showDetails ? " is-open" : ""}`}
+        aria-expanded={showDetails}
+        onClick={() => setDetailsOpen((current) => !current)}
+      >
+        {`${showDetails ? "ซ่อน" : "แก้ไข"}วันที่ / ${isTransfer ? "" : "กระเป๋า / "}หมายเหตุ`}
+        <ChevronDown size={14} strokeWidth={2.5} aria-hidden="true" />
       </button>
       {showDetails && (
         <div className="draft-grid draft-grid-secondary">
@@ -94,27 +139,13 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
             วันที่
             <input type="date" value={toDateInput(draft.occurred_at)} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, draft.occurred_at) })} />
           </label>
-          {!!wallets.length && draft.transaction_type !== "card_charge" && (
+          {!isTransfer && !!wallets.length && draft.transaction_type !== "card_charge" && (
             <label>
-              {isTransfer ? "จากกระเป๋า" : "กระเป๋า"}
+              กระเป๋า
               <div className="select-shell">
                 <select value={draft.wallet_id || defaultWalletId(wallets) || ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
                 {wallets.map((wallet) => (
                   <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
-                ))}
-              </select>
-                <ChevronDown className="select-shell-chevron" aria-hidden="true" />
-              </div>
-            </label>
-          )}
-          {isTransfer && !!wallets.length && (
-            <label className="draft-field-full">
-              ไปกระเป๋า
-              <div className="select-shell">
-                <select aria-invalid={transferInvalid} value={draft.transfer_to_wallet_id ?? ""} onChange={(event) => update({ transfer_to_wallet_id: event.target.value || null })}>
-                <option value="">เลือกกระเป๋าปลายทาง</option>
-                {wallets.map((wallet) => (
-                  <option key={wallet.id} value={wallet.id} disabled={wallet.id === draft.wallet_id}>{wallet.name}</option>
                 ))}
               </select>
                 <ChevronDown className="select-shell-chevron" aria-hidden="true" />
@@ -131,8 +162,8 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
         <p className="draft-result-title">ผลหลังบันทึก</p>
         {isTransfer ? (
           <div className="impact-row">
-            <span>โอนออก {formatSignedMoney(-draft.amount)}</span>
-            <span>โอนเข้า {formatSignedMoney(draft.amount)}</span>
+            <span>{wallets.find((wallet) => wallet.id === draft.wallet_id)?.name ?? "กระเป๋าต้นทาง"} {formatSignedMoney(-draft.amount)}</span>
+            <span>{wallets.find((wallet) => wallet.id === draft.transfer_to_wallet_id)?.name ?? "กระเป๋าปลายทาง"} {formatSignedMoney(draft.amount)}</span>
           </div>
         ) : (
           <div className="impact-row">
@@ -389,31 +420,50 @@ export function ManualEntryForm({
         <input type="date" value={toDateInput(draft.occurred_at)} max={todayDateInput()} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, draft.occurred_at) })} />
       </label>
       {!!wallets.length && draft.transaction_type !== "card_charge" && (
-        <label>
-          {isTransfer ? "จากกระเป๋า" : "กระเป๋า"}
-          <div className="select-shell">
-            <select value={draft.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
-            {wallets.map((wallet) => (
-              <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
-            ))}
-          </select>
-            <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+        // Same route treatment as the AI review card (see DraftRow): on a
+        // transfer the two wallets are one fact, so they read as from -> to
+        // rather than as two dropdowns that happen to be adjacent.
+        isTransfer ? (
+          <div className="draft-route">
+            <label>
+              จากกระเป๋า
+              <div className="select-shell">
+                <select value={draft.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
+                  {wallets.map((wallet) => (
+                    <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+              </div>
+            </label>
+            <span className="draft-route-arrow" aria-hidden="true"><ArrowDown size={16} strokeWidth={2.5} /></span>
+            <label>
+              ไปกระเป๋า
+              <div className="select-shell">
+                <select aria-invalid={transferInvalid} value={destWalletId ?? ""} onChange={(event) => setDestWalletId(event.target.value || null)}>
+                  <option value="">เลือกกระเป๋าปลายทาง</option>
+                  {wallets.map((wallet) => (
+                    <option key={wallet.id} value={wallet.id} disabled={wallet.id === draft.wallet_id}>{wallet.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+              </div>
+            </label>
+            {transferInvalid && <small className="draft-route-hint">เลือกกระเป๋าปลายทางก่อนบันทึก</small>}
           </div>
-        </label>
-      )}
-      {isTransfer && !!wallets.length && (
-        <label>
-          ไปกระเป๋า
-          <div className="select-shell">
-            <select value={destWalletId ?? ""} onChange={(event) => setDestWalletId(event.target.value || null)}>
-            <option value="">เลือกกระเป๋าปลายทาง</option>
-            {wallets.map((wallet) => (
-              <option key={wallet.id} value={wallet.id} disabled={wallet.id === draft.wallet_id}>{wallet.name}</option>
-            ))}
-          </select>
-            <ChevronDown className="select-shell-chevron" aria-hidden="true" />
-          </div>
-        </label>
+        ) : (
+          <label>
+            กระเป๋า
+            <div className="select-shell">
+              <select value={draft.wallet_id ?? defaultWalletId(wallets) ?? ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
+              {wallets.map((wallet) => (
+                <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
+              ))}
+            </select>
+              <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+            </div>
+          </label>
+        )
       )}
       <label>
         <textarea value={draft.note ?? ""} onChange={(event) => update({ note: event.target.value })} placeholder="รายละเอียดเพิ่มเติมของรายการนี้" />
