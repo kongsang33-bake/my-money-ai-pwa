@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { GeminiChainError, generateGeminiContent, isTimeoutError, sameModelRetryDelayMs, thinkingConfigForModel } from "./gemini.ts";
+import { GeminiChainError, classifyGeminiFailure, describeGeminiError, dominantFailureCode, generateGeminiContent, isTimeoutError, sameModelRetryDelayMs, thinkingConfigForModel } from "./gemini.ts";
 import type { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 
 // AbortSignal.timeout rejects with a DOMException whose *name* is TimeoutError
@@ -165,5 +165,44 @@ describe("generateGeminiContent thinking handling", () => {
     assert.equal(calls[0].model, calls[1].model);
     assert.ok(calls[0].thinking, "first attempt carries the thinking config");
     assert.equal(calls[1].thinking, undefined, "retry drops it");
+  });
+});
+
+describe("classifyGeminiFailure", () => {
+  it("names each failure the API actually returns", () => {
+    assert.equal(classifyGeminiFailure(new Error('{"error":{"code":429,"status":"RESOURCE_EXHAUSTED"}}')), "429");
+    assert.equal(classifyGeminiFailure(new Error('{"error":{"code":503,"status":"UNAVAILABLE"}}')), "503");
+    assert.equal(classifyGeminiFailure(new Error("models/gemini-1.5-flash is not found (404)")), "404");
+    assert.equal(classifyGeminiFailure(timeoutError()), "timeout");
+    assert.equal(classifyGeminiFailure(new Error("boom")), "error");
+  });
+});
+
+describe("dominantFailureCode", () => {
+  it("reports quota over a retired model, whatever order they happened in", () => {
+    // The exact shape of the bug this exists for: the good models were out of
+    // quota, the chain ended on a dead one, and the app blamed the dead one.
+    assert.equal(dominantFailureCode(["429", "429", "404", "404"]), "429");
+  });
+
+  it("falls back to the worst thing present when there is no quota failure", () => {
+    assert.equal(dominantFailureCode(["404", "timeout"]), "timeout");
+    assert.equal(dominantFailureCode(["404"]), "404");
+    assert.equal(dominantFailureCode([]), "error");
+  });
+});
+
+describe("describeGeminiError", () => {
+  it("blames quota, not the retired model the chain happened to end on", () => {
+    const chainError = new GeminiChainError(
+      [{ model: "gemini-3.6-flash", code: "429" }, { model: "gemini-2.0-flash", code: "404" }],
+      7000,
+      new Error("models/gemini-2.0-flash is not found (404)"),
+    );
+    const described = describeGeminiError(chainError, "วิเคราะห์รายการ");
+    assert.match(described, /มีคนใช้งานเยอะ/);
+    // And it still shows what was tried, with the reason per model.
+    assert.match(described, /gemini-3\.6-flash·429/);
+    assert.match(described, /gemini-2\.0-flash·404/);
   });
 });

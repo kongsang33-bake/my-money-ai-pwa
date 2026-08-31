@@ -7,13 +7,17 @@ import { GEMINI_TEXT_TIMEOUT_MS } from "./constants.ts";
 // the thing to edit when that happens — no other code change needed. An
 // optional GEMINI_MODEL env var, if set, is tried first of all so a model
 // swap can also be done from hosting config without touching code.
+//
+// gemini-1.5-flash was dropped: it is retired, so it could only ever 404 --
+// and being last in the chain, its 404 became the error the app reported even
+// when the models that matter had failed for a completely different reason.
 const MODEL_CHAIN = [
   ...(process.env.GEMINI_MODEL ? [process.env.GEMINI_MODEL] : []),
   "gemini-3.6-flash",
+  "gemini-3.5-flash",
   "gemini-2.5-flash",
   "gemini-flash-latest",
   "gemini-2.0-flash",
-  "gemini-1.5-flash",
 ].filter((model, index, all) => all.indexOf(model) === index);
 
 // Remembers the last model that actually worked, in-process, so once a
@@ -138,21 +142,52 @@ const GEMINI_MIN_ATTEMPT_MS = 1500;
 // inside this; one that doesn't costs a fraction of the wait it used to.
 const GEMINI_FIRST_MODEL_TIMEOUT_RATIO = 0.45;
 
+// Why one model in the chain did not answer, short enough to show on a phone.
+// "429" (out of quota) and "404" (model gone) mean completely different things
+// to whoever has to fix it, and the old summary -- built from whichever model
+// happened to be tried LAST -- reported the wrong one whenever the chain ended
+// on a retired model after the good ones were rate-limited.
+export type GeminiFailureCode = "429" | "503" | "404" | "timeout" | "400" | "error";
+
+export function classifyGeminiFailure(error: unknown): GeminiFailureCode {
+  if (isRateLimitedError(error)) return "429";
+  if (isOverloadedError(error)) return "503";
+  if (isUnavailableModelError(error)) return "404";
+  if (isTimeoutError(error)) return "timeout";
+  if (isInvalidArgumentError(error)) return "400";
+  return "error";
+}
+
+// Most actionable first: being out of quota is the thing worth telling the
+// user about even when later models in the chain failed for other reasons.
+const FAILURE_CODE_PRIORITY: GeminiFailureCode[] = ["429", "503", "timeout", "404", "400", "error"];
+
+export function dominantFailureCode(codes: GeminiFailureCode[]): GeminiFailureCode {
+  return FAILURE_CODE_PRIORITY.find((code) => codes.includes(code)) ?? "error";
+}
+
+export type GeminiAttempt = { model: string; code: GeminiFailureCode };
+
 /**
- * Thrown when no model in the chain produced an answer. Carries what was
- * actually tried and for how long, so the failure can say which models went
- * quiet instead of just "the AI was slow" -- the app has no other way to
- * surface a server-side log line to whoever is looking at the screen.
+ * Thrown when no model in the chain produced an answer. Carries what was tried,
+ * why each one failed, and how long it took -- the app has no other way to put
+ * a server-side log line in front of whoever is looking at the screen, and
+ * without the per-model reason a chain that ends on a retired model reads as
+ * "the AI is broken" when the real cause was quota on the models that matter.
  */
 export class GeminiChainError extends Error {
-  readonly attempted: string[];
+  readonly attempts: GeminiAttempt[];
   readonly elapsedMs: number;
 
-  constructor(attempted: string[], elapsedMs: number, cause: unknown) {
-    super(`Gemini produced no answer after ${attempted.join(", ") || "no attempts"} (${elapsedMs}ms)`, { cause });
+  constructor(attempts: GeminiAttempt[], elapsedMs: number, cause: unknown) {
+    super(`Gemini produced no answer after ${attempts.map((item) => `${item.model}:${item.code}`).join(", ") || "no attempts"} (${elapsedMs}ms)`, { cause });
     this.name = "GeminiChainError";
-    this.attempted = attempted;
+    this.attempts = attempts;
     this.elapsedMs = elapsedMs;
+  }
+
+  get attempted() {
+    return this.attempts.map((item) => item.model);
   }
 }
 
@@ -177,6 +212,7 @@ export async function generateGeminiContent(
   const startedAt = Date.now();
   const remainingMs = () => budgetMs - (Date.now() - startedAt);
   const modelsAttempted: string[] = [];
+  const failures: GeminiAttempt[] = [];
   let lastError: unknown;
 
   for (const model of chain) {
@@ -196,8 +232,8 @@ export async function generateGeminiContent(
       // have used.
       const timeoutMs = Math.min(modelTimeoutMs, remainingMs());
       if (timeoutMs < minAttemptMs) {
-        console.error("Gemini request ran out of budget", { modelsAttempted, budgetMs, totalElapsedMs: Date.now() - startedAt });
-        throw new GeminiChainError(modelsAttempted, Date.now() - startedAt, lastError);
+        console.error("Gemini request ran out of budget", { failures, budgetMs, totalElapsedMs: Date.now() - startedAt });
+        throw new GeminiChainError(failures, Date.now() - startedAt, lastError);
       }
       if (attempt === 0) modelsAttempted.push(model);
 
@@ -234,6 +270,7 @@ export async function generateGeminiContent(
         // neither clears in the seconds a user is waiting.
         const retryDelayMs = isUnavailableModelError(error) || isRateLimitedError(error) ? null : sameModelRetryDelayMs(error, attempt);
         if (retryDelayMs === null) {
+          failures.push({ model, code: classifyGeminiFailure(error) });
           console.error(`Gemini model ${model} unavailable, trying next candidate`, error);
           break;
         }
@@ -242,8 +279,8 @@ export async function generateGeminiContent(
     }
   }
 
-  console.error("Gemini request failed on every model", { modelsAttempted, totalElapsedMs: Date.now() - startedAt });
-  throw new GeminiChainError(modelsAttempted, Date.now() - startedAt, lastError);
+  console.error("Gemini request failed on every model", { failures, totalElapsedMs: Date.now() - startedAt });
+  throw new GeminiChainError(failures, Date.now() - startedAt, lastError);
 }
 
 // Turns a Gemini SDK error into a short Thai message safe to show a user —
@@ -257,22 +294,27 @@ export function describeGeminiError(error: unknown, action: string): string {
   // and names the models it burned the wait on -- server logs are not
   // something the person holding the phone can go and read.
   const chainError = error instanceof GeminiChainError ? error : null;
-  const detail = chainError ? ` (ลองแล้ว: ${chainError.attempted.join(", ")} · ${Math.round(chainError.elapsedMs / 1000)} วิ)` : "";
+  const detail = chainError
+    ? ` (ลองแล้ว: ${chainError.attempts.map((item) => `${item.model}·${item.code}`).join(", ")} · รวม ${Math.round(chainError.elapsedMs / 1000)} วิ)`
+    : "";
+  // Classified across every model tried, not just the last one -- see
+  // dominantFailureCode.
+  const code = chainError ? dominantFailureCode(chainError.attempts.map((item) => item.code)) : null;
   const cause = chainError?.cause ?? error;
   const message = cause instanceof Error ? cause.message : String(cause);
-  if (message.includes("429") || message.includes("RESOURCE_EXHAUSTED")) {
+  if (code === "429" || (!code && (message.includes("429") || message.includes("RESOURCE_EXHAUSTED")))) {
     return `AI${action}ไม่สำเร็จ เพราะมีคนใช้งานเยอะในขณะนี้ กรุณาลองใหม่อีกครั้งในอีกสักครู่${detail}`;
   }
-  if (message.includes("503") || message.includes("UNAVAILABLE")) {
+  if (code === "503" || (!code && (message.includes("503") || message.includes("UNAVAILABLE")))) {
     return `AI${action}ไม่สำเร็จ เพราะระบบ AI มีผู้ใช้งานหนาแน่นในขณะนี้ กรุณาลองใหม่อีกครั้ง${detail}`;
   }
-  if (message.includes("404") || message.includes("NOT_FOUND") || message.includes("no longer available")) {
+  if (code === "404" || (!code && (message.includes("404") || message.includes("NOT_FOUND") || message.includes("no longer available")))) {
     return `AI${action}ไม่สำเร็จ ระบบ AI ขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง${detail}`;
   }
   // Reached when every model in the chain timed out (or the overall budget
   // ran out mid-chain) -- worth saying plainly that it was slow, not broken,
   // because retrying right away often lands on a healthy model.
-  if (isTimeoutError(cause)) {
+  if (code === "timeout" || (!code && isTimeoutError(cause))) {
     return `AI${action}ไม่สำเร็จ เพราะระบบ AI ตอบช้ากว่าปกติ กรุณาลองใหม่อีกครั้ง${detail}`;
   }
   return `AI${action}ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง${detail}`;
