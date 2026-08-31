@@ -52,11 +52,14 @@ import { createPinSalt, hashPin, isSixDigitPin, pinBackgroundLockMs, pinBlockMs,
 import { compressSlipImage } from "@/lib/image";
 import { authHeaders } from "@/lib/api";
 import {
+  BUDGET_COLUMNS,
   CATEGORY_DOT_TINT_ALPHA,
   DEBTOR_COLUMNS,
   INVESTMENT_COLUMNS,
   INVESTMENT_PRICE_COLUMNS,
+  LOCAL_DATA_MIGRATED_KEY_PREFIX,
   MAX_SLIP_IMAGES,
+  MONEY_GOAL_COLUMNS,
   MONTH_START_DAY_MAX,
   MONTH_START_DAY_MIN,
   PROFILE_COLUMNS,
@@ -130,34 +133,35 @@ const secondaryWalletTags: { tag: WalletTag; label: string; className: string }[
   { tag: "other", label: walletTagLabels.other, className: "other-wallet" },
 ];
 
-function budgetStorageKey(userId: string) {
+const defaultNetWorthDisplaySettings: NetWorthDisplaySettings = { formula: "full", hideCard: false };
+
+// Budgets/goals/net-worth-display now live in Supabase (see updateBudgets,
+// createGoal/removeGoal, updateNetWorthDisplay below) so they sync across
+// devices instead of being tied to one browser. These localStorage readers
+// are kept -- write-side counterparts deleted -- purely so
+// migrateLocalDataIfNeeded can pull a returning user's old values up into
+// the DB the first time they open the app after this change; see that
+// function for the one-time import this whole read-only cluster exists for.
+function localBudgetStorageKey(userId: string) {
   return `money-ai-budgets:${userId}`;
 }
 
-function loadBudgets(userId: string): Record<string, number> {
+function loadLocalBudgets(userId: string): Record<string, number> {
   try {
-    const raw = window.localStorage.getItem(budgetStorageKey(userId));
+    const raw = window.localStorage.getItem(localBudgetStorageKey(userId));
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
   }
 }
 
-function saveBudgets(userId: string, budgets: Record<string, number>) {
-  try {
-    window.localStorage.setItem(budgetStorageKey(userId), JSON.stringify(budgets));
-  } catch {
-    // localStorage unavailable (private mode, quota) — budgets simply won't persist
-  }
-}
-
-function goalStorageKey(userId: string) {
+function localGoalStorageKey(userId: string) {
   return `money-ai-goals:v1:${userId}`;
 }
 
-function loadGoals(userId: string): MoneyGoal[] {
+function loadLocalGoals(userId: string): MoneyGoal[] {
   try {
-    const raw = window.localStorage.getItem(goalStorageKey(userId));
+    const raw = window.localStorage.getItem(localGoalStorageKey(userId));
     const parsed = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(parsed)) return [];
     return parsed
@@ -168,23 +172,13 @@ function loadGoals(userId: string): MoneyGoal[] {
   }
 }
 
-function saveGoals(userId: string, goals: MoneyGoal[]) {
-  try {
-    window.localStorage.setItem(goalStorageKey(userId), JSON.stringify(goals));
-  } catch {
-    // localStorage unavailable (private mode, quota) — goals simply won't persist
-  }
-}
-
-const defaultNetWorthDisplaySettings: NetWorthDisplaySettings = { formula: "full", hideCard: false };
-
-function netWorthDisplayStorageKey(userId: string) {
+function localNetWorthDisplayStorageKey(userId: string) {
   return `money-ai-net-worth-display:${userId}`;
 }
 
-function loadNetWorthDisplaySettings(userId: string): NetWorthDisplaySettings {
+function loadLocalNetWorthDisplaySettings(userId: string): NetWorthDisplaySettings {
   try {
-    const raw = window.localStorage.getItem(netWorthDisplayStorageKey(userId));
+    const raw = window.localStorage.getItem(localNetWorthDisplayStorageKey(userId));
     if (!raw) return defaultNetWorthDisplaySettings;
     const parsed = JSON.parse(raw);
     return {
@@ -193,14 +187,6 @@ function loadNetWorthDisplaySettings(userId: string): NetWorthDisplaySettings {
     };
   } catch {
     return defaultNetWorthDisplaySettings;
-  }
-}
-
-function saveNetWorthDisplaySettings(userId: string, settings: NetWorthDisplaySettings) {
-  try {
-    window.localStorage.setItem(netWorthDisplayStorageKey(userId), JSON.stringify(settings));
-  } catch {
-    // localStorage unavailable (private mode, quota) — setting simply won't persist
   }
 }
 
@@ -255,7 +241,6 @@ export default function Home() {
   const [budgets, setBudgets] = useState<Record<string, number>>({});
   const [goals, setGoals] = useState<MoneyGoal[]>([]);
   const [goalSheetOpen, setGoalSheetOpen] = useState(false);
-  const [netWorthDisplay, setNetWorthDisplay] = useState<NetWorthDisplaySettings>(defaultNetWorthDisplaySettings);
   const [budgetSheetOpen, setBudgetSheetOpen] = useState(false);
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [askAiOpen, setAskAiOpen] = useState(false);
@@ -274,6 +259,9 @@ export default function Home() {
   const displayIcon = profile?.app_icon?.trim() || user?.email?.[0]?.toUpperCase() || "฿";
   const displayIconImage = profile?.app_icon_image?.trim() || "";
   const monthStartDay = profile?.month_start_day || 1;
+  const netWorthDisplay: NetWorthDisplaySettings = profile
+    ? { formula: profile.net_worth_formula, hideCard: profile.net_worth_hide_card }
+    : defaultNetWorthDisplaySettings;
 
   useEffect(() => {
     const settingKey = profile ? `${profile.user_id}:${monthStartDay}` : null;
@@ -471,18 +459,90 @@ export default function Home() {
     setInvestmentPrices((data ?? []).map((row) => ({ ...row, nav: toFiniteNumber(row.nav) })) as InvestmentPrice[]);
   }, []);
 
+  const loadBudgets = useCallback(async () => {
+    if (!supabase) return;
+
+    const { data, error } = await supabase.from(TABLES.budgets).select(BUDGET_COLUMNS);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setBudgets(Object.fromEntries((data ?? []).map((row) => [row.category, toMoneyAmount(row.amount)])));
+  }, []);
+
+  const loadGoals = useCallback(async () => {
+    if (!supabase) return;
+
+    const { data, error } = await supabase
+      .from(TABLES.moneyGoals)
+      .select(MONEY_GOAL_COLUMNS)
+      .order("created_at", { ascending: false });
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setGoals((data ?? []).map((row) => ({
+      ...row,
+      target: toMoneyAmount(row.target),
+      saved: toMoneyAmount(row.saved),
+      deadline: row.deadline ?? "",
+    })) as MoneyGoal[]);
+  }, []);
+
+  // One-time import for a returning user whose budgets/goals/net-worth
+  // display setting still only exist in this browser's localStorage from
+  // before those moved to Supabase. Guarded by a per-user flag so it runs
+  // exactly once per account -- never re-imports over a value the user (or
+  // another device) has since changed in the DB.
+  const migrateLocalDataIfNeeded = useCallback(async (userId: string) => {
+    if (!supabase) return;
+    const flagKey = `${LOCAL_DATA_MIGRATED_KEY_PREFIX}${userId}`;
+    try {
+      if (window.localStorage.getItem(flagKey)) return;
+    } catch {
+      return;
+    }
+
+    const localBudgets = loadLocalBudgets(userId);
+    const localGoals = loadLocalGoals(userId);
+    const localNetWorthDisplay = loadLocalNetWorthDisplaySettings(userId);
+
+    if (Object.keys(localBudgets).length) {
+      const rows = Object.entries(localBudgets).map(([category, amount]) => ({ user_id: userId, category, amount }));
+      await supabase.from(TABLES.budgets).upsert(rows, { onConflict: "user_id,category" });
+    }
+    if (localGoals.length) {
+      const rows = localGoals.map((goal) => ({
+        id: goal.id, user_id: userId, name: goal.name, target: goal.target, saved: goal.saved, deadline: goal.deadline || null,
+      }));
+      await supabase.from(TABLES.moneyGoals).upsert(rows, { onConflict: "id" });
+    }
+    if (localNetWorthDisplay.formula !== defaultNetWorthDisplaySettings.formula || localNetWorthDisplay.hideCard !== defaultNetWorthDisplaySettings.hideCard) {
+      const { data } = await supabase
+        .from(TABLES.profiles)
+        .upsert({ user_id: userId, net_worth_formula: localNetWorthDisplay.formula, net_worth_hide_card: localNetWorthDisplay.hideCard }, { onConflict: "user_id" })
+        .select(PROFILE_COLUMNS)
+        .single();
+      if (data) setProfile(data as Profile);
+    }
+
+    try {
+      window.localStorage.setItem(flagKey, "1");
+    } catch {
+      // localStorage unavailable -- worst case this re-imports (harmlessly, via upsert) next load
+    }
+  }, []);
+
   const loadUserData = useCallback(async (userId: string) => {
     setDataLoading(true);
     setError("");
     try {
-      await Promise.all([loadEntries(), loadDebtors(), loadWallets(), loadRecurringExpenses(), loadInvestments(), loadInvestmentPrices()]);
-      setBudgets(loadBudgets(userId));
-      setGoals(loadGoals(userId));
-      setNetWorthDisplay(loadNetWorthDisplaySettings(userId));
+      await migrateLocalDataIfNeeded(userId);
+      await Promise.all([loadEntries(), loadDebtors(), loadWallets(), loadRecurringExpenses(), loadInvestments(), loadInvestmentPrices(), loadBudgets(), loadGoals()]);
     } finally {
       setDataLoading(false);
     }
-  }, [loadDebtors, loadEntries, loadWallets, loadRecurringExpenses, loadInvestments, loadInvestmentPrices]);
+  }, [migrateLocalDataIfNeeded, loadDebtors, loadEntries, loadWallets, loadRecurringExpenses, loadInvestments, loadInvestmentPrices, loadBudgets, loadGoals]);
 
   const clearPrivateState = useCallback(() => {
     setEntries([]);
@@ -896,21 +956,30 @@ export default function Home() {
     if (user) void loadUserData(user.id);
   }
 
-  function persistGoals(next: MoneyGoal[]) {
-    setGoals(next);
-    if (user) saveGoals(user.id, next);
-  }
-
-  function createGoal(input: Omit<MoneyGoal, "id">) {
-    persistGoals([{ ...input, id: crypto.randomUUID() }, ...goals]);
+  async function createGoal(input: Omit<MoneyGoal, "id">) {
+    if (!supabase || !user) return;
+    const id = crypto.randomUUID();
+    const { error } = await supabase.from(TABLES.moneyGoals).insert({
+      id, user_id: user.id, name: input.name, target: input.target, saved: input.saved, deadline: input.deadline || null,
+    });
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setGoals((current) => [{ ...input, id }, ...current]);
     setGoalSheetOpen(false);
     notify({ tone: "success", title: "สร้างเป้าหมายแล้ว", detail: input.name });
   }
 
   async function removeGoal(goal: MoneyGoal) {
     const confirmed = await requestConfirm({ title: "ลบเป้าหมายนี้?", detail: goal.name, confirmLabel: "ลบเป้าหมาย", tone: "danger" });
-    if (!confirmed) return;
-    persistGoals(goals.filter((item) => item.id !== goal.id));
+    if (!confirmed || !supabase) return;
+    const { error } = await supabase.from(TABLES.moneyGoals).delete().eq("id", goal.id);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setGoals((current) => current.filter((item) => item.id !== goal.id));
     notify({ tone: "info", title: "ลบเป้าหมายแล้ว", detail: goal.name });
   }
 
@@ -1347,16 +1416,40 @@ export default function Home() {
     setBusy(false);
   }, [user, wallets, notify, undoLoggedRecurring]);
 
-  function updateBudgets(next: Record<string, number>) {
-    if (!user) return;
+  async function updateBudgets(next: Record<string, number>) {
+    if (!supabase || !user) return;
+    const removedCategories = Object.keys(budgets).filter((category) => !(category in next));
+    const rows = Object.entries(next).map(([category, amount]) => ({ user_id: user.id, category, amount, updated_at: new Date().toISOString() }));
+
+    if (rows.length) {
+      const { error } = await supabase.from(TABLES.budgets).upsert(rows, { onConflict: "user_id,category" });
+      if (error) {
+        setError(error.message);
+        return;
+      }
+    }
+    if (removedCategories.length) {
+      const { error } = await supabase.from(TABLES.budgets).delete().eq("user_id", user.id).in("category", removedCategories);
+      if (error) {
+        setError(error.message);
+        return;
+      }
+    }
     setBudgets(next);
-    saveBudgets(user.id, next);
   }
 
-  function updateNetWorthDisplay(next: NetWorthDisplaySettings) {
-    if (!user) return;
-    setNetWorthDisplay(next);
-    saveNetWorthDisplaySettings(user.id, next);
+  async function updateNetWorthDisplay(next: NetWorthDisplaySettings) {
+    if (!supabase || !user) return;
+    const { data, error } = await supabase
+      .from(TABLES.profiles)
+      .upsert({ user_id: user.id, net_worth_formula: next.formula, net_worth_hide_card: next.hideCard }, { onConflict: "user_id" })
+      .select(PROFILE_COLUMNS)
+      .single();
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setProfile(data as Profile);
   }
 
   async function saveProfile(next: {

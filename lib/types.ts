@@ -164,6 +164,8 @@ export type Profile = {
   pin_blocked_until: string | null;
   webauthn_credential_id: string | null;
   webauthn_enabled: boolean;
+  net_worth_formula: NetWorthDebtFormula;
+  net_worth_hide_card: boolean;
 };
 
 export type AiFinanceContext = {

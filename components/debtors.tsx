@@ -455,7 +455,7 @@ export function BudgetSheet({
           </div>
           <button onClick={onClose}>×</button>
         </div>
-        <p className="budget-hint">ตั้งวงเงินต่อหมวดหมู่ เว้นว่างไว้ถ้าไม่ต้องการจำกัด บันทึกเฉพาะในเครื่องนี้เท่านั้น</p>
+        <p className="budget-hint">ตั้งวงเงินต่อหมวดหมู่ เว้นว่างไว้ถ้าไม่ต้องการจำกัด</p>
         {expenseCategories.map((category) => (
           <label key={category} className="budget-row">
             <span className="cat-dot" style={{ background: categoryTint(category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(category) }}><CategoryIcon category={category} /></span>

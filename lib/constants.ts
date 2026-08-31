@@ -39,6 +39,8 @@ export const TABLES = {
   investments: "investments",
   investmentPrices: "investment_prices",
   aiChatMessages: "ai_chat_messages",
+  budgets: "budgets",
+  moneyGoals: "money_goals",
 } as const;
 
 // Every entries.select(...) in app/page.tsx pulls this same column list —
@@ -48,7 +50,7 @@ export const TRANSACTION_COLUMNS =
   "id,title,category,amount,kind,transaction_type,wallet_impact,debt_impact,user_share,partner_share,debtor_name,occurred_at,source_text,wallet_id,note,transfer_group_id,investment_id,investment_units";
 
 export const PROFILE_COLUMNS =
-  "user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled";
+  "user_id,nickname,app_icon,app_icon_image,month_start_day,pin_hash,pin_salt,pin_failed_attempts,pin_blocked_until,webauthn_credential_id,webauthn_enabled,net_worth_formula,net_worth_hide_card";
 
 export const DEBTOR_COLUMNS =
   "id,user_id,name,note,opening_balance,kind,monthly_installment,total_installments,credit_limit,credit_card_min_payment_percent,icon,icon_color";
@@ -62,6 +64,17 @@ export const INVESTMENT_COLUMNS = "id,user_id,name,code,units,cost_basis,icon,ic
 export const INVESTMENT_PRICE_COLUMNS = "id,investment_id,nav,recorded_at";
 
 export const AI_CHAT_MESSAGE_COLUMNS = "id,role,content,created_at";
+
+export const BUDGET_COLUMNS = "category,amount";
+
+export const MONEY_GOAL_COLUMNS = "id,name,target,saved,deadline";
+
+// Guards the one-time import of budgets/goals/net-worth-display settings
+// from localStorage into Supabase for a user who had them set before this
+// data moved server-side -- set once per user after a successful import so
+// it never re-runs (and never re-overwrites a value the user has since
+// changed in the DB) on a later login.
+export const LOCAL_DATA_MIGRATED_KEY_PREFIX = "money-ai-migrated:v1:";
 
 // Caps how many rows a cross-month search result renders -- searching spans
 // every entry ever recorded (not just the selected cycle), so this keeps a
