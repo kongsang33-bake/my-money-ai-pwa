@@ -4753,6 +4753,12 @@ button.entry-main {
   }
 }
 
+@keyframes scrim-out-late {
+  from { opacity: 1; }
+  55% { opacity: 0.9; }
+  to { opacity: 0; }
+}
+
 @keyframes report-sheet-in {
   from { opacity: 0.4; transform: translate(-50%, calc(-50% + 18px)) scale(0.98); }
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
@@ -4827,6 +4833,14 @@ button.entry-main {
    unmount delay. */
 .edit-sheet.sheet-from-origin.closing {
   animation: sheet-origin-out var(--t-3) var(--e-in-out) both;
+}
+
+/* The scrim is the sheet's parent, so its own fade multiplies onto the sheet:
+   on the standard 160ms fade-out the collapse above is already down to ~15%
+   opacity a third of the way through, which is why it read as the sheet just
+   vanishing. Match the sheet's run and hold the scrim up for most of it. */
+.sheet-backdrop.from-origin.closing {
+  animation: scrim-out-late var(--t-3) var(--e-in-out) both;
 }
 
 .report-sheet.closing {

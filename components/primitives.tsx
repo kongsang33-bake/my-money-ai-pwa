@@ -94,7 +94,7 @@ export function SheetFrame({ children, onClose, className = "edit-sheet", closin
   useSheetOrigin(dialogRef, originPoint);
 
   return (
-    <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
+    <div className={`sheet-backdrop ${originPoint ? "from-origin" : ""} ${closing ? "closing" : ""}`} onMouseDown={onClose}>
       <section
         ref={dialogRef}
         role="dialog"
@@ -136,7 +136,16 @@ function useSheetOrigin(ref: React.RefObject<HTMLElement | null>, originPoint?: 
     const node = ref.current;
     if (!node || !originPoint) return;
     const apply = () => {
-      const rect = node.getBoundingClientRect();
+      // Measured off offset*, not getBoundingClientRect: the entry animation
+      // fills backwards, so by the time this runs the element already carries
+      // its "from" frame and would report a box scaled to 0.72 around a
+      // transform origin that depends on the very vars being computed here.
+      // offset* is the untransformed layout box, and the sheet's offsetParent
+      // is the fixed, full-viewport backdrop, so it is in viewport space.
+      const parentRect = (node.offsetParent as HTMLElement | null)?.getBoundingClientRect();
+      const left = node.offsetLeft + (parentRect?.left ?? 0);
+      const top = node.offsetTop + (parentRect?.top ?? 0);
+      const rect = { left, top, width: node.offsetWidth, height: node.offsetHeight };
       const clamp = (value: number, max: number) => Math.min(Math.max(value, 0), max);
       const x = clamp(originPoint.x - rect.left, rect.width);
       const y = clamp(originPoint.y - rect.top, rect.height);
