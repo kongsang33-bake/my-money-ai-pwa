@@ -130,6 +130,32 @@ const GEMINI_BUDGET_MULTIPLIER = 2;
 // allows less than this per attempt still wants its attempts to happen.
 const GEMINI_MIN_ATTEMPT_MS = 1500;
 
+// The head of MODEL_CHAIN gets a shorter leash than the models behind it.
+// Nothing carries a known-good model across cold starts (lastWorkingModel is
+// per-instance), so every cold request re-tests the same first candidate --
+// and when that one is having a bad day it was eating half the budget before
+// anything else got a turn. A model that answers normally comes back well
+// inside this; one that doesn't costs a fraction of the wait it used to.
+const GEMINI_FIRST_MODEL_TIMEOUT_RATIO = 0.45;
+
+/**
+ * Thrown when no model in the chain produced an answer. Carries what was
+ * actually tried and for how long, so the failure can say which models went
+ * quiet instead of just "the AI was slow" -- the app has no other way to
+ * surface a server-side log line to whoever is looking at the screen.
+ */
+export class GeminiChainError extends Error {
+  readonly attempted: string[];
+  readonly elapsedMs: number;
+
+  constructor(attempted: string[], elapsedMs: number, cause: unknown) {
+    super(`Gemini produced no answer after ${attempted.join(", ") || "no attempts"} (${elapsedMs}ms)`, { cause });
+    this.name = "GeminiChainError";
+    this.attempted = attempted;
+    this.elapsedMs = elapsedMs;
+  }
+}
+
 // The single entry point every route should call instead of
 // ai.models.generateContent directly. Handles every failure mode Gemini has
 // actually thrown in this app: a transient "high demand" 503 (one quick
@@ -158,14 +184,20 @@ export async function generateGeminiContent(
     // reject it (see isThinkingConfigRejection below).
     let thinkingConfig = options?.minimizeThinking && !params.config?.thinkingConfig ? thinkingConfigForModel(model) : undefined;
 
+    // Only the first candidate is on the short leash, and only when there is
+    // something else to fall through to.
+    const modelTimeoutMs = model === chain[0] && chain.length > 1
+      ? Math.max(minAttemptMs, Math.round(attemptTimeoutMs * GEMINI_FIRST_MODEL_TIMEOUT_RATIO))
+      : attemptTimeoutMs;
+
     for (let attempt = 0; ; attempt++) {
       // Never let one attempt run past the request's overall budget: an
       // attempt the caller will abandon anyway is time the next model could
       // have used.
-      const timeoutMs = Math.min(attemptTimeoutMs, remainingMs());
+      const timeoutMs = Math.min(modelTimeoutMs, remainingMs());
       if (timeoutMs < minAttemptMs) {
         console.error("Gemini request ran out of budget", { modelsAttempted, budgetMs, totalElapsedMs: Date.now() - startedAt });
-        throw lastError ?? new Error("Gemini request ran out of budget");
+        throw new GeminiChainError(modelsAttempted, Date.now() - startedAt, lastError);
       }
       if (attempt === 0) modelsAttempted.push(model);
 
@@ -211,7 +243,7 @@ export async function generateGeminiContent(
   }
 
   console.error("Gemini request failed on every model", { modelsAttempted, totalElapsedMs: Date.now() - startedAt });
-  throw lastError;
+  throw new GeminiChainError(modelsAttempted, Date.now() - startedAt, lastError);
 }
 
 // Turns a Gemini SDK error into a short Thai message safe to show a user —
@@ -221,21 +253,27 @@ export async function generateGeminiContent(
 // what the app was trying to do, e.g. "วิเคราะห์รายการ", "ตอบคำถาม".
 export function describeGeminiError(error: unknown, action: string): string {
   console.error(`Gemini ${action} failed`, error);
-  const message = error instanceof Error ? error.message : String(error);
+  // A chain failure classifies by what actually went wrong on the last model,
+  // and names the models it burned the wait on -- server logs are not
+  // something the person holding the phone can go and read.
+  const chainError = error instanceof GeminiChainError ? error : null;
+  const detail = chainError ? ` (ลองแล้ว: ${chainError.attempted.join(", ")} · ${Math.round(chainError.elapsedMs / 1000)} วิ)` : "";
+  const cause = chainError?.cause ?? error;
+  const message = cause instanceof Error ? cause.message : String(cause);
   if (message.includes("429") || message.includes("RESOURCE_EXHAUSTED")) {
-    return `AI${action}ไม่สำเร็จ เพราะมีคนใช้งานเยอะในขณะนี้ กรุณาลองใหม่อีกครั้งในอีกสักครู่`;
+    return `AI${action}ไม่สำเร็จ เพราะมีคนใช้งานเยอะในขณะนี้ กรุณาลองใหม่อีกครั้งในอีกสักครู่${detail}`;
   }
   if (message.includes("503") || message.includes("UNAVAILABLE")) {
-    return `AI${action}ไม่สำเร็จ เพราะระบบ AI มีผู้ใช้งานหนาแน่นในขณะนี้ กรุณาลองใหม่อีกครั้ง`;
+    return `AI${action}ไม่สำเร็จ เพราะระบบ AI มีผู้ใช้งานหนาแน่นในขณะนี้ กรุณาลองใหม่อีกครั้ง${detail}`;
   }
   if (message.includes("404") || message.includes("NOT_FOUND") || message.includes("no longer available")) {
-    return `AI${action}ไม่สำเร็จ ระบบ AI ขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง`;
+    return `AI${action}ไม่สำเร็จ ระบบ AI ขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง${detail}`;
   }
   // Reached when every model in the chain timed out (or the overall budget
   // ran out mid-chain) -- worth saying plainly that it was slow, not broken,
   // because retrying right away often lands on a healthy model.
-  if (isTimeoutError(error)) {
-    return `AI${action}ไม่สำเร็จ เพราะระบบ AI ตอบช้ากว่าปกติ กรุณาลองใหม่อีกครั้ง`;
+  if (isTimeoutError(cause)) {
+    return `AI${action}ไม่สำเร็จ เพราะระบบ AI ตอบช้ากว่าปกติ กรุณาลองใหม่อีกครั้ง${detail}`;
   }
-  return `AI${action}ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง`;
+  return `AI${action}ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง${detail}`;
 }

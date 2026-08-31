@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { generateGeminiContent, isTimeoutError, sameModelRetryDelayMs, thinkingConfigForModel } from "./gemini.ts";
+import { GeminiChainError, generateGeminiContent, isTimeoutError, sameModelRetryDelayMs, thinkingConfigForModel } from "./gemini.ts";
 import type { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 
 // AbortSignal.timeout rejects with a DOMException whose *name* is TimeoutError
@@ -41,13 +41,18 @@ describe("sameModelRetryDelayMs", () => {
 
 // Stands in for the SDK: every attempt honours the abortSignal the chain hands it,
 // so the fake fails exactly the way a real unresponsive model does.
-function fakeAi(behaviour: (model: string) => "hang" | "ok") {
+//
+// `behaviour` is keyed on the attempt number rather than the model name on
+// purpose: generateGeminiContent remembers the last model that worked for the
+// life of the module, so which model leads the chain depends on what ran
+// before -- assertions here are about chain BEHAVIOUR, not model names.
+function fakeAi(behaviour: (model: string, attemptIndex: number) => "hang" | "ok") {
   const attempts: string[] = [];
   const ai = {
     models: {
       generateContent: (params: { model: string; config?: { abortSignal?: AbortSignal } }) => {
         attempts.push(params.model);
-        if (behaviour(params.model) === "ok") return Promise.resolve({ text: "{}" } as GenerateContentResponse);
+        if (behaviour(params.model, attempts.length - 1) === "ok") return Promise.resolve({ text: "{}" } as GenerateContentResponse);
         return new Promise<GenerateContentResponse>((_resolve, reject) => {
           // AbortSignal.timeout's own timer is unref'd, so with a fake SDK
           // there is nothing holding the event loop open while this "hangs"
@@ -68,12 +73,24 @@ function fakeAi(behaviour: (model: string) => "hang" | "ok") {
 }
 
 describe("generateGeminiContent", () => {
+  it("gives the first candidate a shorter leash than the models behind it", async () => {
+    const { ai, attempts } = fakeAi((_model, attemptIndex) => (attemptIndex === 0 ? "hang" : "ok"));
+    const startedAt = Date.now();
+    await generateGeminiContent(ai, { contents: [{ text: "กาแฟ 20" }] }, { timeoutMs: 4000, budgetMs: 8000 });
+    const elapsed = Date.now() - startedAt;
+    // The head of the chain is cut off at a fraction of the per-attempt
+    // timeout, so a bad first candidate cannot eat the whole wait.
+    assert.equal(attempts.length, 2);
+    assert.ok(elapsed < 3000, `first model held the request for ${elapsed}ms, expected well under the 4s per-attempt timeout`);
+  });
+
   it("falls through to the next model as soon as one stops answering", async () => {
-    const { ai, attempts } = fakeAi((model) => (model === "gemini-3.6-flash" ? "hang" : "ok"));
+    const { ai, attempts } = fakeAi((_model, attemptIndex) => (attemptIndex === 0 ? "hang" : "ok"));
     const startedAt = Date.now();
     await generateGeminiContent(ai, { contents: [{ text: "ลูกบ้านแลกเหรียญ 100" }] }, { timeoutMs: 200, budgetMs: 1000 });
-    // One dead attempt, then the next model -- no same-model retries in between.
-    assert.deepEqual(attempts, ["gemini-3.6-flash", "gemini-2.5-flash"]);
+    // One dead attempt, then a different model -- no same-model retries in between.
+    assert.equal(attempts.length, 2);
+    assert.notEqual(attempts[0], attempts[1]);
     assert.ok(Date.now() - startedAt < 600, "should not spend more than the one timed-out attempt");
   });
 
@@ -82,7 +99,14 @@ describe("generateGeminiContent", () => {
     const startedAt = Date.now();
     await assert.rejects(
       generateGeminiContent(ai, { contents: [{ text: "ลูกบ้านแลกเหรียญ 100" }] }, { timeoutMs: 200, budgetMs: 500 }),
-      (error: Error) => error.name === "TimeoutError",
+      (error: unknown) => {
+        // The wrapper is what the error message shown to the user is built
+        // from: which models went quiet, and how long they were given.
+        assert.ok(error instanceof GeminiChainError);
+        assert.ok(error.attempted.length >= 1);
+        assert.ok(isTimeoutError(error.cause), "keeps the underlying timeout as the cause");
+        return true;
+      },
     );
     const elapsed = Date.now() - startedAt;
     assert.ok(elapsed < 900, `gave up in ${elapsed}ms, expected to stop near the 500ms budget`);
