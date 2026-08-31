@@ -8,6 +8,8 @@ import {
   DATE_INPUT_PATTERN,
   DEFAULT_TIMEZONE,
   GEMINI_EXTRACTION_TEMPERATURE,
+  GEMINI_IMAGE_TIMEOUT_MS,
+  GEMINI_TEXT_TIMEOUT_MS,
   MAX_IMAGE_BYTES,
   MAX_SLIP_IMAGES,
   imageBytes,
@@ -285,7 +287,7 @@ export async function POST(request: Request) {
       // + debtor/split matching, which genuinely takes longer than a plain
       // text entry -- give it more room before the per-attempt timeout
       // aborts and forces a retry/fallback cycle mid-flight.
-    }, { timeoutMs: images.length > 0 ? 25000 : 7000 });
+    }, { timeoutMs: images.length > 0 ? GEMINI_IMAGE_TIMEOUT_MS : GEMINI_TEXT_TIMEOUT_MS });
   } catch (error) {
     return Response.json({ error: describeGeminiError(error, "วิเคราะห์รายการ") }, { status: 502 });
   }

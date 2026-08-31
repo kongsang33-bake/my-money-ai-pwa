@@ -1,6 +1,6 @@
 import { createGeminiClient, describeGeminiError, generateGeminiContent, getGeminiApiKey, missingGeminiKeyResponse } from "@/lib/gemini";
 import { requireUser, unauthorizedResponse } from "@/lib/auth";
-import { AI_CONTEXT_MAX_LENGTH } from "@/lib/constants";
+import { AI_CONTEXT_MAX_LENGTH, GEMINI_CHAT_TIMEOUT_MS } from "@/lib/constants";
 
 type ChatTurn = { role: "user" | "assistant"; content: string };
 
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     // Conversational answers run longer than a structured parse -- keep this
     // at the original timeout rather than the shorter default now used for
     // entry parsing, so a longer reply doesn't get cut off mid-generation.
-    const response = await generateGeminiContent(ai, { contents, config: { temperature: 0.2 } }, { timeoutMs: 12000 });
+    const response = await generateGeminiContent(ai, { contents, config: { temperature: 0.2 } }, { timeoutMs: GEMINI_CHAT_TIMEOUT_MS });
     return Response.json({ answer: response.text?.trim() || "ยังไม่มีคำตอบ" });
   } catch (error) {
     return Response.json({ error: describeGeminiError(error, "ตอบคำถาม") }, { status: 502 });

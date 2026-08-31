@@ -18,6 +18,17 @@ export function imageBytes(base64: string) {
 
 export const GEMINI_EXTRACTION_TEMPERATURE = 0.1;
 
+// Per-attempt Gemini timeouts, by what the request actually has to do. A
+// plain text entry comes back in a couple of seconds, so 7s means "this
+// model isn't answering" rather than "it needs longer"; a receipt photo adds
+// OCR plus per-line itemization and genuinely runs longer; a chat answer is
+// long-form generation that shouldn't get cut off mid-sentence.
+// lib/gemini.ts caps the TOTAL time spent walking the model chain at a
+// multiple of whichever of these a caller passes.
+export const GEMINI_TEXT_TIMEOUT_MS = 7000;
+export const GEMINI_IMAGE_TIMEOUT_MS = 25000;
+export const GEMINI_CHAT_TIMEOUT_MS = 12000;
+
 // Free-text personal context (profiles.ai_context) the user writes for the
 // AI. Long enough for a paragraph of household/business vocabulary, short
 // enough that it can't crowd out the parsing rules in the prompt itself.

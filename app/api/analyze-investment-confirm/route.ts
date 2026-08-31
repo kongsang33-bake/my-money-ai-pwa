@@ -1,6 +1,6 @@
 import { createGeminiClient, describeGeminiError, generateGeminiContent, getGeminiApiKey, missingGeminiKeyResponse } from "@/lib/gemini";
 import { requireUser, unauthorizedResponse } from "@/lib/auth";
-import { GEMINI_EXTRACTION_TEMPERATURE, MAX_IMAGE_BYTES, imageBytes } from "@/lib/constants";
+import { GEMINI_EXTRACTION_TEMPERATURE, GEMINI_IMAGE_TIMEOUT_MS, MAX_IMAGE_BYTES, imageBytes } from "@/lib/constants";
 
 // Reads one purchase row's unit count off a mutual-fund transaction
 // statement photo — nothing else. The app already knows which pending
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
       // A confirmation slip photo goes through OCR like the main receipt
       // path in /api/analyze -- give it the same longer per-attempt window
       // instead of the shorter text-only default.
-    }, { timeoutMs: 25000 });
+    }, { timeoutMs: GEMINI_IMAGE_TIMEOUT_MS });
   } catch (error) {
     return Response.json({ error: describeGeminiError(error, "อ่าน statement") }, { status: 502 });
   }
