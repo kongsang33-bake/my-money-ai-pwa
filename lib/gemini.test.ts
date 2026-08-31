@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { generateGeminiContent, isTimeoutError, sameModelRetryDelayMs } from "./gemini.ts";
+import { generateGeminiContent, isTimeoutError, sameModelRetryDelayMs, thinkingConfigForModel } from "./gemini.ts";
 import type { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 
 // AbortSignal.timeout rejects with a DOMException whose *name* is TimeoutError
@@ -87,5 +87,59 @@ describe("generateGeminiContent", () => {
     const elapsed = Date.now() - startedAt;
     assert.ok(elapsed < 900, `gave up in ${elapsed}ms, expected to stop near the 500ms budget`);
     assert.ok(attempts.length < 5, `tried ${attempts.length} models, expected the budget to cut the chain short`);
+  });
+});
+
+describe("thinkingConfigForModel", () => {
+  it("asks Gemini 3.x for the minimum thinking level", () => {
+    assert.deepEqual(thinkingConfigForModel("gemini-3.6-flash"), { thinkingLevel: "MINIMAL" });
+  });
+
+  it("uses the older budget field on 2.5, which rejects thinking_level", () => {
+    assert.deepEqual(thinkingConfigForModel("gemini-2.5-flash"), { thinkingBudget: 0 });
+  });
+
+  it("sends nothing to models with no thinking to configure", () => {
+    assert.equal(thinkingConfigForModel("gemini-2.0-flash"), undefined);
+    assert.equal(thinkingConfigForModel("gemini-1.5-flash"), undefined);
+  });
+});
+
+describe("generateGeminiContent thinking handling", () => {
+  function recordingAi(onCall: (model: string, thinking: unknown, callIndex: number) => "ok" | "reject-thinking") {
+    const calls: { model: string; thinking: unknown }[] = [];
+    const ai = {
+      models: {
+        generateContent: (params: { model: string; config?: { thinkingConfig?: unknown } }) => {
+          const thinking = params.config?.thinkingConfig;
+          calls.push({ model: params.model, thinking });
+          if (onCall(params.model, thinking, calls.length - 1) === "ok") return Promise.resolve({ text: "{}" } as GenerateContentResponse);
+          return Promise.reject(new Error('{"error":{"code":400,"status":"INVALID_ARGUMENT","message":"thinking_budget is not supported"}}'));
+        },
+      },
+    };
+    return { ai: ai as unknown as GoogleGenAI, calls };
+  }
+
+  it("only sends a thinking config when the caller asks for it", async () => {
+    const { ai, calls } = recordingAi(() => "ok");
+    await generateGeminiContent(ai, { contents: [{ text: "กาแฟ 20" }] }, { timeoutMs: 500 });
+    assert.equal(calls[0].thinking, undefined);
+  });
+
+  it("gives up when the request is bad for a reason other than the thinking config", async () => {
+    const { ai, calls } = recordingAi(() => "reject-thinking");
+    await assert.rejects(generateGeminiContent(ai, { contents: [{ text: "กาแฟ 20" }] }, { timeoutMs: 500, minimizeThinking: true }));
+    // One try with the config, one without -- then the 400 is taken at face value.
+    assert.equal(calls.length, 2);
+  });
+
+  it("retries the same model without the thinking config when the model rejects it", async () => {
+    const { ai, calls } = recordingAi((_model, thinking) => (thinking ? "reject-thinking" : "ok"));
+    await generateGeminiContent(ai, { contents: [{ text: "กาแฟ 20" }] }, { timeoutMs: 500, minimizeThinking: true });
+    assert.equal(calls.length, 2, "should retry the same model, not fall through to the next one");
+    assert.equal(calls[0].model, calls[1].model);
+    assert.ok(calls[0].thinking, "first attempt carries the thinking config");
+    assert.equal(calls[1].thinking, undefined, "retry drops it");
   });
 });

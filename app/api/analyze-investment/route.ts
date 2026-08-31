@@ -103,7 +103,7 @@ export async function POST(request: Request) {
         responseSchema: schema,
         temperature: GEMINI_EXTRACTION_TEMPERATURE,
       },
-    });
+    }, { minimizeThinking: true });
   } catch (error) {
     return Response.json({ error: describeGeminiError(error, "วิเคราะห์รายการลงทุน") }, { status: 502 });
   }

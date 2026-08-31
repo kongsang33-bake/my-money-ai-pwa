@@ -1,4 +1,4 @@
-import { GoogleGenAI, type GenerateContentParameters, type GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel, type GenerateContentParameters, type GenerateContentResponse, type ThinkingConfig } from "@google/genai";
 import { GEMINI_TEXT_TIMEOUT_MS } from "./constants.ts";
 
 // Candidates tried in order on every request, newest first. Google
@@ -73,6 +73,33 @@ function isUnavailableModelError(error: unknown): boolean {
   return message.includes("404") || message.includes("NOT_FOUND") || message.includes("no longer available");
 }
 
+// Pulling apart "ซื้อข้าวเช้า 170 / กาแฟ 20 / น้ำยาปรับผ้านุ่ม 49" into JSON is
+// extraction, not reasoning -- but a Flash model still spends thinking tokens
+// on it by default, and that thinking is most of the wall clock a user waits
+// on. Asking for the least thinking the model allows is the difference between
+// an answer inside the timeout and a timeout.
+//
+// How to ask differs by generation, and asking the wrong way is a hard 400:
+// thinking_budget is rejected from Gemini 3.5 onward (use thinking_level),
+// while models older than 2.5 have no thinking to configure at all.
+export function thinkingConfigForModel(model: string): ThinkingConfig | undefined {
+  if (/^gemini-3\./.test(model)) return { thinkingLevel: ThinkingLevel.MINIMAL };
+  if (/^gemini-2\.5/.test(model)) return { thinkingBudget: 0 };
+  return undefined;
+}
+
+// Any "the request itself is wrong" answer, checked ONLY on an attempt that
+// carried a thinking config: the config is the newest, least-tested thing in
+// the request, so it is dropped and the same model tried once more rather than
+// failing the whole call over a hint we added. Deliberately not matched on the
+// word "thinking" -- the wording of these 400s varies by model generation, and
+// guessing wrong would turn a recoverable request into a dead one. A 400 with
+// some other cause just fails again on the retry, one fast round trip later.
+function isInvalidArgumentError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("400") || message.includes("INVALID_ARGUMENT");
+}
+
 const OVERLOAD_RETRY_DELAY_MS = 500;
 
 /**
@@ -115,7 +142,7 @@ const GEMINI_MIN_ATTEMPT_MS = 1500;
 export async function generateGeminiContent(
   ai: GoogleGenAI,
   params: Omit<GenerateContentParameters, "model">,
-  options?: { timeoutMs?: number; budgetMs?: number }
+  options?: { timeoutMs?: number; budgetMs?: number; minimizeThinking?: boolean }
 ): Promise<GenerateContentResponse> {
   const attemptTimeoutMs = options?.timeoutMs ?? GEMINI_TEXT_TIMEOUT_MS;
   const budgetMs = options?.budgetMs ?? attemptTimeoutMs * GEMINI_BUDGET_MULTIPLIER;
@@ -127,6 +154,10 @@ export async function generateGeminiContent(
   let lastError: unknown;
 
   for (const model of chain) {
+    // Dropped for the rest of this model's attempts if the model turns out to
+    // reject it (see isThinkingConfigRejection below).
+    let thinkingConfig = options?.minimizeThinking && !params.config?.thinkingConfig ? thinkingConfigForModel(model) : undefined;
+
     for (let attempt = 0; ; attempt++) {
       // Never let one attempt run past the request's overall budget: an
       // attempt the caller will abandon anyway is time the next model could
@@ -142,13 +173,26 @@ export async function generateGeminiContent(
         const response = await ai.models.generateContent({
           ...params,
           model,
-          config: { ...params.config, abortSignal: AbortSignal.timeout(timeoutMs) },
+          config: {
+            ...params.config,
+            ...(thinkingConfig ? { thinkingConfig } : {}),
+            abortSignal: AbortSignal.timeout(timeoutMs),
+          },
         });
         lastWorkingModel = model;
         console.log("Gemini request succeeded", { model, modelsAttempted, totalElapsedMs: Date.now() - startedAt });
         return response;
       } catch (error) {
         lastError = error;
+
+        // The model answers fine without the thinking hint -- take it off and
+        // try this same model again rather than losing the model over it.
+        if (thinkingConfig && isInvalidArgumentError(error)) {
+          console.error(`Gemini model ${model} rejected the thinking config, retrying without it`, error);
+          thinkingConfig = undefined;
+          continue;
+        }
+
         // Rate-limited, retired, timed out or overloaded -- all of these mean
         // "try the next model", not "give up entirely". Anything else is a
         // real problem with the request and fails the whole call.

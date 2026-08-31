@@ -287,7 +287,7 @@ export async function POST(request: Request) {
       // + debtor/split matching, which genuinely takes longer than a plain
       // text entry -- give it more room before the per-attempt timeout
       // aborts and forces a retry/fallback cycle mid-flight.
-    }, { timeoutMs: images.length > 0 ? GEMINI_IMAGE_TIMEOUT_MS : GEMINI_TEXT_TIMEOUT_MS });
+    }, { timeoutMs: images.length > 0 ? GEMINI_IMAGE_TIMEOUT_MS : GEMINI_TEXT_TIMEOUT_MS, minimizeThinking: true });
   } catch (error) {
     return Response.json({ error: describeGeminiError(error, "วิเคราะห์รายการ") }, { status: 502 });
   }

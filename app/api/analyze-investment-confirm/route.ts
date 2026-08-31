@@ -70,7 +70,7 @@ export async function POST(request: Request) {
       // A confirmation slip photo goes through OCR like the main receipt
       // path in /api/analyze -- give it the same longer per-attempt window
       // instead of the shorter text-only default.
-    }, { timeoutMs: GEMINI_IMAGE_TIMEOUT_MS });
+    }, { timeoutMs: GEMINI_IMAGE_TIMEOUT_MS, minimizeThinking: true });
   } catch (error) {
     return Response.json({ error: describeGeminiError(error, "อ่าน statement") }, { status: 502 });
   }
