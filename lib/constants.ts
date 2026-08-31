@@ -93,6 +93,12 @@ export const INVESTMENT_PRICE_COLUMNS = "id,investment_id,nav,recorded_at";
 
 export const AI_CHAT_MESSAGE_COLUMNS = "id,role,content,created_at";
 
+// Chat turns loaded when the finance-chat sheet opens. The thread is stored
+// forever, but only the tail is worth rendering -- and the prompt itself only
+// ever replays the last handful of turns (MAX_HISTORY_TURNS in /api/ask), so
+// loading the whole history just grows the payload with every conversation.
+export const AI_CHAT_HISTORY_LIMIT = 50;
+
 export const BUDGET_COLUMNS = "category,amount";
 
 export const MONEY_GOAL_COLUMNS = "id,name,target,saved,deadline";
@@ -103,6 +109,11 @@ export const MONEY_GOAL_COLUMNS = "id,name,target,saved,deadline";
 // it never re-runs (and never re-overwrites a value the user has since
 // changed in the DB) on a later login.
 export const LOCAL_DATA_MIGRATED_KEY_PREFIX = "money-ai-migrated:v1:";
+
+// PostgREST puts an `.in("id", [...])` filter in the query string, so a
+// restore that touches a long history is sent in batches rather than as one
+// request long enough for a proxy to reject.
+export const RESTORE_ID_BATCH_SIZE = 200;
 
 // Caps how many rows a cross-month search result renders -- searching spans
 // every entry ever recorded (not just the selected cycle), so this keeps a

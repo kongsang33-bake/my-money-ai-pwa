@@ -117,6 +117,25 @@ export function expandTransferDraft(draft: Draft, wallets: Wallet[]): Draft[] {
   return [sourceLeg, destLeg];
 }
 
+/**
+ * What deleting `wallet` does to the entries filed under it.
+ *
+ * transactions.wallet_id is ON DELETE SET NULL and buildWalletLedger counts a
+ * null wallet_id against the default wallet, so those entries land on another
+ * balance whether or not anyone chose that -- this names the wallet they
+ * should move to (so the move is explicit and undoable) and which entries
+ * move, for the confirmation text.
+ */
+export function walletDeletionMove(wallet: Wallet, wallets: Wallet[], entries: Entry[]) {
+  const remaining = wallets.filter((item) => item.id !== wallet.id);
+  return {
+    // Prefer the default wallet: it is where the ledger would have put these
+    // entries anyway, so the visible totals stay put.
+    fallbackWallet: remaining.find((item) => item.is_default) ?? remaining[0] ?? null,
+    movingEntryIds: entries.filter((entry) => entry.wallet_id === wallet.id).map((entry) => entry.id),
+  };
+}
+
 export function defaultWalletId(wallets: Wallet[]) {
   return wallets.find((wallet) => wallet.is_default)?.id ?? wallets.find((wallet) => wallet.tag === "cash")?.id ?? wallets[0]?.id ?? null;
 }

@@ -10,6 +10,7 @@ import {
   netWorthAsOf,
   normalizeEntry,
   unnamedDebtor,
+  walletDeletionMove,
 } from "./money.ts";
 import type { Debtor, Entry, HistoryFilters, Investment, InvestmentPrice, Wallet } from "./types.ts";
 
@@ -323,5 +324,38 @@ describe("buildPortfolioTrend", () => {
 
   it("returns an empty trend when there are no prices at all", () => {
     assert.deepEqual(buildPortfolioTrend([makeInvestment()], []), []);
+  });
+});
+
+describe("walletDeletionMove", () => {
+  const petty = makeWallet({ id: "petty", name: "เหรียญสำรอง", tag: "petty", is_default: false });
+  const cash = makeWallet({ id: "cash", name: "กระแสเงินสด", is_default: true });
+  const savings = makeWallet({ id: "savings", name: "เงินออม", tag: "savings", is_default: false });
+
+  it("moves the deleted wallet's entries to the default wallet", () => {
+    const entries = [
+      makeEntry({ id: "a", wallet_id: "petty" }),
+      makeEntry({ id: "b", wallet_id: "cash" }),
+      makeEntry({ id: "c", wallet_id: "petty" }),
+    ];
+    const move = walletDeletionMove(petty, [petty, cash, savings], entries);
+    assert.equal(move.fallbackWallet?.id, "cash");
+    assert.deepEqual(move.movingEntryIds, ["a", "c"]);
+  });
+
+  it("picks another wallet when the default itself is being deleted", () => {
+    const move = walletDeletionMove(cash, [petty, cash, savings], [makeEntry({ wallet_id: "cash" })]);
+    assert.equal(move.fallbackWallet?.id, "petty");
+  });
+
+  it("reports no destination when the last wallet is deleted", () => {
+    const move = walletDeletionMove(cash, [cash], [makeEntry({ id: "a", wallet_id: "cash" })]);
+    assert.equal(move.fallbackWallet, null);
+    assert.deepEqual(move.movingEntryIds, ["a"]);
+  });
+
+  it("finds nothing to move when no entry uses the wallet", () => {
+    const move = walletDeletionMove(savings, [petty, cash, savings], [makeEntry({ wallet_id: "cash" })]);
+    assert.deepEqual(move.movingEntryIds, []);
   });
 });

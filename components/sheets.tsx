@@ -21,7 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { AI_CHAT_MESSAGE_COLUMNS, AI_CONTEXT_MAX_LENGTH, MONTH_START_DAY_MAX, MONTH_START_DAY_MIN, TABLES } from "@/lib/constants";
+import { AI_CHAT_HISTORY_LIMIT, AI_CHAT_MESSAGE_COLUMNS, AI_CONTEXT_MAX_LENGTH, MONTH_START_DAY_MAX, MONTH_START_DAY_MIN, TABLES } from "@/lib/constants";
 import { authHeaders } from "@/lib/api";
 import { formatMoney, formatSignedMoney, moneySign, clampInteger } from "@/lib/format";
 import { entriesInRange, reportBounds, reportLabel } from "@/lib/cycle";
@@ -68,13 +68,17 @@ export function AskFinanceSheet({ context, userId, aiContext, onClose, closing }
     let cancelled = false;
     (async () => {
       if (!supabase) { setLoadingHistory(false); return; }
+      // Newest-first + limit, then flipped back for display: the tail is what
+      // the thread should show, and Postgres can't take the last N rows in
+      // ascending order without reading all of them.
       const { data, error: loadError } = await supabase
         .from(TABLES.aiChatMessages)
         .select(AI_CHAT_MESSAGE_COLUMNS)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false })
+        .limit(AI_CHAT_HISTORY_LIMIT);
       if (cancelled) return;
       if (loadError) setError(loadError.message);
-      else setMessages((data ?? []) as AiChatMessage[]);
+      else setMessages(((data ?? []) as AiChatMessage[]).slice().reverse());
       setLoadingHistory(false);
     })();
     return () => { cancelled = true; };

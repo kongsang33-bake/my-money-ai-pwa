@@ -45,6 +45,7 @@ import {
   payableForDisplay,
   totalWallet,
   unnamedDebtor,
+  walletDeletionMove,
 } from "@/lib/money";
 import { buildWalletInsight, computeStreak, deriveQuickShortcuts, isRecurringLogged, lastSevenDayCashFlow, type QuickShortcut } from "@/lib/insights";
 import { buildAiExamples, buildCategoryMemory } from "@/lib/ai-memory";
@@ -54,6 +55,7 @@ import { compressSlipImage } from "@/lib/image";
 import { authHeaders } from "@/lib/api";
 import {
   AI_CONTEXT_MAX_LENGTH,
+  RESTORE_ID_BATCH_SIZE,
   BUDGET_COLUMNS,
   CATEGORY_DOT_TINT_ALPHA,
   DEBTOR_COLUMNS,
@@ -1864,36 +1866,87 @@ export default function Home() {
     setBusy(false);
     return true;
   }
+  // transactions.wallet_id is ON DELETE SET NULL, and a null wallet_id is
+  // silently counted against the DEFAULT wallet by buildWalletLedger -- so
+  // deleting a wallet without doing anything about its entries moves that
+  // history onto another wallet's balance, permanently (re-inserting the
+  // wallet row on undo does NOT bring the link back). Re-pointing the entries
+  // ourselves first keeps the move explicit, tells the user what will happen,
+  // and gives undo something it can actually reverse.
   async function deleteWallet(wallet: Wallet) {
     if (!supabase) return;
     const currentBalance = displayWallets.find((item) => item.id === wallet.id)?.display_balance ?? wallet.balance;
     const balanceWarning = Math.abs(currentBalance) > 0.005
       ? ` ตอนนี้ยังมียอดเหลืออยู่ ${moneySign}${formatMoney(currentBalance)}`
       : "";
+    const { fallbackWallet, movingEntryIds } = walletDeletionMove(wallet, wallets, entries);
+    const moveWarning = movingEntryIds.length
+      ? fallbackWallet
+        ? ` รายการ ${movingEntryIds.length} รายการจะย้ายไปกระเป๋า "${fallbackWallet.name}"`
+        : ` รายการ ${movingEntryIds.length} รายการจะไม่มีกระเป๋ากำกับ เพราะไม่เหลือกระเป๋าอื่นให้ย้ายไป`
+      : "";
     const confirmed = await requestConfirm({
       title: "ลบกระเป๋านี้?",
-      detail: `ลบ "${wallet.name}" ออกจากกระเป๋าตังค์${balanceWarning}`,
+      detail: `ลบ "${wallet.name}" ออกจากกระเป๋าตังค์${balanceWarning}${moveWarning}`,
       confirmLabel: "ลบกระเป๋า",
       tone: "danger",
     });
     if (!confirmed) return;
     setBusy(true);
     setError("");
+
+    if (movingEntryIds.length && fallbackWallet) {
+      const { error: moveError } = await supabase
+        .from(TABLES.transactions)
+        .update({ wallet_id: fallbackWallet.id })
+        .eq("wallet_id", wallet.id);
+      if (moveError) {
+        setError(moveError.message);
+        setBusy(false);
+        return;
+      }
+      setEntries((current) => current.map((entry) => (entry.wallet_id === wallet.id ? { ...entry, wallet_id: fallbackWallet.id } : entry)));
+    }
+
     const { error } = await supabase.from(TABLES.wallets).delete().eq("id", wallet.id);
-    if (error) setError(error.message);
-    else {
+    if (error) {
+      setError(error.message);
+      // The entries already moved at this point; leaving them on another
+      // wallet while the wallet they belong to still exists would be a wrong
+      // balance nobody asked for.
+      await assignEntriesToWallet(movingEntryIds, wallet.id);
+    } else {
       setWallets((current) => current.filter((item) => item.id !== wallet.id));
       notify({
         tone: "info",
         title: "ลบกระเป๋าแล้ว",
-        detail: wallet.name,
-        action: { label: "ย้อนคืน", onClick: () => { void restoreWallet(wallet); } },
+        detail: movingEntryIds.length && fallbackWallet ? `${wallet.name} · ย้าย ${movingEntryIds.length} รายการไป ${fallbackWallet.name}` : wallet.name,
+        action: { label: "ย้อนคืน", onClick: () => { void restoreWallet(wallet, movingEntryIds); } },
       });
     }
     setBusy(false);
   }
 
-  async function restoreWallet(wallet: Wallet) {
+  // Re-files specific entries under a wallet, in batches: PostgREST puts an
+  // `in` filter in the query string, so one request per few hundred ids keeps
+  // a long history from producing a URL a proxy will reject.
+  async function assignEntriesToWallet(entryIds: string[], walletId: string) {
+    if (!supabase || !entryIds.length) return true;
+    for (let index = 0; index < entryIds.length; index += RESTORE_ID_BATCH_SIZE) {
+      const batch = entryIds.slice(index, index + RESTORE_ID_BATCH_SIZE);
+      const { error } = await supabase.from(TABLES.transactions).update({ wallet_id: walletId }).in("id", batch);
+      if (error) {
+        setError(error.message);
+        notify({ tone: "error", title: "ย้ายรายการกลับเข้ากระเป๋าไม่สำเร็จ", detail: error.message });
+        return false;
+      }
+    }
+    const moved = new Set(entryIds);
+    setEntries((current) => current.map((entry) => (moved.has(entry.id) ? { ...entry, wallet_id: walletId } : entry)));
+    return true;
+  }
+
+  async function restoreWallet(wallet: Wallet, movedEntryIds: string[] = []) {
     if (!supabase) return;
     const { error } = await supabase.from(TABLES.wallets).insert(wallet);
     if (error) {
@@ -1901,6 +1954,12 @@ export default function Home() {
       notify({ tone: "error", title: "ย้อนคืนกระเป๋าไม่สำเร็จ", detail: error.message });
       return;
     }
+
+    // Send back exactly the entries the delete moved -- not everything now
+    // sitting in the fallback wallet, which may include entries that were
+    // always there.
+    await assignEntriesToWallet(movedEntryIds, wallet.id);
+
     setWallets((current) => [
       ...(wallet.is_default ? current.map((item) => ({ ...item, is_default: false })) : current),
       wallet,
@@ -2161,7 +2220,7 @@ export default function Home() {
     if (!supabase) return;
     const confirmed = await requestConfirm({
       title: "ลบพอร์ตนี้?",
-      detail: `ลบ "${item.name}" และประวัติราคาทั้งหมดออกจากพอร์ตลงทุน`,
+      detail: `ลบ "${item.name}" และประวัติราคาทั้งหมดออกจากพอร์ตลงทุน รายการที่เคยบันทึกไว้จะยังอยู่ในประวัติแต่ไม่ผูกกับพอร์ตนี้อีก และย้อนคืนไม่ได้`,
       confirmLabel: "ลบรายการ",
       tone: "danger",
     });
