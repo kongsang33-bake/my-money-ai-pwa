@@ -702,6 +702,23 @@ a:focus-visible {
   grid-template-columns: 1fr 1fr 80px 1fr 1fr;
   align-items: center;
   z-index: var(--z-nav);
+  /* Composed rather than set directly so the wide breakpoint's centering and
+     the tuck-away below can each own one axis without clobbering the other. */
+  --nav-center: 0px;
+  --nav-shift: 0px;
+  transform: translate(var(--nav-center), var(--nav-shift));
+  transition: transform var(--t-3) var(--e-out), opacity var(--t-3) var(--e-out);
+}
+
+/* An open overlay tucks the nav out of the way instead of unmounting it —
+   it used to blink out and snap back on the frame the overlay's state
+   flipped. Keying off the live backdrops rather than that state also brings
+   it back the moment one is marked .closing, so it has slid back into place
+   underneath the more sheet by the time that finishes collapsing onto it. */
+.phone:has(.sheet-backdrop:not(.closing), .dialog-backdrop:not(.closing), .side-menu-backdrop:not(.closing)) .bottom-nav {
+  --nav-shift: calc(100% + var(--s-5));
+  opacity: 0;
+  pointer-events: none;
 }
 
 .bottom-nav button {
@@ -5048,7 +5065,7 @@ button.entry-main {
     padding: 0;
     border-radius: var(--r-full);
     grid-template-columns: 1fr 1fr 80px 1fr 1fr;
-    transform: translateX(-50%);
+    --nav-center: -50%;
   }
 
   .bottom-nav button {

@@ -2833,54 +2833,56 @@ export default function Home() {
         )}
         <ToastHost toasts={toasts} closingIds={closingToastIds} onDismiss={dismissToast} />
 
-        {!overlayOpen && (
-          <nav className="bottom-nav">
-            <button className={tab === "home" ? "active" : ""} onClick={() => setTab("home")} aria-label="หน้าหลัก">
-              <span className="nav-item">
-                <span className="nav-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M4 10.8 12 4l8 6.8v8.7a1.5 1.5 0 0 1-1.5 1.5H15v-6H9v6H5.5A1.5 1.5 0 0 1 4 19.5v-8.7Z" />
-                  </svg>
-                </span>
-                <span className="nav-label">หน้าหลัก</span>
-              </span>
-            </button>
-            <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")} aria-label="รายการ">
-              <span className="nav-item">
-                <span className="nav-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M6.5 5.5h11v13h-11z" />
-                    <path d="M9.5 9h5M9.5 12h5M9.5 15h3" />
-                  </svg>
-                </span>
-                <span className="nav-label">รายการ</span>
-              </span>
-            </button>
-            <button className="add-button" onClick={() => openAddTab()} aria-label="เพิ่มรายการด้วย AI">
+        {/* Stays mounted while an overlay is open — CSS tucks it off-screen
+            and brings it back in step with the overlay's own animation — so
+            `inert` is what keeps it out of reach of focus and screen readers
+            meanwhile. */}
+        <nav className="bottom-nav" inert={overlayOpen}>
+          <button className={tab === "home" ? "active" : ""} onClick={() => setTab("home")} aria-label="หน้าหลัก">
+            <span className="nav-item">
               <span className="nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24">
-                  <path d="M12 5v14M5 12h14" />
+                  <path d="M4 10.8 12 4l8 6.8v8.7a1.5 1.5 0 0 1-1.5 1.5H15v-6H9v6H5.5A1.5 1.5 0 0 1 4 19.5v-8.7Z" />
                 </svg>
               </span>
-            </button>
-            <button className={tab === "wallets" ? "active" : ""} onClick={() => setTab("wallets")} aria-label="กระเป๋าตังค์">
-              <span className="nav-item">
-                <span className="nav-icon" aria-hidden="true">
-                  <WalletIcon aria-hidden="true" />
-                </span>
-                <span className="nav-label">กระเป๋า</span>
+              <span className="nav-label">หน้าหลัก</span>
+            </span>
+          </button>
+          <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")} aria-label="รายการ">
+            <span className="nav-item">
+              <span className="nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M6.5 5.5h11v13h-11z" />
+                  <path d="M9.5 9h5M9.5 12h5M9.5 15h3" />
+                </svg>
               </span>
-            </button>
-            <button className={moreOpen ? "active" : ""} onClick={(event) => { setMoreOrigin(captureSheetOrigin(event.currentTarget)); setMoreOpen(true); }} aria-label="เพิ่มเติม">
-              <span className="nav-item">
-                <span className="nav-icon" aria-hidden="true">
-                  <MoreHorizontal aria-hidden="true" />
-                </span>
-                <span className="nav-label">อื่น ๆ</span>
+              <span className="nav-label">รายการ</span>
+            </span>
+          </button>
+          <button className="add-button" onClick={() => openAddTab()} aria-label="เพิ่มรายการด้วย AI">
+            <span className="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </span>
+          </button>
+          <button className={tab === "wallets" ? "active" : ""} onClick={() => setTab("wallets")} aria-label="กระเป๋าตังค์">
+            <span className="nav-item">
+              <span className="nav-icon" aria-hidden="true">
+                <WalletIcon aria-hidden="true" />
               </span>
-            </button>
-          </nav>
-        )}
+              <span className="nav-label">กระเป๋า</span>
+            </span>
+          </button>
+          <button className={moreOpen ? "active" : ""} onClick={(event) => { setMoreOrigin(captureSheetOrigin(event.currentTarget)); setMoreOpen(true); }} aria-label="เพิ่มเติม">
+            <span className="nav-item">
+              <span className="nav-icon" aria-hidden="true">
+                <MoreHorizontal aria-hidden="true" />
+              </span>
+              <span className="nav-label">อื่น ๆ</span>
+            </span>
+          </button>
+        </nav>
       </section>
     </main>
   );
