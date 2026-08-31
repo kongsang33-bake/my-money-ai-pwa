@@ -76,7 +76,8 @@ import {
 } from "@/lib/constants";
 import { ChevronLeft, Lightbulb, Menu, MoreHorizontal, Wallet as WalletIcon, X } from "lucide-react";
 import { CategoryIcon, WalletAvatarGlyph } from "@/components/shared";
-import { ConfirmDialog, CountUpMoney, ErrorActions, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss } from "@/components/primitives";
+import { captureSheetOrigin, ConfirmDialog, CountUpMoney, ErrorActions, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss } from "@/components/primitives";
+import type { SheetOrigin } from "@/components/primitives";
 import { DraftImpact, DraftRow, EditSheet, EntryList, ManualEntryForm, QuickAddStrip, RecentActivityTimeline } from "@/components/add";
 import {
   BudgetGlanceCard,
@@ -217,6 +218,9 @@ export default function Home() {
   const [editing, setEditing] = useState<Entry | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  // Where the "อื่น ๆ" nav button sat when it was tapped, so the sheet can
+  // expand out of it instead of just sliding up from the bottom edge.
+  const [moreOrigin, setMoreOrigin] = useState<SheetOrigin | null>(null);
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [debtorSheetMode, setDebtorSheetMode] = useState<"create" | "edit" | null>(null);
   const [editingDebtor, setEditingDebtor] = useState<Debtor | null>(null);
@@ -2758,6 +2762,7 @@ export default function Home() {
             recurringTotal={recurringExpenses.reduce((sum, item) => sum + item.amount, 0)}
             portfolioTotal={portfolioTotalValue}
             closing={moreDismiss.closing}
+            originPoint={moreOrigin}
           />
         )}
         {profileSheetDismiss.mounted && (
@@ -2866,7 +2871,7 @@ export default function Home() {
                 <span className="nav-label">กระเป๋า</span>
               </span>
             </button>
-            <button className={moreOpen ? "active" : ""} onClick={() => setMoreOpen(true)} aria-label="เพิ่มเติม">
+            <button className={moreOpen ? "active" : ""} onClick={(event) => { setMoreOrigin(captureSheetOrigin(event.currentTarget)); setMoreOpen(true); }} aria-label="เพิ่มเติม">
               <span className="nav-item">
                 <span className="nav-icon" aria-hidden="true">
                   <MoreHorizontal aria-hidden="true" />

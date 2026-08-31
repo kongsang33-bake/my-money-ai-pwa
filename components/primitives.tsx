@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Check, Info } from "lucide-react";
 import { formatMoney, moneySign } from "@/lib/format";
@@ -88,9 +88,10 @@ export function ToastHost({ toasts, closingIds, onDismiss }: { toasts: Toast[]; 
   );
 }
 
-export function SheetFrame({ children, onClose, className = "edit-sheet", closing = false }: { children: React.ReactNode; onClose: () => void; className?: string; closing?: boolean }) {
+export function SheetFrame({ children, onClose, className = "edit-sheet", closing = false, originPoint }: { children: React.ReactNode; onClose: () => void; className?: string; closing?: boolean; originPoint?: SheetOrigin | null }) {
   useEscapeToClose(onClose);
   const dialogRef = useFocusTrap<HTMLElement>(!closing);
+  useSheetOrigin(dialogRef, originPoint);
 
   return (
     <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
@@ -99,13 +100,59 @@ export function SheetFrame({ children, onClose, className = "edit-sheet", closin
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
-        className={`${className} ${closing ? "closing" : ""}`}
+        className={`${className} ${originPoint ? "sheet-from-origin" : ""} ${closing ? "closing" : ""}`}
         onMouseDown={(event) => event.stopPropagation()}
       >
         {children}
       </section>
     </div>
   );
+}
+
+/**
+ * Viewport-space point a sheet should appear to grow out of — the centre of
+ * the control that opened it. `captureSheetOrigin` reads it off the click.
+ */
+export type SheetOrigin = { x: number; y: number };
+
+export function captureSheetOrigin(element: HTMLElement): SheetOrigin {
+  const rect = element.getBoundingClientRect();
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
+
+/**
+ * Translates a viewport-space origin into the sheet's own coordinate space
+ * and writes it out as `--origin-x`/`--origin-y`/`--origin-r`, which the
+ * `.sheet-from-origin` rules in globals.css use as the transform origin and
+ * as the centre and end radius of the expanding clip circle. The radius is
+ * the distance from the origin to the sheet's farthest corner, in px: a
+ * percentage end radius would finish covering the sheet well before the
+ * animation ends (and can't interpolate cleanly from a px start radius), so
+ * the reveal would be over in the first few frames. Layout effect, so the
+ * vars are in place before the entry animation paints its first frame.
+ */
+function useSheetOrigin(ref: React.RefObject<HTMLElement | null>, originPoint?: SheetOrigin | null) {
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node || !originPoint) return;
+    const apply = () => {
+      const rect = node.getBoundingClientRect();
+      const clamp = (value: number, max: number) => Math.min(Math.max(value, 0), max);
+      const x = clamp(originPoint.x - rect.left, rect.width);
+      const y = clamp(originPoint.y - rect.top, rect.height);
+      const radius = Math.hypot(Math.max(x, rect.width - x), Math.max(y, rect.height - y));
+      node.style.setProperty("--origin-x", `${x}px`);
+      node.style.setProperty("--origin-y", `${y}px`);
+      node.style.setProperty("--origin-r", `${Math.ceil(radius)}px`);
+    };
+    apply();
+    // The animation fills forwards, so its clip circle still applies once the
+    // sheet has opened: recompute on resize, or a viewport that changed shape
+    // underneath an open sheet (rotation, an on-screen keyboard) would leave
+    // it cropped by a circle sized for the old box.
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  }, [ref, originPoint]);
 }
 
 /**

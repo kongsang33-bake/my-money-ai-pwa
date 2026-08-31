@@ -31,6 +31,7 @@ import { compressProfileImage } from "@/lib/image";
 import { nameInitial } from "@/lib/category";
 import type { AiChatMessage, AiFinanceContext, Entry, NetWorthDisplaySettings, Profile, ReportPeriod, Theme, Wallet } from "@/lib/types";
 import { SheetFrame, StateCard, useEscapeToClose, useFocusTrap } from "@/components/primitives";
+import type { SheetOrigin } from "@/components/primitives";
 
 export function cleanAiAnswer(value: string) {
   const withoutCodeMarkers = value
@@ -406,6 +407,7 @@ export function MoreSheet({
   recurringTotal,
   portfolioTotal,
   closing,
+  originPoint,
 }: {
   onClose: () => void;
   onOpenDebtors: () => void;
@@ -417,10 +419,11 @@ export function MoreSheet({
   recurringTotal: number;
   portfolioTotal: number;
   closing?: boolean;
+  originPoint?: SheetOrigin | null;
 }) {
   const debtNet = receivableTotal - payableTotal;
   return (
-    <SheetFrame onClose={onClose} className="edit-sheet more-sheet" closing={closing}>
+    <SheetFrame onClose={onClose} className="edit-sheet more-sheet" closing={closing} originPoint={originPoint}>
       <div className="sheet-head">
         <div>
           <p className="eyebrow">เพิ่มเติม</p>
