@@ -196,6 +196,9 @@
   --t-3: 240ms;
   --t-4: 380ms;
   --t-press: 70ms;
+  /* one step of the list/section entrance ladder -- see the .view > * rules
+     in the Motion section for why it stops after four steps */
+  --t-stagger: 28ms;
   --e-out: cubic-bezier(0.2, 0.9, 0.25, 1);
   --e-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   --e-spring: cubic-bezier(0.22, 1.24, 0.36, 1);
@@ -490,6 +493,22 @@ a:focus-visible {
   border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
   border-radius: var(--r-lg);
   box-shadow: var(--sh-1);
+}
+
+/* backdrop-filter is a per-frame recomposite of everything moving underneath
+   the filtered box: cheap on a desktop GPU, and the single largest scroll
+   cost on a phone -- the topbar is sticky, so every scrolled pixel on
+   History/Wallets/Debtors re-filters the bar. Coarse pointers get a
+   near-opaque fill instead. At 58px tall over a dense app the frost was
+   reading as "slightly translucent" anyway, so this is close to a no-op
+   visually and removes the work entirely. Home's own topbar below 900px is
+   already a solid --hero-bg fill (see the .phone.tab-home block below), and
+   its higher specificity keeps it that way regardless of source order. */
+@media (hover: none), (pointer: coarse) {
+  .topbar {
+    background: color-mix(in srgb, var(--surface) 96%, transparent);
+    backdrop-filter: none;
+  }
 }
 
 .home-identity {
@@ -3387,6 +3406,12 @@ button.entry-main {
 /* -------------------------------------------------------------------------
    Sheets / overlays / dialogs
    ------------------------------------------------------------------------- */
+/* No backdrop-filter here on purpose. A scrim covers the whole viewport, so
+   even a 3px blur makes the browser snapshot and re-filter the entire page
+   -- and it does that during the fade-in/out, i.e. exactly while the sheet
+   is animating and every frame counts. --overlay-scrim already does the
+   separating work at 45%/60% opacity; the blur under it was costing a
+   scroll-and-open budget nobody could see. */
 .sheet-backdrop, .dialog-backdrop, .side-menu-backdrop {
   position: fixed;
   inset: 0;
@@ -3394,7 +3419,6 @@ button.entry-main {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  backdrop-filter: blur(3px);
   animation: fade-in var(--t-2) var(--e-out) both;
 }
 
@@ -3417,7 +3441,6 @@ button.entry-main {
    backdrop (the dialog) carry it alone. */
 .sheet-backdrop:has(~ .dialog-backdrop) {
   background: transparent;
-  backdrop-filter: none;
 }
 
 .edit-sheet {
@@ -3879,6 +3902,17 @@ button.entry-main {
   backdrop-filter: blur(24px) saturate(1.08);
   box-shadow: var(--sh-3);
   animation: drawer-in var(--t-3) var(--e-out) both;
+}
+
+/* Same trade as .topbar's coarse-pointer rule: a full-height translucent
+   panel re-filters everything behind it on every frame of its slide-in.
+   Kept next to the rule it overrides (not up with .topbar's) because the
+   two have equal specificity, so only source order decides the winner. */
+@media (hover: none), (pointer: coarse) {
+  .side-menu {
+    background: color-mix(in srgb, var(--surface) 98%, transparent);
+    backdrop-filter: none;
+  }
 }
 
 .profile-head {
@@ -4756,17 +4790,25 @@ button.entry-main {
   animation: card-in var(--t-3) var(--e-out) backwards;
 }
 
+/* Stagger step, and where it stops. The old ladder ran 45ms x 7, so the
+   seventh card only started at 270ms and finished at ~510ms -- on a tab
+   switch that is half a second of the screen still assembling itself, which
+   reads as the tap being slow rather than as choreography. A stagger only
+   has to establish "these arrived in order" across the first few cards, so
+   the step is tighter and everything from the fifth on shares the fourth
+   step's delay: below the fold nobody sees the difference, and it also
+   fixes the old ladder's own artefact where the eighth card (no rule, so
+   0ms) landed before the seventh. */
 .view > *:nth-child(1), .history-view .entry-group:nth-child(1),
 .debtor-page-list > .debtor-page-item:nth-child(1), .goal-list > .goal-item:nth-child(1) { animation-delay: 0ms; }
 .view > *:nth-child(2), .history-view .entry-group:nth-child(2),
-.debtor-page-list > .debtor-page-item:nth-child(2), .goal-list > .goal-item:nth-child(2) { animation-delay: 45ms; }
+.debtor-page-list > .debtor-page-item:nth-child(2), .goal-list > .goal-item:nth-child(2) { animation-delay: var(--t-stagger); }
 .view > *:nth-child(3), .history-view .entry-group:nth-child(3),
-.debtor-page-list > .debtor-page-item:nth-child(3), .goal-list > .goal-item:nth-child(3) { animation-delay: 90ms; }
+.debtor-page-list > .debtor-page-item:nth-child(3), .goal-list > .goal-item:nth-child(3) { animation-delay: calc(var(--t-stagger) * 2); }
 .view > *:nth-child(4), .history-view .entry-group:nth-child(4),
-.debtor-page-list > .debtor-page-item:nth-child(4), .goal-list > .goal-item:nth-child(4) { animation-delay: 135ms; }
-.view > *:nth-child(5), .debtor-page-list > .debtor-page-item:nth-child(5), .goal-list > .goal-item:nth-child(5) { animation-delay: 180ms; }
-.view > *:nth-child(6), .debtor-page-list > .debtor-page-item:nth-child(6), .goal-list > .goal-item:nth-child(6) { animation-delay: 225ms; }
-.view > *:nth-child(7), .debtor-page-list > .debtor-page-item:nth-child(7), .goal-list > .goal-item:nth-child(7) { animation-delay: 270ms; }
+.debtor-page-list > .debtor-page-item:nth-child(4), .goal-list > .goal-item:nth-child(4) { animation-delay: calc(var(--t-stagger) * 3); }
+.view > *:nth-child(n+5), .history-view .entry-group:nth-child(n+5),
+.debtor-page-list > .debtor-page-item:nth-child(n+5), .goal-list > .goal-item:nth-child(n+5) { animation-delay: calc(var(--t-stagger) * 4); }
 
 @keyframes fade-in {
   from { opacity: 0; }
