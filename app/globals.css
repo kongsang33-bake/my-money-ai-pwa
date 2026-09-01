@@ -82,6 +82,17 @@
   --income-soft: #e3f7ee;
   --expense: #e63c8c;
   --expense-soft: #fdeaf3;
+  /* Large-area ("bold tier") variants of the three fill hues. A color that
+     reads as confident on a 12px bar, a chip or a 56px FAB turns into a
+     light source once it fills a 300px tile — which on a dark ground is
+     what actually makes a theme tiring to look at, not the hue itself. So
+     every full-tile fill goes through these instead of --income/--expense/
+     --accent directly, and only the small uses keep the undimmed hue.
+     Light mode is a color-blocked bento by design, so here they're plain
+     aliases; the dark block below is where they diverge. */
+  --income-fill: var(--income);
+  --expense-fill: var(--expense);
+  --accent-fill: var(--accent);
   --danger: #d6234b;
   --danger-soft: #fce7eb;
   --danger-border: #f5b9c7;
@@ -193,69 +204,94 @@
 /* -------------------------------------------------------------------------
    Tokens — dark ("Neon Terminal")
    ------------------------------------------------------------------------- */
+/* Comfort note (read before brightening anything here): this theme is used
+   at night, on OLED phones, at low screen brightness. Two things made the
+   first pass physically uncomfortable to read, and both are easy to
+   reintroduce by "fixing" one token at a time:
+   1. Pure-black ground + near-white text = ~17:1 contrast. Way past the
+      ~7:1 AAA bar, and on an emissive screen the eye keeps re-adapting
+      between the two extremes. --bg sits a few steps off black and --ink a
+      few steps off white so the pair lands ~12:1 — still comfortably AAA,
+      no longer a headlight.
+   2. Fully-saturated neons at near-maximum lightness (the old #e8ff52 /
+      #4de8ff / #ff3d7f) bloom on dark ground: the eye can't focus the
+      fringe, so edges shimmer. Every loud hue here is pulled down in
+      lightness and chroma just far enough to stop blooming while staying
+      unmistakably neon, and the glows that multiply the effect
+      (--glow-primary, --hero-amount-glow) are roughly half their old
+      alpha. Keep new hues in the same lightness band as their neighbours
+      rather than matching a swatch picked on a white screen. */
 :root[data-theme="dark"] {
-  --bg: #0a0a0c;
-  --surface: #151519;
-  --surface-2: #1b1b21;
-  --surface-3: #202028;
-  --line: #232329;
-  --line-soft: #1c1c22;
-  --line-strong: #2d2d36;
+  --bg: #101116;
+  --surface: #171922;
+  --surface-2: #1d1f2a;
+  --surface-3: #242733;
+  --line: #2b2e3a;
+  --line-soft: #22242e;
+  --line-strong: #383c4a;
 
-  --ink: #e7e5ee;
-  --ink-2: #c9c7d6;
-  --ink-3: #8a879c;
-  --ink-4: #6e6b80;
-  --ink-inverse: #0a0a0c;
+  --ink: #d5d4de;
+  --ink-2: #b6b5c4;
+  --ink-3: #8d8b9e;
+  --ink-4: #6f6d80;
+  --ink-inverse: #101116;
 
   /* primary is acid — the one loud color in this theme, spent on buttons,
      the nav's active state and the FAB; accent (electric cyan) marks
-     secondary structure (insight-tile edges, the heatmap ramp) */
-  --accent: #4de8ff;
-  --accent-strong: #7eefff;
-  --accent-soft: #0f2830;
-  --accent-line: rgba(77, 232, 255, 0.35);
-  --accent-contrast: #0a0a0c;
-  --income-contrast: #0a0a0c;
-  --primary: #e8ff52;
-  --primary-hover: #f0ff7a;
-  --primary-text: #0a0a0c;
+     secondary structure (insight-tile edges, the heatmap ramp). Both are
+     one lightness step below "fluorescent" on purpose — see the comfort
+     note above. */
+  --accent: #5ed0e6;
+  --accent-strong: #86dced;
+  --accent-soft: #16303a;
+  --accent-line: rgba(94, 208, 230, 0.32);
+  --accent-contrast: #101116;
+  --income-contrast: #101116;
+  --primary: #c7e05c;
+  --primary-hover: #d3e97a;
+  --primary-text: #101116;
 
   /* the hero has no fill at all here — it's the same near-black as the
      page, and boldness is spent entirely on the glowing amount instead */
-  --hero-bg: #0a0a0c;
-  --hero-text: #8a879c;
-  --hero-amount: #e8ff52;
+  --hero-bg: #101116;
+  --hero-text: #8d8b9e;
+  --hero-amount: #c7e05c;
   --hero-border: 1px dashed var(--line);
   --hero-shadow: none;
-  --hero-amount-glow: 0 0 28px rgba(232, 255, 82, 0.35);
+  --hero-amount-glow: 0 0 24px rgba(199, 224, 92, 0.18);
 
   --shimmer-sheen: rgba(255, 255, 255, 0.06);
 
   /* dark merges "expense" and "danger" into one hot-pink alert hue —
      income intentionally shares --primary's acid (both read as "positive/
      go"), which only works because they never appear in the same element */
-  --income: #e8ff52;
-  --income-soft: #1e230e;
-  --expense: #ff3d7f;
-  --expense-soft: #2b121d;
-  --danger: #ff3d7f;
-  --danger-soft: #2b121d;
-  --danger-border: #4a1f2e;
+  --income: #c7e05c;
+  --income-soft: #212a12;
+  --expense: #ee5b8d;
+  --expense-soft: #2b1620;
+  /* roughly half the luminance of the hues above (see the light block for
+     why): enough that a full tile stops glaring, still unmistakably the
+     same acid / hot-pink / cyan family */
+  --income-fill: #a8c04d;
+  --expense-fill: #cc4d78;
+  --accent-fill: #4fa8bd;
+  --danger: #ee5b8d;
+  --danger-soft: #2b1620;
+  --danger-border: #4d2634;
 
-  --cat-travel: #4de8ff;
-  --cat-food: #ff7a45;
-  --cat-bills: #3cf2c0;
-  --cat-home: #ffd23f;
-  --cat-entertainment: #ff6fc4;
-  --cat-goods: #9b7bfa;
-  --cat-health: #ff5c7a;
-  --cat-other: #6e6b80;
+  --cat-travel: #5ed0e6;
+  --cat-food: #f08055;
+  --cat-bills: #4fd6ad;
+  --cat-home: #e5c05a;
+  --cat-entertainment: #e57fbe;
+  --cat-goods: #9887ee;
+  --cat-health: #ec6f85;
+  --cat-other: #7d7a8f;
 
-  --seq-1: #123240;
-  --seq-2: #1b4d5e;
-  --seq-3: #2b7690;
-  --seq-4: #4de8ff;
+  --seq-1: #17323c;
+  --seq-2: #204b58;
+  --seq-3: #34798c;
+  --seq-4: #5ed0e6;
 
   /* elevation — panels are flat and bordered, not shadowed; the only
      shadow work left is a colored glow, reserved for the FAB/hero */
@@ -265,9 +301,9 @@
   --card-border: 1px solid var(--line);
   --card-shadow: none;
   --tile-edge-width: 3px;
-  --glow-primary: 0 0 22px -2px rgba(232, 255, 82, 0.55);
-  --overlay-scrim: rgba(0, 0, 0, 0.65);
-  --focus-ring: rgba(232, 255, 82, 0.45);
+  --glow-primary: 0 0 22px -2px rgba(199, 224, 92, 0.3);
+  --overlay-scrim: rgba(0, 0, 0, 0.6);
+  --focus-ring: rgba(199, 224, 92, 0.4);
 
   /* radius — a flatter, "moderate squircle" scale; every step is tighter
      than light mode's, not just re-hued */
@@ -1352,14 +1388,16 @@ a:focus-visible {
 
 /* The savings-rate tile is the one bold, fully saturated fill in this
    grid — the other two stay quiet tints so the eye lands here first.
-   --income and --expense get different contrast treatment: dark mode's
-   --income is deliberately the same acid as --primary (see globals.css
-   token comments), so a full-tile --income fill needs --income-contrast
-   (dark text in dark mode) rather than the always-white --text-on-color —
-   plain white was unreadable on the acid fill. --expense never gets that
+   The fill comes from --income-fill/--expense-fill, not --income/--expense:
+   see the token block for why a full-tile fill is dimmed in dark mode
+   while chips and bars keep the undimmed hue. Contrast treatment still
+   differs per hue: dark mode's income family is the same acid as
+   --primary, so a full-tile income fill needs --income-contrast (dark text
+   in dark mode) rather than the always-white --text-on-color — plain white
+   was unreadable on the acid fill. The expense family never gets that
    bright in either theme, so it stays on --text-on-color. */
-.home-insight-card.savings-rate.income { background: var(--income); }
-.home-insight-card.savings-rate.expense { background: var(--expense); }
+.home-insight-card.savings-rate.income { background: var(--income-fill); }
+.home-insight-card.savings-rate.expense { background: var(--expense-fill); }
 .home-insight-card.savings-rate.income strong,
 .home-insight-card.savings-rate.income span,
 .home-insight-card.savings-rate.income small {
@@ -1396,7 +1434,7 @@ a:focus-visible {
 /* Due-soon gets the bold fill of this pair, budget-glance stays the quiet
    tint — the two "at a glance" tiles no longer read as one repeated shape. */
 .due-soon-card {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--accent-contrast);
 }
 

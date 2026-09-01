@@ -69,6 +69,7 @@ import {
   PROFILE_COLUMNS,
   RECURRING_EXPENSE_COLUMNS,
   SEARCH_RESULT_LIMIT,
+  SPLASH_MIN_VISIBLE_MS,
   TABLES,
   THEME_STORAGE_KEY,
   TRANSACTION_COLUMNS,
@@ -76,7 +77,7 @@ import {
 } from "@/lib/constants";
 import { ChevronLeft, Lightbulb, Menu, MoreHorizontal, Wallet as WalletIcon, X } from "lucide-react";
 import { CategoryIcon, WalletAvatarGlyph } from "@/components/shared";
-import { captureSheetOrigin, ConfirmDialog, CountUpMoney, ErrorActions, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss } from "@/components/primitives";
+import { captureSheetOrigin, ConfirmDialog, CountUpMoney, ElapsedSeconds, ErrorActions, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss } from "@/components/primitives";
 import type { SheetOrigin } from "@/components/primitives";
 import { DraftImpact, DraftRow, EditSheet, EntryList, ManualEntryForm, QuickAddStrip, RecentActivityTimeline } from "@/components/add";
 import {
@@ -106,6 +107,11 @@ import dynamic from "next/dynamic";
 // already a client component gated behind auth/PIN, so there's no SSR
 // pass for these to opt out of; it just skips server-rendering the
 // placeholder on first load.
+// The four whole-tab views get a `loading` skeleton rather than the
+// default (nothing): a tab that renders an empty screen for the length of
+// a chunk fetch reads as a frozen tap. Their chunks are also warmed on
+// idle right after unlock (see the prefetch effect in Home), so in
+// practice the skeleton is only ever seen on a cold, slow connection.
 const AskFinanceSheet = dynamic(() => import("@/components/sheets").then((m) => m.AskFinanceSheet), { ssr: false });
 const ConfirmLogout = dynamic(() => import("@/components/sheets").then((m) => m.ConfirmLogout), { ssr: false });
 const MoreSheet = dynamic(() => import("@/components/sheets").then((m) => m.MoreSheet), { ssr: false });
@@ -113,17 +119,17 @@ const ProfileEditSheet = dynamic(() => import("@/components/sheets").then((m) =>
 const ReportExportSheet = dynamic(() => import("@/components/sheets").then((m) => m.ReportExportSheet), { ssr: false });
 const SideMenu = dynamic(() => import("@/components/sheets").then((m) => m.SideMenu), { ssr: false });
 
-const DebtorsView = dynamic(() => import("@/components/debtors").then((m) => m.DebtorsView), { ssr: false });
+const DebtorsView = dynamic(() => import("@/components/debtors").then((m) => m.DebtorsView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const DebtorEditSheet = dynamic(() => import("@/components/debtors").then((m) => m.DebtorEditSheet), { ssr: false });
 const RecapSheet = dynamic(() => import("@/components/debtors").then((m) => m.RecapSheet), { ssr: false });
 const BudgetSheet = dynamic(() => import("@/components/debtors").then((m) => m.BudgetSheet), { ssr: false });
 
-const WalletsView = dynamic(() => import("@/components/wallets-recurring").then((m) => m.WalletsView), { ssr: false });
+const WalletsView = dynamic(() => import("@/components/wallets-recurring").then((m) => m.WalletsView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const WalletEditSheet = dynamic(() => import("@/components/wallets-recurring").then((m) => m.WalletEditSheet), { ssr: false });
-const RecurringExpensesView = dynamic(() => import("@/components/wallets-recurring").then((m) => m.RecurringExpensesView), { ssr: false });
+const RecurringExpensesView = dynamic(() => import("@/components/wallets-recurring").then((m) => m.RecurringExpensesView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const RecurringExpenseEditSheet = dynamic(() => import("@/components/wallets-recurring").then((m) => m.RecurringExpenseEditSheet), { ssr: false });
 
-const PortfolioView = dynamic(() => import("@/components/portfolio").then((m) => m.PortfolioView), { ssr: false });
+const PortfolioView = dynamic(() => import("@/components/portfolio").then((m) => m.PortfolioView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const InvestmentBuySheet = dynamic(() => import("@/components/portfolio").then((m) => m.InvestmentBuySheet), { ssr: false });
 const InvestmentSellSheet = dynamic(() => import("@/components/portfolio").then((m) => m.InvestmentSellSheet), { ssr: false });
 const InvestmentPriceSheet = dynamic(() => import("@/components/portfolio").then((m) => m.InvestmentPriceSheet), { ssr: false });
@@ -240,7 +246,6 @@ export default function Home() {
   const [investmentAiSheetOpen, setInvestmentAiSheetOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [analyzeElapsedSeconds, setAnalyzeElapsedSeconds] = useState(0);
   const [error, setError] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(monthKey(new Date()));
@@ -260,6 +265,7 @@ export default function Home() {
   const [pinMode, setPinMode] = useState<PinMode>("checking");
   const [pinError, setPinError] = useState("");
   const [pinSheetOpen, setPinSheetOpen] = useState(false);
+  const scrollRootRef = useRef<HTMLElement | null>(null);
   const backgroundedAtRef = useRef<number | null>(null);
   const authUserIdRef = useRef<string | null | undefined>(undefined);
   const cycleMonthSettingRef = useRef<string | null>(null);
@@ -312,6 +318,15 @@ export default function Home() {
     action(...args);
   }, []);
 
+  // openSheet() mints a fresh closure on every call, so calling it inline in
+  // JSX hands a brand-new onEdit down on every render -- which silently
+  // defeats EntryList's memo() (its other props are all memoised, so this
+  // prop alone was re-rendering the whole day/search list on every keystroke
+  // and every toast tick). Anything passed to a memo()'d child needs a
+  // stable identity like this one; the inline openSheet(...) calls that
+  // remain all feed plain components, where a new closure costs nothing.
+  const openEditSheet = useMemo(() => openSheet(setEditing), [openSheet]);
+
   useEffect(() => {
     const next = toasts.find((toast) => !closingToastIds.includes(toast.id));
     if (!next) return;
@@ -347,6 +362,28 @@ export default function Home() {
     document.documentElement.dataset.theme = theme;
     if (themeLoadedRef.current) window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
+
+  // Warm the code-split tab/sheet chunks once the app is up and idle. Without
+  // this the first tap on Wallets/Debtors/Portfolio (or the first open of any
+  // sheet) pays a network round-trip before anything can render, which is
+  // exactly the moment the user is watching. import() is registry-cached, so
+  // these are free once resolved and the tab's own dynamic() import resolves
+  // synchronously from then on.
+  useEffect(() => {
+    if (pinMode !== "unlocked") return;
+    const warm = () => {
+      void import("@/components/sheets");
+      void import("@/components/debtors");
+      void import("@/components/wallets-recurring");
+      void import("@/components/portfolio");
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(warm, { timeout: 3000 });
+      return () => window.cancelIdleCallback?.(id);
+    }
+    const timer = window.setTimeout(warm, 1500);
+    return () => window.clearTimeout(timer);
+  }, [pinMode]);
 
   const loadEntries = useCallback(async () => {
     if (!supabase) return;
@@ -619,7 +656,14 @@ export default function Home() {
   useEffect(() => {
     if (!ready) return;
     const startedAt = (window as unknown as { __splashStartedAt?: number }).__splashStartedAt ?? Date.now();
-    const remaining = Math.max(0, 2400 - (Date.now() - startedAt));
+    // Hold only long enough for the splash's own animation to finish (halo +
+    // bounce + wordmark + underline land at ~1.25s; see the #app-splash
+    // keyframes in globals.css), not a beat longer. The old 2400ms floor
+    // meant that on a warm load -- where auth and the first data fetch are
+    // done well inside a second -- the app sat there fully rendered behind a
+    // finished animation for another second before revealing itself, which
+    // is the single most-felt "this app is slow" moment in the whole thing.
+    const remaining = Math.max(0, SPLASH_MIN_VISIBLE_MS - (Date.now() - startedAt));
     const timer = setTimeout(() => {
       const el = document.getElementById("app-splash");
       if (!el) return;
@@ -649,20 +693,30 @@ export default function Home() {
     recapOpen ||
     pinSheetOpen ||
     logoutOpen;
+  // Scroll-lock behind an open sheet. This has to target .phone, not <body>:
+  // .phone is the app's real scroll container (height: 100dvh; overflow-y:
+  // auto), so the document itself never scrolls -- the old body-level
+  // position:fixed lock was reading window.scrollY (always 0) and pinning an
+  // element that wasn't moving, while the page behind the sheet went right on
+  // scrolling under the user's thumb. Toggling overflow on the actual
+  // scroller keeps its scrollTop, so nothing jumps when the sheet closes.
   useEffect(() => {
-    if (!overlayOpen) return;
-    const scrollY = window.scrollY;
-    const { body } = document;
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.width = "100%";
+    const scroller = scrollRootRef.current;
+    if (!overlayOpen || !scroller) return;
+    const previous = scroller.style.overflowY;
+    scroller.style.overflowY = "hidden";
     return () => {
-      body.style.position = "";
-      body.style.top = "";
-      body.style.width = "";
-      window.scrollTo(0, scrollY);
+      scroller.style.overflowY = previous;
     };
   }, [overlayOpen]);
+
+  // Every tab shares that one scroll container, so without this a user who
+  // scrolls to the bottom of History and taps Home lands halfway down Home.
+  // Instant, not smooth: the tab's own view-in animation is the transition,
+  // and animating a scroll on top of it reads as two things moving at once.
+  useEffect(() => {
+    scrollRootRef.current?.scrollTo({ top: 0, behavior: "instant" });
+  }, [tab]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -1015,8 +1069,6 @@ export default function Home() {
 
     setBusy(true);
     setError("");
-    setAnalyzeElapsedSeconds(0);
-    const elapsedTimer = window.setInterval(() => setAnalyzeElapsedSeconds((seconds) => seconds + 1), 1000);
 
     try {
       const response = await fetch("/api/analyze", {
@@ -1072,7 +1124,6 @@ export default function Home() {
       notify({ tone: "error", title: "AI ยังวิเคราะห์ไม่ได้", detail: e instanceof Error ? e.message : undefined });
     }
 
-    window.clearInterval(elapsedTimer);
     setBusy(false);
   }
 
@@ -2294,7 +2345,7 @@ export default function Home() {
 
   return (
     <main className="shell">
-      <section className={`phone tab-${tab}`}>
+      <section className={`phone tab-${tab}`} ref={scrollRootRef}>
         <header className="topbar">
           <div className="home-identity">
             <span className={`home-profile-icon ${displayIconImage ? "has-image" : ""}`}>
@@ -2367,7 +2418,7 @@ export default function Home() {
               </div>
             )}
 
-            {!dataLoading && <RecentActivityTimeline entries={entries} onEdit={openSheet(setEditing)} />}
+            {!dataLoading && <RecentActivityTimeline entries={entries} onEdit={openEditSheet} />}
 
             {error && <ErrorActions onRetry={retrySync} onDismiss={() => setError("")} />}
             {error && <StateCard tone="error" title="มีบางอย่างไม่สำเร็จ" detail={error} />}
@@ -2451,7 +2502,7 @@ export default function Home() {
                   {busy ? (
                     <span className="button-loading-row">
                       <span className="loading-spinner mini on-ink" />
-                      {`กำลังวิเคราะห์... (${analyzeElapsedSeconds} วิ)`}
+                      กำลังวิเคราะห์... (<ElapsedSeconds /> วิ)
                     </span>
                   ) : "ให้ AI แยกรายการ"}
                 </button>
@@ -2541,7 +2592,7 @@ export default function Home() {
                     ? `แสดง ${SEARCH_RESULT_LIMIT} รายการแรกจากทุกเดือน · ลองใส่ตัวกรองเพิ่มเพื่อจำกัดผลลัพธ์`
                     : `พบ ${searchResults.length} รายการจากทุกเดือน`}
                 </p>
-                <EntryList entries={searchResults} onEdit={openSheet(setEditing)} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+                <EntryList entries={searchResults} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
               </>
             ) : (
               <>
@@ -2561,7 +2612,7 @@ export default function Home() {
                 <IncomeBreakdown items={incomeSummary} />
                 <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedMonth={selectedMonth} onChangeMonth={selectHistoryMonth} selectedDay={selectedDay} defaultDay={defaultHistoryDay} onSelectDay={setSelectedDay} />
                 {activeDay && <HistoryInsight entries={dayEntries} />}
-                <EntryList entries={dayEntries} onEdit={openSheet(setEditing)} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+                <EntryList entries={dayEntries} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
               </>
             )}
           </div>

@@ -269,32 +269,38 @@
      Near-black throughout, no white surface at all. Boldness is spent
      entirely on the acid hero numeral and a colored edge-stripe per tile;
      everything else stays quiet dark panels.
+     Values below are the shipped, eye-comfort-tuned ones (they match
+     :root[data-theme="dark"] in app/globals.css): the ground sits a few
+     steps off pure black, text a few steps off white (~12:1 instead of
+     ~17:1), and every neon is one lightness/chroma step down from the
+     original pitch so it stops blooming on dark ground. Do not "restore"
+     the brighter #0A0A0C / #E8FF52 / #4DE8FF / #FF3D7F version.
      -------------------------------------------------------------------- */
   .dir-c {
-    --bg: #0A0A0C; --text: #E7E5EE; --text-2: #C9C7D6; --muted: #6E6B80;
-    --hero-bg: #0A0A0C; --hero-text: #8A879C; --hero-accent: #E8FF52;
-    --hero-tag-bg: rgba(232,255,82,0.14); --hero-tag-text: #E8FF52;
-    --surface-2: #151519; --tile-1: #151519; --tile-1-text: #E7E5EE;
-    --hairline: #232329; --track: #232329;
-    --income: #E8FF52; --expense: #FF3D7F;
-    --avatar-bg: #1D1D22; --avatar-text: #E8FF52;
-    --chrome-bg: #151519; --chrome-border: 1px solid #232329;
-    --panel-border: 1px solid #232329; --chip-border: 1px solid #232329;
-    --nav-bg: #151519; --nav-icon: #6E6B80; --nav-icon-active: #E8FF52; --nav-border: 1px solid #232329;
-    --nav-add-bg: #E8FF52; --nav-add-icon: #0A0A0C; --nav-add-shadow: 0 0 22px -2px rgba(232,255,82,.55);
+    --bg: #101116; --text: #D5D4DE; --text-2: #B6B5C4; --muted: #6F6D80;
+    --hero-bg: #101116; --hero-text: #8D8B9E; --hero-accent: #C7E05C;
+    --hero-tag-bg: rgba(199,224,92,0.14); --hero-tag-text: #C7E05C;
+    --surface-2: #171922; --tile-1: #171922; --tile-1-text: #D5D4DE;
+    --hairline: #2B2E3A; --track: #2B2E3A;
+    --income: #C7E05C; --expense: #EE5B8D;
+    --avatar-bg: #1D1F2A; --avatar-text: #C7E05C;
+    --chrome-bg: #171922; --chrome-border: 1px solid #2B2E3A;
+    --panel-border: 1px solid #2B2E3A; --chip-border: 1px solid #2B2E3A;
+    --nav-bg: #171922; --nav-icon: #6F6D80; --nav-icon-active: #C7E05C; --nav-border: 1px solid #2B2E3A;
+    --nav-add-bg: #C7E05C; --nav-add-icon: #101116; --nav-add-shadow: 0 0 22px -2px rgba(199,224,92,.3);
     --r-lg: 16px; --r-md: 14px; --r-sm: 10px; --r-round: 50%; --r-pill: 999px;
   }
-  .dir-c .m-hero { border: 1px dashed #232329; }
-  .dir-c .m-amount { text-shadow: 0 0 28px rgba(232,255,82,.35); }
-  .dir-c .m-insight-card { border-left: 3px solid #4DE8FF; }
-  .dir-c .m-insight-card:nth-child(2) { border-left-color: #9B7BFF; }
-  .dir-c .m-insight-card:nth-child(3) { border-left-color: #E8FF52; }
-  .dir-c .m-focus:nth-of-type(1) { border-left: 3px solid #FF3D7F; }
-  .dir-c .m-focus:nth-of-type(2) { border-left: 3px solid #9B7BFF; }
-  .dir-c .m-focus.full.cashflow { border-left: 3px solid #4DE8FF; }
-  .dir-c .m-focus.full.personality { border-left: 3px solid #FF3D7F; }
-  .dir-c .m-budget-bar i.over { background: #FF3D7F !important; }
-  .dir-c .m-goal-bar i { background: #E8FF52; }
+  .dir-c .m-hero { border: 1px dashed #2B2E3A; }
+  .dir-c .m-amount { text-shadow: 0 0 28px rgba(199,224,92,.18); }
+  .dir-c .m-insight-card { border-left: 3px solid #5ED0E6; }
+  .dir-c .m-insight-card:nth-child(2) { border-left-color: #9887EE; }
+  .dir-c .m-insight-card:nth-child(3) { border-left-color: #C7E05C; }
+  .dir-c .m-focus:nth-of-type(1) { border-left: 3px solid #EE5B8D; }
+  .dir-c .m-focus:nth-of-type(2) { border-left: 3px solid #9887EE; }
+  .dir-c .m-focus.full.cashflow { border-left: 3px solid #5ED0E6; }
+  .dir-c .m-focus.full.personality { border-left: 3px solid #EE5B8D; }
+  .dir-c .m-budget-bar i.over { background: #EE5B8D !important; }
+  .dir-c .m-goal-bar i { background: #C7E05C; }
 
   @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 

@@ -45,6 +45,22 @@ export const CountUpMoney = memo(function CountUpMoney({ value }: { value: numbe
   return <>{moneySign}{formatMoney(shown)}</>;
 });
 
+// A self-contained "N seconds elapsed" ticker. It owns its own interval and
+// state so the once-a-second re-render stays inside this <span> instead of
+// re-rendering the whole page tree the way a counter held in app/page.tsx's
+// root component did -- the AI-analyse call it counts through runs for
+// 10-30s, i.e. 10-30 full-tree renders for a number nothing else reads.
+export const ElapsedSeconds = memo(function ElapsedSeconds() {
+  const [seconds, setSeconds] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setSeconds((current) => current + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return <>{seconds}</>;
+});
+
 export function EmptyNote({ glyph, children, action }: { glyph: string; children: React.ReactNode; action?: EmptyAction }) {
   return (
     <div className="empty-note">

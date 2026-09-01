@@ -121,3 +121,13 @@ export const RESTORE_ID_BATCH_SIZE = 200;
 // every entry ever recorded (not just the selected cycle), so this keeps a
 // broad query from dumping years of history into the DOM at once.
 export const SEARCH_RESULT_LIMIT = 200;
+
+// How long the boot splash (app/layout.tsx + the #app-splash keyframes in
+// app/globals.css) stays up at minimum, measured from window.__splashStartedAt
+// rather than from React mounting so a fast load doesn't cut the animation
+// off mid-bounce. Its own sequence -- halo and logo bounce at 0.05s, wordmark
+// at 0.7s, underline finishing at ~1.25s -- is what sets the floor: raise
+// this only if that sequence gets longer, never as a "let the brand breathe"
+// pause, since every millisecond past the animation is dead time in front of
+// an app that is already rendered and waiting behind it.
+export const SPLASH_MIN_VISIBLE_MS = 1300;
