@@ -57,7 +57,7 @@ import {
 import { buildWalletInsight, computeStreak, deriveQuickShortcuts, isRecurringLogged, lastSevenDayCashFlow } from "@/lib/insights";
 import { buildAiExamples, buildCategoryMemory } from "@/lib/ai-memory";
 import { nameColor } from "@/lib/category";
-import { createPinSalt, hashPin, isSixDigitPin, pinBackgroundLockMs, pinBlockMs, pinBlocked, pinMaxAttempts, registerFaceId, timingSafeEqual, verifyFaceId } from "@/lib/pin";
+import { createPinSalt, hashPin, isSixDigitPin, pinBackgroundLockMs, pinBlocked, pinMaxAttempts, recordFailedPinAttempt, registerFaceId, timingSafeEqual, verifyFaceId } from "@/lib/pin";
 import { authHeaders } from "@/lib/api";
 import {
   AI_CONTEXT_MAX_LENGTH,
@@ -1691,20 +1691,22 @@ export default function Home() {
       return true;
     }
 
-    const nextAttempts = clampInteger(latestProfile.pin_failed_attempts + 1, 0, pinMaxAttempts, 1);
-    const blockedUntil = nextAttempts >= pinMaxAttempts ? new Date(Date.now() + pinBlockMs).toISOString() : null;
+    // The counting, clamping and "how many tries left" wording all live in
+    // recordFailedPinAttempt (lib/pin.ts), where they are tested; this is only
+    // the write and the state that follows from its answer.
+    const outcome = recordFailedPinAttempt(latestProfile);
     const { data, error } = await supabase
       .from(TABLES.profiles)
-      .update({ pin_failed_attempts: nextAttempts, pin_blocked_until: blockedUntil, updated_at: new Date().toISOString() })
+      .update({ pin_failed_attempts: outcome.failedAttempts, pin_blocked_until: outcome.blockedUntil, updated_at: new Date().toISOString() })
       .eq("user_id", user.id)
       .select(PROFILE_COLUMNS)
       .single();
     if (data) setProfile(data as Profile);
-    if (blockedUntil) {
+    if (outcome.blocked) {
       setPinSheetOpen(false);
       setPinMode("locked");
     }
-    setPinError(error ? error.message : blockedUntil ? `ใส่ PIN ผิดครบ ${pinMaxAttempts} ครั้ง บล็อกการเข้าใช้งาน ${pinBlockMs / 3_600_000} ชั่วโมง` : `PIN ไม่ถูกต้อง เหลือ ${pinMaxAttempts - nextAttempts} ครั้ง`);
+    setPinError(error ? error.message : outcome.message);
     setBusy(false);
     return false;
   }

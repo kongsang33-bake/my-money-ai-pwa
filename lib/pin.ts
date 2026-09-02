@@ -2,6 +2,7 @@
 // layered on top of it. Both are client-side device gates, not
 // server-verified remote authentication -- see verifyFaceId's note below.
 import { WEBAUTHN_TIMEOUT_MS } from "./constants.ts";
+import { clampInteger } from "./format.ts";
 import type { Profile } from "./types.ts";
 import type { User } from "@supabase/supabase-js";
 
@@ -50,6 +51,52 @@ export function createPinSalt() {
 export function pinBlocked(profile: Profile | null) {
   const blockedAt = profile?.pin_blocked_until ? new Date(profile.pin_blocked_until).getTime() : 0;
   return blockedAt > Date.now();
+}
+
+export type PinAttemptOutcome = {
+  /** What pin_failed_attempts should become. */
+  failedAttempts: number;
+  /** ISO timestamp the block lifts, or null if this attempt did not block. */
+  blockedUntil: string | null;
+  /** Whether this attempt used up the last try. */
+  blocked: boolean;
+  /** What to show the user. */
+  message: string;
+};
+
+/**
+ * The lockout policy: given the profile as the server currently has it, what a
+ * failed PIN entry should leave behind.
+ *
+ * Pulled out of verifyPin because it is the part with actual rules in it --
+ * counting, clamping, deciding when to block, and telling the user how many
+ * tries are left -- while everything around it in app/page.tsx is a Supabase
+ * update and some setState. An off-by-one here either locks someone out of
+ * their own money a try early or hands an attacker an extra guess, and until
+ * now nothing checked either direction.
+ *
+ * `now` is a parameter so a test does not have to race the clock.
+ */
+export function recordFailedPinAttempt(profile: Profile | null, now = Date.now()): PinAttemptOutcome {
+  // Sanitise the stored value BEFORE adding to it, not after. Clamping the sum
+  // means a stored -10 comes out as 0 -- the floor -- so the failure is not
+  // counted at all and the attacker gets a free guess for every unit the value
+  // is negative. Clamping first turns any nonsense into 0 and this failure
+  // into 1. clampInteger's fallback covers null, undefined and NaN the same
+  // way; a stored value already past the cap stays at the cap.
+  const stored = clampInteger(profile?.pin_failed_attempts, 0, pinMaxAttempts, 0);
+  const failedAttempts = Math.min(pinMaxAttempts, stored + 1);
+  const blocked = failedAttempts >= pinMaxAttempts;
+  const blockHours = pinBlockMs / 3_600_000;
+
+  return {
+    failedAttempts,
+    blocked,
+    blockedUntil: blocked ? new Date(now + pinBlockMs).toISOString() : null,
+    message: blocked
+      ? `ใส่ PIN ผิดครบ ${pinMaxAttempts} ครั้ง บล็อกการเข้าใช้งาน ${blockHours} ชั่วโมง`
+      : `PIN ไม่ถูกต้อง เหลือ ${pinMaxAttempts - failedAttempts} ครั้ง`,
+  };
 }
 
 /**

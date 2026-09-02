@@ -13,12 +13,16 @@ import type { Profile } from "./types.ts";
 
 const {
   base64ToBytes, base64UrlToBytes, bytesToBase64, createPinSalt, hashPin,
-  isSixDigitPin, pinBlocked, pinHashIterations, pinLength, pinMaxAttempts,
-  timingSafeEqual,
+  isSixDigitPin, pinBlockMs, pinBlocked, pinHashIterations, pinLength, pinMaxAttempts,
+  recordFailedPinAttempt, timingSafeEqual,
 } = await import("./pin.ts");
 
 function profileWithBlock(pin_blocked_until: string | null): Profile {
   return { pin_blocked_until } as unknown as Profile;
+}
+
+function profileWithAttempts(pin_failed_attempts: unknown): Profile {
+  return { pin_failed_attempts } as unknown as Profile;
 }
 
 describe("isSixDigitPin", () => {
@@ -202,5 +206,89 @@ describe("pinBlocked", () => {
 
   it("agrees with pinMaxAttempts being a real limit", () => {
     assert.ok(pinMaxAttempts > 0 && pinMaxAttempts <= 10);
+  });
+});
+
+describe("recordFailedPinAttempt", () => {
+  const now = Date.parse("2026-09-02T10:00:00.000Z");
+
+  it("counts the first failure as one", () => {
+    const outcome = recordFailedPinAttempt(profileWithAttempts(0), now);
+    assert.equal(outcome.failedAttempts, 1);
+    assert.equal(outcome.blocked, false);
+    assert.equal(outcome.blockedUntil, null);
+  });
+
+  it("counts up from whatever the server already had", () => {
+    assert.equal(recordFailedPinAttempt(profileWithAttempts(2), now).failedAttempts, 3);
+  });
+
+  it("blocks exactly on the last allowed try, not one early and not one late", () => {
+    // The off-by-one that matters in both directions: blocking at
+    // pinMaxAttempts - 1 costs an honest user a try they were promised, and
+    // blocking at pinMaxAttempts + 1 hands an attacker a free guess.
+    const beforeLast = recordFailedPinAttempt(profileWithAttempts(pinMaxAttempts - 2), now);
+    assert.equal(beforeLast.blocked, false, `attempt ${pinMaxAttempts - 1} should not block`);
+
+    const last = recordFailedPinAttempt(profileWithAttempts(pinMaxAttempts - 1), now);
+    assert.equal(last.failedAttempts, pinMaxAttempts);
+    assert.equal(last.blocked, true, `attempt ${pinMaxAttempts} should block`);
+  });
+
+  it("sets the block to expire exactly one block window from now", () => {
+    const outcome = recordFailedPinAttempt(profileWithAttempts(pinMaxAttempts - 1), now);
+    assert.equal(outcome.blockedUntil, new Date(now + pinBlockMs).toISOString());
+  });
+
+  it("counts a failure after the limit without extending past it", () => {
+    // A stored count already at the cap (a stale write, a second device) must
+    // still report blocked and must not let the number drift upward.
+    const outcome = recordFailedPinAttempt(profileWithAttempts(pinMaxAttempts + 5), now);
+    assert.equal(outcome.failedAttempts, pinMaxAttempts);
+    assert.equal(outcome.blocked, true);
+  });
+
+  it("treats a missing or corrupt count as the first failure", () => {
+    for (const stored of [null, undefined, NaN, "nonsense"]) {
+      const outcome = recordFailedPinAttempt(profileWithAttempts(stored), now);
+      assert.equal(outcome.failedAttempts, 1, `stored ${String(stored)} should count as the first failure`);
+      assert.equal(outcome.blocked, false);
+    }
+  });
+
+  it("treats a negative stored count as the first failure too", () => {
+    assert.equal(recordFailedPinAttempt(profileWithAttempts(-10), now).failedAttempts, 1);
+  });
+
+  it("handles no profile at all", () => {
+    const outcome = recordFailedPinAttempt(null, now);
+    assert.equal(outcome.failedAttempts, 1);
+    assert.equal(outcome.blocked, false);
+  });
+
+  it("tells the user how many tries are left, and never a negative number", () => {
+    for (let stored = 0; stored < pinMaxAttempts; stored += 1) {
+      const outcome = recordFailedPinAttempt(profileWithAttempts(stored), now);
+      const remaining = pinMaxAttempts - outcome.failedAttempts;
+      if (outcome.blocked) {
+        assert.ok(outcome.message.includes("บล็อก"), `attempt ${outcome.failedAttempts} should say it is blocked`);
+      } else {
+        assert.ok(remaining > 0, "an unblocked attempt must have tries left");
+        assert.ok(outcome.message.includes(String(remaining)), `expected "${outcome.message}" to name ${remaining} remaining`);
+      }
+    }
+  });
+
+  it("never says '0 tries left' instead of saying you are blocked", () => {
+    // The wording branches on `blocked`, so the two must agree. If they ever
+    // drift apart the user is told to try again with nothing left to try.
+    const outcome = recordFailedPinAttempt(profileWithAttempts(pinMaxAttempts - 1), now);
+    assert.ok(!outcome.message.includes("เหลือ 0"), outcome.message);
+  });
+
+  it("does not mutate the profile it was given", () => {
+    const profile = profileWithAttempts(2);
+    recordFailedPinAttempt(profile, now);
+    assert.equal(profile.pin_failed_attempts, 2);
   });
 });
