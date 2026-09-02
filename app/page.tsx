@@ -987,7 +987,19 @@ export default function Home() {
       totalSpent: budgeted.reduce((sum, item) => sum + item.spent, 0),
     };
   }, [budgets, categorySummary]);
-  const aiFinanceContext = useMemo<AiFinanceContext>(() => ({
+  // Declared here rather than down with the other sheet-dismiss hooks because
+  // the aiFinanceContext memo below gates on its mounted flag.
+  const askAiDismiss = useDismiss(askAiOpen, () => setAskAiOpen(false));
+  const askAiMounted = askAiDismiss.mounted;
+
+  // Built only while the Ask-AI sheet is actually mounted. This allocates ~120
+  // objects out of the current cycle's entries plus several derived arrays,
+  // and exactly one consumer reads it -- a dynamically-imported sheet that is
+  // closed almost all of the time. Computing it eagerly meant every month
+  // change, every saved entry and every wallet edit paid to build a payload
+  // nobody was going to look at. The gate is the first dependency, so opening
+  // the sheet builds it once on the render that mounts it.
+  const aiFinanceContext = useMemo<AiFinanceContext | null>(() => (askAiMounted ? {
     periodLabel: reportLabel("month", selectedMonth, Number(selectedMonth.slice(0, 4)), monthStartDay),
     totals: {
       income: monthlyIncome,
@@ -1004,7 +1016,7 @@ export default function Home() {
     payableTotal,
     transactionCount: monthlyEntries.length,
     transactions: monthlyEntries.slice(0, 120).map(({ title, category, amount, transaction_type, wallet_impact, occurred_at }) => ({ title, category, amount, transaction_type, wallet_impact, occurred_at })),
-  }), [selectedMonth, monthStartDay, monthlyIncome, monthlyOutflow, monthlyBalance, mainWallet, walletBalanceTotal, netWorth, displayWallets, categorySummary, recurringExpenses, receivableTotal, payableTotal, monthlyEntries]);
+  } : null), [askAiMounted, selectedMonth, monthStartDay, monthlyIncome, monthlyOutflow, monthlyBalance, mainWallet, walletBalanceTotal, netWorth, displayWallets, categorySummary, recurringExpenses, receivableTotal, payableTotal, monthlyEntries]);
 
   const openAddTab = useCallback((mode: "ai" | "manual" = "ai", shortcut?: QuickShortcut) => {
     setError("");
@@ -2312,7 +2324,6 @@ export default function Home() {
   const budgetSheetDismiss = useDismiss(budgetSheetOpen, () => setBudgetSheetOpen(false));
   const goalSheetDismiss = useDismiss(goalSheetOpen, () => setGoalSheetOpen(false));
   const reportSheetDismiss = useDismiss(reportSheetOpen, () => setReportSheetOpen(false));
-  const askAiDismiss = useDismiss(askAiOpen, () => setAskAiOpen(false));
   const recapDismiss = useDismiss(recapOpen, () => setRecapOpen(false));
   const pinSheetDismiss = useDismiss(pinSheetOpen, () => { setPinSheetOpen(false); setPinError(""); });
   const logoutDismiss = useDismiss<[boolean]>(logoutOpen, (confirmed) => { setLogoutOpen(false); if (confirmed) void supabase?.auth.signOut(); });
@@ -2793,7 +2804,7 @@ export default function Home() {
             closing={reportSheetDismiss.closing}
           />
         )}
-        {askAiDismiss.mounted && user && (
+        {askAiMounted && user && aiFinanceContext && (
           <AskFinanceSheet context={aiFinanceContext} userId={user.id} aiContext={profile?.ai_context ?? ""} onClose={askAiDismiss.requestClose} closing={askAiDismiss.closing} />
         )}
         {recapDismiss.mounted && (
