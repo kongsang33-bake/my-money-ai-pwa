@@ -1,17 +1,155 @@
 "use client";
 
 import { memo, useMemo, useState } from "react";
-import { ArrowDown, ArrowLeftRight, ChevronDown, X } from "lucide-react";
+import { ArrowDown, ArrowLeftRight, ChevronDown, Lightbulb, X } from "lucide-react";
 import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
+import { compressSlipImage } from "@/lib/image";
 import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
 import { todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
 import { defaultWalletId, entryDisplayImpact, normalizeEntry, unnamedDebtor } from "@/lib/money";
 import { DEBT_TYPES, TYPES_USER_OWES, transactionKind, transactionTypeLabels, type TransactionType } from "@/lib/taxonomy";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
-import type { Debtor, DebtorKind, Draft, EmptyAction, Entry, Wallet } from "@/lib/types";
-import type { QuickShortcut } from "@/lib/insights";
+import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
 import { CategoryIcon, CategoryPicker } from "@/components/shared";
 import { AmountInput, EmptyNote, SheetFrame, StateCard } from "@/components/primitives";
+
+// The whole "let AI write it for me" half of the Add tab: the example chips,
+// the date picker, the textarea, slip attachments and the analyse button.
+//
+// It owns `text` and `slipImages` itself, and that ownership is the entire
+// point of the component existing. Both used to be useState in app/page.tsx's
+// root component, which meant every keystroke in this textarea re-rendered
+// the whole Add tab -- the draft review list, the impact summary, the chips,
+// all of it -- to update one <textarea value>. The composed text only leaves
+// here when the user actually presses analyse, so typing now re-renders this
+// subtree and nothing else.
+//
+// The corollary: the parent cannot clear this by setting a prop. It clears it
+// by bumping `resetKey`, which remounts the component (see the call site in
+// app/page.tsx after a successful save, and clearPrivateState on logout).
+export function AiComposer({
+  suggestions,
+  entryDate,
+  maxDate,
+  onChangeEntryDate,
+  maxSlipImages,
+  busy,
+  disabled,
+  error,
+  elapsedLabel,
+  onAnalyze,
+  onAddShortcut,
+  onError,
+  onAttached,
+}: {
+  suggestions: AiSuggestion[];
+  entryDate: string;
+  maxDate: string;
+  onChangeEntryDate: (value: string) => void;
+  maxSlipImages: number;
+  busy: boolean;
+  disabled: boolean;
+  error: string;
+  elapsedLabel: React.ReactNode;
+  onAnalyze: (text: string, images: SlipImage[]) => void;
+  onAddShortcut: (shortcut: QuickShortcut) => void;
+  onError: (message: string) => void;
+  onAttached: (count: number) => void;
+}) {
+  const [text, setText] = useState("");
+  const [slipImages, setSlipImages] = useState<SlipImage[]>([]);
+
+  const applySuggestion = (suggestion: AiSuggestion) => {
+    if (suggestion.shortcut) {
+      onAddShortcut(suggestion.shortcut);
+      return;
+    }
+    setText((current) => (current.trim() ? `${current.trim()}\n${suggestion.text}` : suggestion.text));
+  };
+
+  const addSlipFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    onError("");
+
+    const nextFiles = [...files].slice(0, maxSlipImages - slipImages.length);
+    if (nextFiles.some((file) => !file.type.startsWith("image/"))) {
+      onError("รองรับเฉพาะไฟล์รูปภาพเท่านั้น");
+      return;
+    }
+
+    try {
+      const images = await Promise.all(nextFiles.map(compressSlipImage));
+      setSlipImages((current) => [...current, ...images].slice(0, maxSlipImages));
+      onAttached(images.length);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "แนบรูปไม่สำเร็จ");
+    }
+  };
+
+  return (
+    <>
+      <label className="entry-date-picker compact">
+        <span>บันทึกของวันที่</span>
+        <input type="date" value={entryDate} max={maxDate} onChange={(event) => onChangeEntryDate(event.target.value)} />
+      </label>
+
+      <div className="ai-suggestions">
+        <span>แตะตัวอย่างเพื่อเริ่มเร็ว</span>
+        <div className="quick-shortcuts">
+          {suggestions.map((suggestion) => (
+            <button
+              key={`${suggestion.label}|${suggestion.detail}`}
+              className="quick-chip"
+              onClick={() => applySuggestion(suggestion)}
+            >
+              <i className="card-accent" style={{ background: suggestion.shortcut ? categoryColor(suggestion.shortcut.category) : undefined }} />
+              <span className="cat-dot" style={{ background: suggestion.shortcut ? categoryTint(suggestion.shortcut.category, CATEGORY_DOT_TINT_ALPHA) : undefined, color: suggestion.shortcut ? categoryColor(suggestion.shortcut.category) : undefined }}>
+                {suggestion.shortcut ? <CategoryIcon category={suggestion.shortcut.category} /> : <Lightbulb size={14} strokeWidth={2.25} aria-hidden="true" />}
+              </span>
+              <span>
+                <b>{suggestion.label}</b>
+                <small>{suggestion.detail}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="ai-input-wrap">
+        <div className="assistant-rail" aria-hidden="true">
+          <span>AI</span>
+          <i />
+        </div>
+        <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="เช่น กินข้าว 120 บาท, ออกให้เพื่อนเอก่อน 500, เพื่อนเอโอนคืน 200" />
+
+        {!!slipImages.length && (
+          <div className="slip-preview-list">
+            {slipImages.map((image) => (
+              <div className="slip-preview" key={image.id}>
+                <span className="slip-thumb" style={{ backgroundImage: `url(${image.preview})` }} aria-label={image.name} />
+                <span>{image.name}</span>
+                <button onClick={() => setSlipImages((items) => items.filter((item) => item.id !== image.id))}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="input-tools">
+          <label className="attach-button">
+            แนบสลิป
+            <input type="file" accept="image/*" multiple onChange={(event) => { void addSlipFiles(event.target.files); event.currentTarget.value = ""; }} />
+          </label>
+          <span>{slipImages.length ? `${slipImages.length}/${maxSlipImages} รูป` : "Gemini ช่วยอ่านรูปและข้อความ"}</span>
+        </div>
+      </div>
+
+      <button className="primary" onClick={() => onAnalyze(text, slipImages)} disabled={busy || disabled || (!text.trim() && !slipImages.length)}>
+        {busy ? <span className="button-loading-row"><span className="loading-spinner mini on-ink" />{elapsedLabel}</span> : "ให้ AI แยกรายการ"}
+      </button>
+      {error && <StateCard tone="error" title="AI ยังทำรายการนี้ไม่ได้" detail={error} />}
+    </>
+  );
+}
 
 export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: { draft: Draft; knownDebtors: Debtor[]; wallets: Wallet[]; onChange: (draft: Draft) => void; onRemove: () => void }) {
   const update = (patch: Partial<Draft>) => onChange(normalizeEntry({ ...draft, ...patch }, false));

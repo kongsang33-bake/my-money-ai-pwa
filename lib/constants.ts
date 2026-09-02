@@ -122,6 +122,27 @@ export const RESTORE_ID_BATCH_SIZE = 200;
 // broad query from dumping years of history into the DOM at once.
 export const SEARCH_RESULT_LIMIT = 200;
 
+// How many transaction rows loadEntries asks for per request.
+//
+// This exists because PostgREST caps every response at the project's
+// `db-max-rows` (1,000 by default on hosted Supabase) and truncates
+// SILENTLY -- no error, just fewer rows than the table holds. That is a
+// correctness problem here, not a performance one: buildWalletLedger and
+// buildDebtSummary fold *every* transaction ever recorded to derive wallet
+// balances and debtor outstandings, so a read that quietly stops at the cap
+// doesn't show a broken screen, it shows wrong money.
+//
+// This is only a request size, never an assumption: loadEntries pages until
+// it has as many rows as the server's own exact count says exist, advancing
+// by however many rows actually came back. A server cap lower than this
+// changes the number of round-trips and nothing else.
+export const ENTRY_PAGE_SIZE = 1000;
+
+// Hard stop for that loop so a server that keeps handing back rows can never
+// spin forever. At ENTRY_PAGE_SIZE per request this allows 200k transactions,
+// far past any real personal-finance history.
+export const ENTRY_PAGE_MAX_REQUESTS = 200;
+
 // How long the boot splash (app/layout.tsx + the #app-splash keyframes in
 // app/globals.css) stays up at minimum, measured from window.__splashStartedAt
 // rather than from React mounting so a fast load doesn't cut the animation

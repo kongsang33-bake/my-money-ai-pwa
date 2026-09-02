@@ -4,10 +4,7 @@
 import { MS_PER_DAY } from "./constants.ts";
 import { formatMoney, moneySign } from "./format.ts";
 import { daysRemainingInCycle, entriesInRange, startOfDay } from "./cycle.ts";
-import type { Entry, RecurringExpense } from "./types.ts";
-import type { TransactionType } from "./taxonomy.ts";
-
-export type QuickShortcut = { title: string; category: string; transaction_type: TransactionType; amount: number; count: number };
+import type { Entry, QuickShortcut, RecurringExpense } from "./types.ts";
 
 export function deriveQuickShortcuts(entries: Entry[]): QuickShortcut[] {
   const cutoff = Date.now() - 90 * MS_PER_DAY;

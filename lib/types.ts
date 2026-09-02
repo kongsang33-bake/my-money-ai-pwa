@@ -222,4 +222,27 @@ export type SlipImage = {
 
 // "target"/"saved" are plain baht amounts the user types in -- no cents
 // tracking, no currency conversion, this is a simple visual progress goal.
+// One entry the user logs often enough that the app offers it as a one-tap
+// shortcut. Derived by deriveQuickShortcuts (lib/insights.ts); `count` is how
+// many times it was seen, which is what ranks the shortcuts against each
+// other.
+export type QuickShortcut = {
+  title: string;
+  category: string;
+  transaction_type: TransactionType;
+  amount: number;
+  count: number;
+};
+
+// One chip in the AI composer's "tap an example to start fast" row. Some
+// chips are generic starters that just seed the textarea; the ones derived
+// from the user's own history carry the shortcut they came from, so tapping
+// them adds the entry outright instead of typing it out for the model.
+export type AiSuggestion = {
+  label: string;
+  detail: string;
+  text: string;
+  shortcut?: QuickShortcut;
+};
+
 export type MoneyGoal = { id: string; name: string; target: number; saved: number; deadline: string };

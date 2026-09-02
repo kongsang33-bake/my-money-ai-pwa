@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { DEBT_TYPES, TYPES_OWED_TO_USER, TYPES_USER_OWES, walletTagLabels, type TransactionType, type WalletTag } from "@/lib/taxonomy";
 import type {
   AiFinanceContext,
+  AiSuggestion,
   ConfirmDialogState,
   Debtor,
   DebtorKind,
@@ -20,6 +21,7 @@ import type {
   NetWorthDisplaySettings,
   PinMode,
   Profile,
+  QuickShortcut,
   RecurringExpense,
   SlipImage,
   Theme,
@@ -47,17 +49,17 @@ import {
   unnamedDebtor,
   walletDeletionMove,
 } from "@/lib/money";
-import { buildWalletInsight, computeStreak, deriveQuickShortcuts, isRecurringLogged, lastSevenDayCashFlow, type QuickShortcut } from "@/lib/insights";
+import { buildWalletInsight, computeStreak, deriveQuickShortcuts, isRecurringLogged, lastSevenDayCashFlow } from "@/lib/insights";
 import { buildAiExamples, buildCategoryMemory } from "@/lib/ai-memory";
-import { categoryColor, categoryTint, nameColor } from "@/lib/category";
+import { nameColor } from "@/lib/category";
 import { createPinSalt, hashPin, isSixDigitPin, pinBackgroundLockMs, pinBlockMs, pinBlocked, pinMaxAttempts, registerFaceId, timingSafeEqual, verifyFaceId } from "@/lib/pin";
-import { compressSlipImage } from "@/lib/image";
 import { authHeaders } from "@/lib/api";
 import {
   AI_CONTEXT_MAX_LENGTH,
+  ENTRY_PAGE_MAX_REQUESTS,
+  ENTRY_PAGE_SIZE,
   RESTORE_ID_BATCH_SIZE,
   BUDGET_COLUMNS,
-  CATEGORY_DOT_TINT_ALPHA,
   DEBTOR_COLUMNS,
   INVESTMENT_COLUMNS,
   INVESTMENT_PRICE_COLUMNS,
@@ -75,11 +77,11 @@ import {
   TRANSACTION_COLUMNS,
   WALLET_COLUMNS,
 } from "@/lib/constants";
-import { ChevronLeft, Lightbulb, Menu, MoreHorizontal, Wallet as WalletIcon, X } from "lucide-react";
-import { CategoryIcon, WalletAvatarGlyph } from "@/components/shared";
+import { ChevronLeft, Menu, MoreHorizontal, Wallet as WalletIcon, X } from "lucide-react";
+import { WalletAvatarGlyph } from "@/components/shared";
 import { captureSheetOrigin, ConfirmDialog, CountUpMoney, ElapsedSeconds, ErrorActions, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss } from "@/components/primitives";
 import type { SheetOrigin } from "@/components/primitives";
-import { DraftImpact, DraftRow, EditSheet, EntryList, ManualEntryForm, QuickAddStrip, RecentActivityTimeline } from "@/components/add";
+import { AiComposer, DraftImpact, DraftRow, EditSheet, EntryList, ManualEntryForm, QuickAddStrip, RecentActivityTimeline } from "@/components/add";
 import {
   BudgetGlanceCard,
   CalendarHeatmap,
@@ -201,7 +203,6 @@ function loadLocalNetWorthDisplaySettings(userId: string): NetWorthDisplaySettin
   }
 }
 
-type AiSuggestion = { label: string; detail: string; text: string; shortcut?: QuickShortcut };
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -214,9 +215,12 @@ export default function Home() {
   const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
-  const [text, setText] = useState("");
-  const [slipImages, setSlipImages] = useState<SlipImage[]>([]);
   const [entryDate, setEntryDate] = useState(todayDateInput);
+  // AiComposer owns the text and the attached slips (see its comment in
+  // components/add.tsx for why). Bumping this remounts it, which is how a
+  // successful save -- or a logout -- clears what the user typed; there is no
+  // prop to set it back to "".
+  const [composerResetKey, setComposerResetKey] = useState(0);
   const [addMode, setAddMode] = useState<"ai" | "manual">("ai");
   const [quickAddPreset, setQuickAddPreset] = useState<QuickShortcut | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -385,20 +389,48 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [pinMode]);
 
+  // Reads the whole transaction history, in pages. The single unpaged select
+  // this replaces looked fine and was quietly unsafe: PostgREST truncates
+  // any response longer than the project's `db-max-rows` (1,000 by default)
+  // without raising an error, and wallet balances and debtor outstandings
+  // are folded from every transaction ever recorded -- so past that cap the
+  // app would not have looked broken, it would have shown wrong money.
+  //
+  // The loop trusts the server's own exact count rather than inferring
+  // "that's all of them" from a short page, so it stays correct whatever the
+  // cap is set to; in the common case (a history under one page) it is still
+  // exactly one request. The id tiebreaker matters: occurred_at alone is not
+  // a total order, and same-timestamp rows sorting differently between two
+  // requests would let a page boundary skip or double-count a row.
   const loadEntries = useCallback(async () => {
     if (!supabase) return;
 
-    const { data, error } = await supabase
-      .from(TABLES.transactions)
-      .select(TRANSACTION_COLUMNS)
-      .order("occurred_at", { ascending: false });
+    const rows: Parameters<typeof mapTransactionRow>[0][] = [];
+    let total: number | null = null;
 
-    if (error) {
-      setError(error.message);
-      return;
+    for (let request = 0; request < ENTRY_PAGE_MAX_REQUESTS; request += 1) {
+      const { data, error, count } = await supabase
+        .from(TABLES.transactions)
+        .select(TRANSACTION_COLUMNS, { count: "exact" })
+        .order("occurred_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(rows.length, rows.length + ENTRY_PAGE_SIZE - 1);
+
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      if (count != null) total = count;
+      const page = data ?? [];
+      rows.push(...page);
+      // An empty page also breaks the loop: without it, a server that keeps
+      // answering a past-the-end range with zero rows would spin until the
+      // request cap.
+      if (!page.length || total == null || rows.length >= total) break;
     }
 
-    setEntries((data ?? []).map(mapTransactionRow));
+    setEntries(rows.map(mapTransactionRow));
   }, []);
 
   const loadProfile = useCallback(async () => {
@@ -600,8 +632,7 @@ export default function Home() {
     setGoals([]);
     setDrafts([]);
     setReceiptTotal(0);
-    setText("");
-    setSlipImages([]);
+    setComposerResetKey((key) => key + 1);
     setEditing(null);
     setDataLoading(false);
   }, []);
@@ -975,26 +1006,6 @@ export default function Home() {
     transactions: monthlyEntries.slice(0, 120).map(({ title, category, amount, transaction_type, wallet_impact, occurred_at }) => ({ title, category, amount, transaction_type, wallet_impact, occurred_at })),
   }), [selectedMonth, monthStartDay, monthlyIncome, monthlyOutflow, monthlyBalance, mainWallet, walletBalanceTotal, netWorth, displayWallets, categorySummary, recurringExpenses, receivableTotal, payableTotal, monthlyEntries]);
 
-  async function addSlipFiles(files: FileList | null) {
-    if (!files?.length) return;
-    setError("");
-
-    const nextFiles = [...files].slice(0, MAX_SLIP_IMAGES - slipImages.length);
-    if (nextFiles.some((file) => !file.type.startsWith("image/"))) {
-      setError("รองรับเฉพาะไฟล์รูปภาพเท่านั้น");
-      return;
-    }
-
-    try {
-      const images = await Promise.all(nextFiles.map(compressSlipImage));
-      setSlipImages((current) => [...current, ...images].slice(0, MAX_SLIP_IMAGES));
-      notify({ tone: "success", title: "แนบสลิปแล้ว", detail: `${images.length} รูปพร้อมให้ AI อ่าน` });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "แนบรูปไม่สำเร็จ");
-      notify({ tone: "error", title: "แนบรูปไม่สำเร็จ", detail: e instanceof Error ? e.message : undefined });
-    }
-  }
-
   const openAddTab = useCallback((mode: "ai" | "manual" = "ai", shortcut?: QuickShortcut) => {
     setError("");
     setEntryDate(todayDateInput());
@@ -1053,15 +1064,9 @@ export default function Home() {
     notify({ tone: "info", title: "เพิ่มรายการลัดแล้ว", detail: shortcut.title });
   }
 
-  function applySuggestion(textValue: string, shortcut?: { title: string; category: string; transaction_type: TransactionType; amount: number }) {
-    if (shortcut) {
-      addQuickShortcut(shortcut);
-      return;
-    }
-    setText((current) => (current.trim() ? `${current.trim()}\n${textValue}` : textValue));
-  }
-
-  async function analyze() {
+  // text/slipImages arrive as arguments rather than being read off root state:
+  // they live in AiComposer now, and are handed over only on the analyse tap.
+  async function analyze(text: string, slipImages: SlipImage[]) {
     if (!text.trim() && !slipImages.length) {
       setError("กรุณาพิมพ์ข้อความหรือแนบรูปสลิปก่อน");
       return;
@@ -1236,8 +1241,7 @@ export default function Home() {
       setEntries((current) => [...inserted, ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
       setDrafts([]);
       setReceiptTotal(0);
-      setText("");
-      setSlipImages([]);
+      setComposerResetKey((key) => key + 1);
       setTab("home");
       setSavePulse(normalizedItems.length);
       notify({ tone: "success", title: "บันทึกรายการแล้ว", detail: `${normalizedItems.length} รายการถูกซิงค์เรียบร้อย` });
@@ -2443,71 +2447,23 @@ export default function Home() {
 
             {addMode === "ai" && (
               <>
-                <label className="entry-date-picker compact">
-                  <span>บันทึกของวันที่</span>
-                  <input type="date" value={entryDate} max={todayDateInput()} onChange={(event) => setEntryDate(event.target.value)} />
-                </label>
-
-                <div className="ai-suggestions">
-                  <span>แตะตัวอย่างเพื่อเริ่มเร็ว</span>
-                  <div className="quick-shortcuts">
-                    {aiSuggestions.map((suggestion) => (
-                      <button
-                        key={`${suggestion.label}|${suggestion.detail}`}
-                        className="quick-chip"
-                        onClick={() => applySuggestion(suggestion.text, suggestion.shortcut)}
-                      >
-                        <i className="card-accent" style={{ background: suggestion.shortcut ? categoryColor(suggestion.shortcut.category) : undefined }} />
-                        <span className="cat-dot" style={{ background: suggestion.shortcut ? categoryTint(suggestion.shortcut.category, CATEGORY_DOT_TINT_ALPHA) : undefined, color: suggestion.shortcut ? categoryColor(suggestion.shortcut.category) : undefined }}>
-                          {suggestion.shortcut ? <CategoryIcon category={suggestion.shortcut.category} /> : <Lightbulb size={14} strokeWidth={2.25} aria-hidden="true" />}
-                        </span>
-                        <span>
-                          <b>{suggestion.label}</b>
-                          <small>{suggestion.detail}</small>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="ai-input-wrap">
-                  <div className="assistant-rail" aria-hidden="true">
-                    <span>AI</span>
-                    <i />
-                  </div>
-                  <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="เช่น กินข้าว 120 บาท, ออกให้เพื่อนเอก่อน 500, เพื่อนเอโอนคืน 200" />
-
-                  {!!slipImages.length && (
-                    <div className="slip-preview-list">
-                      {slipImages.map((image) => (
-                        <div className="slip-preview" key={image.id}>
-                          <span className="slip-thumb" style={{ backgroundImage: `url(${image.preview})` }} aria-label={image.name} />
-                          <span>{image.name}</span>
-                          <button onClick={() => setSlipImages((items) => items.filter((item) => item.id !== image.id))}>×</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="input-tools">
-                    <label className="attach-button">
-                      แนบสลิป
-                      <input type="file" accept="image/*" multiple onChange={(event) => { void addSlipFiles(event.target.files); event.currentTarget.value = ""; }} />
-                    </label>
-                    <span>{slipImages.length ? `${slipImages.length}/${MAX_SLIP_IMAGES} รูป` : "Gemini ช่วยอ่านรูปและข้อความ"}</span>
-                  </div>
-                </div>
-
-                <button className="primary" onClick={analyze} disabled={busy || !isOnline || (!text.trim() && !slipImages.length)}>
-                  {busy ? (
-                    <span className="button-loading-row">
-                      <span className="loading-spinner mini on-ink" />
-                      กำลังวิเคราะห์... (<ElapsedSeconds /> วิ)
-                    </span>
-                  ) : "ให้ AI แยกรายการ"}
-                </button>
+                <AiComposer
+                  key={composerResetKey}
+                  suggestions={aiSuggestions}
+                  entryDate={entryDate}
+                  maxDate={todayDateInput()}
+                  onChangeEntryDate={setEntryDate}
+                  maxSlipImages={MAX_SLIP_IMAGES}
+                  busy={busy}
+                  disabled={!isOnline}
+                  error={error}
+                  elapsedLabel={<>กำลังวิเคราะห์... (<ElapsedSeconds /> วิ)</>}
+                  onAnalyze={analyze}
+                  onAddShortcut={addQuickShortcut}
+                  onError={setError}
+                  onAttached={(count) => notify({ tone: "success", title: "แนบสลิปแล้ว", detail: `${count} รูปพร้อมให้ AI อ่าน` })}
+                />
                 {busy && <SkeletonList rows={2} />}
-                {error && <StateCard tone="error" title="AI ยังทำรายการนี้ไม่ได้" detail={error} />}
 
                 {!!drafts.length && (
                   <section className="review">
@@ -2531,7 +2487,7 @@ export default function Home() {
                         onRemove={() => setDrafts((items) => items.filter((_, i) => i !== index))}
                       />
                     ))}
-                    {!!slipImages.length && receiptTotal > 0 && Math.abs(drafts.reduce((sum, draft) => sum + draft.amount, 0) - receiptTotal) > 1 && (
+                    {receiptTotal > 0 && Math.abs(drafts.reduce((sum, draft) => sum + draft.amount, 0) - receiptTotal) > 1 && (
                       <StateCard
                         tone="error"
                         title="ยอดรวมไม่ตรงกับสลิป"
