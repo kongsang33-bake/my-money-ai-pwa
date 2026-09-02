@@ -13,6 +13,15 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    // Playwright's fixture callbacks take a parameter named `use`, which the
+    // react-hooks rule reads as React's `use` hook being called outside a
+    // component. Nothing in e2e/ is React, so the rules do not apply here.
+    files: ["e2e/**/*.ts", "playwright.config.ts"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

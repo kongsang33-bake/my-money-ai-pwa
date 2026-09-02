@@ -142,13 +142,31 @@ token value.
   `globals.css` even with the file watcher running. After any CSS change,
   do a full restart (kill the process, `rm -rf .next`, relaunch) before
   trusting a screenshot or visual check — don't rely on hot reload alone.
-- For verifying UI changes: seed mock state behind a temporary
-  `?preview=1`-gated `useEffect` (fake user/entries/wallets/debtors/
-  recurring expenses), screenshot with Playwright across both themes and
-  at least three widths (mobile ~390px, tablet ~700px, desktop ~1280px —
-  there is a real breakpoint at 600–899px, don't only check mobile and
-  desktop), then remove the temporary scaffolding before committing. Never
-  leave preview scaffolding in a committed change.
+- **The mock state for driving the app in a browser is committed now — do
+  not hand-roll it again.** `e2e/fixture.ts` builds a seeded account (~350
+  entries over eight months, three wallets, two debtors, budgets and a
+  goal, matching the real account's shape) and injects it as
+  `window.__MONII_PREVIEW__`. `app/page.tsx` reads that global in one
+  guarded effect. Both halves only exist when a build sets
+  `NEXT_PUBLIC_ENABLE_PREVIEW=1`; `next.config.ts` pins it to `"0"`
+  otherwise so the branch folds to dead code, and
+  `npm run verify:preview-stripped` greps the built bundle to prove it.
+  Never reach for that env var outside the test suite, and never import
+  `e2e/` from application code — a static import defeats the whole
+  arrangement (it did, the first time; that is why the verify script
+  exists).
+- `npm run test:e2e` runs the Playwright suite against a **production**
+  build across three viewports (mobile / 700px / desktop — the 600–899px
+  breakpoint is a real layout, don't only check mobile and desktop). It
+  covers boot, theme switching and persistence, tab navigation and scroll
+  behaviour, sheet scroll-lock, the AI composer, and the error boundary.
+  Every spec fails on an uncaught page error, so a crash cannot pass
+  silently now that the error boundary keeps the app on its feet. If
+  Playwright cannot download its own browser, point `E2E_CHROMIUM_PATH` at
+  an existing Chromium binary.
+- For a *visual* check, screenshot through the same fixture in both themes
+  and at all three widths. Judge a design change on the screenshots, not on
+  the diff.
 - When a `<span>`/`<b>`/`<strong>` pair is meant to stack as a label above
   a value (most "total" cards and stat tiles follow this pattern), give the
   label element `display: block` explicitly, or make the parent

@@ -20,6 +20,7 @@ import type {
   MoneyGoal,
   NetWorthDisplaySettings,
   PinMode,
+  PreviewSeed,
   Profile,
   QuickShortcut,
   RecurringExpense,
@@ -294,6 +295,44 @@ export default function Home() {
     setSelectedMonth(currentCycleMonthKey(monthStartDay));
     setSelectedDay(new Date().toDateString());
   }, [profile, monthStartDay]);
+
+  // Accepts a pre-seeded state from the end-to-end suite, which injects it as
+  // window.__MONII_PREVIEW__ before the page scripts run (see e2e/fixture.ts).
+  //
+  // The fixture is never imported by application code -- it is built inside
+  // the test and handed over as plain data -- so there is no module for a
+  // bundler to accidentally keep. What ships is this block, and the env read
+  // below is written inline rather than pulled from lib/constants.ts on
+  // purpose: Next replaces process.env.NEXT_PUBLIC_* with a literal where it
+  // is written, and the minifier only folds the branch away when the literal
+  // sits in the branch. Exported through a module boundary it stays a live
+  // reference and all of this ships. `npm run verify:preview-stripped` greps
+  // the built bundle to confirm it did fold, because a hook that signs you in
+  // as an arbitrary user with an arbitrary balance is not something to leave
+  // to a minifier's good intentions.
+  //
+  // Seeding after mount rather than in the useState initializers is
+  // deliberate, and is why the lint rule is silenced rather than obeyed here:
+  // the server pass cannot see the injected global, so initializing from it
+  // would render a different tree on the server than on the client and trip
+  // hydration.
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_ENABLE_PREVIEW !== "1" || typeof window === "undefined") return;
+    const seed = (window as unknown as { __MONII_PREVIEW__?: PreviewSeed }).__MONII_PREVIEW__;
+    if (!seed) return;
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setUser(seed.user as unknown as User);
+    setProfile(seed.profile as unknown as Profile);
+    setPinMode("unlocked");
+    setReady(true);
+    setEntries(seed.entries);
+    setWallets(seed.wallets);
+    setDebtors(seed.debtors);
+    setRecurringExpenses(seed.recurringExpenses);
+    setGoals(seed.goals);
+    setBudgets(seed.budgets);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
 
   const notify = useCallback((toast: Omit<Toast, "id">) => {
     const id = Date.now() + Math.random();

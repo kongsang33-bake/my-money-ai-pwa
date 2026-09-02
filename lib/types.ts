@@ -245,4 +245,21 @@ export type AiSuggestion = {
   shortcut?: QuickShortcut;
 };
 
+// The shape app/page.tsx will accept as a pre-seeded state, used only by the
+// end-to-end suite (see e2e/fixture.ts). It lives here rather than in the test
+// folder because app/page.tsx needs the type too, and a type-only import
+// leaves nothing behind in the bundle -- which is the whole point: the fixture
+// itself is injected by the browser at test time and is never imported by
+// application code, so it cannot ride along into a production build.
+export type PreviewSeed = {
+  entries: Entry[];
+  wallets: Wallet[];
+  debtors: Debtor[];
+  recurringExpenses: RecurringExpense[];
+  goals: MoneyGoal[];
+  budgets: Record<string, number>;
+  user: { id: string; email: string; user_metadata: { full_name: string } };
+  profile: Record<string, unknown>;
+};
+
 export type MoneyGoal = { id: string; name: string; target: number; saved: number; deadline: string };

@@ -152,3 +152,13 @@ export const ENTRY_PAGE_MAX_REQUESTS = 200;
 // pause, since every millisecond past the animation is dead time in front of
 // an app that is already rendered and waiting behind it.
 export const SPLASH_MIN_VISIBLE_MS = 1300;
+
+// NOTE: there is deliberately no PREVIEW_ENABLED constant here, even though
+// this file is where cross-cutting config belongs. Next inlines
+// process.env.NEXT_PUBLIC_* as a literal at the point it is written, and the
+// minifier will only fold a branch to dead code when the literal is in the
+// branch itself -- exported through a module boundary it stays a live
+// reference and the guarded code ships. app/page.tsx therefore reads
+// process.env.NEXT_PUBLIC_ENABLE_PREVIEW inline, and
+// `npm run verify:preview-stripped` fails the build if that ever stops
+// working.
