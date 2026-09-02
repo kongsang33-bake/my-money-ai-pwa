@@ -4297,6 +4297,15 @@ button.entry-main {
   margin-bottom: var(--s-4);
 }
 
+/* Next's digest for a crashed render (app/error.tsx). Deliberately the
+   quietest thing on that screen: it is there so a user can quote it when
+   something goes wrong, not for them to read. */
+.error-digest {
+  font-size: var(--fs-caption);
+  color: var(--ink-4);
+  margin-top: var(--s-2);
+}
+
 .success-pulse {
   display: flex;
   align-items: center;

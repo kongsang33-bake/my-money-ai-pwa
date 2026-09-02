@@ -265,7 +265,13 @@ export default function Home() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [closingToastIds, setClosingToastIds] = useState<number[]>([]);
   const [savePulse, setSavePulse] = useState(0);
-  const [theme, setTheme] = useState<Theme>("light");
+  // Seeded from the attribute app/layout.tsx's pre-paint script already set
+  // from localStorage, so React's state agrees with what is on screen from
+  // the very first render instead of racing it. Guarded for the server pass,
+  // where there is no document (and where this component renders nothing
+  // anyway, since `ready` is false until the auth check resolves).
+  const [theme, setTheme] = useState<Theme>(() =>
+    (typeof document !== "undefined" && document.documentElement.dataset.theme === "dark" ? "dark" : "light"));
   const [pinMode, setPinMode] = useState<PinMode>("checking");
   const [pinError, setPinError] = useState("");
   const [pinSheetOpen, setPinSheetOpen] = useState(false);
@@ -351,21 +357,34 @@ export default function Home() {
     };
   }, []);
 
-  const themeLoadedRef = useRef(false);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
-      if (saved === "light" || saved === "dark") setTheme(saved);
-      themeLoadedRef.current = true;
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, []);
-
+  // Mirrors <html data-theme> onto the DOM whenever the user switches themes.
+  // It does NOT need to restore the stored theme on mount: the inline script
+  // in app/layout.tsx has already read localStorage and stamped the attribute
+  // before first paint, and the useState initializer above reads that same
+  // attribute back -- so this effect's first write is always the value that
+  // is already there.
+  //
+  // The previous shape had the state default to "light" and a setTimeout(0)
+  // effect correct it afterwards, which meant this effect stamped "light"
+  // over the pre-paint value on every single load and put it back a tick
+  // later: a light flash on every app open for a dark-mode user, and a
+  // crashed render (app/error.tsx) left showing the wrong theme entirely,
+  // since the correcting timeout belongs to the component that just failed.
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    if (themeLoadedRef.current) window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
+
+  // Persist on change rather than in an effect on `theme`. An effect would
+  // also fire on mount and write a theme the user never actually picked.
+  const changeTheme = useCallback((next: Theme) => {
+    setTheme(next);
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      // Private mode / storage blocked: the theme still applies for this
+      // session, it just won't be remembered for the next one.
+    }
+  }, []);
 
   // Warm the code-split tab/sheet chunks once the app is up and idle. Without
   // this the first tap on Wallets/Debtors/Portfolio (or the first open of any
@@ -1273,14 +1292,24 @@ export default function Home() {
       if (!nameKinds.has(name)) nameKinds.set(name, TYPES_USER_OWES.includes(item.transaction_type) ? "own" : "lend");
     }
 
-    for (const [name, kind] of nameKinds) {
-      const { error } = await supabase.from(TABLES.debtors).insert({ user_id: user.id, name, kind });
-      if (error && error.code !== "23505") {
-        setError(error.message);
-        return;
-      }
+    if (!nameKinds.size) return;
+
+    // In parallel, not one await per name: this runs inside saveEntries with
+    // the save spinner up, so a sequential loop charged the user a full
+    // network round-trip for every new person the AI picked out of one
+    // message. 23505 is the debtors_user_name_key unique index doing its job
+    // -- the row is already there (a concurrent save, a retry), which is the
+    // outcome we wanted anyway, so it is not an error to report.
+    const client = supabase;
+    const results = await Promise.all(
+      [...nameKinds].map(([name, kind]) => client.from(TABLES.debtors).insert({ user_id: user.id, name, kind })),
+    );
+    const failure = results.find(({ error }) => error && error.code !== "23505");
+    if (failure?.error) {
+      setError(failure.error.message);
+      return;
     }
-    if (nameKinds.size) await loadDebtors();
+    await loadDebtors();
   }
 
   async function updateEntry(transferToWalletId?: string | null) {
@@ -2764,7 +2793,7 @@ export default function Home() {
             onOpenAsk={() => { menuDismiss.requestClose(); setAskAiOpen(true); }}
             onOpenPin={() => { menuDismiss.requestClose(); setPinSheetOpen(true); }}
             theme={theme}
-            onSetTheme={setTheme}
+            onSetTheme={changeTheme}
             closing={menuDismiss.closing}
           />
         )}
