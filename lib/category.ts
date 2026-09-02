@@ -97,10 +97,15 @@ export const recurringIconOptions: { key: string; label: string; Icon: LucideIco
   { key: "credit-card", label: "การชำระเงิน", Icon: CreditCard },
 ];
 export const recurringIconMap: Record<string, LucideIcon> = Object.fromEntries(recurringIconOptions.map((option) => [option.key, option.Icon]));
+// Order matters: inferredRecurringIcon takes the first group with a matching
+// term, so a group whose terms are more specific has to come before one that
+// would swallow it. "youtube music" sits in the music group but "youtube"
+// alone sits in monitor-play -- with monitor-play first, the music entry was
+// unreachable and a "YouTube Music" subscription came out with a video icon.
 export const recurringServiceIconKeywords: { terms: string[]; key: string }[] = [
   { terms: ["netflix", "disney", "hbo", "prime video", "streaming"], key: "tv" },
-  { terms: ["youtube", "video", "tiktok"], key: "monitor-play" },
   { terms: ["spotify", "apple music", "youtube music", "music"], key: "music" },
+  { terms: ["youtube", "video", "tiktok"], key: "monitor-play" },
   { terms: ["claude", "chatgpt", "openai", "gemini", "ai"], key: "bot" },
   { terms: ["icloud", "google one", "dropbox", "onedrive", "cloud"], key: "cloud" },
   { terms: ["playstation", "xbox", "nintendo", "game pass", "gaming"], key: "gamepad" },
