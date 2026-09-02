@@ -67,6 +67,54 @@ test.describe("navigation", () => {
     });
   }
 
+  // The Ask-AI screen is a chat: composer pinned at the bottom, thread
+  // scrolling above it, and the page itself not scrolling at all. Sending is
+  // out of reach here (no Supabase, and /api/ask needs a key), so this covers
+  // everything up to the send.
+  test("lays Ask AI out as a chat screen", async ({ app }) => {
+    await app.locator(".menu-button").click();
+    await app.locator(".side-menu-list button", { hasText: "ถาม AI เรื่องเงิน" }).click();
+    await expect(app.locator(".ask-ai-composer")).toBeVisible();
+
+    const box = await app.evaluate(() => {
+      const phone = document.querySelector(".phone") as HTMLElement;
+      const composer = document.querySelector(".ask-ai-composer") as HTMLElement;
+      const nav = document.querySelector(".bottom-nav") as HTMLElement;
+      return {
+        overflow: phone.scrollHeight - phone.clientHeight,
+        composerBottom: composer.getBoundingClientRect().bottom,
+        navTop: nav.getBoundingClientRect().top,
+      };
+    });
+    // The composer holds the bottom edge above the nav instead of being
+    // pushed off it by a page that grows.
+    expect(box.overflow, "chat screen should not scroll the page").toBeLessThanOrEqual(1);
+    expect(box.composerBottom).toBeLessThanOrEqual(box.navTop);
+
+    // Send stays disabled until there is something to send.
+    const send = app.locator(".ask-ai-send");
+    await expect(send).toBeDisabled();
+    await app.locator(".ask-ai-input").fill("เดือนนี้ใช้เงินเท่าไร");
+    await expect(send).toBeEnabled();
+  });
+
+  test("fills the composer from an example chip", async ({ app }) => {
+    await app.locator(".menu-button").click();
+    await app.locator(".side-menu-list button", { hasText: "ถาม AI เรื่องเงิน" }).click();
+    await app.locator(".ask-ai-examples button").first().click();
+    await expect(app.locator(".ask-ai-input")).not.toHaveValue("");
+    await expect(app.locator(".ask-ai-send")).toBeEnabled();
+  });
+
+  test("grows the composer with a multi-line question", async ({ app }) => {
+    await app.locator(".menu-button").click();
+    await app.locator(".side-menu-list button", { hasText: "ถาม AI เรื่องเงิน" }).click();
+    const input = app.locator(".ask-ai-input");
+    const before = (await input.boundingBox())!.height;
+    await input.fill("บรรทัดหนึ่ง\nบรรทัดสอง\nบรรทัดสาม");
+    await expect.poll(async () => (await input.boundingBox())!.height).toBeGreaterThan(before);
+  });
+
   test("keeps a menu screen reachable from the bottom nav", async ({ app }) => {
     await app.locator(".menu-button").click();
     await app.locator(".side-menu-list button", { hasText: "งบประมาณ" }).click();

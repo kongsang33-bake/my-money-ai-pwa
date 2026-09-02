@@ -185,3 +185,9 @@ export const SPEND_BASELINE_MIN_DAYS = 14;
 // How far this week's spend has to sit from the baseline before the card
 // calls it high or low rather than normal.
 export const SPEND_BASELINE_TOLERANCE_PERCENT = 10;
+
+
+// Tallest the Ask-AI composer grows before it starts scrolling internally
+// (~5 lines). The textarea auto-grows in JS off scrollHeight, so the ceiling
+// has to be a number that side can read, not just a CSS max-height.
+export const ASK_COMPOSER_MAX_HEIGHT = 132;

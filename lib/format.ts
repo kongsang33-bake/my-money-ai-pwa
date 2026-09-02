@@ -19,6 +19,15 @@ export const formatPercent = (value: number, digits = 0) => `${digits === 0 ? Ma
 export const formatSignedPercent = (value: number, digits = 1) => `${value >= 0 ? "+" : ""}${value.toFixed(digits)}%`;
 export const formatShortDate = (value: Date | string, { year = false }: { year?: boolean } = {}) =>
   (typeof value === "string" ? new Date(value) : value).toLocaleDateString("th-TH", { day: "numeric", month: "short", ...(year ? { year: "numeric" as const } : {}) });
+// Timestamp under a chat bubble: bare clock time for anything sent today,
+// prefixed with the day once the conversation is older, so a thread reloaded
+// a week later doesn't read as if every message arrived this afternoon.
+export const formatChatTime = (value: string, now = new Date()) => {
+  const date = new Date(value);
+  const time = date.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+  const sameDay = date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
+  return sameDay ? time : `${formatShortDate(date)} ${time}`;
+};
 export const toDateInput = (value: string) => localDateInput(new Date(value));
 export const toFiniteNumber = (value: unknown, fallback = 0) => {
   const number = Number(value);

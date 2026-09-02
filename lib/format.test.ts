@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { clampInteger, formatSignedMoney, normalizeBillingDay, toFiniteNumber, toMoneyAmount } from "./format.ts";
+import { clampInteger, formatChatTime, formatSignedMoney, normalizeBillingDay, toFiniteNumber, toMoneyAmount } from "./format.ts";
 
 describe("toFiniteNumber", () => {
   it("parses numeric strings", () => {
@@ -69,5 +69,26 @@ describe("formatSignedMoney", () => {
 
   it("treats zero as non-negative", () => {
     assert.equal(formatSignedMoney(0), "+฿ 0");
+  });
+});
+
+describe("formatChatTime", () => {
+  const now = new Date(2026, 8, 2, 14, 30);
+
+  it("shows only the clock for a message sent today", () => {
+    const stamp = formatChatTime(new Date(2026, 8, 2, 9, 5).toISOString(), now);
+    assert.match(stamp, /^\d{2}:\d{2}$/);
+  });
+
+  it("adds the day once the message is from another date", () => {
+    // Without this an old thread reads as if every message arrived today.
+    const stamp = formatChatTime(new Date(2026, 7, 28, 9, 5).toISOString(), now);
+    assert.ok(stamp.length > 5, `expected a dated stamp, got ${stamp}`);
+    assert.match(stamp, /\d{2}:\d{2}$/);
+  });
+
+  it("does not treat the same day-of-month in another month as today", () => {
+    const stamp = formatChatTime(new Date(2026, 7, 2, 14, 30).toISOString(), now);
+    assert.ok(stamp.length > 5, `expected a dated stamp, got ${stamp}`);
   });
 });

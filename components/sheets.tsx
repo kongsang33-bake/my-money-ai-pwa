@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import NextImage from "next/image";
 import type { User } from "@supabase/supabase-js";
 import {
+  ArrowUp,
   Check,
   Copy,
   Download,
@@ -21,9 +22,9 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { AI_CHAT_HISTORY_LIMIT, AI_CHAT_MESSAGE_COLUMNS, AI_CONTEXT_MAX_LENGTH, MONTH_START_DAY_MAX, MONTH_START_DAY_MIN, TABLES } from "@/lib/constants";
+import { AI_CHAT_HISTORY_LIMIT, AI_CHAT_MESSAGE_COLUMNS, AI_CONTEXT_MAX_LENGTH, ASK_COMPOSER_MAX_HEIGHT, MONTH_START_DAY_MAX, MONTH_START_DAY_MIN, TABLES } from "@/lib/constants";
 import { authHeaders } from "@/lib/api";
-import { formatMoney, formatSignedMoney, moneySign, clampInteger } from "@/lib/format";
+import { formatChatTime, formatMoney, formatSignedMoney, moneySign, clampInteger } from "@/lib/format";
 import { entriesInRange, reportBounds, reportLabel } from "@/lib/cycle";
 import { totalWallet } from "@/lib/money";
 import { buildReportCsv, downloadCsv } from "@/lib/csv";
@@ -64,6 +65,7 @@ export function AskFinanceView({ context, userId, aiContext, onBack }: { context
   const [error, setError] = useState("");
   const [copiedId, setCopiedId] = useState("");
   const threadRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +90,16 @@ export function AskFinanceView({ context, userId, aiContext, onBack }: { context
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
   }, [messages, busy]);
+
+  // Auto-growing composer. Collapse to `auto` first so the scrollHeight read
+  // can shrink the box as well as grow it -- measuring against the current
+  // height only ever ratchets upward.
+  useEffect(() => {
+    const node = inputRef.current;
+    if (!node) return;
+    node.style.height = "auto";
+    node.style.height = `${Math.min(node.scrollHeight, ASK_COMPOSER_MAX_HEIGHT)}px`;
+  }, [question]);
 
   const ask = async () => {
     const trimmed = question.trim();
@@ -137,26 +149,67 @@ export function AskFinanceView({ context, userId, aiContext, onBack }: { context
     className="ask-ai-page"
     actions={messages.length > 0 ? <button className="ask-ai-reset" onClick={() => { void resetChat(); }} aria-label="เริ่มแชทใหม่"><Trash2 size={16} strokeWidth={2.25} /></button> : undefined}
   >
-    <p className="ask-ai-period">อ้างอิงตัวเลขที่แอปคำนวณไว้ใน{context.periodLabel}</p>
-    {messages.length === 0 && (
-      <div className="ask-ai-examples"><span>ลองถาม</span><button onClick={() => setQuestion("เดือนนี้ฉันใช้เงินกับหมวดไหนมากที่สุด")}>หมวดไหนใช้เยอะสุด</button><button onClick={() => setQuestion("ช่วงนี้เงินของฉันเหลือเป็นอย่างไร")}>เงินเหลือเป็นอย่างไร</button></div>
-    )}
     <div className="ask-ai-thread" ref={threadRef}>
+      {/* Reads as a chat's date divider, which is exactly what it is: the
+          slice of the account every answer below it was computed from. */}
+      <p className="ask-ai-divider">อ้างอิงตัวเลขใน{context.periodLabel}</p>
       {loadingHistory && <p className="ask-ai-thread-hint">กำลังโหลดประวัติแชท...</p>}
-      {!loadingHistory && messages.length === 0 && <p className="ask-ai-thread-hint">เริ่มถาม AI เรื่องการเงินของคุณได้เลย</p>}
-      {messages.map((message) => (
-        <div key={message.id} className={`ask-ai-bubble ${message.role}`}>
-          <p>{message.content}</p>
-          <button className="ask-ai-copy" onClick={() => { void copyMessage(message); }} aria-label="คัดลอกข้อความ">
-            {copiedId === message.id ? <Check size={13} strokeWidth={2.5} /> : <Copy size={13} strokeWidth={2.25} />}
-          </button>
+      {!loadingHistory && messages.length === 0 && (
+        <div className="ask-ai-empty">
+          <p>เริ่มถาม AI เรื่องการเงินของคุณได้เลย</p>
+          <div className="ask-ai-examples">
+            <button onClick={() => setQuestion("เดือนนี้ฉันใช้เงินกับหมวดไหนมากที่สุด")}>หมวดไหนใช้เยอะสุด</button>
+            <button onClick={() => setQuestion("ช่วงนี้เงินของฉันเหลือเป็นอย่างไร")}>เงินเหลือเป็นอย่างไร</button>
+          </div>
+        </div>
+      )}
+      {messages.map((message, index) => (
+        // Consecutive messages from the same side group: only the last of a
+        // run keeps the "tail" corner and shows its time, so a multi-message
+        // answer reads as one turn rather than a stack of separate cards.
+        <div
+          key={message.id}
+          className={`ask-ai-row ${message.role} ${messages[index + 1]?.role === message.role ? "grouped" : ""}`}
+        >
+          <div className="ask-ai-bubble"><p>{message.content}</p></div>
+          <div className="ask-ai-meta">
+            <time dateTime={message.created_at}>{formatChatTime(message.created_at)}</time>
+            {message.role === "assistant" && (
+              <button className="ask-ai-copy" onClick={() => { void copyMessage(message); }} aria-label="คัดลอกคำตอบ">
+                {copiedId === message.id ? <><Check size={12} strokeWidth={2.5} aria-hidden="true" />คัดลอกแล้ว</> : <><Copy size={12} strokeWidth={2.25} aria-hidden="true" />คัดลอก</>}
+              </button>
+            )}
+          </div>
         </div>
       ))}
-      {busy && <div className="ask-ai-bubble assistant pending"><p>กำลังวิเคราะห์...</p></div>}
+      {busy && (
+        <div className="ask-ai-row assistant">
+          <div className="ask-ai-bubble pending"><p>กำลังพิมพ์...</p></div>
+        </div>
+      )}
     </div>
     {error && <StateCard tone="error" title="ถาม AI ไม่สำเร็จ" detail={error} />}
-    <textarea className="ask-ai-input" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="เช่น เดือนนี้มีรายจ่ายอะไรที่ควรระวังบ้าง" />
-    <button className="save" onClick={() => { void ask(); }} disabled={busy || !question.trim()}>{busy ? "กำลังวิเคราะห์..." : "ถาม AI"}</button>
+    <div className="ask-ai-composer">
+      <textarea
+        className="ask-ai-input"
+        ref={inputRef}
+        rows={1}
+        value={question}
+        onChange={(event) => setQuestion(event.target.value)}
+        onKeyDown={(event) => {
+          // Enter sends, Shift+Enter breaks the line -- what every messaging
+          // app does. isComposing guards the Thai/IME candidate window, where
+          // Enter is committing a word, not submitting.
+          if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+          event.preventDefault();
+          void ask();
+        }}
+        placeholder="พิมพ์คำถามเรื่องเงินของคุณ"
+      />
+      <button className="ask-ai-send" onClick={() => { void ask(); }} disabled={busy || !question.trim()} aria-label="ส่งคำถาม">
+        <ArrowUp size={18} strokeWidth={2.75} aria-hidden="true" />
+      </button>
+    </div>
   </PageFrame>;
 }
 
