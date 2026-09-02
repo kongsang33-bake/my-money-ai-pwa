@@ -315,6 +315,82 @@ export function buildDebtSummary(debtors: Debtor[], entries: Entry[], kind: Debt
     .sort((a, b) => b.amount - a.amount);
 }
 
+/**
+ * Adds entries to the in-memory list and keeps it in the order the whole app
+ * assumes: newest first. Six call sites in app/page.tsx were each writing this
+ * spread-and-sort by hand -- save, restore, edit, log-a-recurring-bill, two
+ * investment paths -- which is six chances to get the comparator backwards and
+ * silently show a user's history upside down on one screen only.
+ */
+export function withEntries(current: Entry[], incoming: Entry[]): Entry[] {
+  return [...incoming, ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1));
+}
+
+/** Replaces one entry by id, leaving order alone (an edit cannot reorder). */
+export function replaceEntry(current: Entry[], next: Entry): Entry[] {
+  return current.map((item) => (item.id === next.id ? next : item));
+}
+
+export type EntryUpdatePlan =
+  | { kind: "rejected"; message: string }
+  | { kind: "update"; entry: Entry }
+  | { kind: "convert-to-transfer"; sourceLeg: Draft; destLeg: Draft };
+
+/**
+ * Decides what editing an entry should do, without doing any of it.
+ *
+ * Almost all edits are a plain update, but turning an existing entry into a
+ * transfer is not: a transfer is two rows, so the original row is rewritten as
+ * the outgoing leg and a second row has to be created for the incoming one.
+ * Getting that wrong doubles or loses money, and it used to be decided inline
+ * between two awaits where nothing could test it.
+ *
+ * `original` is the entry as it currently exists (used only to tell whether
+ * this edit is the conversion); `edited` is what the user has on screen.
+ */
+export function planEntryUpdate(
+  edited: Entry,
+  original: Entry | undefined,
+  wallets: Wallet[],
+  transferToWalletId?: string | null,
+): EntryUpdatePlan {
+  const convertingToTransfer = edited.transaction_type === "transfer" && original?.transaction_type !== "transfer";
+  if (!convertingToTransfer) return { kind: "update", entry: normalizeEntry(edited) };
+
+  // A transfer to the wallet it came from is not a transfer, and would net to
+  // zero across two rows while still looking like activity in the ledger.
+  if (!transferToWalletId || transferToWalletId === edited.wallet_id) {
+    return { kind: "rejected", message: "กรุณาเลือกกระเป๋าปลายทาง" };
+  }
+
+  const [sourceLeg, destLeg] = expandTransferDraft(
+    { ...edited, wallet_id: edited.wallet_id ?? defaultWalletId(wallets), transfer_to_wallet_id: transferToWalletId },
+    wallets,
+  );
+  return { kind: "convert-to-transfer", sourceLeg, destLeg };
+}
+
+/**
+ * The entry a "log this bill now" tap creates from a recurring expense. Pure
+ * apart from the id, which the caller supplies so a test can pin it.
+ */
+export function recurringExpenseEntry(
+  item: { name: string; amount: number },
+  billingDate: Date,
+  wallets: Wallet[],
+  id: string,
+): Entry {
+  return normalizeEntry({
+    id,
+    title: item.name,
+    category: "บิลประจำ",
+    amount: item.amount,
+    transaction_type: "personal_expense",
+    occurred_at: billingDate.toISOString(),
+    wallet_id: defaultWalletId(wallets),
+  });
+}
+
 export function netWorthAsOf(wallets: Wallet[], debtors: Debtor[], entriesUpToCutoff: Entry[], portfolioValue = 0, debtFormula: NetWorthDebtFormula = "full") {
   const ledger = buildWalletLedger(wallets, entriesUpToCutoff);
   const walletTotal = Object.values(ledger.totals).reduce((sum, amount) => sum + amount, 0);

@@ -45,10 +45,14 @@ import {
   filterEntries,
   mapTransactionRow,
   normalizeEntry,
+  planEntryUpdate,
+  recurringExpenseEntry,
+  replaceEntry,
   payableForDisplay,
   totalWallet,
   unnamedDebtor,
   walletDeletionMove,
+  withEntries,
 } from "@/lib/money";
 import { buildWalletInsight, computeStreak, deriveQuickShortcuts, isRecurringLogged, lastSevenDayCashFlow } from "@/lib/insights";
 import { buildAiExamples, buildCategoryMemory } from "@/lib/ai-memory";
@@ -1268,7 +1272,7 @@ export default function Home() {
       setBusy(false);
       return false;
     }
-    setEntries((current) => [mapTransactionRow(data), ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
+    setEntries((current) => withEntries(current, [mapTransactionRow(data)]));
     setBusy(false);
     notify({ tone: "success", title: "บันทึกรอยืนยันหน่วยแล้ว", detail: `${investment.name} · ${moneySign}${formatMoney(input.amount)}` });
     return true;
@@ -1308,7 +1312,7 @@ export default function Home() {
     } else {
       await createMissingDebtors(normalizedItems);
       const inserted = (data ?? []).map(mapTransactionRow);
-      setEntries((current) => [...inserted, ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
+      setEntries((current) => withEntries(current, inserted));
       setDrafts([]);
       setReceiptTotal(0);
       setComposerResetKey((key) => key + 1);
@@ -1355,22 +1359,23 @@ export default function Home() {
     if (!supabase || !editing || !user) return false;
 
     const original = entries.find((item) => item.id === editing.id);
-    const convertingToTransfer = editing.transaction_type === "transfer" && original?.transaction_type !== "transfer";
 
     setBusy(true);
     setError("");
 
-    if (convertingToTransfer) {
-      if (!transferToWalletId || transferToWalletId === editing.wallet_id) {
-        setError("กรุณาเลือกกระเป๋าปลายทาง");
-        setBusy(false);
-        return false;
-      }
-      const sourceWalletId = editing.wallet_id ?? defaultWalletId(wallets);
-      const [sourceLeg, destLeg] = expandTransferDraft(
-        { ...editing, wallet_id: sourceWalletId, transfer_to_wallet_id: transferToWalletId },
-        wallets,
-      );
+    // What this edit means is decided by planEntryUpdate (lib/money.ts), which
+    // is pure and tested; everything below is the I/O and state that follows
+    // from the answer.
+    const plan = planEntryUpdate(editing, original, wallets, transferToWalletId);
+
+    if (plan.kind === "rejected") {
+      setError(plan.message);
+      setBusy(false);
+      return false;
+    }
+
+    if (plan.kind === "convert-to-transfer") {
+      const { sourceLeg, destLeg } = plan;
 
       const { error: updateError } = await supabase
         .from(TABLES.transactions)
@@ -1403,14 +1408,12 @@ export default function Home() {
 
       const savedSource = { ...sourceLeg, id: editing.id };
       const savedDest = data?.[0] ? mapTransactionRow(data[0]) : destLeg;
-      setEntries((current) =>
-        [savedDest, ...current.map((item) => (item.id === savedSource.id ? savedSource : item))].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)),
-      );
+      setEntries((current) => withEntries(replaceEntry(current, savedSource), [savedDest]));
       setBusy(false);
       return true;
     }
 
-    const normalized = normalizeEntry(editing);
+    const normalized = plan.entry;
     const core = buildTransactionCore(normalized, wallets);
 
     const { error } = await supabase
@@ -1425,7 +1428,7 @@ export default function Home() {
     }
 
     const savedEntry = { ...normalized, wallet_id: core.wallet_id };
-    setEntries((current) => current.map((item) => (item.id === savedEntry.id ? savedEntry : item)));
+    setEntries((current) => replaceEntry(current, savedEntry));
     setBusy(false);
     if (original) {
       notify({
@@ -1468,7 +1471,7 @@ export default function Home() {
       notify({ tone: "error", title: "ย้อนคืนรายการไม่สำเร็จ", detail: error.message });
       return;
     }
-    setEntries((current) => [...entriesToRestore, ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
+    setEntries((current) => withEntries(current, entriesToRestore));
     notify({ tone: "success", title: "ย้อนคืนรายการแล้ว", detail: entriesToRestore[0].title });
   }, [user, wallets, notify]);
 
@@ -1527,15 +1530,7 @@ export default function Home() {
     if (!supabase || !user) return;
     setBusy(true);
     setError("");
-    const normalized = normalizeEntry({
-      id: crypto.randomUUID(),
-      title: item.name,
-      category: "บิลประจำ",
-      amount: item.amount,
-      transaction_type: "personal_expense",
-      occurred_at: billingDate.toISOString(),
-      wallet_id: defaultWalletId(wallets),
-    });
+    const normalized = recurringExpenseEntry(item, billingDate, wallets, crypto.randomUUID());
     const { data, error } = await supabase
       .from(TABLES.transactions)
       .insert({ id: normalized.id, user_id: user.id, ...buildTransactionCore(normalized, wallets) })
@@ -1545,7 +1540,7 @@ export default function Home() {
       setError(error.message);
     } else {
       const inserted = data?.[0] ? mapTransactionRow(data[0]) : normalized;
-      setEntries((current) => [inserted, ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
+      setEntries((current) => withEntries(current, [inserted]));
       notify({
         tone: "success",
         title: "บันทึกรายจ่ายประจำแล้ว",
@@ -2271,7 +2266,7 @@ export default function Home() {
       return false;
     }
     setInvestments((current) => current.map((row) => (row.id === investment.id ? { ...row, units: row.units + units, cost_basis: row.cost_basis + amount } : row)));
-    setEntries((current) => [mapTransactionRow(data), ...current].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)));
+    setEntries((current) => withEntries(current, [mapTransactionRow(data)]));
     setBusy(false);
     return true;
   }

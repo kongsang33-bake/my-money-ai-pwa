@@ -9,8 +9,12 @@ import {
   filterEntries,
   netWorthAsOf,
   normalizeEntry,
+  planEntryUpdate,
+  recurringExpenseEntry,
+  replaceEntry,
   unnamedDebtor,
   walletDeletionMove,
+  withEntries,
 } from "./money.ts";
 import type { Debtor, Entry, HistoryFilters, Investment, InvestmentPrice, Wallet } from "./types.ts";
 
@@ -357,5 +361,180 @@ describe("walletDeletionMove", () => {
   it("finds nothing to move when no entry uses the wallet", () => {
     const move = walletDeletionMove(savings, [petty, cash, savings], [makeEntry({ wallet_id: "cash" })]);
     assert.deepEqual(move.movingEntryIds, []);
+  });
+});
+
+
+const cashWallet: Wallet = { id: "cash", user_id: "u1", name: "เงินสด", tag: "cash", balance: 0, icon: null, icon_color: null, is_default: true };
+const savingsWallet: Wallet = { id: "savings", user_id: "u1", name: "ออม", tag: "savings", balance: 0, icon: null, icon_color: null, is_default: false };
+
+describe("withEntries", () => {
+  it("keeps the list newest first", () => {
+    const older = makeEntry({ id: "old", occurred_at: "2026-01-01T00:00:00.000Z" });
+    const newer = makeEntry({ id: "new", occurred_at: "2026-03-01T00:00:00.000Z" });
+    const middle = makeEntry({ id: "mid", occurred_at: "2026-02-01T00:00:00.000Z" });
+    assert.deepEqual(withEntries([newer, older], [middle]).map((entry) => entry.id), ["new", "mid", "old"]);
+  });
+
+  it("puts a brand new entry at the top", () => {
+    const existing = makeEntry({ id: "old", occurred_at: "2026-01-01T00:00:00.000Z" });
+    const fresh = makeEntry({ id: "fresh", occurred_at: "2026-09-01T00:00:00.000Z" });
+    assert.equal(withEntries([existing], [fresh])[0].id, "fresh");
+  });
+
+  it("adds several at once", () => {
+    const result = withEntries([makeEntry({ id: "a", occurred_at: "2026-02-01T00:00:00.000Z" })], [
+      makeEntry({ id: "b", occurred_at: "2026-01-01T00:00:00.000Z" }),
+      makeEntry({ id: "c", occurred_at: "2026-03-01T00:00:00.000Z" }),
+    ]);
+    assert.deepEqual(result.map((entry) => entry.id), ["c", "a", "b"]);
+  });
+
+  it("does not mutate the list it was given", () => {
+    const current = [makeEntry({ id: "a" })];
+    withEntries(current, [makeEntry({ id: "b" })]);
+    assert.deepEqual(current.map((entry) => entry.id), ["a"]);
+  });
+
+  it("handles an empty addition", () => {
+    const current = [makeEntry({ id: "a" })];
+    assert.deepEqual(withEntries(current, []).map((entry) => entry.id), ["a"]);
+  });
+});
+
+describe("replaceEntry", () => {
+  it("swaps the matching entry in place", () => {
+    const current = [makeEntry({ id: "a", title: "เก่า" }), makeEntry({ id: "b" })];
+    const result = replaceEntry(current, makeEntry({ id: "a", title: "ใหม่" }));
+    assert.equal(result[0].title, "ใหม่");
+    assert.equal(result[1].id, "b");
+  });
+
+  it("keeps position, since an edit must not reorder the list", () => {
+    const current = [makeEntry({ id: "a" }), makeEntry({ id: "b" }), makeEntry({ id: "c" })];
+    const result = replaceEntry(current, makeEntry({ id: "b", title: "แก้ไข" }));
+    assert.deepEqual(result.map((entry) => entry.id), ["a", "b", "c"]);
+  });
+
+  it("leaves the list alone when nothing matches", () => {
+    const current = [makeEntry({ id: "a" })];
+    assert.deepEqual(replaceEntry(current, makeEntry({ id: "zzz" })), current);
+  });
+});
+
+describe("planEntryUpdate", () => {
+  const wallets = [cashWallet, savingsWallet];
+
+  it("plans a plain update for an ordinary edit", () => {
+    const edited = makeEntry({ id: "e1", title: "กาแฟ", amount: 120 });
+    const plan = planEntryUpdate(edited, makeEntry({ id: "e1" }), wallets);
+    assert.equal(plan.kind, "update");
+    if (plan.kind !== "update") return;
+    assert.equal(plan.entry.title, "กาแฟ");
+    assert.equal(plan.entry.amount, 120);
+  });
+
+  it("normalizes the edited entry rather than trusting the form", () => {
+    // wallet_impact is derived, not typed in: an edit that changed the amount
+    // but left the old impact behind would otherwise be written straight to
+    // the database and quietly move the wallet balance by the wrong number.
+    const edited = makeEntry({ id: "e1", amount: 300, wallet_impact: -100, user_share: 100 });
+    const plan = planEntryUpdate(edited, makeEntry({ id: "e1" }), wallets);
+    assert.equal(plan.kind, "update");
+    if (plan.kind !== "update") return;
+    assert.equal(plan.entry.wallet_impact, -300);
+  });
+
+  it("treats an entry that was already a transfer as a plain update", () => {
+    // Only the conversion needs the two-row dance. Editing an existing
+    // transfer must not create a third row.
+    const edited = makeEntry({ id: "e1", transaction_type: "transfer", wallet_id: "cash", transfer_to_wallet_id: "savings" });
+    const plan = planEntryUpdate(edited, makeEntry({ id: "e1", transaction_type: "transfer" }), wallets, "savings");
+    assert.equal(plan.kind, "update");
+  });
+
+  it("plans both legs when converting an entry into a transfer", () => {
+    const edited = makeEntry({ id: "e1", amount: 500, transaction_type: "transfer", wallet_id: "cash" });
+    const plan = planEntryUpdate(edited, makeEntry({ id: "e1", transaction_type: "personal_expense" }), wallets, "savings");
+    assert.equal(plan.kind, "convert-to-transfer");
+    if (plan.kind !== "convert-to-transfer") return;
+    assert.equal(plan.sourceLeg.wallet_id, "cash");
+    assert.equal(plan.destLeg.wallet_id, "savings");
+    assert.equal(plan.sourceLeg.wallet_impact, -500);
+    assert.equal(plan.destLeg.wallet_impact, 500);
+  });
+
+  it("ties the two legs together with one transfer_group_id", () => {
+    // The pairing is what lets a later delete remove both sides; without it
+    // deleting one leg leaves the other behind and the books stop balancing.
+    const edited = makeEntry({ id: "e1", transaction_type: "transfer", wallet_id: "cash" });
+    const plan = planEntryUpdate(edited, makeEntry({ id: "e1" }), wallets, "savings");
+    assert.equal(plan.kind, "convert-to-transfer");
+    if (plan.kind !== "convert-to-transfer") return;
+    assert.ok(plan.sourceLeg.transfer_group_id);
+    assert.equal(plan.sourceLeg.transfer_group_id, plan.destLeg.transfer_group_id);
+  });
+
+  it("rejects a conversion with no destination", () => {
+    const edited = makeEntry({ id: "e1", transaction_type: "transfer", wallet_id: "cash" });
+    const plan = planEntryUpdate(edited, makeEntry({ id: "e1" }), wallets, null);
+    assert.equal(plan.kind, "rejected");
+  });
+
+  it("rejects a transfer to the wallet it came from", () => {
+    // Two rows that net to zero, but still show up as activity in the ledger.
+    const edited = makeEntry({ id: "e1", transaction_type: "transfer", wallet_id: "cash" });
+    const plan = planEntryUpdate(edited, makeEntry({ id: "e1" }), wallets, "cash");
+    assert.equal(plan.kind, "rejected");
+  });
+
+  it("falls back to the default wallet when the entry has none", () => {
+    const edited = makeEntry({ id: "e1", transaction_type: "transfer", wallet_id: null });
+    const plan = planEntryUpdate(edited, makeEntry({ id: "e1" }), wallets, "savings");
+    assert.equal(plan.kind, "convert-to-transfer");
+    if (plan.kind !== "convert-to-transfer") return;
+    assert.equal(plan.sourceLeg.wallet_id, "cash", "cash is is_default");
+  });
+
+  it("treats a missing original as a conversion, not an edit", () => {
+    // An entry the local list has not caught up with yet still has to produce
+    // both legs, or the incoming half is never written.
+    const edited = makeEntry({ id: "e1", transaction_type: "transfer", wallet_id: "cash" });
+    const plan = planEntryUpdate(edited, undefined, wallets, "savings");
+    assert.equal(plan.kind, "convert-to-transfer");
+  });
+});
+
+describe("recurringExpenseEntry", () => {
+  const billingDate = new Date("2026-09-05T00:00:00.000Z");
+
+  it("books the bill as a personal expense in the bills category", () => {
+    const entry = recurringExpenseEntry({ name: "Netflix", amount: 419 }, billingDate, [cashWallet], "id-1");
+    assert.equal(entry.title, "Netflix");
+    assert.equal(entry.category, "บิลประจำ");
+    assert.equal(entry.transaction_type, "personal_expense");
+    assert.equal(entry.amount, 419);
+  });
+
+  it("takes money out of the wallet rather than putting it in", () => {
+    const entry = recurringExpenseEntry({ name: "Netflix", amount: 419 }, billingDate, [cashWallet], "id-1");
+    assert.equal(entry.wallet_impact, -419);
+    assert.equal(entry.debt_impact, 0);
+  });
+
+  it("dates the entry to the billing day, not to today", () => {
+    // A bill logged late still belongs to the cycle it was charged in, or it
+    // lands in the wrong month's totals.
+    const entry = recurringExpenseEntry({ name: "ค่าเน็ต", amount: 599 }, billingDate, [cashWallet], "id-1");
+    assert.equal(entry.occurred_at, billingDate.toISOString());
+  });
+
+  it("uses the default wallet", () => {
+    const entry = recurringExpenseEntry({ name: "Netflix", amount: 419 }, billingDate, [savingsWallet, cashWallet], "id-1");
+    assert.equal(entry.wallet_id, "cash");
+  });
+
+  it("uses the id it is given", () => {
+    assert.equal(recurringExpenseEntry({ name: "x", amount: 1 }, billingDate, [cashWallet], "chosen").id, "chosen");
   });
 });
