@@ -6,6 +6,7 @@
 import { TYPES_OWED_TO_USER, TYPES_USER_OWES, transactionKind, walletTagLabels, type TransactionType, type WalletTag } from "./taxonomy.ts";
 import { formatMoney, moneySign, toFiniteNumber, toMoneyAmount } from "./format.ts";
 import { cycleBounds, entriesInRange, shiftMonthKey } from "./cycle.ts";
+import { RECEIPT_TOTAL_TOLERANCE } from "./constants.ts";
 import type {
   Debtor,
   DebtorKind,
@@ -389,6 +390,61 @@ export function recurringExpenseEntry(
     occurred_at: billingDate.toISOString(),
     wallet_id: defaultWalletId(wallets),
   });
+}
+
+/**
+ * A transfer draft the user has not finished: no destination wallet, or a
+ * destination equal to the source. Saving one would write two rows that net to
+ * zero while still showing up as activity, so the save button is disabled
+ * until they are resolved.
+ *
+ * Returned as a list rather than a boolean because two places in the Add tab
+ * ask this question -- the warning line and the button's disabled state -- and
+ * they were each writing the predicate out by hand. Two copies of a rule is
+ * two chances for the button to go live while the warning still shows.
+ */
+export function incompleteTransferDrafts(drafts: Draft[]): Draft[] {
+  return drafts.filter((draft) =>
+    draft.transaction_type === "transfer"
+    && (!draft.transfer_to_wallet_id || draft.transfer_to_wallet_id === draft.wallet_id));
+}
+
+/** The total the user is agreeing to when they confirm a save. */
+export function draftSaveTotal(drafts: Draft[]): number {
+  // Transfers are excluded on purpose: moving money between your own wallets
+  // is not spending, and adding it here would inflate the number in the
+  // confirmation past anything that leaves the account.
+  return drafts
+    .filter((draft) => draft.transaction_type !== "transfer")
+    .reduce((sum, draft) => sum + draft.amount, 0);
+}
+
+/** The confirm dialog's body for saving a batch of drafts. */
+export function describeDraftSave(drafts: Draft[]): string {
+  return `กำลังจะบันทึก ${drafts.length} รายการ รวม ${moneySign}${formatMoney(draftSaveTotal(drafts))}`;
+}
+
+export type ReceiptMismatch = { parsedTotal: number; receiptTotal: number; detail: string };
+
+/**
+ * Compares what the AI parsed against the total printed on the slip, and
+ * returns null when they agree closely enough to say nothing.
+ *
+ * This is the only check standing between a misread receipt and a wrong
+ * balance the user never notices, so it is worth being exact about: every
+ * draft counts toward the parsed total, transfers included, because the
+ * question here is "did we read this piece of paper correctly", not "how much
+ * did you spend".
+ */
+export function receiptMismatch(drafts: Draft[], receiptTotal: number): ReceiptMismatch | null {
+  if (!(receiptTotal > 0)) return null;
+  const parsedTotal = drafts.reduce((sum, draft) => sum + draft.amount, 0);
+  if (Math.abs(parsedTotal - receiptTotal) <= RECEIPT_TOTAL_TOLERANCE) return null;
+  return {
+    parsedTotal,
+    receiptTotal,
+    detail: `AI แยกรายการได้รวม ${moneySign}${formatMoney(parsedTotal)} แต่ยอดบนสลิประบุ ${moneySign}${formatMoney(receiptTotal)} ลองตรวจรายการอีกครั้งก่อนบันทึก`,
+  };
 }
 
 export type WalletDeletionSummary = {

@@ -122,6 +122,13 @@ export const RESTORE_ID_BATCH_SIZE = 200;
 // broad query from dumping years of history into the DOM at once.
 export const SEARCH_RESULT_LIMIT = 200;
 
+// How far the sum of the AI's parsed rows may sit from the total printed on
+// the slip before the app says so. One baht, not zero: the parser reads
+// rounded per-item prices off a receipt whose own total was computed before
+// rounding, so an exact match is not something a correct parse can promise --
+// and a warning that fires on every single slip is a warning nobody reads.
+export const RECEIPT_TOTAL_TOLERANCE = 1;
+
 // How many transaction rows loadEntries asks for per request.
 //
 // This exists because PostgREST caps every response at the project's

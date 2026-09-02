@@ -5,19 +5,23 @@ import {
   buildPortfolioTrend,
   buildWalletLedger,
   calculateImpacts,
+  describeDraftSave,
   describeWalletDeletion,
+  draftSaveTotal,
   expandTransferDraft,
+  incompleteTransferDrafts,
   filterEntries,
   netWorthAsOf,
   normalizeEntry,
   planEntryUpdate,
+  receiptMismatch,
   recurringExpenseEntry,
   replaceEntry,
   unnamedDebtor,
   walletDeletionMove,
   withEntries,
 } from "./money.ts";
-import type { Debtor, Entry, HistoryFilters, Investment, InvestmentPrice, Wallet } from "./types.ts";
+import type { Debtor, Draft, Entry, HistoryFilters, Investment, InvestmentPrice, Wallet } from "./types.ts";
 
 function makeEntry(overrides: Partial<Entry> = {}): Entry {
   return {
@@ -615,5 +619,125 @@ describe("describeWalletDeletion", () => {
     const summary = describeWalletDeletion(petty, [cash, petty], [makeEntry({ id: "a", wallet_id: "petty" })], 500);
     assert.ok(summary.detail.includes("500"), summary.detail);
     assert.ok(summary.detail.includes("1 รายการ"), summary.detail);
+  });
+});
+
+function makeDraft(overrides: Partial<Draft> = {}): Draft {
+  return { ...makeEntry(), ...overrides } as Draft;
+}
+
+describe("incompleteTransferDrafts", () => {
+  it("finds a transfer with no destination", () => {
+    const drafts = [makeDraft({ id: "t", transaction_type: "transfer", wallet_id: "cash", transfer_to_wallet_id: null })];
+    assert.deepEqual(incompleteTransferDrafts(drafts).map((draft) => draft.id), ["t"]);
+  });
+
+  it("finds a transfer pointed back at its own wallet", () => {
+    const drafts = [makeDraft({ id: "t", transaction_type: "transfer", wallet_id: "cash", transfer_to_wallet_id: "cash" })];
+    assert.deepEqual(incompleteTransferDrafts(drafts).map((draft) => draft.id), ["t"]);
+  });
+
+  it("accepts a finished transfer", () => {
+    const drafts = [makeDraft({ transaction_type: "transfer", wallet_id: "cash", transfer_to_wallet_id: "savings" })];
+    assert.deepEqual(incompleteTransferDrafts(drafts), []);
+  });
+
+  it("ignores non-transfer drafts with no destination", () => {
+    // Every ordinary expense has transfer_to_wallet_id unset; treating that as
+    // unfinished would disable the save button on every AI parse.
+    assert.deepEqual(incompleteTransferDrafts([makeDraft({ transaction_type: "personal_expense" })]), []);
+  });
+
+  it("returns only the offending drafts out of a mixed batch", () => {
+    const drafts = [
+      makeDraft({ id: "ok", transaction_type: "personal_expense" }),
+      makeDraft({ id: "bad", transaction_type: "transfer", wallet_id: "cash", transfer_to_wallet_id: null }),
+      makeDraft({ id: "fine", transaction_type: "transfer", wallet_id: "cash", transfer_to_wallet_id: "savings" }),
+    ];
+    assert.deepEqual(incompleteTransferDrafts(drafts).map((draft) => draft.id), ["bad"]);
+  });
+});
+
+describe("draftSaveTotal / describeDraftSave", () => {
+  it("adds up the drafts", () => {
+    assert.equal(draftSaveTotal([makeDraft({ amount: 100 }), makeDraft({ amount: 250 })]), 350);
+  });
+
+  it("leaves transfers out of the total", () => {
+    // Moving 5,000 between your own wallets is not 5,000 of spending, and the
+    // confirmation is the number the user is agreeing to.
+    const drafts = [
+      makeDraft({ amount: 100, transaction_type: "personal_expense" }),
+      makeDraft({ amount: 5000, transaction_type: "transfer", wallet_id: "cash", transfer_to_wallet_id: "savings" }),
+    ];
+    assert.equal(draftSaveTotal(drafts), 100);
+  });
+
+  it("counts income toward the total", () => {
+    // Income is money the batch records; only transfers are excluded.
+    assert.equal(draftSaveTotal([makeDraft({ amount: 45000, transaction_type: "income" })]), 45000);
+  });
+
+  it("names the count and the total in the confirmation", () => {
+    const detail = describeDraftSave([makeDraft({ amount: 100 }), makeDraft({ amount: 250 })]);
+    assert.ok(detail.includes("2 รายการ"), detail);
+    assert.ok(detail.includes("350"), detail);
+  });
+
+  it("handles an empty batch without producing NaN", () => {
+    assert.equal(draftSaveTotal([]), 0);
+    assert.ok(!describeDraftSave([]).includes("NaN"));
+  });
+});
+
+describe("receiptMismatch", () => {
+  const drafts = [makeDraft({ amount: 100 }), makeDraft({ amount: 250 })];
+
+  it("says nothing when there is no slip total to compare against", () => {
+    assert.equal(receiptMismatch(drafts, 0), null);
+  });
+
+  it("says nothing when the totals agree", () => {
+    assert.equal(receiptMismatch(drafts, 350), null);
+  });
+
+  it("tolerates a rounding difference of up to one baht either way", () => {
+    // A receipt's own total is computed before its per-item prices are
+    // rounded, so an exact match is not something a correct parse can promise
+    // -- and a warning that fires on every slip is one nobody reads.
+    assert.equal(receiptMismatch(drafts, 351), null);
+    assert.equal(receiptMismatch(drafts, 349), null);
+  });
+
+  it("warns once the gap is bigger than the tolerance", () => {
+    const mismatch = receiptMismatch(drafts, 352);
+    assert.ok(mismatch);
+    assert.equal(mismatch?.parsedTotal, 350);
+    assert.equal(mismatch?.receiptTotal, 352);
+  });
+
+  it("warns when the parse read too much as well as too little", () => {
+    // Over-reading a slip inflates the user's spending just as wrongly as
+    // under-reading it hides some.
+    assert.ok(receiptMismatch(drafts, 300), "parsed more than the slip says");
+    assert.ok(receiptMismatch(drafts, 400), "parsed less than the slip says");
+  });
+
+  it("puts both numbers in the message", () => {
+    const mismatch = receiptMismatch(drafts, 500);
+    assert.ok(mismatch?.detail.includes("350"), mismatch?.detail);
+    assert.ok(mismatch?.detail.includes("500"), mismatch?.detail);
+  });
+
+  it("counts transfers toward the parsed total", () => {
+    // Unlike the save confirmation: the question here is whether the slip was
+    // read correctly, not how much was spent, so every row the parser produced
+    // has to be on the scale.
+    const withTransfer = [makeDraft({ amount: 100 }), makeDraft({ amount: 250, transaction_type: "transfer" })];
+    assert.equal(receiptMismatch(withTransfer, 350), null);
+  });
+
+  it("ignores a negative slip total rather than treating it as a mismatch", () => {
+    assert.equal(receiptMismatch(drafts, -50), null);
   });
 });

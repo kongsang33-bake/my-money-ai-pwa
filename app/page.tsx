@@ -41,15 +41,18 @@ import {
   calculateImpacts,
   categorySpendAmount,
   defaultWalletId,
+  describeDraftSave,
   describeWalletDeletion,
   expandTransferDraft,
   filterEntries,
+  incompleteTransferDrafts,
   mapTransactionRow,
   normalizeEntry,
   planEntryUpdate,
   recurringExpenseEntry,
   replaceEntry,
   payableForDisplay,
+  receiptMismatch,
   totalWallet,
   unnamedDebtor,
   withEntries,
@@ -1080,6 +1083,12 @@ export default function Home() {
     transactions: monthlyEntries.slice(0, 120).map(({ title, category, amount, transaction_type, wallet_impact, occurred_at }) => ({ title, category, amount, transaction_type, wallet_impact, occurred_at })),
   } : null), [askAiMounted, selectedMonth, monthStartDay, monthlyIncome, monthlyOutflow, monthlyBalance, mainWallet, walletBalanceTotal, netWorth, displayWallets, categorySummary, recurringExpenses, receivableTotal, payableTotal, monthlyEntries]);
 
+  // Both the warning line and the save button's disabled state ask the same
+  // two questions about the current drafts. Deriving each answer once here is
+  // what keeps them from drifting into disagreeing with each other.
+  const unfinishedTransfers = useMemo(() => incompleteTransferDrafts(drafts), [drafts]);
+  const draftMismatch = useMemo(() => receiptMismatch(drafts, receiptTotal), [drafts, receiptTotal]);
+
   const openAddTab = useCallback((mode: "ai" | "manual" = "ai", shortcut?: QuickShortcut) => {
     setError("");
     setEntryDate(todayDateInput());
@@ -1283,7 +1292,7 @@ export default function Home() {
 
     const confirmed = await requestConfirm({
       title: "ยืนยันการบันทึก",
-      detail: `กำลังจะบันทึก ${items.length} รายการ รวม ${moneySign}${formatMoney(items.filter((item) => item.transaction_type !== "transfer").reduce((sum, item) => sum + item.amount, 0))}`,
+      detail: describeDraftSave(items),
       confirmLabel: "บันทึกเลย",
       tone: "default",
     });
@@ -2562,21 +2571,17 @@ export default function Home() {
                         onRemove={() => setDrafts((items) => items.filter((_, i) => i !== index))}
                       />
                     ))}
-                    {receiptTotal > 0 && Math.abs(drafts.reduce((sum, draft) => sum + draft.amount, 0) - receiptTotal) > 1 && (
-                      <StateCard
-                        tone="error"
-                        title="ยอดรวมไม่ตรงกับสลิป"
-                        detail={`AI แยกรายการได้รวม ${moneySign}${formatMoney(drafts.reduce((sum, draft) => sum + draft.amount, 0))} แต่ยอดบนสลิประบุ ${moneySign}${formatMoney(receiptTotal)} ลองตรวจรายการอีกครั้งก่อนบันทึก`}
-                      />
+                    {draftMismatch && (
+                      <StateCard tone="error" title="ยอดรวมไม่ตรงกับสลิป" detail={draftMismatch.detail} />
                     )}
                     <DraftImpact items={drafts} />
-                    {drafts.some((draft) => draft.transaction_type === "transfer" && (!draft.transfer_to_wallet_id || draft.transfer_to_wallet_id === draft.wallet_id)) && (
+                    {!!unfinishedTransfers.length && (
                       <p className="pin-hint">มีรายการโอนเงินที่ยังไม่ได้เลือกกระเป๋าปลายทาง</p>
                     )}
                     <button
                       className="save"
                       onClick={() => saveEntries(drafts)}
-                      disabled={busy || !isOnline || drafts.some((draft) => draft.transaction_type === "transfer" && (!draft.transfer_to_wallet_id || draft.transfer_to_wallet_id === draft.wallet_id))}
+                      disabled={busy || !isOnline || !!unfinishedTransfers.length}
                     >
                       บันทึก {drafts.length} รายการ
                     </button>
