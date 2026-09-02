@@ -8,7 +8,7 @@ import { installmentStatusText, monthlyDebtObligation, payableForDisplay } from 
 import { categories, categoryColor, categoryTint, nameColor } from "@/lib/category";
 import type { Debtor, DebtorKind, Entry } from "@/lib/types";
 import { CategoryIcon, IconColorPicker, WalletAvatarGlyph } from "@/components/shared";
-import { CountUpMoney, EmptyNote, SheetFrame, SkeletonList, StateCard, decimalInputPattern } from "@/components/primitives";
+import { CountUpMoney, EmptyNote, PageFrame, SheetFrame, SkeletonList, StateCard, decimalInputPattern } from "@/components/primitives";
 import { EntryList } from "@/components/add";
 
 export function DebtorsView({
@@ -420,16 +420,14 @@ export function RecapSheet({
   );
 }
 
-export function BudgetSheet({
+export function BudgetsView({
   budgets,
-  onClose,
+  onBack,
   onSave,
-  closing,
 }: {
   budgets: Record<string, number>;
-  onClose: () => void;
+  onBack: () => void;
   onSave: (next: Record<string, number>) => void;
-  closing?: boolean;
 }) {
   const expenseCategories = categories.filter((category) => category !== "รายได้");
   const [draft, setDraft] = useState<Record<string, string>>(() =>
@@ -443,18 +441,11 @@ export function BudgetSheet({
       if (draft[category]?.trim() && value > 0) next[category] = value;
     }
     onSave(next);
-    onClose();
+    onBack();
   };
 
   return (
-    <SheetFrame onClose={onClose} className="edit-sheet budget-sheet" closing={closing}>
-        <div className="sheet-head">
-          <div>
-            <p className="eyebrow">ตั้งค่า</p>
-            <h2>งบประมาณต่อเดือน</h2>
-          </div>
-          <button onClick={onClose}>×</button>
-        </div>
+    <PageFrame onBack={onBack} eyebrow="ตั้งค่า" title="งบประมาณต่อเดือน" className="budget-page">
         <p className="budget-hint">ตั้งวงเงินต่อหมวดหมู่ เว้นว่างไว้ถ้าไม่ต้องการจำกัด</p>
         {expenseCategories.map((category) => (
           <label key={category} className="budget-row">
@@ -471,7 +462,7 @@ export function BudgetSheet({
         <button className="save" onClick={submit}>
           บันทึกงบประมาณ
         </button>
-    </SheetFrame>
+    </PageFrame>
   );
 }
 

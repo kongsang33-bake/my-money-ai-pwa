@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { clampInteger } from "@/lib/format";
 import { isPlatformAuthenticatorAvailable, isSixDigitPin, pinLength, pinMaxAttempts } from "@/lib/pin";
 import type { PinMode, Profile } from "@/lib/types";
-import { SheetFrame } from "@/components/primitives";
+import { PageFrame } from "@/components/primitives";
 
 export function PinGate({
   mode,
@@ -214,30 +214,28 @@ export function PinKeypad({
   );
 }
 
-export function PinSecuritySheet({
+export function SecurityView({
   pinEnabled,
   webauthnEnabled,
   busy,
   error,
-  onClose,
+  onBack,
   onEnable,
   onChange,
   onDisable,
   onEnableFaceId,
   onDisableFaceId,
-  closing,
 }: {
   pinEnabled: boolean;
   webauthnEnabled: boolean;
   busy: boolean;
   error: string;
-  onClose: () => void;
+  onBack: () => void;
   onEnable: (nextPin: string) => void;
   onChange: (currentPin: string, nextPin: string) => void;
   onDisable: (currentPin: string) => void;
   onEnableFaceId: (currentPin: string) => Promise<boolean>;
   onDisableFaceId: (currentPin: string) => Promise<boolean>;
-  closing?: boolean;
 }) {
   const [mode, setMode] = useState<"change" | "disable" | "faceid">("change");
   const [currentPin, setCurrentPin] = useState("");
@@ -261,14 +259,7 @@ export function PinSecuritySheet({
   }, []);
 
   return (
-    <SheetFrame onClose={onClose} className="edit-sheet pin-edit-sheet" closing={closing}>
-        <div className="sheet-head">
-          <div>
-            <p className="eyebrow">ความปลอดภัย</p>
-            <h2>{pinEnabled ? "จัดการ PIN" : "เปิดใช้ PIN"}</h2>
-          </div>
-          <button onClick={onClose}>×</button>
-        </div>
+    <PageFrame onBack={onBack} eyebrow="ความปลอดภัย" title={pinEnabled ? "จัดการ PIN" : "เปิดใช้ PIN"} className="pin-page">
         {pinEnabled && (
           <div className="report-period-toggle pin-mode-toggle">
             <button className={mode === "change" ? "active" : ""} onClick={() => setMode("change")}>เปลี่ยน PIN</button>
@@ -333,7 +324,7 @@ export function PinSecuritySheet({
             )}
           </>
         )}
-    </SheetFrame>
+    </PageFrame>
   );
 }
 

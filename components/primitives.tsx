@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Check, Info } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, Info } from "lucide-react";
 import { formatMoney, moneySign } from "@/lib/format";
 import type { ConfirmDialogState, EmptyAction, Toast } from "@/lib/types";
 
@@ -121,6 +121,48 @@ export function SheetFrame({ children, onClose, className = "edit-sheet", closin
       >
         {children}
       </section>
+    </div>
+  );
+}
+
+/**
+ * The full-page counterpart to SheetFrame. Same body markup and the same
+ * `.edit-sheet` form styles (globals.css scopes the panel chrome to
+ * `.sheet-backdrop >` so only the modal path picks it up) laid out as a screen
+ * with the standard `.add-title` back header instead of a panel over a scrim.
+ *
+ * A destination reached from the side menu is a place in the app, not
+ * something that pops up over the place you were: it deserves a back button,
+ * the page's own scroll, and no focus trap. Screens built with this are
+ * ordinary Tab values in app/page.tsx, which is also what gives them the
+ * scroll-to-top and view-in animation every other tab gets for free.
+ */
+export function PageFrame({
+  children,
+  onBack,
+  eyebrow,
+  title,
+  actions,
+  className = "",
+}: {
+  children: React.ReactNode;
+  onBack: () => void;
+  eyebrow: string;
+  title: string;
+  actions?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`view edit-sheet ${className}`}>
+      <div className="add-title">
+        <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
+        <div>
+          <p className="eyebrow">{eyebrow}</p>
+          <h2>{title}</h2>
+        </div>
+        {actions}
+      </div>
+      {children}
     </div>
   );
 }

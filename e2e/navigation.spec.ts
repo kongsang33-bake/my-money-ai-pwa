@@ -22,11 +22,11 @@ test.describe("navigation", () => {
     // so the old <body> position:fixed lock was a no-op and the page went on
     // scrolling under the sheet.
     await app.locator(".activity-timeline-list button, .entry-tappable").first().click();
-    await expect(app.locator(".edit-sheet")).toBeVisible();
+    await expect(app.locator(".sheet-backdrop > .edit-sheet")).toBeVisible();
     expect(await app.evaluate(() => (document.querySelector(".phone") as HTMLElement).style.overflowY)).toBe("hidden");
 
     await app.keyboard.press("Escape");
-    await expect(app.locator(".edit-sheet")).toHaveCount(0);
+    await expect(app.locator(".sheet-backdrop > .edit-sheet")).toHaveCount(0);
     expect(await app.evaluate(() => (document.querySelector(".phone") as HTMLElement).style.overflowY)).toBe("");
   });
 
@@ -35,6 +35,47 @@ test.describe("navigation", () => {
     await expect(app.locator(".side-menu")).toBeVisible();
     await app.locator(".side-menu-backdrop").click({ position: { x: 8, y: 400 } });
     await expect(app.locator(".side-menu")).toHaveCount(0);
+  });
+
+
+  // Every side-menu entry is a screen you navigate to, not a sheet that opens
+  // over the tab you were on: it gets a back button, keeps the bottom nav
+  // live, and does not scroll-lock the page behind it.
+  const MENU_SCREENS = [
+    { label: "งบประมาณ", heading: "งบประมาณต่อเดือน" },
+    { label: "ถาม AI เรื่องเงิน", heading: "ถาม AI เรื่องเงิน" },
+    { label: "ส่งออกรีพอร์ท", heading: "รีพอร์ท Excel / Sheets" },
+    { label: "จัดการโปรไฟล์", heading: "จัดการโปรไฟล์" },
+    { label: "รหัส PIN", heading: "เปิดใช้ PIN" },
+  ];
+
+  for (const { label, heading } of MENU_SCREENS) {
+    test(`opens ${label} as its own screen`, async ({ app }) => {
+      await app.locator(".menu-button").click();
+      await app.locator(".side-menu-list button", { hasText: label }).click();
+
+      await expect(app.locator(".add-title h2")).toHaveText(heading);
+      // The drawer is gone and nothing modal took its place.
+      await expect(app.locator(".side-menu")).toHaveCount(0);
+      await expect(app.locator(".sheet-backdrop")).toHaveCount(0);
+      // A page, so the app scroller is still live and the nav still reachable.
+      expect(await app.evaluate(() => (document.querySelector(".phone") as HTMLElement).style.overflowY)).toBe("");
+      await expect(app.locator(".bottom-nav")).not.toHaveAttribute("inert", /.*/);
+
+      await app.locator(".add-title > button:first-child").click();
+      await expect(app.locator(".hero-wallet-card, .wallet-grid")).toBeVisible();
+    });
+  }
+
+  test("keeps a menu screen reachable from the bottom nav", async ({ app }) => {
+    await app.locator(".menu-button").click();
+    await app.locator(".side-menu-list button", { hasText: "งบประมาณ" }).click();
+    await expect(app.locator(".add-title h2")).toHaveText("งบประมาณต่อเดือน");
+
+    // Tapping a nav tab from a menu screen leaves it, the way it would from
+    // any other tab -- a sheet would have swallowed the tap instead.
+    await navigate(app, "history");
+    await expect(app.locator(".add-title h2")).not.toHaveText("งบประมาณต่อเดือน");
   });
 
   test("moves between months in History", async ({ app }) => {

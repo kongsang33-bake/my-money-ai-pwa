@@ -105,7 +105,7 @@ import {
   SuccessPulse,
 } from "@/components/home";
 import { HistoryFilterBar, HistoryInsight, IncomeBreakdown, MonthSummary, MonthlyTrendChart } from "@/components/history";
-import { Auth, PinGate, PinSecuritySheet } from "@/components/auth";
+import { Auth, PinGate, SecurityView } from "@/components/auth";
 import type { WalletInput, RecurringExpenseInput } from "@/components/wallets-recurring";
 import type { DebtorInput } from "@/components/debtors";
 import dynamic from "next/dynamic";
@@ -122,17 +122,17 @@ import dynamic from "next/dynamic";
 // a chunk fetch reads as a frozen tap. Their chunks are also warmed on
 // idle right after unlock (see the prefetch effect in Home), so in
 // practice the skeleton is only ever seen on a cold, slow connection.
-const AskFinanceSheet = dynamic(() => import("@/components/sheets").then((m) => m.AskFinanceSheet), { ssr: false });
+const AskFinanceView = dynamic(() => import("@/components/sheets").then((m) => m.AskFinanceView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const ConfirmLogout = dynamic(() => import("@/components/sheets").then((m) => m.ConfirmLogout), { ssr: false });
 const MoreSheet = dynamic(() => import("@/components/sheets").then((m) => m.MoreSheet), { ssr: false });
-const ProfileEditSheet = dynamic(() => import("@/components/sheets").then((m) => m.ProfileEditSheet), { ssr: false });
-const ReportExportSheet = dynamic(() => import("@/components/sheets").then((m) => m.ReportExportSheet), { ssr: false });
+const ProfileView = dynamic(() => import("@/components/sheets").then((m) => m.ProfileView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
+const ReportExportView = dynamic(() => import("@/components/sheets").then((m) => m.ReportExportView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const SideMenu = dynamic(() => import("@/components/sheets").then((m) => m.SideMenu), { ssr: false });
 
 const DebtorsView = dynamic(() => import("@/components/debtors").then((m) => m.DebtorsView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const DebtorEditSheet = dynamic(() => import("@/components/debtors").then((m) => m.DebtorEditSheet), { ssr: false });
 const RecapSheet = dynamic(() => import("@/components/debtors").then((m) => m.RecapSheet), { ssr: false });
-const BudgetSheet = dynamic(() => import("@/components/debtors").then((m) => m.BudgetSheet), { ssr: false });
+const BudgetsView = dynamic(() => import("@/components/debtors").then((m) => m.BudgetsView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 
 const WalletsView = dynamic(() => import("@/components/wallets-recurring").then((m) => m.WalletsView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const WalletEditSheet = dynamic(() => import("@/components/wallets-recurring").then((m) => m.WalletEditSheet), { ssr: false });
@@ -146,7 +146,13 @@ const InvestmentPriceSheet = dynamic(() => import("@/components/portfolio").then
 const InvestmentConfirmUnitsSheet = dynamic(() => import("@/components/portfolio").then((m) => m.InvestmentConfirmUnitsSheet), { ssr: false });
 const InvestmentAiSheet = dynamic(() => import("@/components/portfolio").then((m) => m.InvestmentAiSheet), { ssr: false });
 
-type Tab = "home" | "add" | "history" | "debtors" | "wallets" | "recurring" | "goals" | "portfolio";
+// Every destination is a Tab, including the five reached from the side menu.
+// Those used to be modal sheets stacked over whatever tab you were on, which
+// made a place in the app behave like a popup -- no back button, no scroll of
+// its own, and gone the moment you tapped the scrim.
+type Tab =
+  | "home" | "add" | "history" | "debtors" | "wallets" | "recurring" | "goals" | "portfolio"
+  | "budgets" | "ask" | "report" | "profile" | "security";
 
 const secondaryWalletTags: { tag: WalletTag; label: string; className: string }[] = [
   { tag: "savings", label: walletTagLabels.savings, className: "savings-wallet" },
@@ -239,7 +245,6 @@ export default function Home() {
   // Where the "อื่น ๆ" nav button sat when it was tapped, so the sheet can
   // expand out of it instead of just sliding up from the bottom edge.
   const [moreOrigin, setMoreOrigin] = useState<SheetOrigin | null>(null);
-  const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [debtorSheetMode, setDebtorSheetMode] = useState<"create" | "edit" | null>(null);
   const [editingDebtor, setEditingDebtor] = useState<Debtor | null>(null);
   const [selectedDebtor, setSelectedDebtor] = useState<Debtor | null>(null);
@@ -266,9 +271,6 @@ export default function Home() {
   const [budgets, setBudgets] = useState<Record<string, number>>({});
   const [goals, setGoals] = useState<MoneyGoal[]>([]);
   const [goalSheetOpen, setGoalSheetOpen] = useState(false);
-  const [budgetSheetOpen, setBudgetSheetOpen] = useState(false);
-  const [reportSheetOpen, setReportSheetOpen] = useState(false);
-  const [askAiOpen, setAskAiOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [closingToastIds, setClosingToastIds] = useState<number[]>([]);
@@ -282,7 +284,6 @@ export default function Home() {
     (typeof document !== "undefined" && document.documentElement.dataset.theme === "dark" ? "dark" : "light"));
   const [pinMode, setPinMode] = useState<PinMode>("checking");
   const [pinError, setPinError] = useState("");
-  const [pinSheetOpen, setPinSheetOpen] = useState(false);
   const scrollRootRef = useRef<HTMLElement | null>(null);
   const backgroundedAtRef = useRef<number | null>(null);
   const authUserIdRef = useRef<string | null | undefined>(undefined);
@@ -772,7 +773,6 @@ export default function Home() {
   const overlayOpen =
     menuOpen ||
     moreOpen ||
-    profileSheetOpen ||
     !!editing ||
     !!debtorSheetMode ||
     !!walletSheetMode ||
@@ -782,12 +782,8 @@ export default function Home() {
     !!investmentPriceTarget ||
     !!investmentConfirmTarget ||
     investmentAiSheetOpen ||
-    budgetSheetOpen ||
-    reportSheetOpen ||
-    askAiOpen ||
     goalSheetOpen ||
     recapOpen ||
-    pinSheetOpen ||
     logoutOpen;
   // Scroll-lock behind an open sheet. This has to target .phone, not <body>:
   // .phone is the app's real scroll container (height: 100dvh; overflow-y:
@@ -825,15 +821,15 @@ export default function Home() {
       if (!backgroundedAt || pinMode !== "unlocked" || !profile?.pin_hash) return;
       if (Date.now() - backgroundedAt < pinBackgroundLockMs) return;
       setMenuOpen(false);
-      setProfileSheetOpen(false);
-      setBudgetSheetOpen(false);
-      setReportSheetOpen(false);
       setRecapOpen(false);
       setDebtorSheetMode(null);
       setWalletSheetMode(null);
       setRecurringSheetMode(null);
-      setPinSheetOpen(false);
       setConfirmDialog(null);
+      // The menu screens (profile, PIN, budgets, ...) are tabs now, so
+      // clearing them means going home rather than closing an overlay --
+      // otherwise the unlock lands straight back on the PIN settings page.
+      setTab("home");
       setPinError("");
       setPinMode("locked");
     };
@@ -1052,12 +1048,9 @@ export default function Home() {
       totalSpent: budgeted.reduce((sum, item) => sum + item.spent, 0),
     };
   }, [budgets, categorySummary]);
-  // Declared here rather than down with the other sheet-dismiss hooks because
-  // the aiFinanceContext memo below gates on its mounted flag.
-  const askAiDismiss = useDismiss(askAiOpen, () => setAskAiOpen(false));
-  const askAiMounted = askAiDismiss.mounted;
+  const askAiMounted = tab === "ask";
 
-  // Built only while the Ask-AI sheet is actually mounted. This allocates ~120
+  // Built only while the Ask-AI screen is actually open. This allocates ~120
   // objects out of the current cycle's entries plus several derived arrays,
   // and exactly one consumer reads it -- a dynamically-imported sheet that is
   // closed almost all of the time. Computing it eagerly meant every month
@@ -1712,7 +1705,7 @@ export default function Home() {
       .single();
     if (data) setProfile(data as Profile);
     if (outcome.blocked) {
-      setPinSheetOpen(false);
+      setTab("home");
       setPinMode("locked");
     }
     setPinError(error ? error.message : outcome.message);
@@ -2393,12 +2386,8 @@ export default function Home() {
   const menuDismiss = useDismiss(menuOpen, () => setMenuOpen(false));
   const menuVisible = menuDismiss.mounted && !menuDismiss.closing;
   const moreDismiss = useDismiss(moreOpen, () => setMoreOpen(false));
-  const profileSheetDismiss = useDismiss(profileSheetOpen, () => setProfileSheetOpen(false));
-  const budgetSheetDismiss = useDismiss(budgetSheetOpen, () => setBudgetSheetOpen(false));
   const goalSheetDismiss = useDismiss(goalSheetOpen, () => setGoalSheetOpen(false));
-  const reportSheetDismiss = useDismiss(reportSheetOpen, () => setReportSheetOpen(false));
   const recapDismiss = useDismiss(recapOpen, () => setRecapOpen(false));
-  const pinSheetDismiss = useDismiss(pinSheetOpen, () => { setPinSheetOpen(false); setPinError(""); });
   const logoutDismiss = useDismiss<[boolean]>(logoutOpen, (confirmed) => { setLogoutOpen(false); if (confirmed) void supabase?.auth.signOut(); });
   const confirmDialogDismiss = useDismiss<[boolean]>(!!confirmDialog, (confirmed) => closeConfirmDialog(confirmed));
   const clearSavePulse = useCallback(() => setSavePulse(0), []);
@@ -2476,7 +2465,7 @@ export default function Home() {
                 {(dueSoonRecurring.length > 0 || budgetGlance.totalBudget > 0) && (
                   <div className="home-focus-grid">
                     {dueSoonRecurring.length > 0 && <DueSoonCard items={dueSoonRecurring} onManage={() => setTab("recurring")} onLogNow={logRecurringNow} />}
-                    {budgetGlance.totalBudget > 0 && <BudgetGlanceCard budgetGlance={budgetGlance} onManage={() => setBudgetSheetOpen(true)} />}
+                    {budgetGlance.totalBudget > 0 && <BudgetGlanceCard budgetGlance={budgetGlance} onManage={() => setTab("budgets")} />}
                   </div>
                 )}
                 <CashFlowTrendCard summary={cashFlowSummary} />
@@ -2487,7 +2476,7 @@ export default function Home() {
             {!dataLoading && !wallets.length && !entries.length && !debtors.length && (
               <FirstRunHomeState
                 onCreateWallet={openSheet(() => { setEditingWallet(null); setWalletSheetMode("create"); })}
-                onSetBudget={() => setBudgetSheetOpen(true)}
+                onSetBudget={() => setTab("budgets")}
                 onAddEntry={() => openAddTab()}
               />
             )}
@@ -2705,6 +2694,62 @@ export default function Home() {
           />
         )}
 
+        {tab === "budgets" && (
+          <BudgetsView budgets={budgets} onBack={() => setTab("home")} onSave={updateBudgets} />
+        )}
+
+        {tab === "ask" && user && aiFinanceContext && (
+          <AskFinanceView context={aiFinanceContext} userId={user.id} aiContext={profile?.ai_context ?? ""} onBack={() => setTab("home")} />
+        )}
+
+        {tab === "report" && (
+          <ReportExportView
+            entries={entries}
+            wallets={wallets}
+            receivableSummary={receivableSummary}
+            payableSummary={payableSummary}
+            selectedMonth={selectedMonth}
+            monthStartDay={monthStartDay}
+            onBack={() => setTab("home")}
+          />
+        )}
+
+        {tab === "profile" && (
+          <ProfileView
+            profile={profile}
+            busy={busy}
+            error={error}
+            onBack={() => setTab("home")}
+            onSave={saveProfile}
+            netWorthDisplay={netWorthDisplay}
+            onSaveNetWorthDisplay={updateNetWorthDisplay}
+          />
+        )}
+
+        {tab === "security" && (
+          <SecurityView
+            pinEnabled={!!profile?.pin_hash && !!profile.pin_salt}
+            webauthnEnabled={!!profile?.webauthn_enabled}
+            busy={busy}
+            error={pinError}
+            onBack={() => { setTab("home"); setPinError(""); }}
+            onEnable={async (nextPin) => {
+              await savePin(nextPin, "unlocked");
+              setTab("home");
+            }}
+            onChange={async (currentPin, nextPin) => {
+              const ok = await changePin(currentPin, nextPin);
+              if (ok) setTab("home");
+            }}
+            onDisable={async (currentPin) => {
+              const ok = await disablePin(currentPin);
+              if (ok) setTab("home");
+            }}
+            onEnableFaceId={enableFaceId}
+            onDisableFaceId={disableFaceId}
+          />
+        )}
+
         {tab === "portfolio" && (
           <PortfolioView
             holdings={portfolioHoldings}
@@ -2827,11 +2872,11 @@ export default function Home() {
             profile={profile}
             onClose={menuDismiss.requestClose}
             onLogout={() => { menuDismiss.requestClose(); setLogoutOpen(true); }}
-            onOpenProfile={openSheet(() => { menuDismiss.requestClose(); setProfileSheetOpen(true); })}
-            onOpenBudgets={() => { menuDismiss.requestClose(); setBudgetSheetOpen(true); }}
-            onOpenReport={() => { menuDismiss.requestClose(); setReportSheetOpen(true); }}
-            onOpenAsk={() => { menuDismiss.requestClose(); setAskAiOpen(true); }}
-            onOpenPin={() => { menuDismiss.requestClose(); setPinSheetOpen(true); }}
+            onOpenProfile={() => { menuDismiss.requestClose(); setTab("profile"); }}
+            onOpenBudgets={() => { menuDismiss.requestClose(); setTab("budgets"); }}
+            onOpenReport={() => { menuDismiss.requestClose(); setTab("report"); }}
+            onOpenAsk={() => { menuDismiss.requestClose(); setTab("ask"); }}
+            onOpenPin={() => { menuDismiss.requestClose(); setTab("security"); }}
             theme={theme}
             onSetTheme={changeTheme}
             closing={menuDismiss.closing}
@@ -2852,29 +2897,8 @@ export default function Home() {
             originPoint={moreOrigin}
           />
         )}
-        {profileSheetDismiss.mounted && (
-          <ProfileEditSheet profile={profile} busy={busy} error={error} onClose={profileSheetDismiss.requestClose} onSave={saveProfile} closing={profileSheetDismiss.closing} netWorthDisplay={netWorthDisplay} onSaveNetWorthDisplay={updateNetWorthDisplay} />
-        )}
-        {budgetSheetDismiss.mounted && (
-          <BudgetSheet budgets={budgets} onClose={budgetSheetDismiss.requestClose} onSave={updateBudgets} closing={budgetSheetDismiss.closing} />
-        )}
         {goalSheetDismiss.mounted && (
           <GoalEditSheet onClose={goalSheetDismiss.requestClose} onCreate={createGoal} closing={goalSheetDismiss.closing} />
-        )}
-        {reportSheetDismiss.mounted && (
-          <ReportExportSheet
-            entries={entries}
-            wallets={wallets}
-            receivableSummary={receivableSummary}
-            payableSummary={payableSummary}
-            selectedMonth={selectedMonth}
-            monthStartDay={monthStartDay}
-            onClose={reportSheetDismiss.requestClose}
-            closing={reportSheetDismiss.closing}
-          />
-        )}
-        {askAiMounted && user && aiFinanceContext && (
-          <AskFinanceSheet context={aiFinanceContext} userId={user.id} aiContext={profile?.ai_context ?? ""} onClose={askAiDismiss.requestClose} closing={askAiDismiss.closing} />
         )}
         {recapDismiss.mounted && (
           <RecapSheet
@@ -2886,30 +2910,6 @@ export default function Home() {
             streak={streak}
             onClose={recapDismiss.requestClose}
             closing={recapDismiss.closing}
-          />
-        )}
-        {pinSheetDismiss.mounted && (
-          <PinSecuritySheet
-            pinEnabled={!!profile?.pin_hash && !!profile.pin_salt}
-            webauthnEnabled={!!profile?.webauthn_enabled}
-            busy={busy}
-            error={pinError}
-            onClose={pinSheetDismiss.requestClose}
-            onEnable={async (nextPin) => {
-              await savePin(nextPin, "unlocked");
-              pinSheetDismiss.requestClose();
-            }}
-            onChange={async (currentPin, nextPin) => {
-              const ok = await changePin(currentPin, nextPin);
-              if (ok) pinSheetDismiss.requestClose();
-            }}
-            onDisable={async (currentPin) => {
-              const ok = await disablePin(currentPin);
-              if (ok) pinSheetDismiss.requestClose();
-            }}
-            onEnableFaceId={enableFaceId}
-            onDisableFaceId={disableFaceId}
-            closing={pinSheetDismiss.closing}
           />
         )}
         {logoutDismiss.mounted && (

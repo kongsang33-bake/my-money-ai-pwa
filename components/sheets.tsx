@@ -30,7 +30,7 @@ import { buildReportCsv, downloadCsv } from "@/lib/csv";
 import { compressProfileImage } from "@/lib/image";
 import { nameInitial } from "@/lib/category";
 import type { AiChatMessage, AiFinanceContext, Entry, NetWorthDisplaySettings, Profile, ReportPeriod, Theme, Wallet } from "@/lib/types";
-import { SheetFrame, StateCard, useEscapeToClose, useFocusTrap } from "@/components/primitives";
+import { PageFrame, SheetFrame, StateCard, useEscapeToClose, useFocusTrap } from "@/components/primitives";
 import type { SheetOrigin } from "@/components/primitives";
 
 export function cleanAiAnswer(value: string) {
@@ -56,7 +56,7 @@ export function cleanAiAnswer(value: string) {
     .trim();
 }
 
-export function AskFinanceSheet({ context, userId, aiContext, onClose, closing }: { context: AiFinanceContext; userId: string; aiContext: string; onClose: () => void; closing?: boolean }) {
+export function AskFinanceView({ context, userId, aiContext, onBack }: { context: AiFinanceContext; userId: string; aiContext: string; onBack: () => void }) {
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [question, setQuestion] = useState("");
@@ -130,14 +130,13 @@ export function AskFinanceSheet({ context, userId, aiContext, onClose, closing }
     } catch { /* clipboard unavailable, ignore */ }
   };
 
-  return <SheetFrame onClose={onClose} className="edit-sheet ask-ai-sheet" closing={closing}>
-    <div className="sheet-head">
-      <div><p className="eyebrow">ผู้ช่วยการเงิน</p><h2>ถาม AI เรื่องเงิน</h2></div>
-      <div className="ask-ai-head-actions">
-        {messages.length > 0 && <button className="ask-ai-reset" onClick={() => { void resetChat(); }} aria-label="เริ่มแชทใหม่"><Trash2 size={16} strokeWidth={2.25} /></button>}
-        <button onClick={onClose}>×</button>
-      </div>
-    </div>
+  return <PageFrame
+    onBack={onBack}
+    eyebrow="ผู้ช่วยการเงิน"
+    title="ถาม AI เรื่องเงิน"
+    className="ask-ai-page"
+    actions={messages.length > 0 ? <button className="ask-ai-reset" onClick={() => { void resetChat(); }} aria-label="เริ่มแชทใหม่"><Trash2 size={16} strokeWidth={2.25} /></button> : undefined}
+  >
     <p className="ask-ai-period">อ้างอิงตัวเลขที่แอปคำนวณไว้ใน{context.periodLabel}</p>
     {messages.length === 0 && (
       <div className="ask-ai-examples"><span>ลองถาม</span><button onClick={() => setQuestion("เดือนนี้ฉันใช้เงินกับหมวดไหนมากที่สุด")}>หมวดไหนใช้เยอะสุด</button><button onClick={() => setQuestion("ช่วงนี้เงินของฉันเหลือเป็นอย่างไร")}>เงินเหลือเป็นอย่างไร</button></div>
@@ -158,18 +157,17 @@ export function AskFinanceSheet({ context, userId, aiContext, onClose, closing }
     {error && <StateCard tone="error" title="ถาม AI ไม่สำเร็จ" detail={error} />}
     <textarea className="ask-ai-input" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="เช่น เดือนนี้มีรายจ่ายอะไรที่ควรระวังบ้าง" />
     <button className="save" onClick={() => { void ask(); }} disabled={busy || !question.trim()}>{busy ? "กำลังวิเคราะห์..." : "ถาม AI"}</button>
-  </SheetFrame>;
+  </PageFrame>;
 }
 
-export function ReportExportSheet({
+export function ReportExportView({
   entries,
   wallets,
   receivableSummary,
   payableSummary,
   selectedMonth,
   monthStartDay,
-  onClose,
-  closing,
+  onBack,
 }: {
   entries: Entry[];
   wallets: Wallet[];
@@ -177,8 +175,7 @@ export function ReportExportSheet({
   payableSummary: { name: string; amount: number }[];
   selectedMonth: string;
   monthStartDay: number;
-  onClose: () => void;
-  closing?: boolean;
+  onBack: () => void;
 }) {
   const [period, setPeriod] = useState<ReportPeriod>("month");
   const [month, setMonth] = useState(selectedMonth);
@@ -206,14 +203,7 @@ export function ReportExportSheet({
   }
 
   return (
-    <SheetFrame onClose={onClose} className="edit-sheet report-sheet" closing={closing}>
-        <div className="sheet-head">
-          <div>
-            <p className="eyebrow">ส่งออกข้อมูล</p>
-            <h2>รีพอร์ท Excel / Sheets</h2>
-          </div>
-          <button onClick={onClose}>×</button>
-        </div>
+    <PageFrame onBack={onBack} eyebrow="ส่งออกข้อมูล" title="รีพอร์ท Excel / Sheets" className="report-page">
 
         <div className="report-period-toggle">
           <button className={period === "month" ? "active" : ""} onClick={() => setPeriod("month")}>รายเดือน</button>
@@ -266,7 +256,7 @@ export function ReportExportSheet({
         <button className="save" onClick={submit}>
           ดาวน์โหลดไฟล์ CSV
         </button>
-    </SheetFrame>
+    </PageFrame>
   );
 }
 
@@ -470,22 +460,20 @@ const aiContextTemplate = [
   "เก็บเหรียญ = เปิดเครื่องเก็บรายได้ เป็นรายรับเข้ากระเป๋าเหรียญสำรอง",
 ].join("\n");
 
-export function ProfileEditSheet({
+export function ProfileView({
   profile,
   busy,
   error,
-  onClose,
+  onBack,
   onSave,
-  closing,
   netWorthDisplay,
   onSaveNetWorthDisplay,
 }: {
   profile: Profile | null;
   busy: boolean;
   error: string;
-  onClose: () => void;
+  onBack: () => void;
   onSave: (next: { nickname: string; app_icon: string; app_icon_image: string; month_start_day: number; ai_context: string }) => Promise<boolean>;
-  closing?: boolean;
   netWorthDisplay: NetWorthDisplaySettings;
   onSaveNetWorthDisplay: (next: NetWorthDisplaySettings) => void;
 }) {
@@ -511,18 +499,11 @@ export function ProfileEditSheet({
 
   const submit = async () => {
     const saved = await onSave({ nickname, app_icon, app_icon_image, month_start_day, ai_context });
-    if (saved) onClose();
+    if (saved) onBack();
   };
 
   return (
-    <SheetFrame onClose={onClose} closing={closing}>
-      <div className="sheet-head">
-        <div>
-          <p className="eyebrow">ตั้งค่า</p>
-          <h2>จัดการโปรไฟล์</h2>
-        </div>
-        <button onClick={onClose}>x</button>
-      </div>
+    <PageFrame onBack={onBack} eyebrow="ตั้งค่า" title="จัดการโปรไฟล์" className="profile-page">
       <section className="profile-editor-preview" aria-label="ตัวอย่างโปรไฟล์">
         <span className={`profile-editor-avatar ${app_icon_image ? "has-image" : ""}`}>
           {app_icon_image ? <NextImage className="profile-image" src={app_icon_image} alt="รูปโปรไฟล์ปัจจุบัน" width={72} height={72} unoptimized /> : (app_icon || nameInitial(profileName))}
@@ -599,7 +580,7 @@ export function ProfileEditSheet({
       <button className="save" onClick={submit} disabled={busy}>
         {busy ? "กำลังบันทึก..." : "บันทึก"}
       </button>
-    </SheetFrame>
+    </PageFrame>
   );
 }
 export function ConfirmLogout({ onCancel, onConfirm, closing }: { onCancel: () => void; onConfirm: () => void; closing?: boolean }) {

@@ -1926,10 +1926,29 @@ a:focus-visible {
 .ask-ai-period { margin: var(--s-2) 0 var(--s-3); color: var(--ink-3); font-size: var(--fs-micro); }
 .ask-ai-examples span { flex: 0 0 auto; color: var(--ink-3); font-size: var(--fs-micro); align-self: center; }
 .ask-ai-examples button { flex: 0 0 auto; padding: 6px 10px; border-radius: var(--r-full); background: var(--surface-2); color: var(--ink-2); font-size: var(--fs-micro); }
-.ask-ai-input { width: 100%; min-height: 72px; resize: vertical; }
-.ask-ai-head-actions { display: flex; align-items: center; gap: var(--s-2); flex-shrink: 0; }
-.ask-ai-reset { width: 36px; height: 36px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line-soft); display: grid; place-items: center; color: var(--ink-3); flex-shrink: 0; }
-.ask-ai-thread { display: flex; flex-direction: column; gap: var(--s-2); max-height: 46vh; overflow-y: auto; margin-bottom: var(--s-3); padding-right: 2px; }
+.ask-ai-input {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  background: var(--surface-3);
+  transition: box-shadow var(--t-2) var(--e-out), background var(--t-2) var(--e-out), border-color var(--t-2) var(--e-out);
+}
+
+.ask-ai-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+.ask-ai-reset { margin-left: auto; width: 36px; height: 36px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line-soft); display: grid; place-items: center; color: var(--ink-3); flex-shrink: 0; }
+.ask-ai-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 74dvh;
+}
+
+.ask-ai-thread { display: flex; flex-direction: column; gap: var(--s-2); flex: 1; min-height: 120px; overflow-y: auto; margin-bottom: var(--s-3); padding-right: 2px; }
 .ask-ai-thread-hint { color: var(--ink-3); font-size: var(--fs-caption); text-align: center; padding: var(--s-4) 0; }
 .ask-ai-bubble { position: relative; max-width: 85%; padding: var(--s-3); padding-right: calc(var(--s-3) + 22px); border-radius: var(--r-md); }
 .ask-ai-bubble p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-body); line-height: 1.6; }
@@ -3474,14 +3493,23 @@ button.entry-main {
   background: transparent;
 }
 
+/* .edit-sheet is the FORM BODY, not the panel: everything under it (labels,
+   inputs, the floating field caption, selects, textareas, check rows) is
+   shared by the modal sheets and by the full-page screens that PageFrame
+   builds out of the same markup. The panel chrome -- the sliding animation,
+   the rounded top, the grabber, the scrim-relative sizing -- is scoped to
+   `.sheet-backdrop >` below, so a page gets the fields and none of the modal. */
 .edit-sheet {
   width: 100%;
   max-width: 100%;
+  overflow-x: hidden;
+}
+
+.sheet-backdrop > .edit-sheet {
   max-height: min(86vh, 760px);
   background: var(--surface);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   padding: var(--s-6) var(--s-5) max(var(--s-7), env(safe-area-inset-bottom));
-  overflow-x: hidden;
   overflow-y: auto;
   box-shadow: 0 -8px 32px color-mix(in srgb, var(--ink) 14%, transparent);
   animation: sheet-in var(--t-3) var(--e-out) both;
@@ -3501,7 +3529,7 @@ button.entry-main {
   animation: sheet-origin-in var(--t-4) var(--e-in-out) both;
 }
 
-.edit-sheet::before {
+.sheet-backdrop > .edit-sheet::before {
   content: "";
   display: block;
   width: 40px;
@@ -3582,7 +3610,7 @@ button.entry-main {
   margin-top: 0;
 }
 
-.edit-sheet label > span, .manual-entry-form label > span, .draft label > span {
+.edit-sheet label > span:not(.cat-dot), .manual-entry-form label > span, .draft label > span {
   position: absolute;
   left: 14px;
   top: 50%;
@@ -3677,29 +3705,14 @@ button.entry-main {
   transform: scale(0.96);
 }
 
-.report-sheet {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  bottom: auto;
-  transform: translate(-50%, -50%);
-  width: min(100% - var(--s-5), 440px);
-  max-height: min(82dvh, 680px);
-  border-radius: var(--r-xl);
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  animation: report-sheet-in var(--t-3) var(--e-out) both;
-}
-
-.report-sheet label input,
-.report-sheet label select {
+.report-page label input,
+.report-page label select {
   width: 100%;
   max-width: 100%;
   min-width: 0;
 }
 
-.report-sheet *, .budget-sheet * {
+.report-page *, .budget-page * {
   min-width: 0;
 }
 
@@ -3836,7 +3849,7 @@ button.entry-main {
   margin-bottom: var(--s-4);
 }
 
-.budget-row {
+.edit-sheet label.budget-row {
   display: flex;
   align-items: center;
   gap: var(--s-3);
@@ -3853,9 +3866,14 @@ button.entry-main {
 .budget-row:nth-child(7) { animation-delay: 420ms; }
 .budget-row:nth-child(8) { animation-delay: 465ms; }
 
-.budget-row input {
+/* Same specificity story as the row itself: `.edit-sheet label input` (0,1,2)
+   was beating a bare `.budget-row input` (0,1,1), so the field stretched to
+   the full row instead of sitting as a fixed-width amount box. margin-left
+   pins every field to the same right edge, so the rows read as one column. */
+.edit-sheet label.budget-row input {
   width: 110px;
   margin-top: 0;
+  margin-left: auto;
   flex-shrink: 0;
 }
 
@@ -4896,11 +4914,6 @@ button.entry-main {
   to { opacity: 0; }
 }
 
-@keyframes report-sheet-in {
-  from { opacity: 0.4; transform: translate(-50%, calc(-50% + 18px)) scale(0.98); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-
 @keyframes drawer-in {
   from { opacity: 0.6; transform: translateX(24px); }
   to { opacity: 1; transform: translateX(0); }
@@ -4938,11 +4951,6 @@ button.entry-main {
   to { opacity: 0; transform: translateY(24px); }
 }
 
-@keyframes report-sheet-out {
-  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  to { opacity: 0; transform: translate(-50%, calc(-50% + 18px)) scale(0.98); }
-}
-
 @keyframes drawer-out {
   from { opacity: 1; transform: translateX(0); }
   to { opacity: 0; transform: translateX(24px); }
@@ -4978,10 +4986,6 @@ button.entry-main {
    vanishing. Match the sheet's run and hold the scrim up for most of it. */
 .sheet-backdrop.from-origin.closing {
   animation: scrim-out-late var(--t-3) var(--e-in-out) both;
-}
-
-.report-sheet.closing {
-  animation: report-sheet-out var(--t-3) var(--e-out) both;
 }
 
 .side-menu.closing {
@@ -5159,7 +5163,7 @@ button.entry-main {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .edit-sheet {
+  .sheet-backdrop > .edit-sheet {
     width: min(560px, calc(100vw - 48px));
     max-height: min(84vh, 780px);
     border-radius: var(--r-xl);
