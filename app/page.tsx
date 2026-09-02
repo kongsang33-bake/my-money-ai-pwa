@@ -41,6 +41,7 @@ import {
   calculateImpacts,
   categorySpendAmount,
   defaultWalletId,
+  describeWalletDeletion,
   expandTransferDraft,
   filterEntries,
   mapTransactionRow,
@@ -51,7 +52,6 @@ import {
   payableForDisplay,
   totalWallet,
   unnamedDebtor,
-  walletDeletionMove,
   withEntries,
 } from "@/lib/money";
 import { buildWalletInsight, computeStreak, deriveQuickShortcuts, isRecurringLogged, lastSevenDayCashFlow } from "@/lib/insights";
@@ -2011,19 +2011,18 @@ export default function Home() {
   // and gives undo something it can actually reverse.
   async function deleteWallet(wallet: Wallet) {
     if (!supabase) return;
-    const currentBalance = displayWallets.find((item) => item.id === wallet.id)?.display_balance ?? wallet.balance;
-    const balanceWarning = Math.abs(currentBalance) > 0.005
-      ? ` ตอนนี้ยังมียอดเหลืออยู่ ${moneySign}${formatMoney(currentBalance)}`
-      : "";
-    const { fallbackWallet, movingEntryIds } = walletDeletionMove(wallet, wallets, entries);
-    const moveWarning = movingEntryIds.length
-      ? fallbackWallet
-        ? ` รายการ ${movingEntryIds.length} รายการจะย้ายไปกระเป๋า "${fallbackWallet.name}"`
-        : ` รายการ ${movingEntryIds.length} รายการจะไม่มีกระเป๋ากำกับ เพราะไม่เหลือกระเป๋าอื่นให้ย้ายไป`
-      : "";
+    // What is about to happen, and how to say it, both come from
+    // describeWalletDeletion (lib/money.ts) -- the wording is what the user
+    // agrees to, so it is tested rather than assembled inline here.
+    const { fallbackWallet, movingEntryIds, detail } = describeWalletDeletion(
+      wallet,
+      wallets,
+      entries,
+      displayWallets.find((item) => item.id === wallet.id)?.display_balance,
+    );
     const confirmed = await requestConfirm({
       title: "ลบกระเป๋านี้?",
-      detail: `ลบ "${wallet.name}" ออกจากกระเป๋าตังค์${balanceWarning}${moveWarning}`,
+      detail,
       confirmLabel: "ลบกระเป๋า",
       tone: "danger",
     });

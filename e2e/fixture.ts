@@ -16,6 +16,23 @@ import type { Entry, PreviewSeed } from "../lib/types.ts";
 // months, three wallets, two debtors -- so that a render timing measured here
 // means something, and they are derived from a fixed clock so two runs get
 // byte-identical data and a spec can assert on a total.
+//
+// WHAT THIS SUITE CANNOT REACH. The seed is local state only; there is no
+// Supabase client, because the suite runs without credentials. Every mutation
+// in app/page.tsx opens with `if (!supabase) return`, so saving, editing,
+// deleting, PIN changes and anything else that writes are all no-ops here --
+// the tap lands and nothing happens, including the confirm dialogs some of
+// them raise first. A spec written against one of those will pass or fail for
+// reasons unrelated to what it claims to check.
+//
+// So the boundary is: everything up to a write. Rendering, navigation,
+// theming, scroll behaviour, local component state, code-split chunks and the
+// error boundary are real here; the mutations are covered by unit tests on
+// the pure functions they delegate to (planEntryUpdate,
+// describeWalletDeletion, recordFailedPinAttempt, ...). Moving the boundary
+// means giving the fixture a stub Supabase client, which is a bigger piece of
+// work than it looks and should be a deliberate decision, not something
+// smuggled in with a new spec.
 
 const USER_ID = "preview-user";
 const CATEGORIES = ["อาหาร", "บิลประจำ", "เดินทาง", "บันเทิง", "ของใช้", "สุขภาพ"];

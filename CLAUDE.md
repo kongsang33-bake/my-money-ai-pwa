@@ -164,6 +164,15 @@ token value.
   silently now that the error boundary keeps the app on its feet. If
   Playwright cannot download its own browser, point `E2E_CHROMIUM_PATH` at
   an existing Chromium binary.
+- **The e2e suite stops at the first write, and that is not a gap you can
+  close with another spec.** It runs without Supabase credentials, and every
+  mutation in `app/page.tsx` opens with `if (!supabase) return` — so save,
+  edit, delete, PIN changes and the confirm dialogs some of them raise are
+  all no-ops in the suite. Don't write a spec that taps one; it will pass or
+  fail for reasons unrelated to what it claims. Those paths are covered by
+  unit-testing the pure functions they delegate to instead
+  (`planEntryUpdate`, `describeWalletDeletion`, `recordFailedPinAttempt`).
+  Moving that boundary needs a stub Supabase client in `e2e/fixture.ts`.
 - For a *visual* check, screenshot through the same fixture in both themes
   and at all three widths. Judge a design change on the screenshots, not on
   the diff.

@@ -4,7 +4,7 @@
 // are wrong) so it's kept as pure, dependency-free functions that
 // lib/money.test.ts can exercise directly.
 import { TYPES_OWED_TO_USER, TYPES_USER_OWES, transactionKind, walletTagLabels, type TransactionType, type WalletTag } from "./taxonomy.ts";
-import { toFiniteNumber, toMoneyAmount } from "./format.ts";
+import { formatMoney, moneySign, toFiniteNumber, toMoneyAmount } from "./format.ts";
 import { cycleBounds, entriesInRange, shiftMonthKey } from "./cycle.ts";
 import type {
   Debtor,
@@ -389,6 +389,62 @@ export function recurringExpenseEntry(
     occurred_at: billingDate.toISOString(),
     wallet_id: defaultWalletId(wallets),
   });
+}
+
+export type WalletDeletionSummary = {
+  /** The wallet money is moving to, or null when this is the last wallet. */
+  fallbackWallet: Wallet | null;
+  /** The entries that will be re-pointed, in the order the delete found them. */
+  movingEntryIds: string[];
+  /** The balance the user is about to lose track of, after transactions. */
+  balance: number;
+  /** Whether that balance is worth warning about at all. */
+  hasBalance: boolean;
+  /** The confirm dialog's body, ready to show. */
+  detail: string;
+};
+
+/**
+ * Everything the "delete this wallet?" confirmation needs to say, worked out
+ * in one place.
+ *
+ * This is the last thing a user reads before an irreversible action that can
+ * silently re-point hundreds of entries, so the wording is not decoration --
+ * getting the count or the destination wrong here means someone agrees to
+ * something other than what happens. It was previously assembled inline in
+ * app/page.tsx between the balance lookup and the confirm call.
+ *
+ * `displayBalance` is the wallet's balance *including* its transactions, which
+ * only the caller can know; it falls back to the wallet's opening balance when
+ * the ledger has no row for it.
+ */
+export function describeWalletDeletion(
+  wallet: Wallet,
+  wallets: Wallet[],
+  entries: Entry[],
+  displayBalance?: number,
+): WalletDeletionSummary {
+  const { fallbackWallet, movingEntryIds } = walletDeletionMove(wallet, wallets, entries);
+  const balance = displayBalance ?? wallet.balance;
+  // Half a satang: a wallet whose transactions cancel out to a rounding
+  // residue is empty as far as anyone reading this dialog is concerned, and
+  // warning about "฿0.00 left" trains people to click through the warning.
+  const hasBalance = Math.abs(balance) > 0.005;
+
+  const balanceWarning = hasBalance ? ` ตอนนี้ยังมียอดเหลืออยู่ ${moneySign}${formatMoney(balance)}` : "";
+  const moveWarning = movingEntryIds.length
+    ? fallbackWallet
+      ? ` รายการ ${movingEntryIds.length} รายการจะย้ายไปกระเป๋า "${fallbackWallet.name}"`
+      : ` รายการ ${movingEntryIds.length} รายการจะไม่มีกระเป๋ากำกับ เพราะไม่เหลือกระเป๋าอื่นให้ย้ายไป`
+    : "";
+
+  return {
+    fallbackWallet,
+    movingEntryIds,
+    balance,
+    hasBalance,
+    detail: `ลบ "${wallet.name}" ออกจากกระเป๋าตังค์${balanceWarning}${moveWarning}`,
+  };
 }
 
 export function netWorthAsOf(wallets: Wallet[], debtors: Debtor[], entriesUpToCutoff: Entry[], portfolioValue = 0, debtFormula: NetWorthDebtFormula = "full") {

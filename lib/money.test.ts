@@ -5,6 +5,7 @@ import {
   buildPortfolioTrend,
   buildWalletLedger,
   calculateImpacts,
+  describeWalletDeletion,
   expandTransferDraft,
   filterEntries,
   netWorthAsOf,
@@ -536,5 +537,83 @@ describe("recurringExpenseEntry", () => {
 
   it("uses the id it is given", () => {
     assert.equal(recurringExpenseEntry({ name: "x", amount: 1 }, billingDate, [cashWallet], "chosen").id, "chosen");
+  });
+});
+
+describe("describeWalletDeletion", () => {
+  const cash: Wallet = { id: "cash", user_id: "u1", name: "บัญชีหลัก", tag: "cash", balance: 1000, icon: null, icon_color: null, is_default: true };
+  const petty: Wallet = { id: "petty", user_id: "u1", name: "กระเป๋าย่อย", tag: "petty", balance: 200, icon: null, icon_color: null, is_default: false };
+
+  it("names the wallet being deleted", () => {
+    assert.ok(describeWalletDeletion(petty, [cash, petty], [], 0).detail.includes("กระเป๋าย่อย"));
+  });
+
+  it("says how many entries move and where they go", () => {
+    // The number and the destination are the two facts the user is agreeing
+    // to. Either one wrong and they consented to something else.
+    const entries = [makeEntry({ id: "a", wallet_id: "petty" }), makeEntry({ id: "b", wallet_id: "petty" })];
+    const summary = describeWalletDeletion(petty, [cash, petty], entries, 0);
+    assert.deepEqual(summary.movingEntryIds, ["a", "b"]);
+    assert.equal(summary.fallbackWallet?.id, "cash");
+    assert.ok(summary.detail.includes("2 รายการ"), summary.detail);
+    assert.ok(summary.detail.includes("บัญชีหลัก"), summary.detail);
+  });
+
+  it("warns that entries will be left with no wallet when none is left", () => {
+    const summary = describeWalletDeletion(cash, [cash], [makeEntry({ id: "a", wallet_id: "cash" })], 0);
+    assert.equal(summary.fallbackWallet, null);
+    assert.ok(summary.detail.includes("ไม่เหลือกระเป๋าอื่น"), summary.detail);
+  });
+
+  it("says nothing about moving when nothing moves", () => {
+    const summary = describeWalletDeletion(petty, [cash, petty], [makeEntry({ wallet_id: "cash" })], 0);
+    assert.deepEqual(summary.movingEntryIds, []);
+    assert.ok(!summary.detail.includes("รายการ"), summary.detail);
+  });
+
+  it("warns about a balance that is still in the wallet", () => {
+    const summary = describeWalletDeletion(petty, [cash, petty], [], 250);
+    assert.equal(summary.hasBalance, true);
+    assert.ok(summary.detail.includes("250"), summary.detail);
+  });
+
+  it("warns about a negative balance too", () => {
+    // An overdrawn wallet is at least as important to mention as a full one.
+    const summary = describeWalletDeletion(petty, [cash, petty], [], -80);
+    assert.equal(summary.hasBalance, true);
+    assert.ok(summary.detail.includes("80"), summary.detail);
+  });
+
+  it("stays quiet about a rounding residue", () => {
+    // Warning "there is still ฿0.00 left" on every empty wallet teaches people
+    // to click through the dialog without reading it.
+    for (const residue of [0, 0.001, -0.004]) {
+      const summary = describeWalletDeletion(petty, [cash, petty], [], residue);
+      assert.equal(summary.hasBalance, false, `${residue} should not count as a balance`);
+      assert.ok(!summary.detail.includes("ยอดเหลือ"), summary.detail);
+    }
+  });
+
+  it("warns about anything above the rounding threshold", () => {
+    assert.equal(describeWalletDeletion(petty, [cash, petty], [], 0.01).hasBalance, true);
+  });
+
+  it("uses the balance after transactions, not the opening balance", () => {
+    // wallet.balance is what the wallet started with; the number that matters
+    // is what is in it now, which only the caller's ledger knows.
+    const summary = describeWalletDeletion(petty, [cash, petty], [], 4321);
+    assert.equal(summary.balance, 4321);
+    assert.ok(summary.detail.includes("4,321"), summary.detail);
+  });
+
+  it("falls back to the opening balance when the ledger has no row", () => {
+    const summary = describeWalletDeletion(petty, [cash, petty], []);
+    assert.equal(summary.balance, 200);
+  });
+
+  it("mentions both the balance and the move when both apply", () => {
+    const summary = describeWalletDeletion(petty, [cash, petty], [makeEntry({ id: "a", wallet_id: "petty" })], 500);
+    assert.ok(summary.detail.includes("500"), summary.detail);
+    assert.ok(summary.detail.includes("1 รายการ"), summary.detail);
   });
 });
