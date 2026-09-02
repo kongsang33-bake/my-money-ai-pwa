@@ -169,3 +169,19 @@ export const SPLASH_MIN_VISIBLE_MS = 1300;
 // process.env.NEXT_PUBLIC_ENABLE_PREVIEW inline, and
 // `npm run verify:preview-stripped` fails the build if that ever stops
 // working.
+
+// Home's cash-flow card. The window is 7 days; the baseline it compares that
+// window against is the 28 days *before* it (one full cycle, so it spans both
+// the flush and the lean end of a month, and excludes the current window so
+// this week can't average itself down).
+// A 7-day NET is structurally negative for anyone paid monthly -- salary
+// lands once, spending happens daily -- so the card reports spend against
+// that baseline instead. Below MIN_DAYS of covered history the baseline
+// isn't trustworthy and the card says so rather than judging.
+export const CASH_FLOW_WINDOW_DAYS = 7;
+export const SPEND_BASELINE_WINDOW_DAYS = 28;
+export const SPEND_BASELINE_MIN_DAYS = 14;
+
+// How far this week's spend has to sit from the baseline before the card
+// calls it high or low rather than normal.
+export const SPEND_BASELINE_TOLERANCE_PERCENT = 10;

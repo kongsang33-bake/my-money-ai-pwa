@@ -944,7 +944,7 @@ export default function Home() {
   const netWorth = walletBalanceTotal + receivableTotal - netWorthPayable + portfolioTotalValue;
   const savingsRate = monthlyIncome > 0 ? (monthlyBalance / monthlyIncome) * 100 : 0;
   const walletInsight = useMemo(() => buildWalletInsight(mainWallet, monthlyOutflow, cycleRange.end), [mainWallet, monthlyOutflow, cycleRange.end]);
-  const cashFlowTrend = useMemo(() => lastSevenDayCashFlow(entries, new Date()), [entries]);
+  const cashFlowSummary = useMemo(() => lastSevenDayCashFlow(entries, new Date()), [entries]);
   const monthlyTrend = useMemo(
     () => buildMonthlyTrend(entries, wallets, debtors, selectedMonth, monthStartDay, 6, portfolioTotalValue, netWorthDisplay.formula),
     [entries, wallets, debtors, selectedMonth, monthStartDay, portfolioTotalValue, netWorthDisplay.formula],
@@ -2479,7 +2479,7 @@ export default function Home() {
                     {budgetGlance.totalBudget > 0 && <BudgetGlanceCard budgetGlance={budgetGlance} onManage={() => setBudgetSheetOpen(true)} />}
                   </div>
                 )}
-                <CashFlowTrendCard trend={cashFlowTrend} />
+                <CashFlowTrendCard summary={cashFlowSummary} />
                 <SpendingPersonalityCard topCategory={discretionaryTopCategory} trend={discretionaryCategoryTrend} monthlyOutflow={monthlyOutflow} hasBillsOnly={!discretionaryTopCategory && monthlyOutflow > 0} />
               </>
             )}

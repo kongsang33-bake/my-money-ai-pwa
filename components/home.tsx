@@ -5,6 +5,7 @@ import { ChevronLeft, TrendingDown, TrendingUp, Users, Wallet as WalletIcon } fr
 import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
 import { formatMoney, formatPercent, formatShortDate, formatSignedMoney, moneySign, toMoneyAmount } from "@/lib/format";
 import { shiftMonthKey } from "@/lib/cycle";
+import type { CashFlowSummary } from "@/lib/insights";
 import { categoryColor, categoryTint, nameColor } from "@/lib/category";
 import type { Entry, MoneyGoal, NetWorthDebtFormula, RecurringExpense } from "@/lib/types";
 import { CategoryIcon, WalletAvatarGlyph } from "@/components/shared";
@@ -386,23 +387,25 @@ export function GoalEditSheet({ onClose, onCreate, closing }: { onClose: () => v
   );
 }
 
-export function CashFlowTrendCard({ trend }: { trend: { key: string; label: string; income: number; expense: number }[] }) {
-  const totalIncome = trend.reduce((sum, day) => sum + day.income, 0);
-  const totalExpense = trend.reduce((sum, day) => sum + day.expense, 0);
-  const net = totalIncome - totalExpense;
-  const maxIncome = Math.max(...trend.map((day) => day.income), 1);
-  const maxExpense = Math.max(...trend.map((day) => day.expense), 1);
-  const isEmpty = !totalIncome && !totalExpense;
+export function CashFlowTrendCard({ summary }: { summary: CashFlowSummary }) {
+  const { days, spend, income, avgDaily, baselineDaily, deltaPercent, tone } = summary;
+  const isEmpty = !spend && !income;
+  // Both series scale to the largest DAY OF SPENDING, so the plot reads as one
+  // chart: separate income/expense maxima used to make a ฿20 refund stand as
+  // tall as a ฿5,000 rent payment. Payday dwarfs every expense in the window,
+  // so an income bar clips at the ceiling instead of flattening the spending
+  // detail this card is about -- the exact inflow is spelled out below it.
+  const max = Math.max(...days.map((day) => day.expense), 1);
+  // min-height on the bar keeps a real-but-tiny amount visible, so a zero has
+  // to be left out of the DOM entirely or every quiet day sprouts a stub.
+  const barHeight = (value: number) => `${Math.min(100, Math.max(3, (value / max) * 100))}%`;
 
   return (
     <section className="home-focus-card cashflow-trend-card">
       <div className="home-focus-head">
         <div>
-          <span>กระแสเงินสด 7 วันล่าสุด</span>
-          <strong className={net >= 0 ? "income" : "expense"}>
-            {net < 0 ? "−" : "+"}
-            <CountUpMoney value={Math.abs(net)} />
-          </strong>
+          <span>ใช้จ่าย 7 วันล่าสุด</span>
+          <strong><CountUpMoney value={spend} /></strong>
         </div>
       </div>
       {isEmpty ? (
@@ -411,17 +414,32 @@ export function CashFlowTrendCard({ trend }: { trend: { key: string; label: stri
           <p>ยังไม่มีรายการใน 7 วันล่าสุด</p>
         </div>
       ) : (
-        <div className="cashflow-bars">
-          {trend.map((day) => (
-            <div key={day.key}>
-              <span>
-                <i className="income" style={{ height: `${day.income ? Math.max(3, (day.income / maxIncome) * 100) : 0}%` }} />
-                <i className="expense" style={{ height: `${day.expense ? Math.max(3, (day.expense / maxExpense) * 100) : 0}%` }} />
+        <>
+          <p className="cashflow-pace">
+            เฉลี่ยวันละ {moneySign}{formatMoney(avgDaily)}
+            {" · "}
+            <span className={`cashflow-verdict ${tone}`}>
+              {tone === "unknown" ? "ยังเทียบกับปกติไม่ได้"
+                : tone === "steady" ? "พอ ๆ กับปกติ"
+                  : `${tone === "high" ? "มากกว่า" : "น้อยกว่า"}ปกติ ${Math.abs(deltaPercent)}%`}
+            </span>
+          </p>
+          <div className="cashflow-plot">
+            {tone !== "unknown" && (
+              <i className="cashflow-baseline" style={{ bottom: barHeight(baselineDaily) }} aria-hidden="true" />
+            )}
+            {days.map((day) => (
+              <span key={day.key}>
+                {day.income > 0 && <i className="income" style={{ height: barHeight(day.income) }} />}
+                {day.expense > 0 && <i className="expense" style={{ height: barHeight(day.expense) }} />}
               </span>
-              <small>{day.label}</small>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          <div className="cashflow-labels">
+            {days.map((day) => <small key={day.key}>{day.label}</small>)}
+          </div>
+          {income > 0 && <p className="cashflow-inflow">รับเข้าช่วงนี้ {moneySign}{formatMoney(income)}</p>}
+        </>
       )}
     </section>
   );

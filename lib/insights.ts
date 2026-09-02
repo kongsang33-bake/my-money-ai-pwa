@@ -1,7 +1,13 @@
 // Home-screen insight builders: quick-add shortcuts derived from recent
 // history, the day-streak counter, the "how am I doing this cycle" wallet
-// blurb, and the 7-day cash flow sparkline data.
-import { MS_PER_DAY } from "./constants.ts";
+// blurb, and the 7-day spend-pace sparkline data.
+import {
+  CASH_FLOW_WINDOW_DAYS,
+  MS_PER_DAY,
+  SPEND_BASELINE_MIN_DAYS,
+  SPEND_BASELINE_TOLERANCE_PERCENT,
+  SPEND_BASELINE_WINDOW_DAYS,
+} from "./constants.ts";
 import { formatMoney, moneySign } from "./format.ts";
 import { daysRemainingInCycle, entriesInRange, startOfDay } from "./cycle.ts";
 import type { Entry, QuickShortcut, RecurringExpense } from "./types.ts";
@@ -81,18 +87,79 @@ export function isRecurringLogged(item: RecurringExpense, entries: Entry[], cycl
   );
 }
 
-export function lastSevenDayCashFlow(entries: Entry[], anchorDate: Date) {
+export type SpendPaceTone = "unknown" | "low" | "steady" | "high";
+
+export type CashFlowSummary = {
+  days: { key: string; label: string; income: number; expense: number }[];
+  spend: number;
+  income: number;
+  avgDaily: number;
+  baselineDaily: number;
+  deltaPercent: number;
+  tone: SpendPaceTone;
+};
+
+// The card this feeds asks "am I spending more than usual?", not "am I up or
+// down?" -- see CASH_FLOW_WINDOW_DAYS in lib/constants.ts for why a 7-day net
+// can't answer anything. So the headline number is `spend`, and the judgement
+// lives in `tone`/`deltaPercent`: this window's spend against the average day
+// of the 28 days before it.
+export function lastSevenDayCashFlow(entries: Entry[], anchorDate: Date): CashFlowSummary {
   const today = startOfDay(anchorDate);
-  return Array.from({ length: 7 }, (_, index) => {
-    const time = today - (6 - index) * MS_PER_DAY;
-    const dayEntries = entries.filter((entry) => startOfDay(new Date(entry.occurred_at)) === time && entry.transaction_type !== "transfer");
-    const income = dayEntries.filter((entry) => entry.wallet_impact > 0).reduce((sum, entry) => sum + entry.wallet_impact, 0);
-    const expense = dayEntries.filter((entry) => entry.wallet_impact < 0).reduce((sum, entry) => sum + Math.abs(entry.wallet_impact), 0);
+  const windowStart = today - (CASH_FLOW_WINDOW_DAYS - 1) * MS_PER_DAY;
+  const baselineStart = windowStart - SPEND_BASELINE_WINDOW_DAYS * MS_PER_DAY;
+
+  const buckets = new Map<number, { income: number; expense: number }>();
+  let baselineSpend = 0;
+  let firstEntryDay = Infinity;
+
+  for (const entry of entries) {
+    if (entry.transaction_type === "transfer") continue;
+    const day = startOfDay(new Date(entry.occurred_at));
+    if (day < firstEntryDay) firstEntryDay = day;
+    if (day >= windowStart && day <= today) {
+      let bucket = buckets.get(day);
+      if (!bucket) buckets.set(day, (bucket = { income: 0, expense: 0 }));
+      if (entry.wallet_impact > 0) bucket.income += entry.wallet_impact;
+      else bucket.expense += Math.abs(entry.wallet_impact);
+    } else if (day >= baselineStart && day < windowStart && entry.wallet_impact < 0) {
+      baselineSpend += Math.abs(entry.wallet_impact);
+    }
+  }
+
+  const days = Array.from({ length: CASH_FLOW_WINDOW_DAYS }, (_, index) => {
+    const time = windowStart + index * MS_PER_DAY;
+    const bucket = buckets.get(time);
     return {
       key: String(time),
       label: new Date(time).toLocaleDateString("th-TH", { weekday: "short" }),
-      income,
-      expense,
+      income: bucket?.income ?? 0,
+      expense: bucket?.expense ?? 0,
     };
   });
+
+  const spend = days.reduce((sum, day) => sum + day.expense, 0);
+  const income = days.reduce((sum, day) => sum + day.income, 0);
+  const avgDaily = spend / CASH_FLOW_WINDOW_DAYS;
+
+  // Divide by the days the baseline window actually covers, not by a flat 28:
+  // an account that is three weeks old would otherwise have its average
+  // diluted by a week that never existed, and read as overspending forever.
+  const baselineEnd = windowStart - MS_PER_DAY;
+  const baselineDays = firstEntryDay === Infinity
+    ? 0
+    : Math.round((baselineEnd - Math.max(baselineStart, firstEntryDay)) / MS_PER_DAY) + 1;
+  const baselineDaily = baselineDays >= SPEND_BASELINE_MIN_DAYS ? baselineSpend / baselineDays : 0;
+
+  if (baselineDaily <= 0) {
+    return { days, spend, income, avgDaily, baselineDaily: 0, deltaPercent: 0, tone: "unknown" };
+  }
+
+  const deltaPercent = Math.round(((avgDaily - baselineDaily) / baselineDaily) * 100);
+  const tone: SpendPaceTone =
+    deltaPercent <= -SPEND_BASELINE_TOLERANCE_PERCENT ? "low"
+      : deltaPercent >= SPEND_BASELINE_TOLERANCE_PERCENT ? "high"
+        : "steady";
+
+  return { days, spend, income, avgDaily, baselineDaily, deltaPercent, tone };
 }

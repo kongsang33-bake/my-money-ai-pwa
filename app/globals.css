@@ -2900,29 +2900,50 @@ a:focus-visible {
   margin: 0 -2px;
 }
 
-.cashflow-bars {
+/* Spend pace, above the chart: the amount is the neutral headline, the
+   verdict against the user's own baseline is what carries the color. */
+.cashflow-pace {
+  color: var(--ink-3);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  margin-bottom: var(--s-4);
+}
+
+.cashflow-verdict.low { color: var(--income); }
+.cashflow-verdict.high { color: var(--expense); }
+.cashflow-verdict.steady, .cashflow-verdict.unknown { color: var(--ink-2); }
+
+.cashflow-plot, .cashflow-labels {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: var(--s-2);
-  min-height: 72px;
+}
+
+.cashflow-plot {
+  position: relative;
+  height: 56px;
   align-items: end;
 }
 
-.cashflow-bars > div {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
+/* The user's own average day, drawn across the plot so "which days ran hot"
+   is readable from the shape alone, without reading a number. */
+.cashflow-baseline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed var(--line-strong);
+  pointer-events: none;
 }
 
-.cashflow-bars span {
-  height: 56px;
+.cashflow-plot > span {
+  height: 100%;
   display: flex;
   align-items: end;
   justify-content: center;
   gap: 3px;
 }
 
-.cashflow-bars i {
+.cashflow-plot span i {
   display: block;
   width: 8px;
   min-height: 3px;
@@ -2931,13 +2952,23 @@ a:focus-visible {
   animation: grow-bar var(--t-3) var(--e-out) both;
 }
 
-.cashflow-bars i.income { background: var(--income); }
-.cashflow-bars i.expense { background: var(--expense); }
+.cashflow-plot span i.income { background: var(--income); }
+.cashflow-plot span i.expense { background: var(--expense); }
 
-.cashflow-bars small {
+.cashflow-labels {
+  margin-top: 4px;
+}
+
+.cashflow-labels small {
   text-align: center;
   color: var(--ink-3);
   font-size: var(--fs-micro);
+}
+
+.cashflow-inflow {
+  margin-top: var(--s-3);
+  color: var(--ink-3);
+  font-size: var(--fs-caption);
 }
 
 .trend-legend {
