@@ -52,6 +52,22 @@ test.describe("AI composer", () => {
     await expect(textarea).toHaveValue("อย่าลบข้อความนี้");
   });
 
+  // DateField hides the native control's own text (which the OS renders in
+  // the browser's locale, not the app's) and paints a Thai date over it. The
+  // two are separate elements, so the risk is they drift: the input holds a
+  // date the overlay is not showing.
+  test("shows the draft's date in Thai and keeps it in step with the input", async ({ app }) => {
+    await app.locator(".ai-suggestions .quick-chip").first().click();
+    await app.locator(".draft-details-toggle").first().click();
+
+    const shell = app.locator(".draft .date-shell").first();
+    await expect(shell.locator(".date-shell-text")).toBeVisible();
+
+    await shell.locator('input[type="date"]').fill("2026-01-15");
+    await expect(shell.locator(".date-shell-text")).toHaveText("15 ม.ค. 2569");
+    await expect(shell.locator('input[type="date"]')).toHaveValue("2026-01-15");
+  });
+
   test("keeps the analyse button disabled until there is something to analyse", async ({ app }) => {
     const analyse = app.getByRole("button", { name: "ให้ AI แยกรายการ" });
     await expect(analyse).toBeDisabled();

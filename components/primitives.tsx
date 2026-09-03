@@ -2,8 +2,8 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Check, ChevronLeft, Info } from "lucide-react";
-import { formatMoney, moneySign } from "@/lib/format";
+import { AlertTriangle, CalendarDays, Check, ChevronLeft, Info } from "lucide-react";
+import { formatDateInputValue, formatMoney, moneySign } from "@/lib/format";
 import type { ConfirmDialogState, EmptyAction, Toast } from "@/lib/types";
 
 // A generic animated-count-up money display -- lives here rather than in
@@ -163,6 +163,39 @@ export function PageFrame({
         {actions}
       </div>
       {children}
+    </div>
+  );
+}
+
+/**
+ * A native <input type="date"> wearing the app's own face.
+ *
+ * The bare control has exactly the problem .select-shell exists to fix for
+ * <select>: the OS renders the value in the *browser's* locale, so a Thai app
+ * shows "09/03/2026", and it paints its own calendar glyph, which stays black
+ * on a dark panel because it is not an SVG that inherits currentColor.
+ *
+ * The real input stays -- it is what opens the OS picker and what keyboard
+ * and screen-reader users operate -- but its own text is transparent and the
+ * Thai date is drawn over it. CSS stretches the picker indicator across the
+ * whole field so a tap anywhere still opens the calendar.
+ */
+export function DateField({
+  value,
+  onChange,
+  max,
+  placeholder = "เลือกวันที่",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  max?: string;
+  placeholder?: string;
+}) {
+  return (
+    <div className="date-shell">
+      <input type="date" value={value} max={max} onChange={(event) => onChange(event.target.value)} />
+      <span className="date-shell-text" aria-hidden="true">{value ? formatDateInputValue(value) : placeholder}</span>
+      <CalendarDays className="date-shell-icon" aria-hidden="true" />
     </div>
   );
 }

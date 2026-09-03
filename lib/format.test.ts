@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { clampInteger, formatChatTime, formatSignedMoney, normalizeBillingDay, roundMoney, roundMoneyDeep, toFiniteNumber, toMoneyAmount } from "./format.ts";
+import { clampInteger, formatChatTime, formatDateInputValue, formatSignedMoney, normalizeBillingDay, roundMoney, roundMoneyDeep, toFiniteNumber, toMoneyAmount } from "./format.ts";
 
 describe("toFiniteNumber", () => {
   it("parses numeric strings", () => {
@@ -137,5 +137,21 @@ describe("roundMoneyDeep", () => {
 
   it("passes non-finite numbers through rather than turning them into NaN maths", () => {
     assert.deepEqual(roundMoneyDeep({ a: Infinity, b: NaN }), { a: Infinity, b: NaN });
+  });
+});
+
+describe("formatDateInputValue", () => {
+  it("renders a picker value as a Thai date with the Buddhist year", () => {
+    assert.equal(formatDateInputValue("2026-09-02"), "2 ก.ย. 2569");
+  });
+
+  it("reads the value as a local date, not as UTC midnight", () => {
+    // new Date("2026-01-01") is UTC midnight, which is 31 Dec for anyone
+    // behind UTC -- the picker's own value is a plain calendar date.
+    assert.equal(formatDateInputValue("2026-01-01"), "1 ม.ค. 2569");
+  });
+
+  it("returns an empty string for an unset field so the placeholder shows", () => {
+    assert.equal(formatDateInputValue(""), "");
   });
 });

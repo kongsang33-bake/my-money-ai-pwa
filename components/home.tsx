@@ -9,7 +9,7 @@ import type { CashFlowSummary } from "@/lib/insights";
 import { categoryColor, categoryTint, nameColor } from "@/lib/category";
 import type { Entry, MoneyGoal, NetWorthDebtFormula, RecurringExpense } from "@/lib/types";
 import { CategoryIcon, WalletAvatarGlyph } from "@/components/shared";
-import { CountUpMoney, EmptyNote, SheetFrame, SkeletonList, decimalInputPattern } from "@/components/primitives";
+import { CountUpMoney, DateField, EmptyNote, SheetFrame, SkeletonList, decimalInputPattern } from "@/components/primitives";
 
 export const CalendarHeatmap = memo(function CalendarHeatmap({
   start,
@@ -381,7 +381,7 @@ export function GoalEditSheet({ onClose, onCreate, closing }: { onClose: () => v
         <input inputMode="decimal" value={savedText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setSavedText(event.target.value); }} placeholder="0" />
         <span>มีเงินเก็บแล้ว</span>
       </label>
-      <label>วันที่อยากบรรลุ (ถ้ามี)<input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} /></label>
+      <label>วันที่อยากบรรลุ (ถ้ามี)<DateField value={deadline} onChange={setDeadline} /></label>
       <button className="save" onClick={submit} disabled={!name.trim() || toMoneyAmount(targetText) <= 0}>สร้างเป้าหมาย</button>
     </SheetFrame>
   );

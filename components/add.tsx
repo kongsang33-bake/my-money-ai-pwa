@@ -11,7 +11,7 @@ import { DEBT_TYPES, TYPES_USER_OWES, transactionKind, transactionTypeLabels, ty
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
 import { CategoryIcon, CategoryPicker } from "@/components/shared";
-import { AmountInput, EmptyNote, SheetFrame, StateCard } from "@/components/primitives";
+import { AmountInput, DateField, EmptyNote, SheetFrame, StateCard } from "@/components/primitives";
 
 // The whole "let AI write it for me" half of the Add tab: the example chips,
 // the date picker, the textarea, slip attachments and the analyse button.
@@ -90,7 +90,7 @@ export function AiComposer({
     <>
       <label className="entry-date-picker compact">
         <span>บันทึกของวันที่</span>
-        <input type="date" value={entryDate} max={maxDate} onChange={(event) => onChangeEntryDate(event.target.value)} />
+        <DateField value={entryDate} max={maxDate} onChange={onChangeEntryDate} />
       </label>
 
       <div className="ai-suggestions">
@@ -275,7 +275,7 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
         <div className="draft-grid draft-grid-secondary">
           <label>
             วันที่
-            <input type="date" value={toDateInput(draft.occurred_at)} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, draft.occurred_at) })} />
+            <DateField value={toDateInput(draft.occurred_at)} onChange={(next) => update({ occurred_at: withDateKeepingTime(next, draft.occurred_at) })} />
           </label>
           {!isTransfer && !!wallets.length && draft.transaction_type !== "card_charge" && (
             <label>
@@ -555,7 +555,7 @@ export function ManualEntryForm({
       )}
       <label>
         วันที่
-        <input type="date" value={toDateInput(draft.occurred_at)} max={todayDateInput()} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, draft.occurred_at) })} />
+        <DateField value={toDateInput(draft.occurred_at)} max={todayDateInput()} onChange={(next) => update({ occurred_at: withDateKeepingTime(next, draft.occurred_at) })} />
       </label>
       {!!wallets.length && draft.transaction_type !== "card_charge" && (
         // Same route treatment as the AI review card (see DraftRow): on a
@@ -718,7 +718,7 @@ export function EditSheet({
       )}
       <label>
         วันที่
-        <input type="date" value={toDateInput(entry.occurred_at)} onChange={(event) => update({ occurred_at: withDateKeepingTime(event.target.value, entry.occurred_at) })} />
+        <DateField value={toDateInput(entry.occurred_at)} onChange={(next) => update({ occurred_at: withDateKeepingTime(next, entry.occurred_at) })} />
       </label>
       {!!wallets.length && entry.transaction_type !== "card_charge" && !wasTransfer && (
         <label>

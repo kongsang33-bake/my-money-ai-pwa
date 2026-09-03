@@ -10,7 +10,7 @@ import { compressSlipImage } from "@/lib/image";
 import { nameColor } from "@/lib/category";
 import type { Entry, Investment, InvestmentDraftItem, PortfolioHolding, SlipImage, Wallet } from "@/lib/types";
 import { IconColorPicker, WalletAvatarGlyph } from "@/components/shared";
-import { CountUpMoney, EmptyNote, SheetFrame, SkeletonList, StateCard, decimalInputPattern } from "@/components/primitives";
+import { CountUpMoney, DateField, EmptyNote, SheetFrame, SkeletonList, StateCard, decimalInputPattern } from "@/components/primitives";
 
 export function PortfolioTrendChart({ trend }: { trend: { date: string; value: number }[] }) {
   if (trend.length < 2) return null;
@@ -277,7 +277,7 @@ export function InvestmentBuySheet({
       </label>
       <label>
         วันที่ซื้อ
-        <input type="date" value={occurredAt} max={todayDateInput()} onChange={(event) => setOccurredAt(event.target.value)} />
+        <DateField value={occurredAt} max={todayDateInput()} onChange={setOccurredAt} />
       </label>
       {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
       <button className="save" onClick={submit} disabled={busy || !(amount > 0) || !walletId || (!selected && !name.trim())}>
@@ -376,7 +376,7 @@ export function InvestmentPriceSheet({
       </label>
       <label>
         ราคา ณ วันที่
-        <input type="date" value={recordedAt} max={todayDateInput()} onChange={(event) => setRecordedAt(event.target.value)} />
+        <DateField value={recordedAt} max={todayDateInput()} onChange={setRecordedAt} />
       </label>
       {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
       <button className="save" onClick={submit} disabled={busy || !(nav > 0)}>
@@ -612,7 +612,7 @@ export function InvestmentAiSheet({
               </label>
               <label>
                 วันที่
-                <input type="date" value={draft.date} max={todayDateInput()} onChange={(event) => updateDraft(index, { date: event.target.value })} />
+                <DateField value={draft.date} max={todayDateInput()} onChange={(next) => updateDraft(index, { date: next })} />
               </label>
               <button type="button" className="review-cancel-all" onClick={() => removeDraft(index)}>ลบรายการนี้</button>
             </div>

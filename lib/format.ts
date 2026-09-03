@@ -46,6 +46,17 @@ export function roundMoneyDeep<T>(value: T): T {
   return value;
 }
 
+// A yyyy-mm-dd value from an <input type="date">, rendered for reading.
+// Parsed from its parts rather than through new Date(value): a bare date
+// string parses as UTC midnight, which lands on the day before for anyone
+// behind UTC -- Bangkok is ahead, but a browser is not always where the user
+// is, and this is the string the picker round-trips.
+export const formatDateInputValue = (value: string) => {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return "";
+  return formatShortDate(new Date(year, month - 1, day), { year: true });
+};
+
 export const toDateInput = (value: string) => localDateInput(new Date(value));
 export const toFiniteNumber = (value: unknown, fallback = 0) => {
   const number = Number(value);
