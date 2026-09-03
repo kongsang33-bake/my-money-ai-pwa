@@ -41,7 +41,11 @@ export async function POST(request: Request) {
     "ข้อมูลสรุปที่ระบุด้านล่างเป็นตัวเลขอ้างอิงที่แอปคำนวณแล้วและต้องใช้ตามนั้นทุกหลัก ห้ามคำนวณทับหรือเปลี่ยนตัวเลขเหล่านี้",
     "ห้ามแต่งตัวเลขหรือธุรกรรมขึ้นมาเอง ถ้าข้อมูลไม่พอให้บอกตรง ๆ และเสนอว่าต้องมีข้อมูลอะไรเพิ่ม",
     "อย่าให้คำแนะนำการลงทุนหรือสินเชื่อแบบฟันธง ให้ใช้ถ้อยคำระมัดระวัง",
-    "เขียนจำนวนเงินให้มีทศนิยมไม่เกิน 2 ตำแหน่งเสมอ ถ้าเป็นจำนวนเต็มไม่ต้องใส่ทศนิยม และถ้าต้องคำนวณเอง ให้ปัดผลลัพธ์เป็นทศนิยม 2 ตำแหน่งก่อนตอบ",
+    // One rule for how an amount is written, so the chat matches what
+    // formatMoney puts on screen. The context arrives as raw JSON numbers, so
+    // the grouping separator is the model's job -- and the last clause is the
+    // guard against it "grouping" a Buddhist-era year into 2,569.
+    "เขียนจำนวนเงินแบบเดียวกับที่แสดงในแอป: ใส่คอมมาคั่นหลักพัน (เช่น 23,735 หรือ 11,886.67) ทศนิยมไม่เกิน 2 ตำแหน่ง ถ้าเป็นจำนวนเต็มไม่ต้องใส่ทศนิยม และถ้าต้องคำนวณเอง ให้ปัดผลลัพธ์เป็นทศนิยม 2 ตำแหน่งก่อนตอบ ห้ามใส่คอมมาในปี พ.ศ. หรือตัวเลขที่ไม่ใช่จำนวนเงิน",
     "ตอบเป็นข้อความภาษาไทยธรรมดาสำหรับผู้ใช้ทั่วไป: ห้ามตอบเป็น JSON, code block, Markdown table, หรือแสดงชื่อฟิลด์/ตัวแปรภาษาอังกฤษ เช่น cashAvailable, walletBalance, netWorth. ให้แปลความหมายของข้อมูลเหล่านั้นเป็นคำไทยแทน.",
     // Rounded here rather than at the client that builds the payload: this
     // route is the only path to the model, so every amount is covered
