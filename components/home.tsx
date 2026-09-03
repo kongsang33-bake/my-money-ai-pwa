@@ -9,7 +9,7 @@ import type { CashFlowSummary } from "@/lib/insights";
 import { categoryColor, categoryTint, nameColor } from "@/lib/category";
 import type { Entry, MoneyGoal, NetWorthDebtFormula, RecurringExpense } from "@/lib/types";
 import { CategoryIcon, WalletAvatarGlyph } from "@/components/shared";
-import { CountUpMoney, DateField, EmptyNote, SheetFrame, SkeletonList, decimalInputPattern } from "@/components/primitives";
+import { CountUpMoney, DateField, EmptyNote, MonthField, SheetFrame, SkeletonList, decimalInputPattern } from "@/components/primitives";
 
 export const CalendarHeatmap = memo(function CalendarHeatmap({
   start,
@@ -77,7 +77,7 @@ export const CalendarHeatmap = memo(function CalendarHeatmap({
         <h2>ปฏิทินการใช้จ่าย</h2>
         <div className="heatmap-month-controls" aria-label="เลือกรอบเดือนของปฏิทิน">
           <button type="button" onClick={() => onChangeMonth(shiftMonthKey(selectedMonth, -1))} aria-label="เดือนก่อนหน้า">‹</button>
-          <input type="month" value={selectedMonth} onChange={(event) => { if (event.target.value) onChangeMonth(event.target.value); }} aria-label="เลือกเดือนและปี" />
+          <MonthField value={selectedMonth} onChange={onChangeMonth} />
           <button type="button" onClick={() => onChangeMonth(shiftMonthKey(selectedMonth, 1))} aria-label="เดือนถัดไป">›</button>
         </div>
       </div>
@@ -370,16 +370,16 @@ export function GoalEditSheet({ onClose, onCreate, closing }: { onClose: () => v
     <SheetFrame onClose={onClose} closing={closing}>
       <div className="sheet-head"><div><p className="eyebrow">เป้าหมายการเงิน</p><h2>สร้างเป้าหมายใหม่</h2></div><button onClick={onClose}>×</button></div>
       <label>
+        ชื่อเป้าหมาย
         <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น เงินฉุกเฉิน" />
-        <span>ชื่อเป้าหมาย</span>
       </label>
       <label>
+        ยอดเป้าหมาย
         <input inputMode="decimal" value={targetText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setTargetText(event.target.value); }} placeholder="50000" />
-        <span>ยอดเป้าหมาย</span>
       </label>
       <label>
+        มีเงินเก็บแล้ว
         <input inputMode="decimal" value={savedText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setSavedText(event.target.value); }} placeholder="0" />
-        <span>มีเงินเก็บแล้ว</span>
       </label>
       <label>วันที่อยากบรรลุ (ถ้ามี)<DateField value={deadline} onChange={setDeadline} /></label>
       <button className="save" onClick={submit} disabled={!name.trim() || toMoneyAmount(targetText) <= 0}>สร้างเป้าหมาย</button>

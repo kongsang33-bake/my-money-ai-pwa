@@ -421,7 +421,7 @@ input, textarea, select {
   display: block;
 }
 
-.date-shell input[type="date"] {
+.date-shell input[type="date"], .date-shell input[type="month"] {
   width: 100%;
   /* Hides the OS-locale text without hiding the field: the value still reads
      out to assistive tech from the input itself. */
@@ -432,7 +432,8 @@ input, textarea, select {
 /* Stretched over the whole field so tapping anywhere opens the picker, the
    way tapping a select anywhere opens its list. Chromium only; Safari and
    Firefox open their picker from a tap on the field regardless. */
-.date-shell input[type="date"]::-webkit-calendar-picker-indicator {
+.date-shell input[type="date"]::-webkit-calendar-picker-indicator,
+.date-shell input[type="month"]::-webkit-calendar-picker-indicator {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -2478,7 +2479,10 @@ a:focus-visible {
 
 .draft-header {
   display: flex;
-  align-items: flex-start;
+  /* flex-end, not flex-start: the title field carries its name above the
+     control like every other field now, so aligning to the top would park
+     the category icon beside the label instead of beside the input. */
+  align-items: flex-end;
   gap: var(--s-3);
   margin-bottom: var(--s-3);
   padding-right: var(--s-6);
@@ -2657,8 +2661,24 @@ a:focus-visible {
 .summary-head input {
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
-  padding: 6px 8px;
+  padding: 6px 28px 6px 8px;
   background: var(--surface-2);
+}
+
+/* MonthField's overlay is positioned for a full form field; these two are
+   compact controls, so it has to be re-seated against their own padding and
+   type size rather than the field default. */
+.summary-head .date-shell-text {
+  left: 8px;
+  right: 26px;
+  max-width: none;
+  font-size: var(--fs-caption);
+}
+
+.summary-head .date-shell-icon {
+  right: 8px;
+  width: 14px;
+  height: 14px;
 }
 
 .summary-grid {
@@ -2819,15 +2839,30 @@ a:focus-visible {
 }
 
 .heatmap-month-controls input {
-  width: 118px;
+  /* Wider than it was: "กันยายน 2569" is a longer string than "09/2026". */
+  width: 132px;
   height: 30px;
-  padding: 0 var(--s-1);
+  padding: 0 20px 0 var(--s-2);
   border: 1px solid var(--line-soft);
   border-radius: var(--r-sm);
   background: var(--surface);
   color: var(--ink-2);
   font-size: var(--fs-micro);
   font-weight: var(--fw-semibold);
+}
+
+.heatmap-month-controls .date-shell-text {
+  left: var(--s-2);
+  right: 18px;
+  max-width: none;
+  font-size: var(--fs-micro);
+  color: var(--ink-2);
+}
+
+.heatmap-month-controls .date-shell-icon {
+  right: 5px;
+  width: 13px;
+  height: 13px;
 }
 
 .heatmap-weekdays {
@@ -3831,6 +3866,14 @@ button.entry-main {
   flex-shrink: 0;
 }
 
+/* Every field in the app wears its name ABOVE the control, as a text node
+   inside the <label>. The alternative -- a <span> caption floating from
+   inside the field to its top border -- could never cover <select> or
+   <input type="date">, which always have a value and so would have sat
+   permanently floated; running both idioms side by side is what made a form
+   read as two different forms. It also needed :placeholder-shown, a
+   placeholder=" " on every field, and a :not() exclusion for each span that
+   was not a caption (.cat-dot, then .date-shell-text). */
 .edit-sheet label, .manual-entry-form label {
   position: relative;
   display: block;
@@ -3859,79 +3902,6 @@ button.entry-main {
 .draft label input:focus, .draft label select:focus {
   border-color: var(--accent);
   background: var(--surface);
-}
-
-/* Floating-label caption: a <span> sibling placed after the field inside
-   the same <label> (input/textarea before span, required for the ~
-   sibling selector below — implicit label association doesn't care
-   about child order, so this doesn't affect accessibility). Sits
-   centered inside the field at rest; floats to a small caption above
-   the border on focus or once the field has a value. */
-.edit-sheet label:has(> span) > input,
-.edit-sheet label:has(> span) > textarea,
-.manual-entry-form label:has(> span) > input,
-.manual-entry-form label:has(> span) > textarea,
-.draft label:has(> span) > input {
-  margin-top: 0;
-}
-
-.edit-sheet label > span:not(.cat-dot), .manual-entry-form label > span, .draft label > span {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  max-width: calc(100% - 28px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fs-body);
-  font-weight: var(--fw-semibold);
-  color: var(--ink-3);
-  background: var(--surface-3);
-  padding: 0 4px;
-  pointer-events: none;
-  transition: top var(--t-2) var(--e-out), font-size var(--t-2) var(--e-out), color var(--t-2) var(--e-out), background var(--t-2) var(--e-out);
-}
-
-/* :not(.date-shell-text) throughout: the `~` here only requires the span to
-   follow the input among its own siblings, so DateField's overlay -- a span
-   sitting beside the input inside .date-shell -- was being read as a caption
-   and flung to the top of the field. A date input always has a value, so it
-   would have been permanently "floated" too. */
-.edit-sheet label input:focus ~ span:not(.date-shell-text),
-.edit-sheet label input:not(:placeholder-shown) ~ span:not(.date-shell-text),
-.edit-sheet label textarea:focus ~ span,
-.edit-sheet label textarea:not(:placeholder-shown) ~ span,
-.manual-entry-form label input:focus ~ span:not(.date-shell-text),
-.manual-entry-form label input:not(:placeholder-shown) ~ span:not(.date-shell-text),
-.manual-entry-form label textarea:focus ~ span,
-.manual-entry-form label textarea:not(:placeholder-shown) ~ span,
-.draft label input:focus ~ span:not(.date-shell-text),
-.draft label input:not(:placeholder-shown) ~ span:not(.date-shell-text) {
-  top: 0;
-  font-size: var(--fs-micro);
-  background: var(--surface);
-}
-
-.edit-sheet label input:focus ~ span:not(.date-shell-text),
-.edit-sheet label textarea:focus ~ span,
-.manual-entry-form label input:focus ~ span:not(.date-shell-text),
-.manual-entry-form label textarea:focus ~ span,
-.draft label input:focus ~ span:not(.date-shell-text) {
-  color: var(--accent);
-}
-
-.edit-sheet label input::placeholder, .edit-sheet label textarea::placeholder,
-.manual-entry-form label input::placeholder, .manual-entry-form label textarea::placeholder,
-.draft label input::placeholder {
-  opacity: 0;
-  transition: opacity var(--t-2) var(--e-out);
-}
-
-.edit-sheet label input:focus::placeholder, .edit-sheet label textarea:focus::placeholder,
-.manual-entry-form label input:focus::placeholder, .manual-entry-form label textarea:focus::placeholder,
-.draft label input:focus::placeholder {
-  opacity: 1;
 }
 
 .amount-input {
@@ -3990,7 +3960,7 @@ button.entry-main {
    above (.draft select, .history-filter-grid select, .edit-sheet label
    select) by coming after them at equal specificity, so the chevron never
    overlaps the select's own text. */
-.select-shell select, .date-shell input[type="date"] {
+.select-shell select, .date-shell input[type="date"], .date-shell input[type="month"] {
   padding-right: 36px;
 }
 

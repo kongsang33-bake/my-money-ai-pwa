@@ -31,7 +31,7 @@ import { buildReportCsv, downloadCsv } from "@/lib/csv";
 import { compressProfileImage } from "@/lib/image";
 import { nameInitial } from "@/lib/category";
 import type { AiChatMessage, AiFinanceContext, Entry, NetWorthDisplaySettings, Profile, ReportPeriod, Theme, Wallet } from "@/lib/types";
-import { PageFrame, SheetFrame, StateCard, useEscapeToClose, useFocusTrap } from "@/components/primitives";
+import { MonthField, PageFrame, SheetFrame, StateCard, useEscapeToClose, useFocusTrap } from "@/components/primitives";
 import type { SheetOrigin } from "@/components/primitives";
 
 export function cleanAiAnswer(value: string) {
@@ -266,14 +266,14 @@ export function ReportExportView({
         {period === "month" ? (
           <label>
             เลือกเดือน
-            <input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
+            <MonthField value={month} onChange={setMonth} />
             <small>ใช้รอบเดือนตามวันที่เริ่มรอบที่ตั้งไว้: วันที่ {monthStartDay}</small>
           </label>
         ) : (
           <label>
-        <input placeholder=" " type="number" min={2000} max={2100} value={year} onChange={(event) => setYear(Number(event.target.value))} />
-        <span>เลือกปี</span>
-      </label>
+            เลือกปี
+            <input type="number" min={2000} max={2100} value={year} onChange={(event) => setYear(Number(event.target.value))} />
+          </label>
         )}
 
         <ReportSummaryTiles income={income} outflow={outflow} balance={balance} count={reportEntries.length} />
@@ -568,8 +568,8 @@ export function ProfileView({
         </div>
       </section>
       <label>
+        ชื่อเล่น
         <input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="เช่น ก้อง" />
-        <span>ชื่อเล่น</span>
       </label>
       <label>
         เปลี่ยนรูปโปรไฟล์
@@ -578,8 +578,8 @@ export function ProfileView({
       </label>
       {!!app_icon_image && <button className="side-ghost" onClick={() => setAppIconImage("")}>ลบรูปไอคอน</button>}
       <label>
-        <input placeholder=" " type="number" min={MONTH_START_DAY_MIN} max={MONTH_START_DAY_MAX} value={month_start_day} onChange={(event) => setMonthStartDay(clampInteger(event.target.value, MONTH_START_DAY_MIN, MONTH_START_DAY_MAX, 1))} />
-        <span>วันเริ่มรอบเดือน</span>
+        วันเริ่มรอบเดือน
+        <input type="number" min={MONTH_START_DAY_MIN} max={MONTH_START_DAY_MAX} value={month_start_day} onChange={(event) => setMonthStartDay(clampInteger(event.target.value, MONTH_START_DAY_MIN, MONTH_START_DAY_MAX, 1))} />
       </label>
       <label>
         บริบทของฉันสำหรับ AI

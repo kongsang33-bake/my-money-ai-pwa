@@ -163,8 +163,8 @@ export function WalletEditSheet({
       </div>
       <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
       <label>
+        ชื่อกระเป๋า
         <input autoFocus={!wallet} value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น กระเป๋าหลัก, ออมทรัพย์ SCB" />
-        <span>ชื่อกระเป๋า</span>
       </label>
       <label>
         ประเภท
@@ -179,8 +179,8 @@ export function WalletEditSheet({
         <small className="cycle-note">{walletTagHints[tag]}</small>
       </label>
       <label>
-        <input placeholder=" " inputMode="decimal" value={balanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setBalanceText(event.target.value); }} />
-        <span>ยอดเงิน</span>
+        ยอดเงิน
+        <input inputMode="decimal" value={balanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setBalanceText(event.target.value); }} />
       </label>
       <label className="sheet-check-row">
         <input type="checkbox" checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} />
@@ -324,12 +324,12 @@ export function RecurringExpenseEditSheet({
       </div>
       <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} iconOptions={recurringIconOptions} renderGlyph={RecurringAvatarGlyph} />
       <label>
+        ชื่อรายการ
         <input autoFocus={!item} value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น Netflix, Claude Pro, YouTube Premium" />
-        <span>ชื่อรายการ</span>
       </label>
       <label>
-        <input placeholder=" " inputMode="decimal" value={amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setAmountText(event.target.value); }} />
-        <span>ยอดต่อเดือน</span>
+        ยอดต่อเดือน
+        <input inputMode="decimal" value={amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setAmountText(event.target.value); }} />
       </label>
       <label>
         ตัดเงินทุกวันที่

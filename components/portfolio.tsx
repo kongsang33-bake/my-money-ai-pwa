@@ -244,22 +244,22 @@ export function InvestmentBuySheet({
         <>
           <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
           <label>
-        <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น K-WSPEEDUP, หุ้น PTT" />
-        <span>ชื่อกองทุน/สินทรัพย์</span>
-      </label>
+            ชื่อกองทุน/สินทรัพย์
+            <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น K-WSPEEDUP, หุ้น PTT" />
+          </label>
           <label>
-        <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="เช่น K-WSPEEDUP" />
-        <span>รหัส/สัญลักษณ์ (ถ้ามี)</span>
-      </label>
+            รหัส/สัญลักษณ์ (ถ้ามี)
+            <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="เช่น K-WSPEEDUP" />
+          </label>
         </>
       )}
       <label>
+        จำนวนหน่วยที่ซื้อ (เว้นว่างได้ถ้ายังไม่รู้)
         <input inputMode="decimal" value={unitsText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setUnitsText(event.target.value); }} placeholder="เช่น 92.6397" />
-        <span>จำนวนหน่วยที่ซื้อ (เว้นว่างได้ถ้ายังไม่รู้)</span>
       </label>
       <label>
+        จำนวนเงินที่จ่ายไป
         <input inputMode="decimal" value={amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setAmountText(event.target.value); }} placeholder="เช่น 1000" />
-        <span>จำนวนเงินที่จ่ายไป</span>
       </label>
       {pricePerUnit != null
         ? <small className="cycle-note">ราคาต่อหน่วย {pricePerUnit.toFixed(4)}</small>
@@ -323,8 +323,8 @@ export function InvestmentSellSheet({
       </div>
       <small className="cycle-note">ถืออยู่ {formatUnits(item.units)} หน่วย</small>
       <label>
+        จำนวนหน่วยที่ขาย
         <input autoFocus inputMode="decimal" value={unitsText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setUnitsText(event.target.value); }} placeholder="เช่น 20" />
-        <span>จำนวนหน่วยที่ขาย</span>
       </label>
       <button type="button" className="text-button" onClick={() => setUnitsText(String(item.units))}>ขายทั้งหมด</button>
       {unitsText && !valid && <StateCard tone="error" title="จำนวนไม่ถูกต้อง" detail={`ขายได้สูงสุด ${formatUnits(item.units)} หน่วย`} />}
@@ -371,8 +371,8 @@ export function InvestmentPriceSheet({
         <button onClick={onClose}>x</button>
       </div>
       <label>
+        ราคาต่อหน่วย (NAV)
         <input autoFocus inputMode="decimal" value={navText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setNavText(event.target.value); }} placeholder="เช่น 10.3400" />
-        <span>ราคาต่อหน่วย (NAV)</span>
       </label>
       <label>
         ราคา ณ วันที่
@@ -459,8 +459,8 @@ export function InvestmentConfirmUnitsSheet({
         ? <p className="pin-hint">{extractNote.text}</p>
         : <StateCard tone="error" title="ลองตรวจสอบอีกครั้ง" detail={extractNote.text} />)}
       <label>
+        จำนวนหน่วยที่ได้จริง
         <input autoFocus inputMode="decimal" value={unitsText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setUnitsText(event.target.value); }} placeholder="เช่น 92.6397" />
-        <span>จำนวนหน่วยที่ได้จริง</span>
       </label>
       {pricePerUnit != null && <small className="cycle-note">ราคาต่อหน่วย {pricePerUnit.toFixed(4)}</small>}
       {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
@@ -563,9 +563,9 @@ export function InvestmentAiSheet({
       {!drafts.length && (
         <>
           <label>
-        <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="เช่น DCA K-WSPEEDUP 1000 บาท จากกระเป๋าหลัก" />
-        <span>พิมพ์รายการลงทุน</span>
-      </label>
+            พิมพ์รายการลงทุน
+            <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="เช่น DCA K-WSPEEDUP 1000 บาท จากกระเป๋าหลัก" />
+          </label>
           {analyzeError && <StateCard tone="error" title="AI ยังวิเคราะห์ไม่ได้" detail={analyzeError} />}
           <button className="save" onClick={runAnalyze} disabled={analyzing || !text.trim()}>
             {analyzing ? "กำลังวิเคราะห์..." : "ให้ AI แยกรายการ"}
@@ -591,14 +591,14 @@ export function InvestmentAiSheet({
               </label>
               {!draft.investmentId && (
                 <label>
-        <input value={draft.investment_name} onChange={(event) => updateDraft(index, { investment_name: event.target.value })} placeholder="เช่น K-WSPEEDUP" />
-        <span>ชื่อกองทุน/สินทรัพย์ใหม่</span>
-      </label>
+                  ชื่อกองทุน/สินทรัพย์ใหม่
+                  <input value={draft.investment_name} onChange={(event) => updateDraft(index, { investment_name: event.target.value })} placeholder="เช่น K-WSPEEDUP" />
+                </label>
               )}
               <label>
-        <input placeholder=" " inputMode="decimal" value={draft.amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) updateDraft(index, { amountText: event.target.value }); }} />
-        <span>จำนวนเงิน</span>
-      </label>
+                จำนวนเงิน
+                <input inputMode="decimal" value={draft.amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) updateDraft(index, { amountText: event.target.value }); }} />
+              </label>
               <label>
                 กระเป๋าต้นทาง
                 <div className="select-shell">

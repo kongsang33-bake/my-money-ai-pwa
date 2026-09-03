@@ -291,40 +291,40 @@ export function DebtorEditSheet({
       </div>
       <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
       <label>
+        ชื่อ
         <input autoFocus={!debtor} value={name} onChange={(event) => setName(event.target.value)} placeholder={kind === "own" ? "เช่น ผ่อนบ้าน ผ่อนรถ" : "เช่น เพื่อนเอ"} />
-        <span>ชื่อ</span>
       </label>
       <label>
+        หมายเหตุ
         <input value={note} onChange={(event) => setNote(event.target.value)} placeholder={kind === "own" ? "เช่น ธนาคาร หรือรายละเอียดหนี้" : "เช่น เพื่อนร่วมงาน"} />
-        <span>หมายเหตุ</span>
       </label>
       <label>
-        <input placeholder=" " inputMode="decimal" value={openingBalanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setOpeningBalanceText(event.target.value); }} />
-        <span>{kind === "own" ? "ยอดหนี้คงเหลือ" : "ยอดเริ่มต้น"}</span>
+        {kind === "own" ? "ยอดหนี้คงเหลือ" : "ยอดเริ่มต้น"}
+        <input inputMode="decimal" value={openingBalanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setOpeningBalanceText(event.target.value); }} />
       </label>
       {kind === "own" && (
         <>
           <label>
-        <input inputMode="decimal" value={creditLimitText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setCreditLimitText(event.target.value); }} placeholder="เช่น 50000" />
-        <span>วงเงิน (กรอกถ้าเป็นบัตรเครดิต)</span>
-      </label>
+            วงเงิน (กรอกถ้าเป็นบัตรเครดิต)
+            <input inputMode="decimal" value={creditLimitText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setCreditLimitText(event.target.value); }} placeholder="เช่น 50000" />
+          </label>
           {isCreditCard ? (
             <label>
-        <input inputMode="decimal" value={minPaymentPercentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMinPaymentPercentText(event.target.value); }} placeholder="เช่น 10" />
-        <span>ยอดขั้นต่ำที่ต้องจ่าย (%)</span>
-        <small className="cycle-note">ยอดขั้นต่ำบัตรเครดิตแปรผันตามยอดคงเหลือทุกเดือน ใส่เป็น % ที่ธนาคารกำหนดแทนยอดคงที่</small>
-      </label>
+              ยอดขั้นต่ำที่ต้องจ่าย (%)
+              <input inputMode="decimal" value={minPaymentPercentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMinPaymentPercentText(event.target.value); }} placeholder="เช่น 10" />
+              <small className="cycle-note">ยอดขั้นต่ำบัตรเครดิตแปรผันตามยอดคงเหลือทุกเดือน ใส่เป็น % ที่ธนาคารกำหนดแทนยอดคงที่</small>
+            </label>
           ) : (
             <>
               <label>
-        <input inputMode="decimal" value={monthlyInstallmentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMonthlyInstallmentText(event.target.value); }} placeholder="เช่น 15000" />
-        <span>ผ่อนต่อเดือน</span>
-      </label>
+                ผ่อนต่อเดือน
+                <input inputMode="decimal" value={monthlyInstallmentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMonthlyInstallmentText(event.target.value); }} placeholder="เช่น 15000" />
+              </label>
               {hasInstallment && (
                 <label>
-        <input inputMode="numeric" value={totalInstallmentsText} onChange={(event) => { if (event.target.value === "" || /^\d*$/.test(event.target.value)) setTotalInstallmentsText(event.target.value); }} placeholder="เช่น 24" />
-        <span>ทั้งหมด (งวด)</span>
-      </label>
+                  ทั้งหมด (งวด)
+                  <input inputMode="numeric" value={totalInstallmentsText} onChange={(event) => { if (event.target.value === "" || /^\d*$/.test(event.target.value)) setTotalInstallmentsText(event.target.value); }} placeholder="เช่น 24" />
+                </label>
               )}
             </>
           )}

@@ -183,8 +183,8 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
           <span className="cat-icon" style={{ background: categoryTint(draft.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(draft.category) }}><CategoryIcon category={draft.category} size={18} /></span>
         )}
         <label className="draft-title-field">
-          <input placeholder=" " value={draft.title} onChange={(event) => update({ title: event.target.value })} />
-          <span>ชื่อรายการ</span>
+          ชื่อรายการ
+          <input value={draft.title} onChange={(event) => update({ title: event.target.value })} />
         </label>
       </div>
       {draft.ambiguous && <p className="draft-ambiguous-hint">AI ไม่แน่ใจว่าให้เปล่าหรือให้ยืม โปรดเลือกประเภทที่ถูกต้องด้านบน</p>}
@@ -256,8 +256,8 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
       {isDebtType && (
         <div className="draft-debtor-field">
           <label>
+            {debtorFieldLabel}
             <input placeholder={debtorFieldPlaceholder} value={draft.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
-            <span>{debtorFieldLabel}</span>
           </label>
           {isNewDebtor && <small>{relevantKind === "own" ? "หนี้ใหม่" : "ลูกหนี้ใหม่"} · จะสร้างให้อัตโนมัติเมื่อบันทึก</small>}
         </div>
@@ -291,8 +291,8 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
             </label>
           )}
           <label className="draft-field-full">
-            <input placeholder=" " value={draft.note ?? ""} onChange={(event) => update({ note: event.target.value })} />
-            <span>หมายเหตุ</span>
+            หมายเหตุ
+            <input value={draft.note ?? ""} onChange={(event) => update({ note: event.target.value })} />
           </label>
         </div>
       )}
@@ -531,7 +531,8 @@ export function ManualEntryForm({
         <AmountInput value={draft.amount} onChange={(amount) => update({ amount })} autoFocus />
       </label>
       <label>
-        <input placeholder=" "
+        ชื่อรายการ{isTransfer && <small> (เว้นว่างได้ จะตั้งชื่อให้อัตโนมัติ)</small>}
+        <input
           value={draft.title}
           onChange={(event) => update({ title: event.target.value })}
           onBlur={() => {
@@ -539,7 +540,6 @@ export function ManualEntryForm({
             if (remembered) update({ category: remembered });
           }}
         />
-        <span>ชื่อรายการ{isTransfer && <small> (เว้นว่างได้ จะตั้งชื่อให้อัตโนมัติ)</small>}</span>
       </label>
       {!isTransfer && (
         <label>
@@ -549,9 +549,9 @@ export function ManualEntryForm({
       )}
       {DEBT_TYPES.includes(draft.transaction_type) && (
         <label>
-        <input type="text" placeholder={draft.transaction_type === "card_charge" ? "เช่น กรุงศรีเฟิร์สช้อย" : "เช่น เพื่อนเอ"} value={draft.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
-        <span>{draft.transaction_type === "card_charge" ? "ชื่อบัตร" : "ชื่อผู้เกี่ยวข้อง"}</span>
-      </label>
+          {draft.transaction_type === "card_charge" ? "ชื่อบัตร" : "ชื่อผู้เกี่ยวข้อง"}
+          <input type="text" placeholder={draft.transaction_type === "card_charge" ? "เช่น กรุงศรีเฟิร์สช้อย" : "เช่น เพื่อนเอ"} value={draft.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
+        </label>
       )}
       <label>
         วันที่
@@ -604,8 +604,8 @@ export function ManualEntryForm({
         )
       )}
       <label>
+        หมายเหตุ
         <textarea value={draft.note ?? ""} onChange={(event) => update({ note: event.target.value })} placeholder="รายละเอียดเพิ่มเติมของรายการนี้" />
-        <span>หมายเหตุ</span>
       </label>
 
       {isTransfer ? (
@@ -677,8 +677,8 @@ export function EditSheet({
       {convertingToTransfer && <p className="pin-hint">เลือกกระเป๋าปลายทางก่อนบันทึกเป็นรายการโอน</p>}
 
       <label>
-        <input placeholder=" " value={entry.title} onChange={(event) => update({ title: event.target.value })} />
-        <span>ชื่อรายการ</span>
+        ชื่อรายการ
+        <input value={entry.title} onChange={(event) => update({ title: event.target.value })} />
       </label>
       {!isTransfer && (
         <label>
@@ -712,9 +712,9 @@ export function EditSheet({
       </label>
       {DEBT_TYPES.includes(entry.transaction_type) && (
         <label>
-        <input type="text" placeholder={entry.transaction_type === "card_charge" ? "เช่น กรุงศรีเฟิร์สช้อย" : "เช่น เพื่อนเอ"} value={entry.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
-        <span>{entry.transaction_type === "card_charge" ? "ชื่อบัตร" : "ชื่อผู้เกี่ยวข้อง"}</span>
-      </label>
+          {entry.transaction_type === "card_charge" ? "ชื่อบัตร" : "ชื่อผู้เกี่ยวข้อง"}
+          <input type="text" placeholder={entry.transaction_type === "card_charge" ? "เช่น กรุงศรีเฟิร์สช้อย" : "เช่น เพื่อนเอ"} value={entry.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
+        </label>
       )}
       <label>
         วันที่
@@ -748,8 +748,8 @@ export function EditSheet({
         </label>
       )}
       <label>
+        หมายเหตุ
         <textarea value={entry.note ?? ""} onChange={(event) => update({ note: event.target.value })} placeholder="รายละเอียดเพิ่มเติมของรายการนี้" />
-        <span>หมายเหตุ</span>
       </label>
 
       {convertingToTransfer ? (

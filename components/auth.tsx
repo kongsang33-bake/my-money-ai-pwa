@@ -272,21 +272,21 @@ export function SecurityView({
 
         {pinEnabled && (
           <label>
-        <input placeholder=" " inputMode="numeric" type="password" maxLength={pinLength} value={currentPin} onChange={(event) => setCurrentPin(clean(event.target.value))} />
-        <span>PIN ปัจจุบัน</span>
-      </label>
+            PIN ปัจจุบัน
+            <input inputMode="numeric" type="password" maxLength={pinLength} value={currentPin} onChange={(event) => setCurrentPin(clean(event.target.value))} />
+          </label>
         )}
 
         {mode === "change" && (
           <>
             <label>
-        <input placeholder=" " inputMode="numeric" type="password" maxLength={pinLength} value={nextPin} onChange={(event) => setNextPin(clean(event.target.value))} />
-        <span>PIN ใหม่</span>
-      </label>
+              PIN ใหม่
+              <input inputMode="numeric" type="password" maxLength={pinLength} value={nextPin} onChange={(event) => setNextPin(clean(event.target.value))} />
+            </label>
             <label>
-        <input placeholder=" " inputMode="numeric" type="password" maxLength={pinLength} value={confirmPin} onChange={(event) => setConfirmPin(clean(event.target.value))} />
-        <span>ยืนยัน PIN ใหม่</span>
-      </label>
+              ยืนยัน PIN ใหม่
+              <input inputMode="numeric" type="password" maxLength={pinLength} value={confirmPin} onChange={(event) => setConfirmPin(clean(event.target.value))} />
+            </label>
             {(mismatch || error) && <p className="pin-error">{mismatch ? "PIN ใหม่สองรอบไม่ตรงกัน" : error}</p>}
             <button className="save" onClick={() => (pinEnabled ? onChange(currentPin, nextPin) : onEnable(nextPin))} disabled={busy || !canSaveChange}>
               {busy ? "กำลังบันทึก" : pinEnabled ? "บันทึก PIN ใหม่" : "เปิดใช้ PIN"}

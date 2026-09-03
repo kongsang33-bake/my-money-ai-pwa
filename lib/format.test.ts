@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { clampInteger, formatChatTime, formatDateInputValue, formatSignedMoney, normalizeBillingDay, roundMoney, roundMoneyDeep, toFiniteNumber, toMoneyAmount } from "./format.ts";
+import { clampInteger, formatChatTime, formatDateInputValue, formatMonthInputValue, formatSignedMoney, normalizeBillingDay, roundMoney, roundMoneyDeep, toFiniteNumber, toMoneyAmount } from "./format.ts";
 
 describe("toFiniteNumber", () => {
   it("parses numeric strings", () => {
@@ -153,5 +153,15 @@ describe("formatDateInputValue", () => {
 
   it("returns an empty string for an unset field so the placeholder shows", () => {
     assert.equal(formatDateInputValue(""), "");
+  });
+});
+
+describe("formatMonthInputValue", () => {
+  it("renders a month picker's value in Thai with the Buddhist year", () => {
+    assert.equal(formatMonthInputValue("2026-09"), "กันยายน 2569");
+  });
+
+  it("returns an empty string for an unset field", () => {
+    assert.equal(formatMonthInputValue(""), "");
   });
 });

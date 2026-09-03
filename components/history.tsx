@@ -8,7 +8,7 @@ import { transactionTypeLabels, type TransactionType } from "@/lib/taxonomy";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { Entry, HistoryFilters } from "@/lib/types";
 import { CategoryIcon } from "@/components/shared";
-import { EmptyNote, Metric } from "@/components/primitives";
+import { EmptyNote, Metric, MonthField } from "@/components/primitives";
 
 export function HistoryInsight({ entries }: { entries: Entry[] }) {
   const nonTransferEntries = entries.filter((entry) => entry.transaction_type !== "transfer");
@@ -141,13 +141,13 @@ export function HistoryFilterBar({
             </div>
           </label>
           <label>
-        <input inputMode="decimal" value={filters.minAmount} onChange={(event) => update({ minAmount: event.target.value })} placeholder="0" />
-        <span>ยอดต่ำสุด</span>
-      </label>
+            ยอดต่ำสุด
+            <input inputMode="decimal" value={filters.minAmount} onChange={(event) => update({ minAmount: event.target.value })} placeholder="0" />
+          </label>
           <label>
-        <input inputMode="decimal" value={filters.maxAmount} onChange={(event) => update({ maxAmount: event.target.value })} placeholder="ไม่จำกัด" />
-        <span>ยอดสูงสุด</span>
-      </label>
+            ยอดสูงสุด
+            <input inputMode="decimal" value={filters.maxAmount} onChange={(event) => update({ maxAmount: event.target.value })} placeholder="ไม่จำกัด" />
+          </label>
         </div>
       )}
     </section>
@@ -257,7 +257,7 @@ export function MonthSummary({
           <h2>ภาพรวมเดือนนี้</h2>
           <small className="cycle-note">รอบเริ่มวันที่ {monthStartDay} ของเดือน</small>
         </div>
-        <input type="month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
+        <MonthField value={selectedMonth} onChange={setSelectedMonth} />
       </div>
       <div className="summary-grid">
         <Metric label="เงินเข้า" value={income} tone="income" />

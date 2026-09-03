@@ -57,6 +57,14 @@ export const formatDateInputValue = (value: string) => {
   return formatShortDate(new Date(year, month - 1, day), { year: true });
 };
 
+// The yyyy-mm value of an <input type="month">, same story as above: the
+// control renders it in the browser's locale ("September 2026").
+export const formatMonthInputValue = (value: string) => {
+  const [year, month] = value.split("-").map(Number);
+  if (!year || !month) return "";
+  return new Date(year, month - 1, 1).toLocaleDateString("th-TH", { month: "long", year: "numeric" });
+};
+
 export const toDateInput = (value: string) => localDateInput(new Date(value));
 export const toFiniteNumber = (value: unknown, fallback = 0) => {
   const number = Number(value);

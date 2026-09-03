@@ -3,7 +3,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, CalendarDays, Check, ChevronLeft, Info } from "lucide-react";
-import { formatDateInputValue, formatMoney, moneySign } from "@/lib/format";
+import { formatDateInputValue, formatMonthInputValue, formatMoney, moneySign } from "@/lib/format";
 import type { ConfirmDialogState, EmptyAction, Toast } from "@/lib/types";
 
 // A generic animated-count-up money display -- lives here rather than in
@@ -195,6 +195,27 @@ export function DateField({
     <div className="date-shell">
       <input type="date" value={value} max={max} onChange={(event) => onChange(event.target.value)} />
       <span className="date-shell-text" aria-hidden="true">{value ? formatDateInputValue(value) : placeholder}</span>
+      <CalendarDays className="date-shell-icon" aria-hidden="true" />
+    </div>
+  );
+}
+
+/** DateField's sibling for <input type="month">, same shell and same reason. */
+export function MonthField({
+  value,
+  onChange,
+  max,
+  className = "",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  max?: string;
+  className?: string;
+}) {
+  return (
+    <div className={`date-shell ${className}`}>
+      <input type="month" value={value} max={max} onChange={(event) => { if (event.target.value) onChange(event.target.value); }} aria-label="เลือกเดือนและปี" />
+      <span className="date-shell-text" aria-hidden="true">{formatMonthInputValue(value) || "เลือกเดือน"}</span>
       <CalendarDays className="date-shell-icon" aria-hidden="true" />
     </div>
   );
