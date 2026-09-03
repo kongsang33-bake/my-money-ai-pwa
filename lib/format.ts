@@ -28,6 +28,24 @@ export const formatChatTime = (value: string, now = new Date()) => {
   const sameDay = date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
   return sameDay ? time : `${formatShortDate(date)} ${time}`;
 };
+// Money as a NUMBER at satang precision. formatMoney handles this for
+// anything a person reads, but a value leaving the app as raw JSON -- the
+// payload the AI chat reasons over -- keeps whatever float noise the sums
+// accumulated, and the model prints it verbatim ("11886.669999999998 บาท").
+export const roundMoney = (value: number) => Math.round(value * 100) / 100;
+
+// Same, applied through a payload of unknown shape, so every amount in the
+// AI context is rounded without the caller having to name each field (and
+// without a field added later quietly slipping through unrounded).
+export function roundMoneyDeep<T>(value: T): T {
+  if (typeof value === "number") return (Number.isFinite(value) ? roundMoney(value) : value) as T;
+  if (Array.isArray(value)) return value.map(roundMoneyDeep) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, roundMoneyDeep(item)])) as T;
+  }
+  return value;
+}
+
 export const toDateInput = (value: string) => localDateInput(new Date(value));
 export const toFiniteNumber = (value: unknown, fallback = 0) => {
   const number = Number(value);
