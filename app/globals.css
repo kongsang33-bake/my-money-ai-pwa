@@ -857,10 +857,10 @@ a:focus-visible {
 }
 
 /* Active state: a solid filled pill behind icon *and* label together (not
-   just the icon) — a chunkier, more obvious "you are here" that reads as
-   one selected-tab capsule instead of a highlight that stops halfway. */
+   just the icon), and only ever one of it — it slides from the tab you left
+   to the tab you tapped instead of one highlight fading out while another
+   fades in, so the bar shows the move, not just the result. */
 .bottom-nav .nav-item {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -869,16 +869,34 @@ a:focus-visible {
   border-radius: var(--r-full);
 }
 
-.bottom-nav .nav-item::before {
-  content: "";
+/* Absolutely positioned so it takes no grid column, and z-index -1 so it
+   paints over the nav's own background but under the icons — the same layer
+   the per-item pill used to sit on. Position and size come from the active
+   .nav-item, measured in bottom-nav.tsx (Thai labels are different widths,
+   so the pill has to hug the item rather than fill the column). */
+.bottom-nav .nav-indicator {
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--primary);
-  opacity: 0;
-  transform: scale(0.8);
-  transition: opacity var(--t-2) var(--e-out), transform var(--t-3) var(--e-spring);
+  top: 50%;
+  left: 0;
   z-index: -1;
+  border-radius: var(--r-full);
+  background: var(--primary);
+  transition: opacity var(--t-2) var(--e-out);
+}
+
+/* Added a frame after the first measurement: the opening placement is a jump,
+   everything after it is a slide. */
+.bottom-nav .nav-indicator.sliding {
+  transition:
+    transform var(--t-3) var(--e-spring),
+    width var(--t-3) var(--e-spring),
+    height var(--t-2) var(--e-out),
+    opacity var(--t-2) var(--e-out);
+}
+
+/* No tab is selected on the screens reached from the side menu. */
+.bottom-nav .nav-indicator[data-visible="false"] {
+  opacity: 0;
 }
 
 .bottom-nav .nav-icon {
@@ -894,9 +912,11 @@ a:focus-visible {
   100% { transform: scale(1); }
 }
 
-.bottom-nav button.active .nav-item::before {
-  opacity: 1;
-  transform: scale(1);
+/* The pill is travelling under these for the length of --t-3, so the colour
+   has to travel with it rather than snap on the frame the class flips. */
+.bottom-nav .nav-icon,
+.bottom-nav .nav-label {
+  transition: color var(--t-3) var(--e-out);
 }
 
 .bottom-nav button.active .nav-icon,

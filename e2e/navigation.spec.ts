@@ -150,4 +150,39 @@ test.describe("navigation", () => {
       await expect(app.locator(".bottom-nav")).toBeVisible();
     }
   });
+
+  // One pill slides between the tabs instead of a highlight per button, so it
+  // is positioned from a measurement rather than by the grid -- which is
+  // exactly the kind of thing that silently drifts at a breakpoint (the nav is
+  // absolute on mobile, fixed and -50%-centred above 900px) or lands on the
+  // wrong tab. Each project runs this at its own width.
+  test("parks the sliding pill on the active tab", async ({ app }) => {
+    const geometry = () => app.evaluate(() => {
+      const pill = document.querySelector(".nav-indicator") as HTMLElement;
+      const item = document.querySelector(".bottom-nav button.active .nav-item") as HTMLElement | null;
+      const box = (element: HTMLElement) => {
+        const rect = element.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      };
+      return { opacity: Number(getComputedStyle(pill).opacity), pill: box(pill), item: item && box(item) };
+    });
+
+    for (const tab of ["home", "history", "wallets"] as const) {
+      await navigate(app, tab);
+      await app.waitForTimeout(400);
+      const { opacity, pill, item } = await geometry();
+      expect(item, `${tab} should have an active tab`).not.toBeNull();
+      expect(opacity).toBe(1);
+      for (const side of ["x", "y", "width", "height"] as const) {
+        expect(Math.abs(pill[side] - item![side]), `${tab} pill ${side}`).toBeLessThan(1.5);
+      }
+    }
+
+    // A side-menu screen selects no tab: the pill fades out where it stands
+    // rather than sliding off to somewhere arbitrary.
+    await app.locator(".menu-button").click();
+    await app.locator(".side-menu-list button", { hasText: "งบประมาณ" }).click();
+    await app.waitForTimeout(400);
+    expect((await geometry()).opacity).toBe(0);
+  });
 });
