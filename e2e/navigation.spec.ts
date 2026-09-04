@@ -151,31 +151,43 @@ test.describe("navigation", () => {
     }
   });
 
-  // One pill slides between the tabs instead of a highlight per button, so it
-  // is positioned from a measurement rather than by the grid -- which is
-  // exactly the kind of thing that silently drifts at a breakpoint (the nav is
-  // absolute on mobile, fixed and -50%-centred above 900px) or lands on the
-  // wrong tab. Each project runs this at its own width.
+  // One pill slides between the tabs instead of a highlight per button. Where
+  // it lands is arithmetic on the grid rather than a measurement of the active
+  // item -- the version that measured stopped following the tab on iOS while
+  // passing everywhere here -- so what is worth pinning is that the arithmetic
+  // and the grid still agree: same centre, same width, on the tab that is
+  // actually active. The three projects run this at their three widths, and
+  // the nav is laid out differently in each (absolute on mobile, fixed and
+  // -50%-centred above 900px).
   test("parks the sliding pill on the active tab", async ({ app }) => {
     const geometry = () => app.evaluate(() => {
       const pill = document.querySelector(".nav-indicator") as HTMLElement;
       const item = document.querySelector(".bottom-nav button.active .nav-item") as HTMLElement | null;
+      const label = item?.querySelector(".nav-label") as HTMLElement | undefined;
       const box = (element: HTMLElement) => {
         const rect = element.getBoundingClientRect();
-        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        return { left: rect.x, right: rect.right, centreX: rect.x + rect.width / 2, centreY: rect.y + rect.height / 2 };
       };
-      return { opacity: Number(getComputedStyle(pill).opacity), pill: box(pill), item: item && box(item) };
+      return {
+        opacity: Number(getComputedStyle(pill).opacity),
+        pill: box(pill),
+        item: item && box(item),
+        label: label && box(label),
+      };
     });
 
     for (const tab of ["home", "history", "wallets"] as const) {
       await navigate(app, tab);
       await app.waitForTimeout(400);
-      const { opacity, pill, item } = await geometry();
+      const { opacity, pill, item, label } = await geometry();
       expect(item, `${tab} should have an active tab`).not.toBeNull();
       expect(opacity).toBe(1);
-      for (const side of ["x", "y", "width", "height"] as const) {
-        expect(Math.abs(pill[side] - item![side]), `${tab} pill ${side}`).toBeLessThan(1.5);
-      }
+      expect(Math.abs(pill.centreX - item!.centreX), `${tab} pill centred on the label`).toBeLessThan(1.5);
+      expect(Math.abs(pill.centreY - item!.centreY), `${tab} pill centred vertically`).toBeLessThan(1.5);
+      // ...and wide enough to actually be behind it, not a capsule the label
+      // pokes out of.
+      expect(label!.left, `${tab} label inside the pill`).toBeGreaterThanOrEqual(pill.left - 1);
+      expect(label!.right, `${tab} label inside the pill`).toBeLessThanOrEqual(pill.right + 1);
     }
 
     // A side-menu screen selects no tab: the pill fades out where it stands

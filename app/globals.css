@@ -138,6 +138,13 @@
      flow. Both are re-declared at the wide breakpoint, where the chrome is
      laid out differently. */
   --nav-height: 68px;
+  /* The add button's fixed grid column, and how wide the active-tab pill
+     is allowed to get once a tab column is wider than a label needs. Both
+     are read by the nav's grid *and* by the pill's own arithmetic, which
+     is the only reason the pill can be positioned without measuring
+     anything -- they must stay one value, not two that agree. */
+  --nav-add-col: 80px;
+  --nav-pill-max: 92px;
   --topbar-height: 58px;
   --nav-clearance: calc(96px + env(safe-area-inset-bottom));
   --topbar-block: calc(var(--topbar-height) + max(var(--s-2), env(safe-area-inset-top)) + var(--s-3));
@@ -821,11 +828,17 @@ a:focus-visible {
   bottom: max(var(--s-4), env(safe-area-inset-bottom));
   height: var(--nav-height);
   border-radius: var(--r-full);
+  /* Keeps the outermost tab's pill clear of the capsule's own curved ends.
+     The pill has to subtract this itself: an absolutely positioned child is
+     laid out against the padding box, which *includes* the padding, so a
+     percentage there covers ground the grid columns do not. */
+  --nav-pad: var(--s-2);
+  padding-inline: var(--nav-pad);
   background: var(--surface-2);
   border: var(--card-border);
   box-shadow: var(--sh-2);
   display: grid;
-  grid-template-columns: 1fr 1fr 80px 1fr 1fr;
+  grid-template-columns: 1fr 1fr var(--nav-add-col) 1fr 1fr;
   align-items: center;
   z-index: var(--z-nav);
   /* Composed rather than set directly so the wide breakpoint's centering and
@@ -871,27 +884,48 @@ a:focus-visible {
 
 /* Absolutely positioned so it takes no grid column, and z-index -1 so it
    paints over the nav's own background but under the icons — the same layer
-   the per-item pill used to sit on. Position and size come from the active
-   .nav-item, measured in bottom-nav.tsx (Thai labels are different widths,
-   so the pill has to hug the item rather than fill the column). */
+   the per-item pill used to sit on.
+
+   Where it lands is worked out from the grid, not read back from the DOM.
+   bottom-nav.tsx sets one attribute naming the selected tab and each tab's
+   left edge is spelled out below; the columns are fixed by
+   grid-template-columns, so nothing has to be measured. The version that did
+   measure the active item passed every check here and then stopped following
+   the tab on a real phone, and a measurement has plenty of ways to go wrong
+   that a layout cannot: which element the engine calls the offsetParent,
+   whether the :active press transform is still applied when the read happens,
+   whether the web font has landed yet.
+
+   --nav-tab-col is one 1fr column worked out the long way round, because a
+   percentage here resolves against the nav's padding box (padding included)
+   while the grid divides up the content box. --nav-edge is what centres the
+   pill in whichever column it is on. */
 .bottom-nav .nav-indicator {
   position: absolute;
-  top: 50%;
-  left: 0;
+  top: var(--s-2);
+  bottom: var(--s-2);
+  --nav-tab-col: calc((100% - 2 * var(--nav-pad) - var(--nav-add-col)) / 4);
+  --nav-pill-w: min(var(--nav-tab-col) - var(--s-2), var(--nav-pill-max));
+  --nav-edge: calc(var(--nav-pad) + (var(--nav-tab-col) - var(--nav-pill-w)) / 2);
+  width: var(--nav-pill-w);
+  left: var(--nav-edge);
   z-index: -1;
   border-radius: var(--r-full);
   background: var(--primary);
-  transition: opacity var(--t-2) var(--e-out);
+  transition: left var(--t-3) var(--e-spring), opacity var(--t-2) var(--e-out);
 }
 
-/* Added a frame after the first measurement: the opening placement is a jump,
-   everything after it is a slide. */
-.bottom-nav .nav-indicator.sliding {
-  transition:
-    transform var(--t-3) var(--e-spring),
-    width var(--t-3) var(--e-spring),
-    height var(--t-2) var(--e-out),
-    opacity var(--t-2) var(--e-out);
+.bottom-nav .nav-indicator[data-tab="history"] {
+  left: calc(var(--nav-edge) + var(--nav-tab-col));
+}
+
+/* Past the add button's column, so its width joins the sum. */
+.bottom-nav .nav-indicator[data-tab="wallets"] {
+  left: calc(var(--nav-edge) + 2 * var(--nav-tab-col) + var(--nav-add-col));
+}
+
+.bottom-nav .nav-indicator[data-tab="more"] {
+  left: calc(var(--nav-edge) + 3 * var(--nav-tab-col) + var(--nav-add-col));
 }
 
 /* No tab is selected on the screens reached from the side menu. */
@@ -941,6 +975,9 @@ a:focus-visible {
 .bottom-nav .nav-label {
   font-size: var(--fs-micro);
   font-weight: var(--fw-semibold);
+  /* The item is a fixed slice of its column now, and a Thai label that wraps
+     to a second line inside it makes the row taller than the nav itself. */
+  white-space: nowrap;
 }
 
 .bottom-nav .add-button {
@@ -5460,9 +5497,8 @@ button.entry-main {
     bottom: var(--s-7);
     width: min(560px, calc(100vw - 128px));
     height: var(--nav-height);
-    padding: 0;
     border-radius: var(--r-full);
-    grid-template-columns: 1fr 1fr 80px 1fr 1fr;
+    grid-template-columns: 1fr 1fr var(--nav-add-col) 1fr 1fr;
     --nav-center: -50%;
   }
 
