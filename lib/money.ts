@@ -80,31 +80,90 @@ export function splitDebtorNames(debtorName?: string | null): string[] {
     });
 }
 
+/**
+ * The pins a draft is carrying, in the shape splitSharesBetween wants. Both
+ * fields are client-only (see the Draft type): they are an instruction for
+ * how to divide the bill, and once it is divided the rows themselves are the
+ * record.
+ */
+export function draftSplitPins(draft: { split_shares?: (number | null)[] | null; split_self_share?: number | null }): SplitPins {
+  return { self: draft.split_self_share, people: draft.split_shares };
+}
+
 /** A bill with more than one person named on it: one row each, at save. */
 export function isMultiPersonSplit(draft: { transaction_type: TransactionType; debtor_name?: string | null }) {
   return SHARED_EXPENSE_TYPES.includes(draft.transaction_type) && splitDebtorNames(draft.debtor_name).length > 1;
 }
 
+export type SplitPins = {
+  /** What the user themselves is paying, when they said so. */
+  self?: number | null;
+  /** A pinned amount per named person, aligned with `names`; null = share it. */
+  people?: (number | null)[] | null;
+};
+
+const satang = (value: number) => Math.round(value * 100) / 100;
+
 /**
  * What each named person owes, and what is left as the user's own share.
  *
- * Everyone pays the same, and the rounding remainder lands on the user rather
- * than on a friend -- a 1000-baht bill three ways is 333.33 each and 333.34
- * for whoever is holding the receipt. The shares always add back up to the
- * bill, which is the property that makes the rows safe to save separately.
+ * By default everyone pays the same and the rounding remainder lands on the
+ * user rather than on a friend -- a 1000-baht bill three ways is 333.33 each
+ * and 333.34 for whoever is holding the receipt.
  *
- * A lend is the same arithmetic minus the user: they are not one of the
- * heads, so they keep none of it.
+ * Any slot can be pinned instead, which is what "ค่าเบียร์ 1000 ผมออก 500
+ * ส่วนที่เหลือหาร 3 คน" needs: pin the user at 500 and the three friends
+ * divide what is left. Pinning some and leaving others open is the whole
+ * point -- an uneven split is usually one person being different, not four
+ * numbers typed out.
+ *
+ * Whatever the pins, the parts always add back up to the bill: that invariant
+ * is what makes it safe for expandDraftForSave to store them as separate rows.
+ *
+ * A lend is the same arithmetic minus the user: they are not one of the heads,
+ * so they keep none of it.
  */
-export function splitSharesBetween(amount: number, names: string[], transactionType: TransactionType) {
-  const heads = transactionType === "split_half" ? names.length + 1 : names.length;
-  const each = heads > 0 ? Math.round((amount / heads) * 100) / 100 : 0;
-  const shares = names.map(() => each);
-  if (transactionType !== "split_half" && shares.length) {
-    shares[shares.length - 1] = Math.round((amount - each * (names.length - 1)) * 100) / 100;
-  }
-  const userShare = transactionType === "split_half" ? Math.round((amount - each * names.length) * 100) / 100 : 0;
-  return { shares, userShare, heads };
+export function splitSharesBetween(amount: number, names: string[], transactionType: TransactionType, pinned?: SplitPins) {
+  const includesUser = transactionType === "split_half";
+  const heads = names.length + (includesUser ? 1 : 0);
+  // The user is one more slot on the end of the list, so "I'm covering 500,
+  // split the rest three ways" and "อ้อน owes 300, the rest split evenly" are
+  // the same calculation rather than two.
+  const wanted = [
+    ...names.map((_, index) => pinned?.people?.[index]),
+    ...(includesUser ? [pinned?.self] : []),
+  ].map((value) => (value == null || !Number.isFinite(value) ? null : Math.max(0, satang(value))));
+
+  // Pinned amounts are taken first, in order, and can never take more than is
+  // left of the bill -- typing 900 into a 500 bill can't create money.
+  let remaining = Math.max(0, satang(amount));
+  const slots = wanted.map((value) => {
+    if (value == null) return null;
+    const share = Math.min(value, remaining);
+    remaining = satang(remaining - share);
+    return share;
+  });
+
+  // Whatever is left is shared evenly by the slots nobody pinned, with the
+  // last of them absorbing the odd satang so the parts always add back up to
+  // the bill.
+  const openSlots = slots.reduce<number>((count, share) => count + (share == null ? 1 : 0), 0);
+  const each = openSlots > 0 ? satang(remaining / openSlots) : 0;
+  let seen = 0;
+  const filled = slots.map((share) => {
+    if (share != null) return share;
+    seen += 1;
+    return seen === openSlots ? satang(remaining - each * (openSlots - 1)) : each;
+  });
+  // Nothing open to absorb it (every slot pinned, and for a lend there is no
+  // user slot at all): the last person takes the difference.
+  if (openSlots === 0 && remaining > 0 && filled.length) filled[filled.length - 1] = satang(filled[filled.length - 1] + remaining);
+
+  return {
+    shares: filled.slice(0, names.length),
+    userShare: includesUser ? filled[filled.length - 1] ?? 0 : 0,
+    heads,
+  };
 }
 
 /**
@@ -269,14 +328,14 @@ export function expandDraftForSave(draft: Draft, wallets: Wallet[]): Draft[] {
     // over a note the user wrote themselves.
     note: draft.note?.trim()
       || (card ? `จ่ายด้วยบัตร ${card}` : null)
-      || (perPerson ? `หารกัน ${splitSharesBetween(draft.amount, names, draft.transaction_type).heads} คน` : null),
+      || (perPerson ? `หารกัน ${names.length + (draft.transaction_type === "split_half" ? 1 : 0)} คน` : null),
     wallet_id: card ? null : draft.wallet_id,
     transfer_group_id: groupId,
   };
 
   const legs: Draft[] = [];
   if (perPerson) {
-    const { shares, userShare } = splitSharesBetween(draft.amount, names, draft.transaction_type);
+    const { shares, userShare } = splitSharesBetween(draft.amount, names, draft.transaction_type, draftSplitPins(draft));
     names.forEach((name, index) => {
       legs.push(normalizeEntry({
         ...shared,
@@ -698,7 +757,7 @@ export function draftRowCount(draft: Draft): number {
   const names = shareable ? splitDebtorNames(draft.debtor_name) : [];
   const card = shareable && draft.funding_card_name?.trim() ? 1 : 0;
   if (names.length < 2) return 1 + card;
-  const { userShare } = splitSharesBetween(draft.amount, names, draft.transaction_type);
+  const { userShare } = splitSharesBetween(draft.amount, names, draft.transaction_type, draftSplitPins(draft));
   return names.length + (userShare > 0 ? 1 : 0) + card;
 }
 

@@ -41,7 +41,18 @@ export type Entry = {
 // expandCardFundedDraft turns it into the second row that carries the charge
 // (lib/money.ts) — by the time anything is written, the pair itself is the
 // record of it.
-export type Draft = Omit<Entry, "id"> & { id: string; ambiguous?: boolean; funding_card_name?: string | null };
+//
+// `split_shares` and `split_self_share` are the same kind of thing for a bill
+// split between named people: what one person, or the user, is paying, with
+// the rest divided evenly (splitSharesBetween). They only exist until
+// expandDraftForSave turns them into a row each.
+export type Draft = Omit<Entry, "id"> & {
+  id: string;
+  ambiguous?: boolean;
+  funding_card_name?: string | null;
+  split_shares?: (number | null)[] | null;
+  split_self_share?: number | null;
+};
 
 export type EntryInput = {
   id: string;

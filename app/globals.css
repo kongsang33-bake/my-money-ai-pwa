@@ -2666,12 +2666,20 @@ a:focus-visible {
   border: 1px solid var(--line-soft);
 }
 
+.draft-split-people-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-2);
+}
+
 .draft-split-people-title {
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
   color: var(--ink-2);
-  margin-bottom: var(--s-2);
 }
+
 
 .draft-split-people-list ul {
   display: grid;
@@ -2681,7 +2689,7 @@ a:focus-visible {
 
 .draft-split-people-list li {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
   font-size: var(--fs-body-sm);
@@ -2692,8 +2700,19 @@ a:focus-visible {
   color: var(--ink-3);
 }
 
-.draft-split-people-list li b {
-  font-weight: var(--fw-bold);
+/* One person's amount, typed in place. Smaller and quieter than the bill's
+   own amount field above it -- these are parts of that number, not another
+   one of it. */
+.draft-split-people-list li .amount-input {
+  width: 104px;
+  padding: 6px var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  text-align: right;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
 }
 
 .draft-split-people-list > small {

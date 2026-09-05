@@ -1179,7 +1179,7 @@ export default function Home() {
 
       const source = [text.trim(), slipImages.length ? `แนบรูปสลิป ${slipImages.length} รูป` : ""].filter(Boolean).join(" | ");
       setDrafts(
-        data.items.map((item: { title: string; category: string; amount: number; transaction_type: TransactionType; debtor_name?: string; date: string; note?: string; wallet_id?: string | null; transfer_to_wallet_id?: string | null; ambiguous?: boolean; paid_with_card?: string; partner_share?: number }, index: number) =>
+        data.items.map((item: { title: string; category: string; amount: number; transaction_type: TransactionType; debtor_name?: string; date: string; note?: string; wallet_id?: string | null; transfer_to_wallet_id?: string | null; ambiguous?: boolean; paid_with_card?: string; partner_share?: number; user_share?: number }, index: number) =>
           {
             const aiWalletId = item.wallet_id && wallets.some((wallet) => wallet.id === item.wallet_id) ? item.wallet_id : null;
             // Only a card the user actually has can fund a row: the pair this
@@ -1210,6 +1210,9 @@ export default function Home() {
               }, false),
               ambiguous: !!item.ambiguous,
               funding_card_name: aiCard,
+              // "ผมออก 500 ส่วนที่เหลือหาร 3 คน": the app divides the rest, so
+              // the model only has to repeat the number it was told.
+              split_self_share: item.transaction_type === "split_half" && item.user_share ? item.user_share : null,
             };
           },
         ),

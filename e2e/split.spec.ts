@@ -71,14 +71,42 @@ test.describe("split review", () => {
     await expect(breakdown).toContainText("หารกัน 5 คน");
     await expect(breakdown.locator("li")).toHaveCount(5);
     for (const name of ["อ้อน", "แบงค์", "วิน", "พี่พัก"]) {
-      await expect(breakdown.locator("li", { hasText: name })).toContainText("300");
+      await expect(breakdown.locator("li", { hasText: name }).locator(".amount-input")).toHaveValue("300");
     }
-    await expect(breakdown.locator("li.is-self")).toContainText("300");
+    await expect(breakdown.locator("li.is-self").locator(".amount-input")).toHaveValue("300");
     await expect(breakdown).toContainText("แยกเป็น 5 รายการ");
 
     // The single-person share controls step aside; the list decides now.
     await expect(page.locator(".draft-split-share")).toHaveCount(0);
     await expect(page.locator(".draft-result .impact-row")).toContainText("1,200");
+  });
+
+  test("divides what is left when the user pins their own share", async ({ page }) => {
+    // "ค่าเบียร์ 1000 ผมออก 500 ส่วนที่เหลือหาร 3 คน มีอ้อน แบงค์ วิน"
+    await openWithDraft(page, seedDraft({ title: "ค่าเบียร์", amount: 1000, debtor_name: "อ้อน, แบงค์, วิน" }));
+
+    const rows = page.locator(".draft-split-people-list li");
+    await expect(rows).toHaveCount(4);
+    await expect(rows.nth(0).locator(".amount-input")).toHaveValue("250");
+
+    await page.locator(".draft-split-people-list li.is-self .amount-input").fill("500");
+    await expect(rows.nth(0).locator(".amount-input")).toHaveValue("166.67");
+    await expect(rows.nth(1).locator(".amount-input")).toHaveValue("166.67");
+    // The odd satang lands on the last open slot, so the parts still add up.
+    await expect(rows.nth(2).locator(".amount-input")).toHaveValue("166.66");
+    await expect(page.locator(".draft-result .impact-row")).toContainText("500");
+  });
+
+  test("re-divides around one person's pinned amount, and can undo it", async ({ page }) => {
+    await openWithDraft(page, seedDraft({ title: "ค่าเบียร์", amount: 1000, debtor_name: "อ้อน, แบงค์, วิน" }));
+
+    const rows = page.locator(".draft-split-people-list li");
+    await rows.nth(0).locator(".amount-input").fill("400");
+    await expect(rows.nth(1).locator(".amount-input")).toHaveValue("200");
+    await expect(rows.nth(3).locator(".amount-input")).toHaveValue("200");
+
+    await page.locator(".draft-split-people-head button", { hasText: "หารเท่ากัน" }).click();
+    await expect(rows.nth(0).locator(".amount-input")).toHaveValue("250");
   });
 
   test("keeps the share controls for a bill split with one person", async ({ page }) => {

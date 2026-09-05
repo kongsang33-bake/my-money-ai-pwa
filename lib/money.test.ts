@@ -15,6 +15,7 @@ import {
   isCardFundedLeg,
   isMultiPersonSplit,
   splitDebtorNames,
+  splitSharesBetween,
   matchDebtorName,
   filterEntries,
   netWorthAsOf,
@@ -1110,5 +1111,62 @@ describe("draftRowCount", () => {
   it("says so in the confirmation only when a draft splits", () => {
     assert.match(describeDraftSave([{ ...draft, debtor_name: "อ้อน, แบงค์, วิน, พี่พัก" }]), /แยกเป็น 5 แถว/);
     assert.doesNotMatch(describeDraftSave([draft]), /แยกเป็น/);
+  });
+});
+
+describe("splitSharesBetween: pinning what someone pays", () => {
+  const three = ["อ้อน", "แบงค์", "วิน"];
+
+  it("divides what is left after the user's own share", () => {
+    // "ค่าเบียร์ 1000 ผมออก 500 ส่วนที่เหลือหาร 3 คน มีอ้อน แบงค์ วิน"
+    const { shares, userShare } = splitSharesBetween(1000, three, "split_half", { self: 500 });
+    assert.deepEqual(shares, [166.67, 166.67, 166.66]);
+    assert.equal(userShare, 500);
+    assert.equal(shares.reduce((sum, share) => sum + share, 0) + userShare, 1000);
+  });
+
+  it("divides what is left after one person's pinned share", () => {
+    const { shares, userShare } = splitSharesBetween(1000, three, "split_half", { people: [400, null, null] });
+    assert.equal(shares[0], 400);
+    assert.deepEqual(shares.slice(1), [200, 200]);
+    assert.equal(userShare, 200);
+  });
+
+  it("still adds up when every slot is pinned", () => {
+    const { shares, userShare } = splitSharesBetween(1000, three, "split_half", { people: [300, 200, 100], self: 400 });
+    assert.equal(shares.reduce((sum, share) => sum + share, 0) + userShare, 1000);
+  });
+
+  it("cannot pin more than the bill", () => {
+    // A pin of 900 on a 500 bill takes the 500 that exists and no more.
+    const { shares, userShare } = splitSharesBetween(500, three, "split_half", { people: [900, null, null] });
+    assert.equal(shares[0], 500);
+    assert.deepEqual(shares.slice(1), [0, 0]);
+    assert.equal(userShare, 0);
+  });
+
+  it("ignores a pin that is not a number", () => {
+    assert.deepEqual(splitSharesBetween(900, three, "split_half", { self: Number.NaN }).shares, [225, 225, 225]);
+  });
+
+  it("keeps a lend out of the user's pocket even when pinned", () => {
+    const { shares, userShare } = splitSharesBetween(900, three, "lend", { people: [500, null, null] });
+    assert.deepEqual(shares, [500, 200, 200]);
+    assert.equal(userShare, 0);
+  });
+
+  it("writes the pinned rows the save path will store", () => {
+    const draft: Draft = {
+      id: "d1", title: "ค่าเบียร์", category: "อาหาร", amount: 1000, type: "expense",
+      transaction_type: "split_half", wallet_impact: -1000, debt_impact: 500, user_share: 500,
+      partner_share: 500, debtor_name: "อ้อน, แบงค์, วิน", occurred_at: "2026-09-05T12:00:00.000Z",
+      wallet_id: "w1", note: null, split_self_share: 500,
+    };
+    const rows = expandDraftForSave(draft, []);
+    assert.equal(rows.length, 4);
+    assert.deepEqual(rows.filter((row) => row.transaction_type === "lend").map((row) => row.amount), [166.67, 166.67, 166.66]);
+    assert.equal(rows.find((row) => row.transaction_type === "personal_expense")!.amount, 500);
+    assert.equal(rows.reduce((sum, row) => sum + row.amount, 0), 1000);
+    assert.equal(rows.reduce((sum, row) => sum + row.wallet_impact, 0), -1000);
   });
 });

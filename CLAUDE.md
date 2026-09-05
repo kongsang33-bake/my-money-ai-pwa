@@ -196,7 +196,10 @@ shared location instead of typing the value inline.
 thing that turns drafts into rows, and three shapes become several: a
 transfer's two legs, a bill split between named people (one `lend` per name
 plus the user's own `personal_expense`, since `debtor_name` holds one person),
-and a bill paid with a credit card (the charge, plus whoever owes it). Only
+and a bill paid with a credit card (the charge, plus whoever owes it). Who
+pays what inside a split is `splitSharesBetween`: any slot — a person, or the
+user — can be pinned and the rest divide what is left, with the parts always
+adding back up to the bill. Only
 the card-funded shape links its rows with a `transfer_group_id` — that same id
 is what tells a row it moved no wallet money (`isCardFundedLeg`), so grouping
 the plain per-person rows would zero out money that really did leave. Add a

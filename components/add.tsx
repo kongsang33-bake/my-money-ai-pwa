@@ -6,7 +6,7 @@ import { CATEGORY_DOT_TINT_ALPHA, MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE } from "@/l
 import { compressSlipImage } from "@/lib/image";
 import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
 import { todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
-import { SHARED_EXPENSE_TYPES, defaultWalletId, entryDisplayImpact, isCardFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, splitDebtorNames, splitSharesBetween, unnamedDebtor } from "@/lib/money";
+import { SHARED_EXPENSE_TYPES, defaultWalletId, draftSplitPins, entryDisplayImpact, isCardFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, splitDebtorNames, splitSharesBetween, unnamedDebtor } from "@/lib/money";
 import { DEBT_TYPES, TYPES_USER_OWES, transactionKind, transactionTypeLabels, type TransactionType } from "@/lib/taxonomy";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
@@ -186,10 +186,22 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
   // to decide, not the user's -- so they are shown, not asked for.
   const splitNames = SHARED_EXPENSE_TYPES.includes(draft.transaction_type) ? splitDebtorNames(draft.debtor_name) : [];
   const perPerson = isMultiPersonSplit(draft);
-  const perPersonSplit = splitSharesBetween(draft.amount, splitNames, draft.transaction_type);
+  const perPersonSplit = splitSharesBetween(draft.amount, splitNames, draft.transaction_type, draftSplitPins(draft));
+  const hasPins = !!draft.split_shares?.some((share) => share != null) || draft.split_self_share != null;
+  // Pinning is per slot: type a number into one line and the lines nobody
+  // pinned re-divide what is left. "ผมออก 500 ที่เหลือหาร 3 คน" is one pin.
+  const pinShare = (index: number, share: number) => update({
+    split_shares: splitNames.map((_, slot) => (slot === index ? share : draft.split_shares?.[slot] ?? null)),
+  });
   // Amount and share move together while the split is still even, so the
   // common case needs no second edit; a share the user set is left alone.
-  const setAmount = (amount: number) => update({ amount, partner_share: retargetPartnerShare(draft.amount, draft.partner_share, amount) });
+  const setAmount = (amount: number) => update({
+    amount,
+    partner_share: retargetPartnerShare(draft.amount, draft.partner_share, amount),
+    // Pinned amounts were chosen against the old bill; keeping them would
+    // silently re-divide everyone else around a number nobody meant.
+    ...(draft.amount === amount ? {} : { split_shares: null, split_self_share: null }),
+  });
 
   return (
     <div className={`draft draft-${draft.transaction_type}${draft.ambiguous ? " draft-needs-review" : ""}`}>
@@ -289,18 +301,34 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
       )}
       {perPerson && (
         <div className="draft-split-people-list">
-          <p className="draft-split-people-title">
-            {isSplit ? `หารกัน ${perPersonSplit.heads} คน · คนละ ${formatMoney(perPersonSplit.shares[0] ?? 0)}` : `ออกให้ ${splitNames.length} คน`}
-          </p>
+          <div className="draft-split-people-head">
+            <p className="draft-split-people-title">
+              {isSplit ? `หารกัน ${perPersonSplit.heads} คน` : `ออกให้ ${splitNames.length} คน`}
+            </p>
+            {hasPins && (
+              <button type="button" className="text-button" onClick={() => update({ split_shares: null, split_self_share: null })}>
+                หารเท่ากัน
+              </button>
+            )}
+          </div>
           <ul>
             {splitNames.map((name, index) => (
-              <li key={name}><span>{name}</span><b>{formatSignedMoney(perPersonSplit.shares[index])}</b></li>
+              <li key={name}>
+                <span>{name}</span>
+                <AmountInput value={perPersonSplit.shares[index]} onChange={(share) => pinShare(index, share)} />
+              </li>
             ))}
-            {perPersonSplit.userShare > 0 && (
-              <li className="is-self"><span>ส่วนของคุณ</span><b>{formatMoney(perPersonSplit.userShare)}</b></li>
+            {isSplit && (
+              <li className="is-self">
+                <span>ส่วนของคุณ</span>
+                <AmountInput value={perPersonSplit.userShare} onChange={(split_self_share) => update({ split_self_share })} />
+              </li>
             )}
           </ul>
-          <small>บันทึกแล้วจะแยกเป็น {splitNames.length + (perPersonSplit.userShare > 0 ? 1 : 0)} รายการ เพื่อให้ยอดหนี้แยกรายคน</small>
+          <small>
+            แก้ยอดของใครก็ได้ ที่เหลือจะหารกันเอง · บันทึกแล้วจะแยกเป็น{" "}
+            {splitNames.length + (perPersonSplit.userShare > 0 ? 1 : 0)} รายการ เพื่อให้ยอดหนี้แยกรายคน
+          </small>
         </div>
       )}
       {isSplit && !perPerson && (
