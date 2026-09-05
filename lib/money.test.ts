@@ -6,13 +6,15 @@ import {
   buildWalletLedger,
   calculateImpacts,
   describeDraftSave,
+  draftRowCount,
   describeWalletDeletion,
   draftSaveTotal,
-  expandCardFundedDraft,
   expandDraftForSave,
   expandTransferDraft,
   incompleteTransferDrafts,
   isCardFundedLeg,
+  isMultiPersonSplit,
+  splitDebtorNames,
   matchDebtorName,
   filterEntries,
   netWorthAsOf,
@@ -832,7 +834,7 @@ describe("retargetPartnerShare", () => {
   });
 });
 
-describe("expandCardFundedDraft", () => {
+describe("expandDraftForSave: a bill paid with a card", () => {
   const cardSplit: Draft = {
     id: "d1",
     title: "ข้าวมื้อเย็น",
@@ -852,12 +854,12 @@ describe("expandCardFundedDraft", () => {
   };
 
   it("leaves a draft that isn't card-funded alone", () => {
-    assert.deepEqual(expandCardFundedDraft({ ...cardSplit, funding_card_name: null }), [{ ...cardSplit, funding_card_name: null }]);
-    assert.equal(expandCardFundedDraft({ ...cardSplit, transaction_type: "personal_expense" }).length, 1);
+    assert.deepEqual(expandDraftForSave({ ...cardSplit, funding_card_name: null }, []), [{ ...cardSplit, funding_card_name: null }]);
+    assert.equal(expandDraftForSave({ ...cardSplit, transaction_type: "personal_expense" }, []).length, 1);
   });
 
   it("writes the charge to the card and the share to the person, and moves no wallet money", () => {
-    const [expense, card] = expandCardFundedDraft(cardSplit);
+    const [expense, card] = expandDraftForSave(cardSplit, []);
 
     assert.equal(expense.transaction_type, "split_half");
     assert.equal(expense.debtor_name, "จูน");
@@ -878,21 +880,21 @@ describe("expandCardFundedDraft", () => {
   });
 
   it("keeps an uneven share when it splits", () => {
-    const [expense, card] = expandCardFundedDraft({ ...cardSplit, partner_share: 100 });
+    const [expense, card] = expandDraftForSave({ ...cardSplit, partner_share: 100 }, []);
     assert.equal(expense.debt_impact, 100);
     assert.equal(expense.user_share, 63);
     assert.equal(card.debt_impact, 163);
   });
 
   it("says which card paid when the user left no note of their own", () => {
-    assert.equal(expandCardFundedDraft(cardSplit)[0].note, "จ่ายด้วยบัตร SPay");
-    assert.equal(expandCardFundedDraft({ ...cardSplit, note: "กับที่ทำงาน" })[0].note, "กับที่ทำงาน");
+    assert.equal(expandDraftForSave(cardSplit, [])[0].note, "จ่ายด้วยบัตร SPay");
+    assert.equal(expandDraftForSave({ ...cardSplit, note: "กับที่ทำงาน" }, [])[0].note, "กับที่ทำงาน");
   });
 
   it("survives the save path's re-normalize with its numbers intact", () => {
     // saveEntries normalizes again after expanding; the legs have to be
     // idempotent under that or the wallet_impact it just zeroed comes back.
-    const [expense, card] = expandCardFundedDraft(cardSplit).map((leg) => normalizeEntry(leg));
+    const [expense, card] = expandDraftForSave(cardSplit, []).map((leg) => normalizeEntry(leg));
     assert.equal(expense.wallet_impact, 0);
     assert.equal(card.user_share, 0);
   });
@@ -979,5 +981,134 @@ describe("splitting a bill between people", () => {
   it("keeps the same headcount when the bill changes", () => {
     // 1200 six ways, re-read as 1800: still six ways, not "1000 of 1800".
     assert.equal(retargetPartnerShare(1200, 1000, 1800), 1500);
+  });
+});
+
+describe("splitDebtorNames", () => {
+  it("reads several people out of the one field", () => {
+    assert.deepEqual(splitDebtorNames("อ้อน, แบงค์, วิน, พี่พัก"), ["อ้อน", "แบงค์", "วิน", "พี่พัก"]);
+  });
+
+  it("trims, drops blanks and the unnamed placeholder, and keeps each person once", () => {
+    assert.deepEqual(splitDebtorNames(" อ้อน ,, ไม่ระบุ , อ้อน , แบงค์ "), ["อ้อน", "แบงค์"]);
+    assert.deepEqual(splitDebtorNames(""), []);
+    assert.deepEqual(splitDebtorNames(null), []);
+  });
+
+  it("only counts as a multi-person split on a type that can be shared", () => {
+    assert.equal(isMultiPersonSplit({ transaction_type: "split_half", debtor_name: "อ้อน, แบงค์" }), true);
+    assert.equal(isMultiPersonSplit({ transaction_type: "lend", debtor_name: "อ้อน, แบงค์" }), true);
+    assert.equal(isMultiPersonSplit({ transaction_type: "split_half", debtor_name: "อ้อน" }), false);
+    assert.equal(isMultiPersonSplit({ transaction_type: "personal_expense", debtor_name: "อ้อน, แบงค์" }), false);
+  });
+});
+
+describe("expandDraftForSave: a bill split between named people", () => {
+  const beers: Draft = {
+    id: "d1", title: "ค่าเบียร์", category: "อาหาร", amount: 1500, type: "expense",
+    transaction_type: "split_half", wallet_impact: -1500, debt_impact: 1200, user_share: 300,
+    partner_share: 1200, debtor_name: "อ้อน, แบงค์, วิน, พี่พัก",
+    occurred_at: "2026-09-05T12:00:00.000Z", wallet_id: "w1", note: null,
+  };
+
+  it("writes one debt per person and keeps the user's own share", () => {
+    const rows = expandDraftForSave(beers, []);
+    assert.equal(rows.length, 5);
+
+    const debts = rows.filter((row) => row.transaction_type === "lend");
+    assert.deepEqual(debts.map((row) => row.debtor_name), ["อ้อน", "แบงค์", "วิน", "พี่พัก"]);
+    assert.deepEqual(debts.map((row) => row.debt_impact), [300, 300, 300, 300]);
+
+    const mine = rows.find((row) => row.transaction_type === "personal_expense")!;
+    assert.equal(mine.amount, 300);
+    assert.equal(mine.user_share, 300);
+    assert.equal(mine.debt_impact, 0);
+  });
+
+  it("takes exactly the bill out of the wallet, no more and no less", () => {
+    const rows = expandDraftForSave(beers, []);
+    assert.equal(rows.reduce((sum, row) => sum + row.wallet_impact, 0), -1500);
+    assert.equal(rows.reduce((sum, row) => sum + row.amount, 0), 1500);
+  });
+
+  it("gives the rounding remainder to the one holding the receipt", () => {
+    // 1000 three ways is 333.33 each; the odd satang is the user's, not a
+    // friend's, and the rows still add up to the bill.
+    const rows = expandDraftForSave({ ...beers, amount: 1000, debtor_name: "อ้อน, แบงค์" }, []);
+    assert.deepEqual(rows.filter((row) => row.transaction_type === "lend").map((row) => row.amount), [333.33, 333.33]);
+    assert.equal(rows.find((row) => row.transaction_type === "personal_expense")!.amount, 333.34);
+    assert.equal(rows.reduce((sum, row) => sum + row.amount, 0), 1000);
+  });
+
+  it("leaves the user out of a lend, since none of it was theirs", () => {
+    const rows = expandDraftForSave({ ...beers, transaction_type: "lend", amount: 900, debtor_name: "อ้อน, แบงค์, วิน" }, []);
+    assert.equal(rows.length, 3);
+    assert.deepEqual(rows.map((row) => row.amount), [300, 300, 300]);
+    assert.equal(rows.every((row) => row.user_share === 0), true);
+  });
+
+  it("does not group plain per-person rows, which each moved their own money", () => {
+    // The group id is also what marks a row as having moved no wallet money,
+    // so grouping these would zero out the 1500 that really did leave.
+    assert.equal(expandDraftForSave(beers, []).every((row) => !row.transfer_group_id), true);
+  });
+
+  it("says how many ways it went, on rows that could not otherwise say", () => {
+    assert.equal(expandDraftForSave(beers, [])[0].note, "หารกัน 5 คน");
+    assert.equal(expandDraftForSave({ ...beers, note: "ปาร์ตี้บริษัท" }, [])[0].note, "ปาร์ตี้บริษัท");
+  });
+
+  it("leaves a bill with one person named as the single split row it already was", () => {
+    const rows = expandDraftForSave({ ...beers, debtor_name: "จูน", amount: 163, partner_share: 81.5 }, []);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].transaction_type, "split_half");
+  });
+
+  it("puts a card-funded party on the card once and moves no wallet money", () => {
+    const rows = expandDraftForSave({ ...beers, funding_card_name: "SPay" }, []);
+    assert.equal(rows.length, 6);
+    assert.equal(rows.reduce((sum, row) => sum + row.wallet_impact, 0), 0);
+
+    const card = rows.find((row) => row.transaction_type === "card_charge")!;
+    assert.equal(card.debtor_name, "SPay");
+    assert.equal(card.debt_impact, 1500);
+    assert.equal(card.user_share, 0);
+
+    // Four friends owe 300 each, and the dinner cost the user 300 -- once.
+    assert.equal(rows.filter((row) => row.transaction_type === "lend").reduce((sum, row) => sum + row.debt_impact, 0), 1200);
+    assert.equal(rows.reduce((sum, row) => sum + row.user_share, 0), 300);
+    assert.equal(new Set(rows.map((row) => row.transfer_group_id)).size, 1);
+  });
+});
+
+describe("draftRowCount", () => {
+  const draft: Draft = {
+    id: "d1", title: "ค่าเบียร์", category: "อาหาร", amount: 1500, type: "expense",
+    transaction_type: "split_half", wallet_impact: -1500, debt_impact: 1200, user_share: 300,
+    partner_share: 1200, debtor_name: "จูน", occurred_at: "2026-09-05T12:00:00.000Z", wallet_id: "w1", note: null,
+  };
+
+  it("counts what each draft will really become", () => {
+    assert.equal(draftRowCount(draft), 1);
+    assert.equal(draftRowCount({ ...draft, funding_card_name: "SPay" }), 2);
+    assert.equal(draftRowCount({ ...draft, debtor_name: "อ้อน, แบงค์, วิน, พี่พัก" }), 5);
+    assert.equal(draftRowCount({ ...draft, debtor_name: "อ้อน, แบงค์, วิน, พี่พัก", funding_card_name: "SPay" }), 6);
+  });
+
+  it("agrees with what expandDraftForSave actually writes", () => {
+    for (const candidate of [
+      draft,
+      { ...draft, funding_card_name: "SPay" },
+      { ...draft, debtor_name: "อ้อน, แบงค์, วิน, พี่พัก" },
+      { ...draft, debtor_name: "อ้อน, แบงค์, วิน, พี่พัก", funding_card_name: "SPay" },
+      { ...draft, transaction_type: "lend" as const, debtor_name: "อ้อน, แบงค์" },
+    ]) {
+      assert.equal(draftRowCount(candidate), expandDraftForSave(candidate, []).length, candidate.debtor_name);
+    }
+  });
+
+  it("says so in the confirmation only when a draft splits", () => {
+    assert.match(describeDraftSave([{ ...draft, debtor_name: "อ้อน, แบงค์, วิน, พี่พัก" }]), /แยกเป็น 5 แถว/);
+    assert.doesNotMatch(describeDraftSave([draft]), /แยกเป็น/);
   });
 });

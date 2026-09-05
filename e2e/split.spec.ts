@@ -62,6 +62,38 @@ test.describe("split review", () => {
     await expect(page.locator(".draft-split-people-count")).toHaveValue("");
   });
 
+  test("breaks a party into one debt per person before it is saved", async ({ page }) => {
+    // The whole reason this exists: "ค่าเบียร์ 1500 หาร 5 คน มีอ้อน แบงค์ วิน
+    // พี่พัก ผม" used to land as one lump owed by "เพื่อน".
+    await openWithDraft(page, seedDraft({ title: "ค่าเบียร์", amount: 1500, debtor_name: "อ้อน, แบงค์, วิน, พี่พัก" }));
+
+    const breakdown = page.locator(".draft-split-people-list");
+    await expect(breakdown).toContainText("หารกัน 5 คน");
+    await expect(breakdown.locator("li")).toHaveCount(5);
+    for (const name of ["อ้อน", "แบงค์", "วิน", "พี่พัก"]) {
+      await expect(breakdown.locator("li", { hasText: name })).toContainText("300");
+    }
+    await expect(breakdown.locator("li.is-self")).toContainText("300");
+    await expect(breakdown).toContainText("แยกเป็น 5 รายการ");
+
+    // The single-person share controls step aside; the list decides now.
+    await expect(page.locator(".draft-split-share")).toHaveCount(0);
+    await expect(page.locator(".draft-result .impact-row")).toContainText("1,200");
+  });
+
+  test("keeps the share controls for a bill split with one person", async ({ page }) => {
+    await openWithDraft(page);
+
+    await expect(page.locator(".draft-split-people-list")).toHaveCount(0);
+    await expect(page.locator(".draft-split-share")).toHaveCount(1);
+  });
+
+  test("names the people it is about to create debts for", async ({ page }) => {
+    await openWithDraft(page, seedDraft({ debtor_name: "อ้อน, แบงค์" }));
+
+    await expect(page.locator(".draft-debtor-field")).toContainText("ลูกหนี้ใหม่ · อ้อน, แบงค์");
+  });
+
   test("offers a credit card as the thing that paid, not just a wallet", async ({ page }) => {
     // The bug this whole feature came from: a split could only be funded by a
     // wallet, so a dinner split and paid on a credit card could not be

@@ -37,7 +37,7 @@ import {
   buildPortfolioHoldings,
   buildPortfolioTrend,
   buildTransactionCore,
-  CARD_FUNDABLE_TYPES,
+  SHARED_EXPENSE_TYPES,
   buildWalletLedger,
   calculateImpacts,
   categorySpendAmount,
@@ -1186,7 +1186,7 @@ export default function Home() {
             // creates writes a debt onto that card's balance, and a card the
             // model invented would quietly open a debt against a name nobody
             // recognises.
-            const aiCard = CARD_FUNDABLE_TYPES.includes(item.transaction_type)
+            const aiCard = SHARED_EXPENSE_TYPES.includes(item.transaction_type)
               ? matchDebtorName(debtors.filter((debtor) => debtor.kind === "own").map((debtor) => debtor.name), item.paid_with_card)
               : null;
             const aiDestWalletId = item.transfer_to_wallet_id && wallets.some((wallet) => wallet.id === item.transfer_to_wallet_id) ? item.transfer_to_wallet_id : null;
@@ -1495,10 +1495,13 @@ export default function Home() {
 
   const deleteEntry = useCallback(async (entry: Entry) => {
     if (!supabase) return;
-    const pairedEntry = entry.transfer_group_id
-      ? entries.find((item) => item.id !== entry.id && item.transfer_group_id === entry.transfer_group_id)
-      : null;
-    const entriesToDelete = pairedEntry ? [entry, pairedEntry] : [entry];
+    // A group can be two rows (a transfer, a split paid with a card) or many
+    // (a card-funded bill split between five people), so take all of them.
+    const groupedEntries = entry.transfer_group_id
+      ? entries.filter((item) => item.id !== entry.id && item.transfer_group_id === entry.transfer_group_id)
+      : [];
+    const pairedEntry = groupedEntries.length > 0;
+    const entriesToDelete = [entry, ...groupedEntries];
     // Both kinds of paired row (a transfer's two legs, a card-funded split's
     // charge and share) only balance as a pair, so they go together -- the
     // wording is all that differs.
@@ -1506,7 +1509,7 @@ export default function Home() {
     const confirmed = await requestConfirm({
       title: pairedEntry ? `ลบ${pairLabel}นี้?` : "ลบรายการนี้?",
       detail: pairedEntry
-        ? `ลบ${pairLabel} "${entry.title}" ทั้งสองแถวที่คู่กันออกจากประวัติ`
+        ? `ลบ${pairLabel} "${entry.title}" ทั้ง ${entriesToDelete.length} แถวที่ผูกกันออกจากประวัติ`
         : `ลบ "${entry.title}" ออกจากประวัติ`,
       confirmLabel: "ลบรายการ",
       tone: "danger",

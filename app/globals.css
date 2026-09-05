@@ -2654,6 +2654,61 @@ a:focus-visible {
   color: var(--ink-3);
 }
 
+/* What a bill split between named people will become, listed row by row
+   before it is saved: the review step is the only place the person-by-person
+   breakdown exists as one thing, since after the save each line is a debt of
+   its own. */
+.draft-split-people-list {
+  margin-bottom: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+}
+
+.draft-split-people-title {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-2);
+  margin-bottom: var(--s-2);
+}
+
+.draft-split-people-list ul {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+}
+
+.draft-split-people-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  font-size: var(--fs-body-sm);
+  color: var(--ink);
+}
+
+.draft-split-people-list li.is-self {
+  color: var(--ink-3);
+}
+
+.draft-split-people-list li b {
+  font-weight: var(--fw-bold);
+}
+
+.draft-split-people-list > small {
+  display: block;
+  margin-top: var(--s-2);
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+}
+
+/* Sits in the same slot as the "ลูกหนี้ใหม่" note below it but is guidance,
+   not news, so it stays quiet rather than taking the accent colour. */
+.draft-debtor-field small.draft-debtor-hint {
+  color: var(--ink-3);
+}
+
 /* Headcount and share sit one above the other because they are two ways of
    saying the same thing -- change either and the other follows. */
 .draft-split-people {

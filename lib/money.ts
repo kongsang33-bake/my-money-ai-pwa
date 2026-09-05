@@ -24,16 +24,16 @@ import type {
 
 export const unnamedDebtor = "ไม่ระบุ";
 
-// The two expense types that can be paid with a credit card instead of a
-// wallet. Both put money on someone else's tab (a split partner, a borrower),
-// which is why they need a funding source of their own: personal spending on
-// a card is already its own type (card_charge).
-export const CARD_FUNDABLE_TYPES: TransactionType[] = ["split_half", "lend"];
+// The two expense types that put money on someone else's tab -- a split
+// partner, a borrower. Both can name several people and both can be paid with
+// a credit card instead of a wallet, which is what separates them from
+// personal spending (already its own types: personal_expense, card_charge).
+export const SHARED_EXPENSE_TYPES: TransactionType[] = ["split_half", "lend"];
 
-// ...and the types that can appear as one leg of the pair a card-funded split
-// is stored as -- the two expense types above plus the card_charge leg that
-// carries the charge itself.
-const CARD_FUNDED_LEG_TYPES: TransactionType[] = [...CARD_FUNDABLE_TYPES, "card_charge"];
+// The types that can appear as a leg of a card-funded bill: the shared ones
+// above, the personal_expense that carries the user's own share of a bill
+// split between named people, and the card_charge leg carrying the charge.
+const CARD_FUNDED_LEG_TYPES: TransactionType[] = [...SHARED_EXPENSE_TYPES, "personal_expense", "card_charge"];
 
 /**
  * Is this row one leg of a card-funded split/lend?
@@ -42,7 +42,7 @@ const CARD_FUNDED_LEG_TYPES: TransactionType[] = [...CARD_FUNDABLE_TYPES, "card_
  * debtor_name and sums debt_impact. "Dinner split with จูน, paid on the SPay
  * card" moves two of them at once (SPay +163 owed by me, จูน +81.5 owed to
  * me), so it is stored the way a transfer is -- two rows sharing a
- * transfer_group_id, created together by expandCardFundedDraft and deleted
+ * transfer_group_id, created together by expandDraftForSave and deleted
  * together by deleteEntry.
  *
  * Being a leg is what makes the two rows add up instead of double-counting:
@@ -54,6 +54,57 @@ const CARD_FUNDED_LEG_TYPES: TransactionType[] = [...CARD_FUNDABLE_TYPES, "card_
  */
 export function isCardFundedLeg(entry: { transaction_type: TransactionType; transfer_group_id?: string | null }) {
   return !!entry.transfer_group_id && CARD_FUNDED_LEG_TYPES.includes(entry.transaction_type);
+}
+
+/**
+ * The people a bill is split with, read out of the single debtor field:
+ * "อ้อน, แบงค์, วิน" is three debts of their own, not one person with commas
+ * in their name.
+ *
+ * One field rather than a list editor because it is the field the AI already
+ * fills, the field the user already types into, and the one place a name can
+ * come from -- and because a bill split with one person, which is most of
+ * them, must not get harder to enter to make room for a party.
+ */
+export function splitDebtorNames(debtorName?: string | null): string[] {
+  const seen = new Set<string>();
+  return (debtorName ?? "")
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => {
+      if (!name || name === unnamedDebtor) return false;
+      const key = name.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+/** A bill with more than one person named on it: one row each, at save. */
+export function isMultiPersonSplit(draft: { transaction_type: TransactionType; debtor_name?: string | null }) {
+  return SHARED_EXPENSE_TYPES.includes(draft.transaction_type) && splitDebtorNames(draft.debtor_name).length > 1;
+}
+
+/**
+ * What each named person owes, and what is left as the user's own share.
+ *
+ * Everyone pays the same, and the rounding remainder lands on the user rather
+ * than on a friend -- a 1000-baht bill three ways is 333.33 each and 333.34
+ * for whoever is holding the receipt. The shares always add back up to the
+ * bill, which is the property that makes the rows safe to save separately.
+ *
+ * A lend is the same arithmetic minus the user: they are not one of the
+ * heads, so they keep none of it.
+ */
+export function splitSharesBetween(amount: number, names: string[], transactionType: TransactionType) {
+  const heads = transactionType === "split_half" ? names.length + 1 : names.length;
+  const each = heads > 0 ? Math.round((amount / heads) * 100) / 100 : 0;
+  const shares = names.map(() => each);
+  if (transactionType !== "split_half" && shares.length) {
+    shares[shares.length - 1] = Math.round((amount - each * (names.length - 1)) * 100) / 100;
+  }
+  const userShare = transactionType === "split_half" ? Math.round((amount - each * names.length) * 100) / 100 : 0;
+  return { shares, userShare, heads };
 }
 
 /**
@@ -149,7 +200,10 @@ export function calculateImpacts(amount: number, transactionType: TransactionTyp
   if (transactionType === "transfer" || transactionType === "investment_buy") {
     return { wallet_impact: -amount, debt_impact: 0, user_share: 0, partner_share: 0 };
   }
-  return { wallet_impact: -amount, debt_impact: 0, user_share: amount, partner_share: 0 };
+  // personal_expense and gift. personal_expense reaches this as a card-funded
+  // leg too -- the user's own share of a bill their card paid -- where the
+  // spending is still theirs but no wallet moved.
+  return { wallet_impact: cardFunded ? 0 : -amount, debt_impact: 0, user_share: amount, partner_share: 0 };
 }
 
 /**
@@ -175,55 +229,90 @@ export function matchDebtorName(names: string[], candidate: string | null | unde
 }
 
 /**
- * Splits a card-funded draft into the two rows it is stored as: the expense
- * itself (no wallet movement) and the charge on the card. Mirrors
- * expandTransferDraft, right down to sharing transfer_group_id, so the two
- * rows delete together and neither can be left behind on its own.
+ * Turns one reviewed draft into the rows it is actually stored as.
  *
- * Returns the draft untouched when it isn't card-funded, so the save path can
- * run every draft through it.
- */
-export function expandCardFundedDraft(draft: Draft): Draft[] {
-  const card = draft.funding_card_name?.trim();
-  if (!card || !CARD_FUNDABLE_TYPES.includes(draft.transaction_type)) return [draft];
-
-  const groupId = crypto.randomUUID();
-  const expenseLeg = normalizeEntry({
-    ...draft,
-    transfer_group_id: groupId,
-    // The card paid, so no wallet did. Saying which card is the one thing the
-    // expense row cannot say in a field of its own (debtor_name is already
-    // the person being split with), and a row reading "฿0" with no
-    // explanation is worse than one carrying the sentence.
-    wallet_id: null,
-    note: draft.note?.trim() || `จ่ายด้วยบัตร ${card}`,
-  }, false);
-  const cardLeg = normalizeEntry({
-    id: `${groupId}-card`,
-    title: draft.title,
-    category: draft.category,
-    amount: draft.amount,
-    transaction_type: "card_charge",
-    debtor_name: card,
-    occurred_at: draft.occurred_at,
-    wallet_id: null,
-    note: draft.note,
-    source_text: draft.source_text,
-    transfer_group_id: groupId,
-  }, false);
-  return [expenseLeg, cardLeg];
-}
-
-/**
- * Every draft the save path has to turn into rows: transfers and card-funded
- * splits each become two, everything else stays one. One entry point so a new
- * caller can't pick up only half the expansions -- which is exactly what
- * "flatMap(expandTransferDraft)" would have done to a card-funded split.
+ * Three shapes need more than one row, and they compose:
+ *
+ * - a transfer, which has always been two legs (expandTransferDraft);
+ * - a bill split between *named* people -- "หาร 5 คน มีอ้อน แบงค์ วิน พี่พัก
+ *   ผม" is four debts of 300 and 300 of the user's own spending, because
+ *   buildDebtSummary groups by debtor_name and one row can only name one
+ *   person;
+ * - a bill paid with a credit card, where the charge lands on the card and
+ *   the expense on whoever owes it.
+ *
+ * Only the card-funded shape links its rows with a transfer_group_id, and
+ * that is deliberate: the group id is also what tells a row it moved no
+ * wallet money (isCardFundedLeg), so grouping the plain per-person rows --
+ * which did each move their own share out of the wallet -- would zero them
+ * out. They stand alone; the card-funded ones are grouped and deleted
+ * together.
  */
 export function expandDraftForSave(draft: Draft, wallets: Wallet[]): Draft[] {
-  return draft.transaction_type === "transfer"
-    ? expandTransferDraft(draft, wallets)
-    : expandCardFundedDraft(draft);
+  if (draft.transaction_type === "transfer") return expandTransferDraft(draft, wallets);
+
+  const shareable = SHARED_EXPENSE_TYPES.includes(draft.transaction_type);
+  const card = shareable ? draft.funding_card_name?.trim() ?? "" : "";
+  const names = shareable ? splitDebtorNames(draft.debtor_name) : [];
+  const perPerson = names.length > 1;
+  if (!card && !perPerson) return [draft];
+
+  // Every leg of a card-funded bill carries the group id; a plain per-person
+  // split carries none (see above).
+  const groupId = card ? crypto.randomUUID() : null;
+  const shared = {
+    category: draft.category,
+    occurred_at: draft.occurred_at,
+    source_text: draft.source_text,
+    // Whichever half of "why is this row 300 and not 1500" applies -- said
+    // once, on rows that would otherwise have no way to say it, and never
+    // over a note the user wrote themselves.
+    note: draft.note?.trim()
+      || (card ? `จ่ายด้วยบัตร ${card}` : null)
+      || (perPerson ? `หารกัน ${splitSharesBetween(draft.amount, names, draft.transaction_type).heads} คน` : null),
+    wallet_id: card ? null : draft.wallet_id,
+    transfer_group_id: groupId,
+  };
+
+  const legs: Draft[] = [];
+  if (perPerson) {
+    const { shares, userShare } = splitSharesBetween(draft.amount, names, draft.transaction_type);
+    names.forEach((name, index) => {
+      legs.push(normalizeEntry({
+        ...shared,
+        id: `${draft.id}-${index}`,
+        title: draft.title,
+        amount: shares[index],
+        transaction_type: "lend",
+        debtor_name: name,
+      }, false));
+    });
+    if (userShare > 0) {
+      legs.push(normalizeEntry({
+        ...shared,
+        id: `${draft.id}-self`,
+        title: draft.title,
+        amount: userShare,
+        transaction_type: "personal_expense",
+        debtor_name: "",
+      }, false));
+    }
+  } else {
+    legs.push(normalizeEntry({ ...draft, ...shared }, false));
+  }
+
+  if (card) {
+    legs.push(normalizeEntry({
+      ...shared,
+      id: `${draft.id}-card`,
+      title: draft.title,
+      amount: draft.amount,
+      transaction_type: "card_charge",
+      debtor_name: card,
+      note: draft.note,
+    }, false));
+  }
+  return legs;
 }
 
 export function categorySpendAmount(entry: Entry): number | null {
@@ -597,8 +686,29 @@ export function draftSaveTotal(drafts: Draft[]): number {
 }
 
 /** The confirm dialog's body for saving a batch of drafts. */
+/**
+ * How many rows one reviewed draft will actually become -- a transfer's two
+ * legs, a debt per person on a split, the charge on a card. Counted from the
+ * same rules expandDraftForSave applies, without building the rows, so the
+ * confirmation can say so before the user agrees to it.
+ */
+export function draftRowCount(draft: Draft): number {
+  if (draft.transaction_type === "transfer") return draft.transfer_to_wallet_id ? 2 : 1;
+  const shareable = SHARED_EXPENSE_TYPES.includes(draft.transaction_type);
+  const names = shareable ? splitDebtorNames(draft.debtor_name) : [];
+  const card = shareable && draft.funding_card_name?.trim() ? 1 : 0;
+  if (names.length < 2) return 1 + card;
+  const { userShare } = splitSharesBetween(draft.amount, names, draft.transaction_type);
+  return names.length + (userShare > 0 ? 1 : 0) + card;
+}
+
 export function describeDraftSave(drafts: Draft[]): string {
-  return `กำลังจะบันทึก ${drafts.length} รายการ รวม ${moneySign}${formatMoney(draftSaveTotal(drafts))}`;
+  const rows = drafts.reduce((sum, draft) => sum + draftRowCount(draft), 0);
+  // Splitting a bill between five people writes five rows from one reviewed
+  // card, so the count the user agreed to and the count that lands in their
+  // history would otherwise disagree.
+  const split = rows > drafts.length ? ` (แยกเป็น ${rows} แถว)` : "";
+  return `กำลังจะบันทึก ${drafts.length} รายการ${split} รวม ${moneySign}${formatMoney(draftSaveTotal(drafts))}`;
 }
 
 export type ReceiptMismatch = { parsedTotal: number; receiptTotal: number; detail: string };

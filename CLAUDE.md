@@ -192,6 +192,16 @@ config (`lib/constants.ts`). If something you need isn't there, say so
 explicitly (don't just add a new local literal) and add it to the right
 shared location instead of typing the value inline.
 
+**One reviewed draft is not one row.** `expandDraftForSave` is the only
+thing that turns drafts into rows, and three shapes become several: a
+transfer's two legs, a bill split between named people (one `lend` per name
+plus the user's own `personal_expense`, since `debtor_name` holds one person),
+and a bill paid with a credit card (the charge, plus whoever owes it). Only
+the card-funded shape links its rows with a `transfer_group_id` — that same id
+is what tells a row it moved no wallet money (`isCardFundedLeg`), so grouping
+the plain per-person rows would zero out money that really did leave. Add a
+new multi-row shape there, not in a second flatMap at the call site.
+
 **One row moves one debt balance.** `buildDebtSummary` groups by
 `debtor_name` and sums `debt_impact`, so a transaction that moves two of them
 at once — a bill split with someone but paid on a credit card, which the card

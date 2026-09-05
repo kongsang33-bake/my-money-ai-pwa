@@ -6,7 +6,7 @@ import { CATEGORY_DOT_TINT_ALPHA, MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE } from "@/l
 import { compressSlipImage } from "@/lib/image";
 import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
 import { todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
-import { CARD_FUNDABLE_TYPES, defaultWalletId, entryDisplayImpact, isCardFundedLeg, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, unnamedDebtor } from "@/lib/money";
+import { SHARED_EXPENSE_TYPES, defaultWalletId, entryDisplayImpact, isCardFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, splitDebtorNames, splitSharesBetween, unnamedDebtor } from "@/lib/money";
 import { DEBT_TYPES, TYPES_USER_OWES, transactionKind, transactionTypeLabels, type TransactionType } from "@/lib/taxonomy";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
@@ -157,7 +157,10 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
   const isOwnDebtType = TYPES_USER_OWES.includes(draft.transaction_type);
   const relevantKind: DebtorKind = isOwnDebtType ? "own" : "lend";
   const knownNames = knownDebtors.filter((debtor) => debtor.kind === relevantKind).map((debtor) => debtor.name);
-  const isNewDebtor = isDebtType && !!draft.debtor_name.trim() && draft.debtor_name !== unnamedDebtor && !knownNames.some((name) => name.trim().toLowerCase() === draft.debtor_name.trim().toLowerCase());
+  const newDebtorNames = isDebtType
+    ? (SHARED_EXPENSE_TYPES.includes(draft.transaction_type) ? splitDebtorNames(draft.debtor_name) : [draft.debtor_name.trim()])
+      .filter((name) => name && name !== unnamedDebtor && !knownNames.some((known) => known.trim().toLowerCase() === name.toLowerCase()))
+    : [];
   const isTransfer = draft.transaction_type === "transfer";
   const transferInvalid = isTransfer && (!draft.transfer_to_wallet_id || draft.transfer_to_wallet_id === draft.wallet_id);
   const debtorFieldLabel =
@@ -175,9 +178,15 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
   // wallet dropdown alone could not express "dinner split with จูน, paid on
   // SPay" -- the one thing this row could not say before.
   const cards = knownDebtors.filter((debtor) => debtor.kind === "own");
-  const canPayWithCard = CARD_FUNDABLE_TYPES.includes(draft.transaction_type) && cards.length > 0;
+  const canPayWithCard = SHARED_EXPENSE_TYPES.includes(draft.transaction_type) && cards.length > 0;
   const fundingCard = canPayWithCard ? draft.funding_card_name?.trim() || "" : "";
   const isSplit = draft.transaction_type === "split_half";
+  // Several names in the one debtor field means one debt each, worked out at
+  // save (expandDraftForSave). The headcount and the share are then the list's
+  // to decide, not the user's -- so they are shown, not asked for.
+  const splitNames = SHARED_EXPENSE_TYPES.includes(draft.transaction_type) ? splitDebtorNames(draft.debtor_name) : [];
+  const perPerson = isMultiPersonSplit(draft);
+  const perPersonSplit = splitSharesBetween(draft.amount, splitNames, draft.transaction_type);
   // Amount and share move together while the split is still even, so the
   // common case needs no second edit; a share the user set is left alone.
   const setAmount = (amount: number) => update({ amount, partner_share: retargetPartnerShare(draft.amount, draft.partner_share, amount) });
@@ -270,10 +279,31 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
             {debtorFieldLabel}
             <input placeholder={debtorFieldPlaceholder} value={draft.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
           </label>
-          {isNewDebtor && <small>{relevantKind === "own" ? "หนี้ใหม่" : "ลูกหนี้ใหม่"} · จะสร้างให้อัตโนมัติเมื่อบันทึก</small>}
+          {SHARED_EXPENSE_TYPES.includes(draft.transaction_type) && (
+            <small className="draft-debtor-hint">ใส่หลายชื่อได้ คั่นด้วย , แล้วจะแยกเป็นหนี้รายคนให้</small>
+          )}
+          {!!newDebtorNames.length && (
+            <small>{relevantKind === "own" ? "หนี้ใหม่" : "ลูกหนี้ใหม่"} · {newDebtorNames.join(", ")} · จะสร้างให้อัตโนมัติเมื่อบันทึก</small>
+          )}
         </div>
       )}
-      {isSplit && (
+      {perPerson && (
+        <div className="draft-split-people-list">
+          <p className="draft-split-people-title">
+            {isSplit ? `หารกัน ${perPersonSplit.heads} คน · คนละ ${formatMoney(perPersonSplit.shares[0] ?? 0)}` : `ออกให้ ${splitNames.length} คน`}
+          </p>
+          <ul>
+            {splitNames.map((name, index) => (
+              <li key={name}><span>{name}</span><b>{formatSignedMoney(perPersonSplit.shares[index])}</b></li>
+            ))}
+            {perPersonSplit.userShare > 0 && (
+              <li className="is-self"><span>ส่วนของคุณ</span><b>{formatMoney(perPersonSplit.userShare)}</b></li>
+            )}
+          </ul>
+          <small>บันทึกแล้วจะแยกเป็น {splitNames.length + (perPersonSplit.userShare > 0 ? 1 : 0)} รายการ เพื่อให้ยอดหนี้แยกรายคน</small>
+        </div>
+      )}
+      {isSplit && !perPerson && (
         <SplitShareField
           amount={draft.amount}
           partnerShare={draft.partner_share}
@@ -350,6 +380,11 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
           <div className="impact-row">
             <span>{wallets.find((wallet) => wallet.id === draft.wallet_id)?.name ?? "กระเป๋าต้นทาง"} {formatSignedMoney(-draft.amount)}</span>
             <span>{wallets.find((wallet) => wallet.id === draft.transfer_to_wallet_id)?.name ?? "กระเป๋าปลายทาง"} {formatSignedMoney(draft.amount)}</span>
+          </div>
+        ) : perPerson ? (
+          <div className="impact-row">
+            <span>{fundingCard || "กระเป๋า"} {formatSignedMoney(fundingCard ? draft.amount : -draft.amount)}</span>
+            <span>ลูกหนี้ {splitNames.length} คน {formatSignedMoney(perPersonSplit.shares.reduce((sum, share) => sum + share, 0))}</span>
           </div>
         ) : fundingCard ? (
           // Two rows get written here, so the preview shows both: the charge
@@ -784,7 +819,7 @@ export function EditSheet({
 }) {
   const update = (patch: Partial<Entry>) => onChange(normalizeEntry({ ...entry, ...patch }, false));
   const [originalType] = useState(entry.transaction_type);
-  // One leg of a card-funded pair (see expandCardFundedDraft). Amount, type
+  // One leg of a card-funded bill (see expandDraftForSave). Amount, type
   // and funding are the halves of it that only make sense together, so they
   // are locked the way a transfer's are -- but the split itself is this row's
   // alone, so who owes what stays editable.
