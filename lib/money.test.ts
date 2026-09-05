@@ -17,6 +17,8 @@ import {
   filterEntries,
   netWorthAsOf,
   normalizeEntry,
+  partnerShareForPeople,
+  peopleFromPartnerShare,
   planEntryUpdate,
   receiptMismatch,
   recurringExpenseEntry,
@@ -941,5 +943,41 @@ describe("matchDebtorName", () => {
     assert.equal(matchDebtorName(cards, "กสิกร"), null);
     assert.equal(matchDebtorName(cards, ""), null);
     assert.equal(matchDebtorName(cards, undefined), null);
+  });
+});
+
+describe("splitting a bill between people", () => {
+  it("leaves the user with their own share and the rest owed back", () => {
+    // The party case: 1200 six ways is 200 each, so 1000 comes back.
+    assert.equal(partnerShareForPeople(1200, 6), 1000);
+    assert.equal(1200 - partnerShareForPeople(1200, 6), 200);
+  });
+
+  it("matches the old even split at two people", () => {
+    assert.equal(partnerShareForPeople(163, 2), 81.5);
+  });
+
+  it("rounds to satang rather than handing the user 108.66666666666667", () => {
+    assert.equal(partnerShareForPeople(163, 3), 108.67);
+  });
+
+  it("holds a headcount inside the supported range", () => {
+    assert.equal(partnerShareForPeople(100, 1), partnerShareForPeople(100, 2));
+    assert.equal(partnerShareForPeople(100, 999), partnerShareForPeople(100, 50));
+  });
+
+  it("reads the headcount back off a share it produced", () => {
+    assert.equal(peopleFromPartnerShare(1200, 1000), 6);
+    assert.equal(peopleFromPartnerShare(163, 108.67), 3);
+    assert.equal(peopleFromPartnerShare(163, 81.5), 2);
+  });
+
+  it("reports no headcount for a share the user typed themselves", () => {
+    assert.equal(peopleFromPartnerShare(163, 100), null);
+  });
+
+  it("keeps the same headcount when the bill changes", () => {
+    // 1200 six ways, re-read as 1800: still six ways, not "1000 of 1800".
+    assert.equal(retargetPartnerShare(1200, 1000, 1800), 1500);
   });
 });

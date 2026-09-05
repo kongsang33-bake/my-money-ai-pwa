@@ -19,7 +19,7 @@ test.describe("split review", () => {
 
     const share = page.locator(".draft-split-share .amount-input");
     await expect(share).toHaveValue("81.5");
-    await expect(page.locator(".draft-split-presets button.is-active")).toHaveText("คนละครึ่ง");
+    await expect(page.locator(".draft-split-people-count")).toHaveValue("2");
     await expect(page.locator(".draft-result .impact-row")).toContainText("81.5");
   });
 
@@ -32,15 +32,34 @@ test.describe("split review", () => {
     // The whole 163 still left the wallet; only who owes what moved.
     await expect(page.locator(".draft-result .impact-row")).toContainText("163");
     await expect(page.locator(".draft-result .impact-row")).toContainText("100");
-    await expect(page.locator(".draft-split-share small")).toContainText("63");
-    await expect(page.locator(".draft-split-presets button.is-active")).toHaveCount(0);
+    await expect(page.locator(".draft-split-summary")).toContainText("63");
   });
 
-  test("splits into thirds from the preset", async ({ page }) => {
+  test("counts the table up one head at a time", async ({ page }) => {
     await openWithDraft(page);
 
-    await page.locator(".draft-split-presets button", { hasText: "หาร 3" }).click();
-    await expect(page.locator(".draft-split-share .amount-input")).toHaveValue(/54\.3/);
+    await expect(page.locator(".draft-split-people-count")).toHaveValue("2");
+    await page.locator("button[aria-label='เพิ่มจำนวนคนที่หาร']").click();
+    // 163 three ways: 54.33 each, so 108.67 comes back.
+    await expect(page.locator(".draft-split-share .amount-input")).toHaveValue("108.67");
+    await expect(page.locator(".draft-split-summary")).toContainText("54.33");
+  });
+
+  test("takes a headcount a party actually needs, past the old ÷2 ÷3 ÷4", async ({ page }) => {
+    await openWithDraft(page, seedDraft({ amount: 1200 }));
+
+    await page.locator(".draft-split-people-count").fill("6");
+    // 1200 six ways: 200 each, 1000 owed back.
+    await expect(page.locator(".draft-split-share .amount-input")).toHaveValue("1000");
+    await expect(page.locator(".draft-split-summary")).toContainText("200");
+    await expect(page.locator(".draft-result .impact-row")).toContainText("1,000");
+  });
+
+  test("empties the headcount when the share is one the user typed", async ({ page }) => {
+    await openWithDraft(page);
+
+    await page.locator(".draft-split-share .amount-input").fill("100");
+    await expect(page.locator(".draft-split-people-count")).toHaveValue("");
   });
 
   test("offers a credit card as the thing that paid, not just a wallet", async ({ page }) => {
@@ -65,11 +84,13 @@ test.describe("split review", () => {
     await expect(page.locator(".draft-grid-secondary select")).toHaveCount(0);
   });
 
-  test("keeps an even split even when the amount changes", async ({ page }) => {
+  test("keeps the same headcount when the amount changes", async ({ page }) => {
     await openWithDraft(page);
 
+    await page.locator(".draft-split-people-count").fill("4");
     await page.locator(".draft-grid .amount-input").first().fill("200");
-    await expect(page.locator(".draft-split-share .amount-input")).toHaveValue("100");
+    await expect(page.locator(".draft-split-people-count")).toHaveValue("4");
+    await expect(page.locator(".draft-split-share .amount-input")).toHaveValue("150");
   });
 
   test("leaves a share the user set alone when the amount changes", async ({ page }) => {

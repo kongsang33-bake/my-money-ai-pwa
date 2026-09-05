@@ -10,6 +10,14 @@ export const DATE_INPUT_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export const MAX_SLIP_IMAGES = 3;
 
+// How many ways a shared bill can be split. Two is the floor because a split
+// with nobody else in it is just a personal expense; the ceiling only exists
+// so a stray keystroke in the headcount box can't turn one dinner into a
+// fifty-thousand-way split -- a party big enough to reach it is one where the
+// share gets typed in baht anyway.
+export const MIN_SPLIT_PEOPLE = 2;
+export const MAX_SPLIT_PEOPLE = 50;
+
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export function imageBytes(base64: string) {

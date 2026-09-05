@@ -1,12 +1,12 @@
 "use client";
 
 import { memo, useMemo, useState } from "react";
-import { ArrowDown, ArrowLeftRight, ChevronDown, Lightbulb, X } from "lucide-react";
-import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
+import { ArrowDown, ArrowLeftRight, ChevronDown, Lightbulb, Minus, Plus, X } from "lucide-react";
+import { CATEGORY_DOT_TINT_ALPHA, MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE } from "@/lib/constants";
 import { compressSlipImage } from "@/lib/image";
 import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
 import { todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
-import { CARD_FUNDABLE_TYPES, defaultWalletId, entryDisplayImpact, isCardFundedLeg, normalizeEntry, retargetPartnerShare, unnamedDebtor } from "@/lib/money";
+import { CARD_FUNDABLE_TYPES, defaultWalletId, entryDisplayImpact, isCardFundedLeg, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, unnamedDebtor } from "@/lib/money";
 import { DEBT_TYPES, TYPES_USER_OWES, transactionKind, transactionTypeLabels, type TransactionType } from "@/lib/taxonomy";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
@@ -273,7 +273,15 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
           {isNewDebtor && <small>{relevantKind === "own" ? "หนี้ใหม่" : "ลูกหนี้ใหม่"} · จะสร้างให้อัตโนมัติเมื่อบันทึก</small>}
         </div>
       )}
-      {isSplit && <SplitShareField draft={draft} onChange={(partner_share) => update({ partner_share })} />}
+      {isSplit && (
+        <SplitShareField
+          amount={draft.amount}
+          partnerShare={draft.partner_share}
+          userShare={draft.user_share}
+          debtorName={draft.debtor_name}
+          onChange={(partner_share) => update({ partner_share })}
+        />
+      )}
       {canPayWithCard && (
         <label className="draft-funding">
           จ่ายด้วย
@@ -368,38 +376,75 @@ function splitFundingValue(value: string): [source: string, value: string] {
 }
 
 /**
- * How much of a shared bill the other person owes back. Defaults to half --
- * the only thing the app could record until now -- with the thirds and
- * quarters of a three- or four-way dinner one tap away, and any other number
- * typeable, because "you get 100 of this one" is not a fraction.
+ * How much of a shared bill the other person owes back, from either end: the
+ * headcount, for the usual even split (a table of six is a number you count,
+ * not a fraction you look up -- which is why this is a headcount rather than
+ * the ÷2 ÷3 ÷4 chips it replaced), or the amount itself, for "you get 100 of
+ * this one".
+ *
+ * Both are always visible and always agree: typing a share that isn't an even
+ * split just empties the headcount, and every number the split produces --
+ * each person's share, the user's own -- is spelled out rather than left to
+ * be inferred from one figure.
  */
-function SplitShareField({ draft, onChange }: { draft: Draft; onChange: (share: number) => void }) {
-  const presets = [
-    { label: "คนละครึ่ง", share: draft.amount / 2 },
-    { label: "หาร 3", share: draft.amount / 3 },
-    { label: "หาร 4", share: draft.amount / 4 },
-  ];
-  const name = draft.debtor_name && draft.debtor_name !== unnamedDebtor ? draft.debtor_name : "อีกฝ่าย";
+export function SplitShareField({
+  amount,
+  partnerShare,
+  userShare,
+  debtorName,
+  onChange,
+}: {
+  amount: number;
+  partnerShare: number;
+  userShare: number;
+  debtorName: string;
+  onChange: (share: number) => void;
+}) {
+  const people = peopleFromPartnerShare(amount, partnerShare);
+  const name = debtorName && debtorName !== unnamedDebtor ? debtorName : "อีกฝ่าย";
+  const setPeople = (next: number) => onChange(partnerShareForPeople(amount, next));
 
   return (
     <div className="draft-split-share">
+      <div className="draft-split-people">
+        <span className="draft-split-people-label">หารกันกี่คน<small>รวมคุณด้วย</small></span>
+        <span className="draft-split-stepper">
+          <button
+            type="button"
+            onClick={() => setPeople((people ?? MIN_SPLIT_PEOPLE) - 1)}
+            disabled={!!people && people <= MIN_SPLIT_PEOPLE}
+            aria-label="ลดจำนวนคนที่หาร"
+          >
+            <Minus size={16} strokeWidth={2.5} aria-hidden="true" />
+          </button>
+          <input
+            className="draft-split-people-count"
+            inputMode="numeric"
+            value={people ?? ""}
+            placeholder="—"
+            aria-label="จำนวนคนที่หารบิลนี้"
+            onChange={(event) => {
+              const next = Number(event.target.value.replace(/\D/g, ""));
+              if (next >= MIN_SPLIT_PEOPLE) setPeople(Math.min(next, MAX_SPLIT_PEOPLE));
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => setPeople((people ?? MIN_SPLIT_PEOPLE - 1) + 1)}
+            disabled={!!people && people >= MAX_SPLIT_PEOPLE}
+            aria-label="เพิ่มจำนวนคนที่หาร"
+          >
+            <Plus size={16} strokeWidth={2.5} aria-hidden="true" />
+          </button>
+        </span>
+      </div>
       <label>
         {name}คืนเท่าไร
-        <AmountInput value={draft.partner_share} onChange={onChange} />
+        <AmountInput value={partnerShare} onChange={onChange} />
       </label>
-      <div className="draft-split-presets">
-        {presets.map((preset) => (
-          <button
-            key={preset.label}
-            type="button"
-            className={Math.abs(draft.partner_share - preset.share) < 0.005 ? "is-active" : ""}
-            onClick={() => onChange(preset.share)}
-          >
-            {preset.label}
-          </button>
-        ))}
-      </div>
-      <small>ส่วนของคุณ {formatMoney(draft.user_share)}</small>
+      <small className="draft-split-summary">
+        {people ? `คนละ ${formatMoney(amount / people)} · ` : ""}ส่วนของคุณ {formatMoney(userShare)}
+      </small>
     </div>
   );
 }
@@ -811,10 +856,13 @@ export function EditSheet({
         />
       </label>
       {entry.transaction_type === "split_half" && (
-        <label>
-          {entry.debtor_name && entry.debtor_name !== unnamedDebtor ? entry.debtor_name : "อีกฝ่าย"}คืนเท่าไร
-          <AmountInput value={entry.partner_share} onChange={(partner_share) => update({ partner_share })} />
-        </label>
+        <SplitShareField
+          amount={entry.amount}
+          partnerShare={entry.partner_share}
+          userShare={entry.user_share}
+          debtorName={entry.debtor_name}
+          onChange={(partner_share) => update({ partner_share })}
+        />
       )}
       {DEBT_TYPES.includes(entry.transaction_type) && (
         <label>

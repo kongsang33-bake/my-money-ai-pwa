@@ -6,7 +6,7 @@
 import { TYPES_OWED_TO_USER, TYPES_USER_OWES, transactionKind, walletTagLabels, type TransactionType, type WalletTag } from "./taxonomy.ts";
 import { formatMoney, moneySign, toFiniteNumber, toMoneyAmount } from "./format.ts";
 import { cycleBounds, entriesInRange, shiftMonthKey } from "./cycle.ts";
-import { RECEIPT_TOTAL_TOLERANCE } from "./constants.ts";
+import { MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE, RECEIPT_TOTAL_TOLERANCE } from "./constants.ts";
 import type {
   Debtor,
   DebtorKind,
@@ -68,17 +68,47 @@ export function partnerShareOf(amount: number, partnerShare?: number | null) {
 }
 
 /**
+ * What the others owe back when a bill is split evenly between `people` (the
+ * user included) and the user paid all of it: everything but their own share.
+ *
+ * A row can only name one debtor, so a table of six lands as one debt of five
+ * sixths rather than five debts of one sixth -- the aggregate is right either
+ * way (the user's own spending is exactly their share), and splitting it per
+ * person means one row per person, which is what the debtor field is for.
+ *
+ * Rounded to satang because this number is also what the user sees in the
+ * share box, and a 163-baht dinner three ways is 108.67, not
+ * 108.66666666666667.
+ */
+export function partnerShareForPeople(amount: number, people: number) {
+  const heads = Math.min(Math.max(Math.round(people) || MIN_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE), MAX_SPLIT_PEOPLE);
+  return partnerShareOf(amount, Math.round((amount - amount / heads) * 100) / 100);
+}
+
+/**
+ * The headcount an even split implies, or null when the share isn't one of
+ * them -- which is how the UI knows whether to show "หาร 6 คน" or to leave
+ * the headcount blank because the user typed a number of their own.
+ */
+export function peopleFromPartnerShare(amount: number, partnerShare: number): number | null {
+  for (let people = MIN_SPLIT_PEOPLE; people <= MAX_SPLIT_PEOPLE; people += 1) {
+    if (Math.abs(partnerShareForPeople(amount, people) - partnerShare) < 0.005) return people;
+  }
+  return null;
+}
+
+/**
  * The partner's share to carry over when the bill amount changes.
  *
- * A share the user never touched should follow the amount (an even split of
- * 163 that becomes 200 is still even), while one they set deliberately should
- * survive -- so "did they touch it" is read back off the numbers rather than
- * tracked as another piece of state that edit, AI-parse and the manual form
- * would each have to set.
+ * A split the user never touched should follow the amount (163 six ways that
+ * becomes 200 is still six ways), while a share they typed should survive --
+ * so "did they touch it" is read back off the numbers rather than tracked as
+ * another piece of state that edit, AI-parse and the manual form would each
+ * have to set.
  */
 export function retargetPartnerShare(previousAmount: number, previousPartnerShare: number, nextAmount: number) {
-  const wasEven = Math.abs(previousPartnerShare - previousAmount / 2) < 0.005;
-  return wasEven ? nextAmount / 2 : partnerShareOf(nextAmount, previousPartnerShare);
+  const people = peopleFromPartnerShare(previousAmount, previousPartnerShare);
+  return people ? partnerShareForPeople(nextAmount, people) : partnerShareOf(nextAmount, previousPartnerShare);
 }
 
 export type ImpactOptions = {

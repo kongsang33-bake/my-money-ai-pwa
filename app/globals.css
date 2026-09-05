@@ -2647,35 +2647,81 @@ a:focus-visible {
   margin-bottom: var(--s-3);
 }
 
-.draft-split-share > small {
+.draft-split-summary {
   display: block;
   margin-top: 4px;
   font-size: var(--fs-micro);
   color: var(--ink-3);
 }
 
-.draft-split-presets {
+/* Headcount and share sit one above the other because they are two ways of
+   saying the same thing -- change either and the other follows. */
+.draft-split-people {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-  margin-top: var(--s-2);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-2);
 }
 
-.draft-split-presets button {
-  padding: 6px 12px;
+.draft-split-people-label {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-2);
+}
+
+.draft-split-people-label small {
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-regular);
+  color: var(--ink-3);
+}
+
+.draft-split-stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 4px;
   border-radius: var(--r-full);
   background: var(--surface-2);
   border: 1px solid var(--line);
-  color: var(--ink-2);
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-semibold);
-  transition: background var(--t-2) var(--e-out), color var(--t-2) var(--e-out), border-color var(--t-2) var(--e-out);
 }
 
-.draft-split-presets button.is-active {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--primary-text);
+.draft-split-stepper button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--ink-2);
+  transition: background var(--t-2) var(--e-out), color var(--t-2) var(--e-out), transform var(--t-press) var(--e-out);
+}
+
+.draft-split-stepper button:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.draft-split-stepper button:disabled {
+  color: var(--ink-3);
+  opacity: 0.5;
+}
+
+.draft-split-people-count {
+  width: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: center;
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+  font-family: inherit;
+}
+
+.draft-split-people-count:focus {
+  outline: none;
 }
 
 .draft-result {
