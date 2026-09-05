@@ -15,10 +15,12 @@ import {
   isCardFundedLeg,
   isMultiPersonSplit,
   splitDebtorNames,
+  splitPinMismatch,
   splitSharesBetween,
   matchDebtorName,
   filterEntries,
   netWorthAsOf,
+  mismatchedSplitDrafts,
   normalizeEntry,
   partnerShareForPeople,
   peopleFromPartnerShare,
@@ -1168,5 +1170,56 @@ describe("splitSharesBetween: pinning what someone pays", () => {
     assert.equal(rows.find((row) => row.transaction_type === "personal_expense")!.amount, 500);
     assert.equal(rows.reduce((sum, row) => sum + row.amount, 0), 1000);
     assert.equal(rows.reduce((sum, row) => sum + row.wallet_impact, 0), -1000);
+  });
+});
+
+describe("splitPinMismatch", () => {
+  const bill: Draft = {
+    id: "d1", title: "ซื้อตั๋ว", category: "อื่น ๆ", amount: 900, type: "expense",
+    transaction_type: "lend", wallet_impact: -900, debt_impact: 900, user_share: 0,
+    partner_share: 900, debtor_name: "อ้อน, แบงค์, วิน", occurred_at: "2026-09-05T12:00:00.000Z",
+    wallet_id: "w1", note: null,
+  };
+
+  it("says nothing while the pins still leave something to divide", () => {
+    assert.equal(splitPinMismatch(bill), null);
+    assert.equal(splitPinMismatch({ ...bill, split_shares: [500, null, null] }), null);
+  });
+
+  it("says nothing when every pin adds up to the bill", () => {
+    assert.equal(splitPinMismatch({ ...bill, split_shares: [400, 300, 200] }), null);
+  });
+
+  it("catches a lend whose people were all pinned to less than the bill", () => {
+    // Without this the last person quietly becomes 300 instead of the 100
+    // that was typed.
+    const mismatch = splitPinMismatch({ ...bill, split_shares: [500, 100, 100] })!;
+    assert.equal(mismatch.difference, -200);
+    assert.match(mismatch.detail, /ขาดอีก/);
+  });
+
+  it("catches a pin larger than the bill itself", () => {
+    const mismatch = splitPinMismatch({ ...bill, split_shares: [1200, null, null] })!;
+    assert.equal(mismatch.difference, 300);
+    assert.match(mismatch.detail, /เกินยอดบิล/);
+  });
+
+  it("counts the user's own share as one of the slots on a split", () => {
+    const split = { ...bill, transaction_type: "split_half" as const };
+    // Three people pinned but the user's share still open: it takes what is
+    // left, so nothing is wrong yet.
+    assert.equal(splitPinMismatch({ ...split, split_shares: [300, 300, 200] }), null);
+    // Pin that too and the four numbers have to be the bill.
+    assert.equal(splitPinMismatch({ ...split, split_shares: [300, 300, 200], split_self_share: 100 }), null);
+    assert.equal(splitPinMismatch({ ...split, split_shares: [300, 300, 200], split_self_share: 50 })!.difference, -50);
+  });
+
+  it("only asks the question of bills split between people", () => {
+    assert.equal(splitPinMismatch({ ...bill, debtor_name: "อ้อน", split_shares: [50] }), null);
+    assert.equal(splitPinMismatch({ ...bill, transaction_type: "personal_expense", split_shares: [50, 50] }), null);
+  });
+
+  it("collects the drafts a save has to stop for", () => {
+    assert.equal(mismatchedSplitDrafts([bill, { ...bill, id: "d2", split_shares: [500, 100, 100] }]).length, 1);
   });
 });

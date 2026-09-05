@@ -90,6 +90,58 @@ export function draftSplitPins(draft: { split_shares?: (number | null)[] | null;
   return { self: draft.split_self_share, people: draft.split_shares };
 }
 
+export type SplitPinMismatch = { pinnedTotal: number; amount: number; difference: number; detail: string };
+
+/**
+ * The per-person amounts a draft was given, when they cannot be what the bill
+ * says -- pinned above it, or pinned in every slot and adding up to less.
+ *
+ * splitSharesBetween always makes the parts add up, because rows that don't
+ * would move the wrong amount of money; when the pins disagree with the bill
+ * it does that by clamping a pin or handing the difference to the last person.
+ * That is the right arithmetic and the wrong silence: someone typing 1200,
+ * 900, 900 into a 3100-baht bill meant one of those four numbers differently,
+ * and quietly making วิน owe 1000 hides which. So the save stops here and says
+ * what does not add up, rather than guessing.
+ *
+ * Partial pins are fine and are the normal case -- pin one, the rest divide --
+ * so nothing is reported unless the pins alone already decide the whole bill.
+ */
+export function splitPinMismatch(draft: Draft): SplitPinMismatch | null {
+  if (!isMultiPersonSplit(draft)) return null;
+  const names = splitDebtorNames(draft.debtor_name);
+  const pins = [
+    ...names.map((_, index) => draft.split_shares?.[index]),
+    ...(draft.transaction_type === "split_half" ? [draft.split_self_share] : []),
+  ].map((value) => (value == null || !Number.isFinite(value) ? null : Math.max(0, value)));
+
+  if (pins.every((pin) => pin == null)) return null;
+  const pinnedTotal = satang(pins.reduce<number>((sum, pin) => sum + (pin ?? 0), 0));
+  const amount = satang(Math.max(0, draft.amount));
+  const everySlotPinned = pins.every((pin) => pin != null);
+  if (pinnedTotal === amount) return null;
+  if (pinnedTotal < amount && !everySlotPinned) return null;
+
+  const difference = satang(pinnedTotal - amount);
+  return {
+    pinnedTotal,
+    amount,
+    difference,
+    detail: difference > 0
+      ? `ยอดรายคนรวมกัน ${formatMoney(pinnedTotal)} เกินยอดบิล ${formatMoney(amount)} อยู่ ${formatMoney(difference)}`
+      : `ยอดรายคนรวมกัน ${formatMoney(pinnedTotal)} ยังไม่ครบยอดบิล ${formatMoney(amount)} ขาดอีก ${formatMoney(-difference)}`,
+  };
+}
+
+/**
+ * The drafts whose per-person amounts don't add up to their own bill. Asked
+ * by both the warning line and the save button, from one place, for the same
+ * reason incompleteTransferDrafts is.
+ */
+export function mismatchedSplitDrafts(drafts: Draft[]): Draft[] {
+  return drafts.filter((draft) => splitPinMismatch(draft));
+}
+
 /** A bill with more than one person named on it: one row each, at save. */
 export function isMultiPersonSplit(draft: { transaction_type: TransactionType; debtor_name?: string | null }) {
   return SHARED_EXPENSE_TYPES.includes(draft.transaction_type) && splitDebtorNames(draft.debtor_name).length > 1;

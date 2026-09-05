@@ -47,6 +47,7 @@ import {
   expandDraftForSave,
   filterEntries,
   incompleteTransferDrafts,
+  mismatchedSplitDrafts,
   isCardFundedLeg,
   matchDebtorName,
   mapTransactionRow,
@@ -1085,6 +1086,7 @@ export default function Home() {
   // two questions about the current drafts. Deriving each answer once here is
   // what keeps them from drifting into disagreeing with each other.
   const unfinishedTransfers = useMemo(() => incompleteTransferDrafts(drafts), [drafts]);
+  const unbalancedSplits = useMemo(() => mismatchedSplitDrafts(drafts), [drafts]);
   const draftMismatch = useMemo(() => receiptMismatch(drafts, receiptTotal), [drafts, receiptTotal]);
 
   const openAddTab = useCallback((mode: "ai" | "manual" = "ai", shortcut?: QuickShortcut) => {
@@ -2593,10 +2595,13 @@ export default function Home() {
                     {!!unfinishedTransfers.length && (
                       <p className="pin-hint">มีรายการโอนเงินที่ยังไม่ได้เลือกกระเป๋าปลายทาง</p>
                     )}
+                    {!!unbalancedSplits.length && (
+                      <p className="pin-hint">มีรายการที่ยอดรายคนรวมกันไม่เท่ากับยอดบิล — แก้ให้ตรงกันก่อนบันทึก</p>
+                    )}
                     <button
                       className="save"
                       onClick={() => saveEntries(drafts)}
-                      disabled={busy || !isOnline || !!unfinishedTransfers.length}
+                      disabled={busy || !isOnline || !!unfinishedTransfers.length || !!unbalancedSplits.length}
                     >
                       บันทึก {drafts.length} รายการ
                     </button>

@@ -2647,6 +2647,15 @@ a:focus-visible {
   margin-bottom: var(--s-3);
 }
 
+/* Replaces the "แก้ยอดของใครก็ได้" line rather than sitting next to it: the
+   list is either explaining itself or telling you it does not add up. */
+.draft-split-warning {
+  margin-top: var(--s-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--danger);
+}
+
 .draft-split-summary {
   display: block;
   margin-top: 4px;

@@ -6,7 +6,7 @@ import { CATEGORY_DOT_TINT_ALPHA, MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE } from "@/l
 import { compressSlipImage } from "@/lib/image";
 import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
 import { todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
-import { SHARED_EXPENSE_TYPES, defaultWalletId, draftSplitPins, entryDisplayImpact, isCardFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, splitDebtorNames, splitSharesBetween, unnamedDebtor } from "@/lib/money";
+import { SHARED_EXPENSE_TYPES, defaultWalletId, draftSplitPins, entryDisplayImpact, isCardFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, splitDebtorNames, splitPinMismatch, splitSharesBetween, unnamedDebtor } from "@/lib/money";
 import { DEBT_TYPES, TYPES_USER_OWES, transactionKind, transactionTypeLabels, type TransactionType } from "@/lib/taxonomy";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
@@ -188,6 +188,11 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
   const perPerson = isMultiPersonSplit(draft);
   const perPersonSplit = splitSharesBetween(draft.amount, splitNames, draft.transaction_type, draftSplitPins(draft));
   const hasPins = !!draft.split_shares?.some((share) => share != null) || draft.split_self_share != null;
+  const pinMismatch = splitPinMismatch(draft);
+  // A pinned line shows what was typed, not what the arithmetic had to do with
+  // it -- otherwise a number that doesn't fit the bill snaps to one that does
+  // and the mismatch it caused becomes invisible.
+  const shareShown = (index: number) => draft.split_shares?.[index] ?? perPersonSplit.shares[index];
   // Pinning is per slot: type a number into one line and the lines nobody
   // pinned re-divide what is left. "ผมออก 500 ที่เหลือหาร 3 คน" is one pin.
   const pinShare = (index: number, share: number) => update({
@@ -315,20 +320,24 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
             {splitNames.map((name, index) => (
               <li key={name}>
                 <span>{name}</span>
-                <AmountInput value={perPersonSplit.shares[index]} onChange={(share) => pinShare(index, share)} />
+                <AmountInput value={shareShown(index)} onChange={(share) => pinShare(index, share)} />
               </li>
             ))}
             {isSplit && (
               <li className="is-self">
                 <span>ส่วนของคุณ</span>
-                <AmountInput value={perPersonSplit.userShare} onChange={(split_self_share) => update({ split_self_share })} />
+                <AmountInput value={draft.split_self_share ?? perPersonSplit.userShare} onChange={(split_self_share) => update({ split_self_share })} />
               </li>
             )}
           </ul>
-          <small>
-            แก้ยอดของใครก็ได้ ที่เหลือจะหารกันเอง · บันทึกแล้วจะแยกเป็น{" "}
-            {splitNames.length + (perPersonSplit.userShare > 0 ? 1 : 0)} รายการ เพื่อให้ยอดหนี้แยกรายคน
-          </small>
+          {pinMismatch ? (
+            <p className="draft-split-warning">{pinMismatch.detail}</p>
+          ) : (
+            <small>
+              แก้ยอดของใครก็ได้ ที่เหลือจะหารกันเอง · บันทึกแล้วจะแยกเป็น{" "}
+              {splitNames.length + (perPersonSplit.userShare > 0 ? 1 : 0)} รายการ เพื่อให้ยอดหนี้แยกรายคน
+            </small>
+          )}
         </div>
       )}
       {isSplit && !perPerson && (

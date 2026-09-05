@@ -109,6 +109,36 @@ test.describe("split review", () => {
     await expect(rows.nth(0).locator(".amount-input")).toHaveValue("250");
   });
 
+  test("stops the save when the per-person amounts don't add up to the bill", async ({ page }) => {
+    // A lend has no "your share" line to absorb a difference, so pinning
+    // everyone to less than the bill used to make the last person quietly owe
+    // more than the number typed for them.
+    await openWithDraft(page, seedDraft({ title: "ซื้อตั๋ว", amount: 900, transaction_type: "lend", debtor_name: "อ้อน, แบงค์, วิน" }));
+
+    const rows = page.locator(".draft-split-people-list li");
+    await rows.nth(0).locator(".amount-input").fill("500");
+    await rows.nth(1).locator(".amount-input").fill("100");
+    await rows.nth(2).locator(".amount-input").fill("100");
+
+    // The typed numbers stay put and the shortfall is named, rather than the
+    // last row silently becoming 300.
+    await expect(rows.nth(2).locator(".amount-input")).toHaveValue("100");
+    await expect(page.locator(".draft-split-warning")).toContainText("ขาดอีก");
+    await expect(page.locator("button.save")).toBeDisabled();
+
+    await rows.nth(2).locator(".amount-input").fill("300");
+    await expect(page.locator(".draft-split-warning")).toHaveCount(0);
+    await expect(page.locator("button.save")).toBeEnabled();
+  });
+
+  test("says so when one person is pinned above the whole bill", async ({ page }) => {
+    await openWithDraft(page, seedDraft({ title: "ซื้อตั๋ว", amount: 900, transaction_type: "lend", debtor_name: "อ้อน, แบงค์, วิน" }));
+
+    await page.locator(".draft-split-people-list li").nth(0).locator(".amount-input").fill("1200");
+    await expect(page.locator(".draft-split-warning")).toContainText("เกินยอดบิล");
+    await expect(page.locator("button.save")).toBeDisabled();
+  });
+
   test("keeps the share controls for a bill split with one person", async ({ page }) => {
     await openWithDraft(page);
 
