@@ -6,7 +6,7 @@ import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
 import { compressSlipImage } from "@/lib/image";
 import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
 import { todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
-import { defaultWalletId, entryDisplayImpact, normalizeEntry, unnamedDebtor } from "@/lib/money";
+import { CARD_FUNDABLE_TYPES, defaultWalletId, entryDisplayImpact, isCardFundedLeg, normalizeEntry, retargetPartnerShare, unnamedDebtor } from "@/lib/money";
 import { DEBT_TYPES, TYPES_USER_OWES, transactionKind, transactionTypeLabels, type TransactionType } from "@/lib/taxonomy";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
@@ -170,6 +170,17 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
     relevantKind === "own" ? "เช่น ผ่อนบ้าน ผ่อนรถ" : "เช่น แฟน หรือ เพื่อนเอ";
   const [detailsOpen, setDetailsOpen] = useState(draft.ambiguous || transferInvalid);
   const showDetails = detailsOpen || draft.ambiguous || transferInvalid;
+  // A split or a lend can come off a credit card instead of a wallet. Cards
+  // live in the debtors table (kind "own"), not in wallets, which is why the
+  // wallet dropdown alone could not express "dinner split with จูน, paid on
+  // SPay" -- the one thing this row could not say before.
+  const cards = knownDebtors.filter((debtor) => debtor.kind === "own");
+  const canPayWithCard = CARD_FUNDABLE_TYPES.includes(draft.transaction_type) && cards.length > 0;
+  const fundingCard = canPayWithCard ? draft.funding_card_name?.trim() || "" : "";
+  const isSplit = draft.transaction_type === "split_half";
+  // Amount and share move together while the split is still even, so the
+  // common case needs no second edit; a share the user set is left alone.
+  const setAmount = (amount: number) => update({ amount, partner_share: retargetPartnerShare(draft.amount, draft.partner_share, amount) });
 
   return (
     <div className={`draft draft-${draft.transaction_type}${draft.ambiguous ? " draft-needs-review" : ""}`}>
@@ -217,7 +228,7 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
         )}
         <label className={isTransfer ? "draft-field-full" : undefined}>
           จำนวนเงิน
-          <AmountInput value={draft.amount} onChange={(amount) => update({ amount })} />
+          <AmountInput value={draft.amount} onChange={setAmount} />
         </label>
       </div>
       {isTransfer && !!wallets.length && (
@@ -262,13 +273,42 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
           {isNewDebtor && <small>{relevantKind === "own" ? "หนี้ใหม่" : "ลูกหนี้ใหม่"} · จะสร้างให้อัตโนมัติเมื่อบันทึก</small>}
         </div>
       )}
+      {isSplit && <SplitShareField draft={draft} onChange={(partner_share) => update({ partner_share })} />}
+      {canPayWithCard && (
+        <label className="draft-funding">
+          จ่ายด้วย
+          <div className="select-shell">
+            <select
+              value={fundingCard ? `card:${fundingCard}` : `wallet:${draft.wallet_id || defaultWalletId(wallets) || ""}`}
+              onChange={(event) => {
+                const [source, value] = splitFundingValue(event.target.value);
+                update(source === "card"
+                  ? { funding_card_name: value, wallet_id: null }
+                  : { funding_card_name: null, wallet_id: value || null });
+              }}
+            >
+              <optgroup label="กระเป๋า">
+                {wallets.map((wallet) => (
+                  <option key={wallet.id} value={`wallet:${wallet.id}`}>{wallet.name}</option>
+                ))}
+              </optgroup>
+              <optgroup label="บัตรเครดิต / หนี้ของฉัน">
+                {cards.map((card) => (
+                  <option key={card.id} value={`card:${card.name}`}>{card.name}</option>
+                ))}
+              </optgroup>
+            </select>
+            <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+          </div>
+        </label>
+      )}
       <button
         type="button"
         className={`text-button draft-details-toggle${showDetails ? " is-open" : ""}`}
         aria-expanded={showDetails}
         onClick={() => setDetailsOpen((current) => !current)}
       >
-        {`${showDetails ? "ซ่อน" : "แก้ไข"}วันที่ / ${isTransfer ? "" : "กระเป๋า / "}หมายเหตุ`}
+        {`${showDetails ? "ซ่อน" : "แก้ไข"}วันที่ / ${isTransfer || fundingCard ? "" : "กระเป๋า / "}หมายเหตุ`}
         <ChevronDown size={14} strokeWidth={2.5} aria-hidden="true" />
       </button>
       {showDetails && (
@@ -277,7 +317,7 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
             วันที่
             <DateField value={toDateInput(draft.occurred_at)} onChange={(next) => update({ occurred_at: withDateKeepingTime(next, draft.occurred_at) })} />
           </label>
-          {!isTransfer && !!wallets.length && draft.transaction_type !== "card_charge" && (
+          {!isTransfer && !fundingCard && !!wallets.length && draft.transaction_type !== "card_charge" && (
             <label>
               กระเป๋า
               <div className="select-shell">
@@ -303,6 +343,13 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
             <span>{wallets.find((wallet) => wallet.id === draft.wallet_id)?.name ?? "กระเป๋าต้นทาง"} {formatSignedMoney(-draft.amount)}</span>
             <span>{wallets.find((wallet) => wallet.id === draft.transfer_to_wallet_id)?.name ?? "กระเป๋าปลายทาง"} {formatSignedMoney(draft.amount)}</span>
           </div>
+        ) : fundingCard ? (
+          // Two rows get written here, so the preview shows both: the charge
+          // that lands on the card, and the share that lands on the person.
+          <div className="impact-row">
+            <span>{fundingCard} {formatSignedMoney(draft.amount)}</span>
+            <span>{draft.debtor_name || "ลูกหนี้"} {formatSignedMoney(draft.debt_impact)}</span>
+          </div>
         ) : (
           <div className="impact-row">
             <span>กระเป๋า {formatSignedMoney(draft.wallet_impact)}</span>
@@ -310,6 +357,49 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** "wallet:<id>" / "card:<name>" -- one dropdown, two kinds of funding. */
+function splitFundingValue(value: string): [source: string, value: string] {
+  const separator = value.indexOf(":");
+  return [value.slice(0, separator), value.slice(separator + 1)];
+}
+
+/**
+ * How much of a shared bill the other person owes back. Defaults to half --
+ * the only thing the app could record until now -- with the thirds and
+ * quarters of a three- or four-way dinner one tap away, and any other number
+ * typeable, because "you get 100 of this one" is not a fraction.
+ */
+function SplitShareField({ draft, onChange }: { draft: Draft; onChange: (share: number) => void }) {
+  const presets = [
+    { label: "คนละครึ่ง", share: draft.amount / 2 },
+    { label: "หาร 3", share: draft.amount / 3 },
+    { label: "หาร 4", share: draft.amount / 4 },
+  ];
+  const name = draft.debtor_name && draft.debtor_name !== unnamedDebtor ? draft.debtor_name : "อีกฝ่าย";
+
+  return (
+    <div className="draft-split-share">
+      <label>
+        {name}คืนเท่าไร
+        <AmountInput value={draft.partner_share} onChange={onChange} />
+      </label>
+      <div className="draft-split-presets">
+        {presets.map((preset) => (
+          <button
+            key={preset.label}
+            type="button"
+            className={Math.abs(draft.partner_share - preset.share) < 0.005 ? "is-active" : ""}
+            onClick={() => onChange(preset.share)}
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
+      <small>ส่วนของคุณ {formatMoney(draft.user_share)}</small>
     </div>
   );
 }
@@ -649,6 +739,11 @@ export function EditSheet({
 }) {
   const update = (patch: Partial<Entry>) => onChange(normalizeEntry({ ...entry, ...patch }, false));
   const [originalType] = useState(entry.transaction_type);
+  // One leg of a card-funded pair (see expandCardFundedDraft). Amount, type
+  // and funding are the halves of it that only make sense together, so they
+  // are locked the way a transfer's are -- but the split itself is this row's
+  // alone, so who owes what stays editable.
+  const [cardFundedLeg] = useState(() => isCardFundedLeg(entry));
   const [destWalletId, setDestWalletId] = useState<string | null>(null);
   const wasTransfer = originalType === "transfer";
   const wasInvestmentBuy = originalType === "investment_buy";
@@ -673,6 +768,7 @@ export function EditSheet({
       </div>
 
       {wasTransfer && <p className="pin-hint">รายการโอนเงินแก้ไขได้เฉพาะชื่อ วันที่ และหมายเหตุ — ลบได้ทั้งสองฝั่งพร้อมกัน</p>}
+      {cardFundedLeg && <p className="pin-hint">รายการนี้จ่ายด้วยบัตร จึงถูกบันทึกเป็นสองแถวคู่กัน (ยอดบนบัตร + ส่วนที่หารกัน) — ยอดเงินและชนิดรายการแก้ที่นี่ไม่ได้ ต้องลบแล้วบันทึกใหม่ ส่วนที่อีกฝ่ายคืนแก้ได้ตามปกติ</p>}
       {wasInvestmentBuy && <p className="pin-hint">รายการลงทุนแก้ไขได้เฉพาะชื่อ วันที่ และหมายเหตุ — ลบรายการนี้จะไม่ปรับหน่วย/ทุนในพอร์ตให้อัตโนมัติ ต้องไปแก้ในหน้าพอร์ตลงทุนเอง</p>}
       {convertingToTransfer && <p className="pin-hint">เลือกกระเป๋าปลายทางก่อนบันทึกเป็นรายการโอน</p>}
 
@@ -696,7 +792,7 @@ export function EditSheet({
       <label>
         ชนิดรายการ
         <div className="select-shell">
-          <select value={entry.transaction_type} disabled={wasTransfer || wasInvestmentBuy} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
+          <select value={entry.transaction_type} disabled={wasTransfer || wasInvestmentBuy || cardFundedLeg} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
           {Object.entries(transactionTypeLabels).filter(([value]) => value !== "investment_buy" || wasInvestmentBuy).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -708,8 +804,18 @@ export function EditSheet({
       </label>
       <label>
         จำนวนเงิน
-        <AmountInput value={entry.amount} onChange={(amount) => update({ amount })} disabled={wasTransfer} />
+        <AmountInput
+          value={entry.amount}
+          onChange={(amount) => update({ amount, partner_share: retargetPartnerShare(entry.amount, entry.partner_share, amount) })}
+          disabled={wasTransfer || cardFundedLeg}
+        />
       </label>
+      {entry.transaction_type === "split_half" && (
+        <label>
+          {entry.debtor_name && entry.debtor_name !== unnamedDebtor ? entry.debtor_name : "อีกฝ่าย"}คืนเท่าไร
+          <AmountInput value={entry.partner_share} onChange={(partner_share) => update({ partner_share })} />
+        </label>
+      )}
       {DEBT_TYPES.includes(entry.transaction_type) && (
         <label>
           {entry.transaction_type === "card_charge" ? "ชื่อบัตร" : "ชื่อผู้เกี่ยวข้อง"}
@@ -720,7 +826,7 @@ export function EditSheet({
         วันที่
         <DateField value={toDateInput(entry.occurred_at)} onChange={(next) => update({ occurred_at: withDateKeepingTime(next, entry.occurred_at) })} />
       </label>
-      {!!wallets.length && entry.transaction_type !== "card_charge" && !wasTransfer && (
+      {!!wallets.length && entry.transaction_type !== "card_charge" && !wasTransfer && !cardFundedLeg && (
         <label>
           {isTransfer ? "จากกระเป๋า" : "กระเป๋า"}
           <div className="select-shell">

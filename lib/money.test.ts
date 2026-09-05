@@ -8,8 +8,12 @@ import {
   describeDraftSave,
   describeWalletDeletion,
   draftSaveTotal,
+  expandCardFundedDraft,
+  expandDraftForSave,
   expandTransferDraft,
   incompleteTransferDrafts,
+  isCardFundedLeg,
+  matchDebtorName,
   filterEntries,
   netWorthAsOf,
   normalizeEntry,
@@ -17,6 +21,7 @@ import {
   receiptMismatch,
   recurringExpenseEntry,
   replaceEntry,
+  retargetPartnerShare,
   unnamedDebtor,
   walletDeletionMove,
   withEntries,
@@ -94,6 +99,38 @@ describe("calculateImpacts", () => {
     assert.deepEqual(calculateImpacts(100, "split_half"), { wallet_impact: -100, debt_impact: 50, user_share: 50, partner_share: 50 });
   });
 
+  it("split_half: an uneven share moves the debt without changing what left the wallet", () => {
+    // "Dinner was 163, จูน is paying 100 of it": the whole bill still left the
+    // wallet, but only 63 of it was the user's own spending.
+    assert.deepEqual(calculateImpacts(163, "split_half", { partnerShare: 100 }), {
+      wallet_impact: -163, debt_impact: 100, user_share: 63, partner_share: 100,
+    });
+  });
+
+  it("split_half: a share outside the bill is clamped rather than believed", () => {
+    assert.equal(calculateImpacts(100, "split_half", { partnerShare: 250 }).debt_impact, 100);
+    assert.equal(calculateImpacts(100, "split_half", { partnerShare: -40 }).debt_impact, 0);
+    assert.equal(calculateImpacts(100, "split_half", { partnerShare: Number.NaN }).debt_impact, 50);
+  });
+
+  it("split_half on a card: the debt is the partner's share and no wallet moves", () => {
+    assert.deepEqual(calculateImpacts(163, "split_half", { cardFunded: true }), {
+      wallet_impact: 0, debt_impact: 81.5, user_share: 81.5, partner_share: 81.5,
+    });
+  });
+
+  it("lend on a card: still owed in full, but the money came off the card", () => {
+    assert.deepEqual(calculateImpacts(500, "lend", { cardFunded: true }), {
+      wallet_impact: 0, debt_impact: 500, user_share: 0, partner_share: 500,
+    });
+  });
+
+  it("card_charge as a split's funding leg: the card owes it all, the user spent none of it here", () => {
+    assert.deepEqual(calculateImpacts(163, "card_charge", { cardFunded: true }), {
+      wallet_impact: 0, debt_impact: 163, user_share: 0, partner_share: 0,
+    });
+  });
+
   it("debt_repayment: cash arrives, and debt owed to the user shrinks", () => {
     assert.deepEqual(calculateImpacts(100, "debt_repayment"), { wallet_impact: 100, debt_impact: -100, user_share: 0, partner_share: 0 });
   });
@@ -120,6 +157,28 @@ describe("calculateImpacts", () => {
 });
 
 describe("normalizeEntry", () => {
+  it("reads a stored uneven split back as it was saved", () => {
+    // The impacts are recomputed on every read rather than trusted, so an
+    // uneven share only survives a reload because partner_share is one of the
+    // inputs to that recomputation.
+    const entry = normalizeEntry({
+      id: "1", title: "ข้าวมื้อเย็น", category: "อาหาร", amount: 163, transaction_type: "split_half",
+      partner_share: 100, debtor_name: "จูน", occurred_at: "2026-09-05T00:00:00.000Z",
+    });
+    assert.equal(entry.partner_share, 100);
+    assert.equal(entry.user_share, 63);
+    assert.equal(entry.debt_impact, 100);
+  });
+
+  it("recognises a card-funded leg from the group id it was stored with", () => {
+    const entry = normalizeEntry({
+      id: "1", title: "ข้าวมื้อเย็น", category: "อาหาร", amount: 163, transaction_type: "split_half",
+      debtor_name: "จูน", occurred_at: "2026-09-05T00:00:00.000Z", transfer_group_id: "g1",
+    });
+    assert.equal(entry.wallet_impact, 0);
+    assert.equal(entry.debt_impact, 81.5);
+  });
+
   it("defaults transaction_type from type when not given", () => {
     const entry = normalizeEntry({ id: "1", title: "โบนัส", category: "รายได้", amount: 500, type: "income", occurred_at: "2026-01-01T00:00:00.000Z" });
     assert.equal(entry.transaction_type, "income");
@@ -739,5 +798,148 @@ describe("receiptMismatch", () => {
 
   it("ignores a negative slip total rather than treating it as a mismatch", () => {
     assert.equal(receiptMismatch(drafts, -50), null);
+  });
+});
+
+describe("isCardFundedLeg", () => {
+  it("is a leg only when a split/lend/card row carries a group id", () => {
+    assert.equal(isCardFundedLeg({ transaction_type: "split_half", transfer_group_id: "g1" }), true);
+    assert.equal(isCardFundedLeg({ transaction_type: "lend", transfer_group_id: "g1" }), true);
+    assert.equal(isCardFundedLeg({ transaction_type: "card_charge", transfer_group_id: "g1" }), true);
+    assert.equal(isCardFundedLeg({ transaction_type: "split_half", transfer_group_id: null }), false);
+  });
+
+  it("never mistakes a transfer leg for one", () => {
+    // Transfers are the other thing that shares a transfer_group_id, and were
+    // the only thing that did before card funding existed.
+    assert.equal(isCardFundedLeg({ transaction_type: "transfer", transfer_group_id: "g1" }), false);
+  });
+});
+
+describe("retargetPartnerShare", () => {
+  it("keeps an even split even when the bill changes", () => {
+    assert.equal(retargetPartnerShare(100, 50, 163), 81.5);
+  });
+
+  it("leaves a share the user set alone", () => {
+    assert.equal(retargetPartnerShare(163, 100, 200), 100);
+  });
+
+  it("clamps a kept share into a bill that shrank below it", () => {
+    assert.equal(retargetPartnerShare(163, 100, 80), 80);
+  });
+});
+
+describe("expandCardFundedDraft", () => {
+  const cardSplit: Draft = {
+    id: "d1",
+    title: "ข้าวมื้อเย็น",
+    category: "อาหาร",
+    amount: 163,
+    type: "expense",
+    transaction_type: "split_half",
+    wallet_impact: -163,
+    debt_impact: 81.5,
+    user_share: 81.5,
+    partner_share: 81.5,
+    debtor_name: "จูน",
+    occurred_at: "2026-09-05T12:00:00.000Z",
+    wallet_id: "w1",
+    note: null,
+    funding_card_name: "SPay",
+  };
+
+  it("leaves a draft that isn't card-funded alone", () => {
+    assert.deepEqual(expandCardFundedDraft({ ...cardSplit, funding_card_name: null }), [{ ...cardSplit, funding_card_name: null }]);
+    assert.equal(expandCardFundedDraft({ ...cardSplit, transaction_type: "personal_expense" }).length, 1);
+  });
+
+  it("writes the charge to the card and the share to the person, and moves no wallet money", () => {
+    const [expense, card] = expandCardFundedDraft(cardSplit);
+
+    assert.equal(expense.transaction_type, "split_half");
+    assert.equal(expense.debtor_name, "จูน");
+    assert.equal(expense.debt_impact, 81.5);
+    assert.equal(expense.user_share, 81.5);
+    assert.equal(expense.wallet_impact, 0);
+    assert.equal(expense.wallet_id, null);
+
+    assert.equal(card.transaction_type, "card_charge");
+    assert.equal(card.debtor_name, "SPay");
+    assert.equal(card.debt_impact, 163);
+    // The dinner counts once: 81.5 of food, not 163 + 81.5.
+    assert.equal(card.user_share, 0);
+
+    assert.equal(expense.wallet_impact + card.wallet_impact, 0);
+    assert.equal(expense.transfer_group_id, card.transfer_group_id);
+    assert.ok(expense.transfer_group_id);
+  });
+
+  it("keeps an uneven share when it splits", () => {
+    const [expense, card] = expandCardFundedDraft({ ...cardSplit, partner_share: 100 });
+    assert.equal(expense.debt_impact, 100);
+    assert.equal(expense.user_share, 63);
+    assert.equal(card.debt_impact, 163);
+  });
+
+  it("says which card paid when the user left no note of their own", () => {
+    assert.equal(expandCardFundedDraft(cardSplit)[0].note, "จ่ายด้วยบัตร SPay");
+    assert.equal(expandCardFundedDraft({ ...cardSplit, note: "กับที่ทำงาน" })[0].note, "กับที่ทำงาน");
+  });
+
+  it("survives the save path's re-normalize with its numbers intact", () => {
+    // saveEntries normalizes again after expanding; the legs have to be
+    // idempotent under that or the wallet_impact it just zeroed comes back.
+    const [expense, card] = expandCardFundedDraft(cardSplit).map((leg) => normalizeEntry(leg));
+    assert.equal(expense.wallet_impact, 0);
+    assert.equal(card.user_share, 0);
+  });
+});
+
+describe("expandDraftForSave", () => {
+  const wallets: Wallet[] = [
+    { id: "w1", user_id: "u1", name: "เงินสด", tag: "cash", is_default: true, balance: 0, icon: null, icon_color: null },
+    { id: "w2", user_id: "u1", name: "เงินออม", tag: "savings", is_default: false, balance: 0, icon: null, icon_color: null },
+  ];
+  const base: Draft = {
+    id: "d1", title: "โอน", category: "อื่น ๆ", amount: 500, type: "expense", transaction_type: "transfer",
+    wallet_impact: -500, debt_impact: 0, user_share: 0, partner_share: 0, debtor_name: "",
+    occurred_at: "2026-09-05T12:00:00.000Z", wallet_id: "w1", transfer_to_wallet_id: "w2", note: null,
+  };
+
+  it("still expands a transfer into its two legs", () => {
+    assert.equal(expandDraftForSave(base, wallets).length, 2);
+  });
+
+  it("expands a card-funded split too", () => {
+    const split = { ...base, transaction_type: "split_half" as const, transfer_to_wallet_id: null, debtor_name: "จูน", funding_card_name: "SPay" };
+    assert.equal(expandDraftForSave(split, wallets).length, 2);
+  });
+
+  it("leaves an ordinary draft as one row", () => {
+    assert.equal(expandDraftForSave({ ...base, transaction_type: "personal_expense", transfer_to_wallet_id: null }, wallets).length, 1);
+  });
+});
+
+describe("matchDebtorName", () => {
+  const cards = ["SPay", "กรุงศรีเฟิร์สช้อย"];
+
+  it("matches regardless of case and spacing", () => {
+    assert.equal(matchDebtorName(cards, "spay"), "SPay");
+    assert.equal(matchDebtorName(cards, "  SPAY "), "SPay");
+  });
+
+  it("matches a name the user wrote longer than the model did", () => {
+    assert.equal(matchDebtorName(["บัตร SPay"], "spay"), "บัตร SPay");
+  });
+
+  it("resolves to nothing rather than guessing between two cards", () => {
+    assert.equal(matchDebtorName(["บัตร A", "บัตร B"], "บัตร"), null);
+  });
+
+  it("resolves to nothing for a card the user does not have", () => {
+    assert.equal(matchDebtorName(cards, "กสิกร"), null);
+    assert.equal(matchDebtorName(cards, ""), null);
+    assert.equal(matchDebtorName(cards, undefined), null);
   });
 });

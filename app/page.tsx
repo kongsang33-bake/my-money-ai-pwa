@@ -37,15 +37,18 @@ import {
   buildPortfolioHoldings,
   buildPortfolioTrend,
   buildTransactionCore,
+  CARD_FUNDABLE_TYPES,
   buildWalletLedger,
   calculateImpacts,
   categorySpendAmount,
   defaultWalletId,
   describeDraftSave,
   describeWalletDeletion,
-  expandTransferDraft,
+  expandDraftForSave,
   filterEntries,
   incompleteTransferDrafts,
+  isCardFundedLeg,
+  matchDebtorName,
   mapTransactionRow,
   normalizeEntry,
   planEntryUpdate,
@@ -340,6 +343,7 @@ export default function Home() {
     setRecurringExpenses(seed.recurringExpenses);
     setGoals(seed.goals);
     setBudgets(seed.budgets);
+    if (seed.drafts) setDrafts(seed.drafts);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
@@ -1175,9 +1179,16 @@ export default function Home() {
 
       const source = [text.trim(), slipImages.length ? `แนบรูปสลิป ${slipImages.length} รูป` : ""].filter(Boolean).join(" | ");
       setDrafts(
-        data.items.map((item: { title: string; category: string; amount: number; transaction_type: TransactionType; debtor_name?: string; date: string; note?: string; wallet_id?: string | null; transfer_to_wallet_id?: string | null; ambiguous?: boolean }, index: number) =>
+        data.items.map((item: { title: string; category: string; amount: number; transaction_type: TransactionType; debtor_name?: string; date: string; note?: string; wallet_id?: string | null; transfer_to_wallet_id?: string | null; ambiguous?: boolean; paid_with_card?: string; partner_share?: number }, index: number) =>
           {
             const aiWalletId = item.wallet_id && wallets.some((wallet) => wallet.id === item.wallet_id) ? item.wallet_id : null;
+            // Only a card the user actually has can fund a row: the pair this
+            // creates writes a debt onto that card's balance, and a card the
+            // model invented would quietly open a debt against a name nobody
+            // recognises.
+            const aiCard = CARD_FUNDABLE_TYPES.includes(item.transaction_type)
+              ? matchDebtorName(debtors.filter((debtor) => debtor.kind === "own").map((debtor) => debtor.name), item.paid_with_card)
+              : null;
             const aiDestWalletId = item.transfer_to_wallet_id && wallets.some((wallet) => wallet.id === item.transfer_to_wallet_id) ? item.transfer_to_wallet_id : null;
             const rememberedCategory = categoryMemory.get(item.title.trim().toLowerCase());
             return {
@@ -1190,11 +1201,15 @@ export default function Home() {
                 debtor_name: item.debtor_name,
                 occurred_at: fromDateInput(item.date),
                 source_text: source,
-                wallet_id: aiWalletId || defaultWalletId(wallets),
+                wallet_id: aiCard ? null : aiWalletId || defaultWalletId(wallets),
                 note: item.note,
                 transfer_to_wallet_id: aiDestWalletId,
+                // 0 (the schema's "not stated") means an even split, which is
+                // what partnerShareOf falls back to for a missing share.
+                partner_share: item.transaction_type === "split_half" && item.partner_share ? item.partner_share : undefined,
               }, false),
               ambiguous: !!item.ambiguous,
+              funding_card_name: aiCard,
             };
           },
         ),
@@ -1295,7 +1310,7 @@ export default function Home() {
     setBusy(true);
     setError("");
     const normalizedItems = items
-      .flatMap((item) => expandTransferDraft(item, wallets))
+      .flatMap((item) => expandDraftForSave(item, wallets))
       .map((item) => normalizeEntry(item));
 
     const payload = normalizedItems.map((normalized) => ({
@@ -1484,10 +1499,14 @@ export default function Home() {
       ? entries.find((item) => item.id !== entry.id && item.transfer_group_id === entry.transfer_group_id)
       : null;
     const entriesToDelete = pairedEntry ? [entry, pairedEntry] : [entry];
+    // Both kinds of paired row (a transfer's two legs, a card-funded split's
+    // charge and share) only balance as a pair, so they go together -- the
+    // wording is all that differs.
+    const pairLabel = pairedEntry && isCardFundedLeg(entry) ? "รายการที่จ่ายด้วยบัตร" : "รายการโอนเงิน";
     const confirmed = await requestConfirm({
-      title: pairedEntry ? "ลบรายการโอนเงินนี้?" : "ลบรายการนี้?",
+      title: pairedEntry ? `ลบ${pairLabel}นี้?` : "ลบรายการนี้?",
       detail: pairedEntry
-        ? `ลบรายการโอนเงิน "${entry.title}" ทั้งสองฝั่ง (ต้นทางและปลายทาง) ออกจากประวัติ`
+        ? `ลบ${pairLabel} "${entry.title}" ทั้งสองแถวที่คู่กันออกจากประวัติ`
         : `ลบ "${entry.title}" ออกจากประวัติ`,
       confirmLabel: "ลบรายการ",
       tone: "danger",
@@ -1504,7 +1523,7 @@ export default function Home() {
       setEntries((current) => current.filter((item) => !deletedIds.has(item.id)));
       notify({
         tone: "info",
-        title: pairedEntry ? "ลบรายการโอนเงินแล้ว" : "ลบรายการแล้ว",
+        title: pairedEntry ? `ลบ${pairLabel}แล้ว` : "ลบรายการแล้ว",
         detail: entry.title,
         action: {
           label: "ย้อนคืน",

@@ -24,18 +24,84 @@ import type {
 
 export const unnamedDebtor = "ไม่ระบุ";
 
-export function calculateImpacts(amount: number, transactionType: TransactionType) {
+// The two expense types that can be paid with a credit card instead of a
+// wallet. Both put money on someone else's tab (a split partner, a borrower),
+// which is why they need a funding source of their own: personal spending on
+// a card is already its own type (card_charge).
+export const CARD_FUNDABLE_TYPES: TransactionType[] = ["split_half", "lend"];
+
+// ...and the types that can appear as one leg of the pair a card-funded split
+// is stored as -- the two expense types above plus the card_charge leg that
+// carries the charge itself.
+const CARD_FUNDED_LEG_TYPES: TransactionType[] = [...CARD_FUNDABLE_TYPES, "card_charge"];
+
+/**
+ * Is this row one leg of a card-funded split/lend?
+ *
+ * One row can only ever move one debt balance: buildDebtSummary groups by
+ * debtor_name and sums debt_impact. "Dinner split with จูน, paid on the SPay
+ * card" moves two of them at once (SPay +163 owed by me, จูน +81.5 owed to
+ * me), so it is stored the way a transfer is -- two rows sharing a
+ * transfer_group_id, created together by expandCardFundedDraft and deleted
+ * together by deleteEntry.
+ *
+ * Being a leg is what makes the two rows add up instead of double-counting:
+ * the expense leg moves no wallet money (the card paid), and the card leg
+ * claims none of the spending (the expense leg already counts the user's
+ * share). Legacy rows can't be mistaken for one -- nothing but a transfer
+ * ever carried a transfer_group_id before this, and transfers are excluded
+ * by type.
+ */
+export function isCardFundedLeg(entry: { transaction_type: TransactionType; transfer_group_id?: string | null }) {
+  return !!entry.transfer_group_id && CARD_FUNDED_LEG_TYPES.includes(entry.transaction_type);
+}
+
+/**
+ * How much of a split the other person owes back. Defaults to half -- which
+ * is all this app could express until three-way dinners and "you get the next
+ * one, I'll cover 100 of this" turned up -- and is clamped into the bill, so
+ * a stored or typed value can never invent debt the bill doesn't contain.
+ */
+export function partnerShareOf(amount: number, partnerShare?: number | null) {
+  if (partnerShare == null || !Number.isFinite(partnerShare)) return amount / 2;
+  return Math.min(Math.max(partnerShare, 0), Math.max(amount, 0));
+}
+
+/**
+ * The partner's share to carry over when the bill amount changes.
+ *
+ * A share the user never touched should follow the amount (an even split of
+ * 163 that becomes 200 is still even), while one they set deliberately should
+ * survive -- so "did they touch it" is read back off the numbers rather than
+ * tracked as another piece of state that edit, AI-parse and the manual form
+ * would each have to set.
+ */
+export function retargetPartnerShare(previousAmount: number, previousPartnerShare: number, nextAmount: number) {
+  const wasEven = Math.abs(previousPartnerShare - previousAmount / 2) < 0.005;
+  return wasEven ? nextAmount / 2 : partnerShareOf(nextAmount, previousPartnerShare);
+}
+
+export type ImpactOptions = {
+  /** What the other person owes back on a split. Defaults to half. */
+  partnerShare?: number | null;
+  /** This row is one leg of a card-funded pair -- see isCardFundedLeg. */
+  cardFunded?: boolean;
+};
+
+export function calculateImpacts(amount: number, transactionType: TransactionType, options: ImpactOptions = {}) {
+  const cardFunded = !!options.cardFunded;
   if (transactionType === "income") {
     return { wallet_impact: amount, debt_impact: 0, user_share: amount, partner_share: 0 };
   }
   if (transactionType === "lend") {
-    return { wallet_impact: -amount, debt_impact: amount, user_share: 0, partner_share: amount };
+    return { wallet_impact: cardFunded ? 0 : -amount, debt_impact: amount, user_share: 0, partner_share: amount };
   }
   if (transactionType === "borrow") {
     return { wallet_impact: amount, debt_impact: amount, user_share: 0, partner_share: 0 };
   }
   if (transactionType === "split_half") {
-    return { wallet_impact: -amount, debt_impact: amount / 2, user_share: amount / 2, partner_share: amount / 2 };
+    const partner = partnerShareOf(amount, options.partnerShare);
+    return { wallet_impact: cardFunded ? 0 : -amount, debt_impact: partner, user_share: amount - partner, partner_share: partner };
   }
   if (transactionType === "debt_repayment") {
     return { wallet_impact: amount, debt_impact: -amount, user_share: 0, partner_share: 0 };
@@ -44,12 +110,90 @@ export function calculateImpacts(amount: number, transactionType: TransactionTyp
     return { wallet_impact: -amount, debt_impact: -amount, user_share: amount, partner_share: 0 };
   }
   if (transactionType === "card_charge") {
-    return { wallet_impact: 0, debt_impact: amount, user_share: amount, partner_share: 0 };
+    // As the funding leg of a split, the charge still lands on the card in
+    // full but none of it is the user's own spending -- the expense leg it
+    // came with counts their share, and counting it here too would show a
+    // 163-baht dinner as 244.5 spent on food.
+    return { wallet_impact: 0, debt_impact: amount, user_share: cardFunded ? 0 : amount, partner_share: 0 };
   }
   if (transactionType === "transfer" || transactionType === "investment_buy") {
     return { wallet_impact: -amount, debt_impact: 0, user_share: 0, partner_share: 0 };
   }
   return { wallet_impact: -amount, debt_impact: 0, user_share: amount, partner_share: 0 };
+}
+
+/**
+ * Resolves a name the model wrote ("spay") against the debtors the user
+ * actually has ("SPay", "บัตร SPay"), or to nothing.
+ *
+ * Nothing is the important half. Accepting a name the user does not have
+ * would open a debt against someone who does not exist, and picking the wrong
+ * one puts a dinner on the wrong card -- so a candidate that matches two
+ * names loosely resolves to null and the row falls back to a wallet, which
+ * the user can see and correct in the review step.
+ */
+export function matchDebtorName(names: string[], candidate: string | null | undefined): string | null {
+  const wanted = (candidate ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  if (!wanted) return null;
+
+  const normalized = names.map((name) => ({ name, key: name.trim().toLowerCase().replace(/\s+/g, " ") }));
+  const exact = normalized.find((entry) => entry.key === wanted);
+  if (exact) return exact.name;
+
+  const overlapping = normalized.filter((entry) => entry.key.includes(wanted) || wanted.includes(entry.key));
+  return overlapping.length === 1 ? overlapping[0].name : null;
+}
+
+/**
+ * Splits a card-funded draft into the two rows it is stored as: the expense
+ * itself (no wallet movement) and the charge on the card. Mirrors
+ * expandTransferDraft, right down to sharing transfer_group_id, so the two
+ * rows delete together and neither can be left behind on its own.
+ *
+ * Returns the draft untouched when it isn't card-funded, so the save path can
+ * run every draft through it.
+ */
+export function expandCardFundedDraft(draft: Draft): Draft[] {
+  const card = draft.funding_card_name?.trim();
+  if (!card || !CARD_FUNDABLE_TYPES.includes(draft.transaction_type)) return [draft];
+
+  const groupId = crypto.randomUUID();
+  const expenseLeg = normalizeEntry({
+    ...draft,
+    transfer_group_id: groupId,
+    // The card paid, so no wallet did. Saying which card is the one thing the
+    // expense row cannot say in a field of its own (debtor_name is already
+    // the person being split with), and a row reading "฿0" with no
+    // explanation is worse than one carrying the sentence.
+    wallet_id: null,
+    note: draft.note?.trim() || `จ่ายด้วยบัตร ${card}`,
+  }, false);
+  const cardLeg = normalizeEntry({
+    id: `${groupId}-card`,
+    title: draft.title,
+    category: draft.category,
+    amount: draft.amount,
+    transaction_type: "card_charge",
+    debtor_name: card,
+    occurred_at: draft.occurred_at,
+    wallet_id: null,
+    note: draft.note,
+    source_text: draft.source_text,
+    transfer_group_id: groupId,
+  }, false);
+  return [expenseLeg, cardLeg];
+}
+
+/**
+ * Every draft the save path has to turn into rows: transfers and card-funded
+ * splits each become two, everything else stays one. One entry point so a new
+ * caller can't pick up only half the expansions -- which is exactly what
+ * "flatMap(expandTransferDraft)" would have done to a card-funded split.
+ */
+export function expandDraftForSave(draft: Draft, wallets: Wallet[]): Draft[] {
+  return draft.transaction_type === "transfer"
+    ? expandTransferDraft(draft, wallets)
+    : expandCardFundedDraft(draft);
 }
 
 export function categorySpendAmount(entry: Entry): number | null {
@@ -71,7 +215,10 @@ export function normalizeEntry(input: EntryInput, applyDebtorDefault = true): En
   // wallet_impact explicitly, so it's trusted here instead of recomputed.
   const impacts = transaction_type === "transfer"
     ? { wallet_impact: input.wallet_impact ?? -amount, debt_impact: 0, user_share: 0, partner_share: 0 }
-    : calculateImpacts(amount, transaction_type);
+    : calculateImpacts(amount, transaction_type, {
+        partnerShare: input.partner_share,
+        cardFunded: isCardFundedLeg({ transaction_type, transfer_group_id: input.transfer_group_id }),
+      });
   const trimmedDebtorName = input.debtor_name?.trim() ?? "";
   return {
     ...input,

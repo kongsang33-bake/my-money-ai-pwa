@@ -34,7 +34,14 @@ export type Entry = {
 // model wasn't sure whether a named person gave/received money for free or
 // as a loan) — it never gets persisted; saveEntries builds its Supabase
 // payload from an explicit field list that doesn't include it.
-export type Draft = Omit<Entry, "id"> & { id: string; ambiguous?: boolean };
+//
+// `funding_card_name` is client-only for the same reason, but for a different
+// one too: it is an instruction for the save, not a field of the row. It says
+// this split/lend was paid with a credit card rather than a wallet, and
+// expandCardFundedDraft turns it into the second row that carries the charge
+// (lib/money.ts) — by the time anything is written, the pair itself is the
+// record of it.
+export type Draft = Omit<Entry, "id"> & { id: string; ambiguous?: boolean; funding_card_name?: string | null };
 
 export type EntryInput = {
   id: string;
@@ -260,6 +267,12 @@ export type PreviewSeed = {
   budgets: Record<string, number>;
   user: { id: string; email: string; user_metadata: { full_name: string } };
   profile: Record<string, unknown>;
+  // Rows waiting in "ตรวจสอบก่อนบันทึก". Optional because only the specs that
+  // exercise that review UI need it: it is normally reached by asking Gemini
+  // to parse a sentence, which the suite has no key for, so without this the
+  // whole draft editor -- split shares, funding source, the impact preview --
+  // is unreachable from a test.
+  drafts?: Draft[];
 };
 
 export type MoneyGoal = { id: string; name: string; target: number; saved: number; deadline: string };

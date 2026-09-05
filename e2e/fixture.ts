@@ -1,6 +1,6 @@
 import { test as base, expect, type Page } from "@playwright/test";
 import { normalizeEntry } from "../lib/money.ts";
-import type { Entry, PreviewSeed } from "../lib/types.ts";
+import type { Draft, Entry, PreviewSeed } from "../lib/types.ts";
 
 // The seeded state every spec runs against, and the helpers for getting into
 // the app with it.
@@ -88,6 +88,25 @@ export function buildSeed(now = Date.now()): PreviewSeed {
     ],
     budgets: { "อาหาร": 6000, "บันเทิง": 2000, "เดินทาง": 3000 },
   };
+}
+
+/**
+ * A row sitting in "ตรวจสอบก่อนบันทึก", as the AI-parse step would have left
+ * it. Seeded through PreviewSeed.drafts because the real route there needs a
+ * Gemini key the suite does not have -- see the note on that field.
+ */
+export function seedDraft(overrides: Partial<Draft> = {}): Draft {
+  return normalizeEntry({
+    id: "preview-draft-1",
+    title: "ข้าวมื้อเย็น",
+    category: "อาหาร",
+    amount: 163,
+    transaction_type: "split_half",
+    debtor_name: "จูน",
+    occurred_at: new Date().toISOString(),
+    wallet_id: "preview-w1",
+    ...overrides,
+  }, false) as Draft;
 }
 
 export const NAV = { home: 0, history: 1, add: 2, wallets: 3, more: 4 } as const;

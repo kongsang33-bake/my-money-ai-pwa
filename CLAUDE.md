@@ -192,6 +192,19 @@ config (`lib/constants.ts`). If something you need isn't there, say so
 explicitly (don't just add a new local literal) and add it to the right
 shared location instead of typing the value inline.
 
+**One row moves one debt balance.** `buildDebtSummary` groups by
+`debtor_name` and sums `debt_impact`, so a transaction that moves two of them
+at once — a bill split with someone but paid on a credit card, which the card
+owes in full and the other person owes a share of — is stored as *two* rows
+sharing a `transfer_group_id`, the way a transfer already was. `calculateImpacts`
+is what keeps the pair from double-counting (the expense leg moves no wallet
+money, the `card_charge` leg claims none of the spending), `expandCardFundedDraft`
+is the only thing that creates one, and `isCardFundedLeg` is the only test for
+whether a row is part of one. Reach for that pair rather than a new
+`transaction_type` or a second debtor column the next time one event has to
+touch two balances — and note `partner_share` is a real stored number now, not
+always half, so nothing may re-derive a split from `amount / 2`.
+
 Don't duplicate: hex colors (must be a CSS custom property in
 `app/globals.css`), Supabase table names and `.select(...)` column lists
 (`lib/constants.ts`'s `TABLES` / the `*_COLUMNS` constants), any numeric
