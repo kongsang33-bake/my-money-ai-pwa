@@ -308,7 +308,7 @@ export function calculateImpacts(amount: number, transactionType: TransactionTyp
     // 163-baht dinner as 244.5 spent on food.
     return { wallet_impact: 0, debt_impact: amount, user_share: cardFunded ? 0 : amount, partner_share: 0 };
   }
-  if (transactionType === "transfer" || transactionType === "investment_buy") {
+  if (transactionType === "transfer" || transactionType === "investment_buy" || transactionType === "balance_adjustment") {
     return { wallet_impact: -amount, debt_impact: 0, user_share: 0, partner_share: 0 };
   }
   // personal_expense and gift. personal_expense reaches this as a card-funded
@@ -427,7 +427,7 @@ export function expandDraftForSave(draft: Draft, wallets: Wallet[]): Draft[] {
 }
 
 export function categorySpendAmount(entry: Entry): number | null {
-  if (entry.transaction_type === "transfer" || entry.transaction_type === "investment_buy") return null;
+  if (entry.transaction_type === "transfer" || entry.transaction_type === "investment_buy" || entry.transaction_type === "balance_adjustment") return null;
   if (entry.wallet_impact > 0 && entry.transaction_type !== "card_charge") return null;
   return entry.user_share > 0 ? entry.user_share : null;
 }
@@ -443,7 +443,7 @@ export function normalizeEntry(input: EntryInput, applyDebtorDefault = true): En
   // derived from amount + type alone the way every other type can — the
   // caller (building one of the two linked legs) must supply the signed
   // wallet_impact explicitly, so it's trusted here instead of recomputed.
-  const impacts = transaction_type === "transfer"
+  const impacts = transaction_type === "transfer" || transaction_type === "balance_adjustment"
     ? { wallet_impact: input.wallet_impact ?? -amount, debt_impact: 0, user_share: 0, partner_share: 0 }
     : calculateImpacts(amount, transaction_type, {
         partnerShare: input.partner_share,
@@ -586,7 +586,10 @@ export function mapTransactionRow(row: {
 
 export function totalWallet(entries: Entry[], direction: EntryKind) {
   return entries
-    .filter((entry) => entry.transaction_type !== "transfer" && entry.transaction_type !== "investment_buy" && (direction === "income" ? entry.wallet_impact > 0 : entry.wallet_impact < 0))
+    // Transfers move money between the user's own wallets, an investment buy
+    // turns it into units, and an adjustment is the app admitting it was
+    // wrong -- none of the three is money the month earned or spent.
+    .filter((entry) => entry.transaction_type !== "transfer" && entry.transaction_type !== "investment_buy" && entry.transaction_type !== "balance_adjustment" && (direction === "income" ? entry.wallet_impact > 0 : entry.wallet_impact < 0))
     .reduce((sum, entry) => sum + entry.wallet_impact, 0);
 }
 
@@ -746,6 +749,39 @@ export function planEntryUpdate(
     wallets,
   );
   return { kind: "convert-to-transfer", sourceLeg, destLeg };
+}
+
+/**
+ * The single entry that makes a wallet in the app equal the money that is
+ * really there, and null when they already agree.
+ *
+ * A wallet's balance is its opening figure plus every wallet_impact since, so
+ * a drift means a row is missing, doubled, or wrong -- and the honest fix is
+ * to find it. But an amount nobody can account for should not keep being
+ * carried into the next month's numbers either: this writes the difference
+ * once, dated today, so the balance tells the truth from here on and the
+ * correction is a line in the history rather than a silently edited opening
+ * balance.
+ */
+export function balanceAdjustmentEntry(
+  wallet: { id: string; display_balance: number },
+  realBalance: number,
+  id: string,
+  at: Date,
+): Entry | null {
+  const difference = satang(toMoneyAmount(realBalance) - wallet.display_balance);
+  if (difference === 0) return null;
+  return normalizeEntry({
+    id,
+    title: "ปรับยอดให้ตรงบัญชีจริง",
+    category: "อื่น ๆ",
+    amount: Math.abs(difference),
+    transaction_type: "balance_adjustment",
+    wallet_impact: difference,
+    occurred_at: at.toISOString(),
+    wallet_id: wallet.id,
+    note: `ยอดในแอป ${formatMoney(wallet.display_balance)} → ยอดจริง ${formatMoney(toMoneyAmount(realBalance))}`,
+  }, false);
 }
 
 /**

@@ -10,9 +10,18 @@ export const TRANSACTION_TYPES = [
   "transfer",
   "gift",
   "investment_buy",
+  "balance_adjustment",
 ] as const;
 
 export type TransactionType = (typeof TRANSACTION_TYPES)[number];
+
+// What the AI parser is allowed to come back with. A balance adjustment is
+// something the user does deliberately from the wallet screen after counting
+// their real money -- never something to infer from a sentence about a
+// coffee, and never something a model should be able to write into a wallet.
+export const PARSEABLE_TRANSACTION_TYPES = TRANSACTION_TYPES.filter(
+  (type) => type !== "balance_adjustment",
+);
 
 export const CATEGORIES = ["อาหาร", "เดินทาง", "ของใช้", "ที่อยู่อาศัย", "สุขภาพ", "บันเทิง", "รายได้", "บิลประจำ", "อื่น ๆ"] as const;
 
@@ -45,6 +54,7 @@ export const transactionTypeLabels: Record<TransactionType, string> = {
   transfer: "โอนเงินระหว่างกระเป๋า",
   gift: "ให้โดยไม่คิดคืน",
   investment_buy: "ลงทุน",
+  balance_adjustment: "ปรับยอดให้ตรงบัญชี",
 };
 
 export const transactionKind: Record<TransactionType, EntryKind> = {
@@ -59,6 +69,10 @@ export const transactionKind: Record<TransactionType, EntryKind> = {
   transfer: "expense",
   gift: "expense",
   investment_buy: "expense",
+  // The direction lives in wallet_impact, which normalizeEntry takes as given
+  // for this type the way it does for a transfer; kind only has "income" and
+  // "expense" to offer and an adjustment is neither.
+  balance_adjustment: "expense",
 };
 
 export const walletTagLabels: Record<WalletTag, string> = {

@@ -5,7 +5,7 @@ import { ChevronLeft, TrendingDown, TrendingUp, Users, Wallet as WalletIcon } fr
 import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
 import { formatMoney, formatPercent, formatShortDate, formatSignedMoney, moneySign, toMoneyAmount } from "@/lib/format";
 import { shiftMonthKey } from "@/lib/cycle";
-import type { CashFlowSummary } from "@/lib/insights";
+import type { CashFlowSummary, UnpaidOwnDebt } from "@/lib/insights";
 import { categoryColor, categoryTint, nameColor } from "@/lib/category";
 import type { Entry, MoneyGoal, NetWorthDebtFormula, RecurringExpense } from "@/lib/types";
 import { CategoryIcon, WalletAvatarGlyph } from "@/components/shared";
@@ -201,6 +201,38 @@ export function HomeInsightGrid({
           </small>
         </div>
       )}
+    </section>
+  );
+}
+
+/**
+ * The cards and instalments with nothing paid against them this cycle. Its
+ * own card rather than a line inside DueSoonCard: a recurring bill is money
+ * about to leave, while this is money the bank may already have taken while
+ * the app still shows it in the wallet.
+ */
+export function UnpaidCardsCard({ items, onManage }: { items: UnpaidOwnDebt[]; onManage: () => void }) {
+  return (
+    <section className="home-focus-card unpaid-cards-card">
+      <div className="home-focus-head">
+        <div>
+          <span>ยังไม่ได้จ่ายรอบนี้</span>
+          <strong>{items.length} ก้อน</strong>
+        </div>
+        <button onClick={onManage}>ดูหนี้</button>
+      </div>
+      <div className="due-soon-list">
+        {items.slice(0, 3).map((item) => (
+          <div key={item.name}>
+            <i className="cat-dot" style={{ background: nameColor(item.name) }} />
+            <span>{item.name}</span>
+            <small>{item.minimum > 0 ? `ขั้นต่ำ ${moneySign}${formatMoney(item.minimum)}` : "ยังไม่มีรายการจ่ายในรอบนี้"}</small>
+            <div className="due-soon-action">
+              <b>{moneySign}{formatMoney(item.balance)}</b>
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

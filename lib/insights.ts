@@ -10,7 +10,7 @@ import {
 } from "./constants.ts";
 import { formatMoney, moneySign } from "./format.ts";
 import { daysRemainingInCycle, entriesInRange, startOfDay } from "./cycle.ts";
-import type { Entry, QuickShortcut, RecurringExpense } from "./types.ts";
+import type { Debtor, Entry, QuickShortcut, RecurringExpense } from "./types.ts";
 
 export function deriveQuickShortcuts(entries: Entry[]): QuickShortcut[] {
   const cutoff = Date.now() - 90 * MS_PER_DAY;
@@ -85,6 +85,48 @@ export function isRecurringLogged(item: RecurringExpense, entries: Entry[], cycl
   return entriesInRange(entries, cycleRange.start, cycleRange.end).some(
     (entry) => entry.title.trim() === item.name.trim() && entry.amount === item.amount,
   );
+}
+
+export type UnpaidOwnDebt = { name: string; balance: number; minimum: number };
+
+/**
+ * The user's own debts -- credit cards, instalments -- that still owe money
+ * and have had nothing paid against them this cycle.
+ *
+ * A card charge moves no wallet money (that is what a card is), so the bill
+ * arriving and being paid is a separate entry the user has to remember. When
+ * they don't, the app's wallet keeps money the bank has already taken, which
+ * is one of the few ways a carefully kept ledger still drifts from reality.
+ *
+ * "Paid this cycle" is any debt_payment against that name inside the range,
+ * the same way isRecurringLogged reads a bill as logged: by what is in the
+ * ledger, not by a stored link.
+ */
+export function unpaidOwnDebts(
+  debtors: Debtor[],
+  balances: { name: string; amount: number }[],
+  entries: Entry[],
+  cycleRange: { start: Date; end: Date },
+): UnpaidOwnDebt[] {
+  const paid = new Set(
+    entriesInRange(entries, cycleRange.start, cycleRange.end)
+      .filter((entry) => entry.transaction_type === "debt_payment")
+      .map((entry) => entry.debtor_name.trim()),
+  );
+
+  return debtors
+    .filter((debtor) => debtor.kind === "own" && !paid.has(debtor.name.trim()))
+    .map((debtor) => {
+      const balance = balances.find((item) => item.name === debtor.name)?.amount ?? 0;
+      const percent = debtor.credit_card_min_payment_percent;
+      return {
+        name: debtor.name,
+        balance,
+        minimum: percent ? Math.round(balance * percent) / 100 : debtor.monthly_installment ?? 0,
+      };
+    })
+    .filter((item) => item.balance > 0)
+    .sort((a, b) => b.balance - a.balance);
 }
 
 export type SpendPaceTone = "unknown" | "low" | "steady" | "high";

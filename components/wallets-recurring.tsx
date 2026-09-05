@@ -8,7 +8,7 @@ import { walletTagHints, walletTagLabels, type WalletTag } from "@/lib/taxonomy"
 import { nameColor, recurringIconOptions } from "@/lib/category";
 import type { Entry, RecurringExpense, Wallet, WalletDisplay } from "@/lib/types";
 import { IconColorPicker, RecurringAvatarGlyph, WalletAvatarGlyph } from "@/components/shared";
-import { CountUpMoney, EmptyNote, SheetFrame, SkeletonList, StateCard, decimalInputPattern } from "@/components/primitives";
+import { AmountInput, CountUpMoney, EmptyNote, SheetFrame, SkeletonList, StateCard, decimalInputPattern } from "@/components/primitives";
 
 export function WalletsView({
   wallets,
@@ -18,6 +18,7 @@ export function WalletsView({
   onAdd,
   onEdit,
   onDelete,
+  onReconcile,
 }: {
   wallets: WalletDisplay[];
   entries: Entry[];
@@ -26,6 +27,7 @@ export function WalletsView({
   onAdd: () => void;
   onEdit: (wallet: Wallet) => void;
   onDelete: (wallet: Wallet) => void;
+  onReconcile: (wallet: WalletDisplay) => void;
 }) {
   const total = wallets.reduce((sum, wallet) => sum + wallet.display_balance, 0);
   const [openWalletId, setOpenWalletId] = useState<string | null>(null);
@@ -77,6 +79,7 @@ export function WalletsView({
             <details className="kebab-menu" name="wallet-kebab">
               <summary>⋮</summary>
               <menu>
+                <button onClick={() => onReconcile(wallet)}>ปรับยอดให้ตรงบัญชีจริง</button>
                 <button onClick={() => onEdit(wallet)}>แก้ไข</button>
                 <button onClick={() => onDelete(wallet)}>ลบ</button>
               </menu>
@@ -118,6 +121,66 @@ export type WalletInput = {
   icon_color: string | null;
   is_default: boolean;
 };
+
+/**
+ * "Count your money, then tell the app." The difference between the two is
+ * written as one balance_adjustment entry (balanceAdjustmentEntry), so the
+ * wallet stops being wrong without anyone having to invent the missing
+ * receipts -- and so the correction is a line in the history with a date on
+ * it, rather than a quietly edited opening balance.
+ */
+export function ReconcileSheet({
+  wallet,
+  busy,
+  error,
+  onClose,
+  onSave,
+  closing,
+}: {
+  wallet: WalletDisplay;
+  busy: boolean;
+  error: string;
+  onClose: () => void;
+  onSave: (realBalance: number) => Promise<boolean>;
+  closing?: boolean;
+}) {
+  const [realBalance, setRealBalance] = useState(wallet.display_balance);
+  const difference = Math.round((realBalance - wallet.display_balance) * 100) / 100;
+
+  const submit = async () => {
+    const saved = await onSave(realBalance);
+    if (saved) onClose();
+  };
+
+  return (
+    <SheetFrame onClose={onClose} closing={closing}>
+      <div className="sheet-head">
+        <div>
+          <p className="eyebrow">ปรับยอดให้ตรงบัญชีจริง</p>
+          <h2>{wallet.name}</h2>
+        </div>
+        <button onClick={onClose}>x</button>
+      </div>
+      <p className="pin-hint">เปิดแอปธนาคาร (หรือนับเงินสด) แล้วใส่ยอดที่มีอยู่จริงตอนนี้ · ส่วนต่างจะถูกบันทึกเป็นรายการปรับยอด 1 รายการ ไม่นับเป็นรายรับหรือรายจ่ายของเดือน</p>
+      <div className="reconcile-compare">
+        <span>ยอดในแอปตอนนี้</span>
+        <b>{moneySign}{formatMoney(wallet.display_balance)}</b>
+      </div>
+      <label>
+        ยอดจริงตอนนี้
+        <AmountInput value={realBalance} onChange={setRealBalance} autoFocus />
+      </label>
+      <div className="draft-impact">
+        <span>ส่วนต่าง {formatSignedMoney(difference)}</span>
+        <span>{difference === 0 ? "ตรงกันอยู่แล้ว" : difference > 0 ? "แอปจดขาดไป" : "แอปจดเกินไป"}</span>
+      </div>
+      {error && <StateCard tone="error" title="ปรับยอดไม่สำเร็จ" detail={error} />}
+      <button className="save" onClick={submit} disabled={busy || difference === 0}>
+        {busy ? "กำลังบันทึก..." : "บันทึกรายการปรับยอด"}
+      </button>
+    </SheetFrame>
+  );
+}
 
 export function WalletEditSheet({
   wallet,

@@ -28,6 +28,7 @@ import type {
   Theme,
   Toast,
   Wallet,
+  WalletDisplay,
 } from "@/lib/types";
 import { clampInteger, formatMoney, formatUnits, moneySign, monthKey, normalizeBillingDay, toFiniteNumber, toMoneyAmount } from "@/lib/format";
 import { currentCycleMonthKey, cycleBounds, defaultDayForCycle, entriesInRange, fromDateInput, nextBillingInfo, reportLabel, shiftMonthKey, todayDateInput } from "@/lib/cycle";
@@ -36,6 +37,7 @@ import {
   buildMonthlyTrend,
   buildPortfolioHoldings,
   buildPortfolioTrend,
+  balanceAdjustmentEntry,
   buildTransactionCore,
   SHARED_EXPENSE_TYPES,
   buildWalletLedger,
@@ -61,7 +63,7 @@ import {
   unnamedDebtor,
   withEntries,
 } from "@/lib/money";
-import { buildWalletInsight, computeStreak, deriveQuickShortcuts, isRecurringLogged, lastSevenDayCashFlow } from "@/lib/insights";
+import { buildWalletInsight, computeStreak, deriveQuickShortcuts, isRecurringLogged, lastSevenDayCashFlow, unpaidOwnDebts } from "@/lib/insights";
 import { buildAiExamples, buildCategoryMemory } from "@/lib/ai-memory";
 import { nameColor } from "@/lib/category";
 import { createPinSalt, hashPin, isSixDigitPin, pinBackgroundLockMs, pinBlocked, pinMaxAttempts, recordFailedPinAttempt, registerFaceId, timingSafeEqual, verifyFaceId } from "@/lib/pin";
@@ -108,6 +110,7 @@ import {
   HomeInsightGrid,
   SpendingPersonalityCard,
   SuccessPulse,
+  UnpaidCardsCard,
 } from "@/components/home";
 import { HistoryFilterBar, HistoryInsight, IncomeBreakdown, MonthSummary, MonthlyTrendChart } from "@/components/history";
 import { Auth, PinGate, SecurityView } from "@/components/auth";
@@ -141,6 +144,7 @@ const BudgetsView = dynamic(() => import("@/components/debtors").then((m) => m.B
 
 const WalletsView = dynamic(() => import("@/components/wallets-recurring").then((m) => m.WalletsView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const WalletEditSheet = dynamic(() => import("@/components/wallets-recurring").then((m) => m.WalletEditSheet), { ssr: false });
+const ReconcileSheet = dynamic(() => import("@/components/wallets-recurring").then((m) => m.ReconcileSheet), { ssr: false });
 const RecurringExpensesView = dynamic(() => import("@/components/wallets-recurring").then((m) => m.RecurringExpensesView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const RecurringExpenseEditSheet = dynamic(() => import("@/components/wallets-recurring").then((m) => m.RecurringExpenseEditSheet), { ssr: false });
 
@@ -256,6 +260,7 @@ export default function Home() {
   const [debtorKindTab, setDebtorKindTab] = useState<DebtorKind>("lend");
   const [walletSheetMode, setWalletSheetMode] = useState<"create" | "edit" | null>(null);
   const [editingWallet, setEditingWallet] = useState<Wallet | null>(null);
+  const [reconcilingWallet, setReconcilingWallet] = useState<WalletDisplay | null>(null);
   const [recurringSheetMode, setRecurringSheetMode] = useState<"create" | "edit" | null>(null);
   const [editingRecurringExpense, setEditingRecurringExpense] = useState<RecurringExpense | null>(null);
   const [investments, setInvestments] = useState<Investment[]>([]);
@@ -782,6 +787,7 @@ export default function Home() {
     !!editing ||
     !!debtorSheetMode ||
     !!walletSheetMode ||
+    !!reconcilingWallet ||
     !!recurringSheetMode ||
     investmentBuySheetOpen ||
     !!investmentSellTarget ||
@@ -885,6 +891,16 @@ export default function Home() {
       .filter(({ daysUntil }) => daysUntil >= 0 && daysUntil <= 3)
       .sort((a, b) => a.daysUntil - b.daysUntil);
   }, [recurringExpenses, entries, monthStartDay]);
+
+  // Cards and instalments with nothing paid against them this cycle. A card
+  // charge never moved the wallet, so the bill being paid is a separate entry
+  // the user has to remember -- and forgetting it is one of the few ways a
+  // carefully kept ledger still drifts away from the bank.
+  const unpaidCards = useMemo(() => {
+    const now = new Date();
+    const currentCycleRange = cycleBounds(currentCycleMonthKey(monthStartDay, now), monthStartDay);
+    return unpaidOwnDebts(debtors, payableSummary, entries, currentCycleRange);
+  }, [debtors, payableSummary, entries, monthStartDay]);
 
   useEffect(() => {
     if (!user || !dueSoonRecurring.length) return;
@@ -1580,6 +1596,39 @@ export default function Home() {
     }
     setBusy(false);
   }, [user, wallets, notify, undoLoggedRecurring]);
+
+  /**
+   * Writes the one entry that makes a wallet match the money that is really
+   * there. Same single-row insert path as logging a recurring bill, undo
+   * included -- an adjustment is a normal entry, not a special mode.
+   */
+  async function reconcileWallet(wallet: WalletDisplay, realBalance: number) {
+    if (!supabase || !user) return false;
+    const normalized = balanceAdjustmentEntry(wallet, realBalance, crypto.randomUUID(), new Date());
+    if (!normalized) return false;
+
+    setBusy(true);
+    setError("");
+    const { data, error } = await supabase
+      .from(TABLES.transactions)
+      .insert({ id: normalized.id, user_id: user.id, ...buildTransactionCore(normalized, wallets) })
+      .select(TRANSACTION_COLUMNS);
+    setBusy(false);
+
+    if (error) {
+      setError(error.message);
+      return false;
+    }
+    const inserted = data?.[0] ? mapTransactionRow(data[0]) : normalized;
+    setEntries((current) => withEntries(current, [inserted]));
+    notify({
+      tone: "success",
+      title: "ปรับยอดแล้ว",
+      detail: `${wallet.name} ${moneySign}${formatMoney(toMoneyAmount(realBalance))}`,
+      action: { label: "ย้อนคืน", onClick: () => { void undoLoggedRecurring(inserted); } },
+    });
+    return true;
+  }
 
   async function updateBudgets(next: Record<string, number>) {
     if (!supabase || !user) return;
@@ -2405,6 +2454,7 @@ export default function Home() {
   const editingDismiss = useDismiss(!!editing, () => setEditing(null));
   const debtorSheetDismiss = useDismiss(!!debtorSheetMode, () => { setDebtorSheetMode(null); setEditingDebtor(null); });
   const walletSheetDismiss = useDismiss(!!walletSheetMode, () => { setWalletSheetMode(null); setEditingWallet(null); });
+  const reconcileDismiss = useDismiss(!!reconcilingWallet, () => setReconcilingWallet(null));
   const recurringSheetDismiss = useDismiss(!!recurringSheetMode, () => { setRecurringSheetMode(null); setEditingRecurringExpense(null); });
   const investmentBuyDismiss = useDismiss(investmentBuySheetOpen, () => { setInvestmentBuySheetOpen(false); setInvestmentBuyTarget(null); });
   const investmentSellDismiss = useDismiss(!!investmentSellTarget, () => setInvestmentSellTarget(null));
@@ -2493,6 +2543,7 @@ export default function Home() {
                 {(dueSoonRecurring.length > 0 || budgetGlance.totalBudget > 0) && (
                   <div className="home-focus-grid">
                     {dueSoonRecurring.length > 0 && <DueSoonCard items={dueSoonRecurring} onManage={() => setTab("recurring")} onLogNow={logRecurringNow} />}
+                    {unpaidCards.length > 0 && <UnpaidCardsCard items={unpaidCards} onManage={() => { setSelectedDebtor(null); setTab("debtors"); }} />}
                     {budgetGlance.totalBudget > 0 && <BudgetGlanceCard budgetGlance={budgetGlance} onManage={() => setTab("budgets")} />}
                   </div>
                 )}
@@ -2701,6 +2752,7 @@ export default function Home() {
             onAdd={openSheet(() => { setEditingWallet(null); setWalletSheetMode("create"); })}
             onEdit={openSheet((wallet: Wallet) => { setEditingWallet(wallet); setWalletSheetMode("edit"); })}
             onDelete={deleteWallet}
+            onReconcile={openSheet((wallet: WalletDisplay) => setReconcilingWallet(wallet))}
           />
         )}
 
@@ -2827,6 +2879,16 @@ export default function Home() {
             onUpdate={updateWallet}
             existingWallets={wallets}
             closing={walletSheetDismiss.closing}
+          />
+        )}
+        {reconcileDismiss.mounted && reconcilingWallet && (
+          <ReconcileSheet
+            wallet={reconcilingWallet}
+            busy={busy}
+            error={error}
+            onClose={reconcileDismiss.requestClose}
+            onSave={(realBalance) => reconcileWallet(reconcilingWallet, realBalance)}
+            closing={reconcileDismiss.closing}
           />
         )}
         {recurringSheetDismiss.mounted && recurringSheetMode && (

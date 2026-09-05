@@ -1,6 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  balanceAdjustmentEntry,
+  categorySpendAmount,
+  mapTransactionRow,
+  totalWallet,
   buildDebtSummary,
   buildPortfolioTrend,
   buildWalletLedger,
@@ -1221,5 +1225,49 @@ describe("splitPinMismatch", () => {
 
   it("collects the drafts a save has to stop for", () => {
     assert.equal(mismatchedSplitDrafts([bill, { ...bill, id: "d2", split_shares: [500, 100, 100] }]).length, 1);
+  });
+});
+
+describe("balanceAdjustmentEntry", () => {
+  const wallet = { id: "w1", display_balance: 10187.52 };
+  const at = new Date("2026-09-05T12:00:00.000Z");
+
+  it("writes the difference between the app and the bank, in the right direction", () => {
+    const entry = balanceAdjustmentEntry(wallet, 8148.22, "adj-1", at)!;
+    assert.equal(entry.transaction_type, "balance_adjustment");
+    assert.equal(entry.amount, 2039.3);
+    assert.equal(entry.wallet_impact, -2039.3);
+    assert.equal(entry.wallet_id, "w1");
+  });
+
+  it("goes the other way when the app is the one that is short", () => {
+    const entry = balanceAdjustmentEntry(wallet, 11000, "adj-1", at)!;
+    assert.equal(entry.wallet_impact, 812.48);
+    assert.equal(entry.amount, 812.48);
+  });
+
+  it("writes nothing when the two already agree", () => {
+    assert.equal(balanceAdjustmentEntry(wallet, 10187.52, "adj-1", at), null);
+  });
+
+  it("is neither income nor spending", () => {
+    const entry = balanceAdjustmentEntry(wallet, 8148.22, "adj-1", at)!;
+    // Not in the month's เงินเข้า/เงินออก...
+    assert.equal(totalWallet([entry], "expense"), 0);
+    assert.equal(totalWallet([entry], "income"), 0);
+    // ...and not spending in any category either.
+    assert.equal(categorySpendAmount(entry), null);
+    assert.equal(entry.debt_impact, 0);
+  });
+
+  it("survives a round trip through the row it is stored as", () => {
+    const entry = balanceAdjustmentEntry(wallet, 8148.22, "adj-1", at)!;
+    const row = mapTransactionRow({
+      id: entry.id, title: entry.title, category: entry.category, amount: entry.amount, kind: entry.type,
+      transaction_type: entry.transaction_type, wallet_impact: entry.wallet_impact, debt_impact: entry.debt_impact,
+      user_share: entry.user_share, partner_share: entry.partner_share, debtor_name: entry.debtor_name,
+      occurred_at: entry.occurred_at, source_text: null, wallet_id: entry.wallet_id ?? null, note: entry.note ?? null,
+    });
+    assert.equal(row.wallet_impact, -2039.3);
   });
 });

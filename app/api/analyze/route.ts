@@ -1,5 +1,5 @@
 import { createGeminiClient, describeGeminiError, generateGeminiContent, getGeminiApiKey, missingGeminiKeyResponse } from "@/lib/gemini";
-import { CATEGORIES, TRANSACTION_TYPES, type WalletTag } from "@/lib/taxonomy";
+import { CATEGORIES, PARSEABLE_TRANSACTION_TYPES, TRANSACTION_TYPES, type WalletTag } from "@/lib/taxonomy";
 import { requireUser, unauthorizedResponse } from "@/lib/auth";
 import {
   AI_CONTEXT_MAX_LENGTH,
@@ -24,7 +24,7 @@ const itemSchema = {
     amount: { type: "number", minimum: 0, description: "ยอดเงินที่จ่ายหรือรับจริง รวมเศษสตางค์ทศนิยมได้ถึง 2 ตำแหน่ง ห้ามปัดเศษ" },
     transaction_type: {
       type: "string",
-      enum: TRANSACTION_TYPES,
+      enum: PARSEABLE_TRANSACTION_TYPES,
       description: "ชนิดธุรกรรมตาม logic กระเป๋าหลักและยอดลูกหนี้",
     },
     debtor_name: {

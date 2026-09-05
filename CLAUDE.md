@@ -205,6 +205,16 @@ is what tells a row it moved no wallet money (`isCardFundedLeg`), so grouping
 the plain per-person rows would zero out money that really did leave. Add a
 new multi-row shape there, not in a second flatMap at the call site.
 
+**A wallet's balance is its opening figure plus every `wallet_impact` since**
+(`buildWalletLedger`), so when it drifts from the real bank the honest fix is
+finding the row that is missing, doubled or wrong. What must not happen is
+quietly editing the opening balance to paper over it: `balance_adjustment` is
+its own transaction type for that reason — one dated row carrying the
+difference, excluded from `totalWallet` and `categorySpendAmount` because
+nothing was earned or spent. It is also the one type the AI parser may not
+emit (`PARSEABLE_TRANSACTION_TYPES`), since it is something the user decides
+after counting real money, never something to infer from a sentence.
+
 **One row moves one debt balance.** `buildDebtSummary` groups by
 `debtor_name` and sums `debt_impact`, so a transaction that moves two of them
 at once — a bill split with someone but paid on a credit card, which the card

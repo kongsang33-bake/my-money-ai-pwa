@@ -1605,6 +1605,14 @@ a:focus-visible {
   opacity: 0.72;
 }
 
+/* Stays on the quiet tint tier rather than taking the due-soon card's bold
+   fill: two full-strength tiles stacked on Home and neither is a highlight
+   any more. Only the balance takes a colour, because that is the number the
+   bank is about to want. */
+.unpaid-cards-card .due-soon-action b {
+  color: var(--expense);
+}
+
 .spending-personality-note {
   font-size: var(--fs-body);
   color: var(--ink-2);
@@ -2661,6 +2669,28 @@ a:focus-visible {
   margin-top: 4px;
   font-size: var(--fs-micro);
   color: var(--ink-3);
+}
+
+/* Today's app figure, sitting above the field where the real one goes -- the
+   comparison is the whole point of the sheet, so it reads as one line rather
+   than as another labelled field. */
+.reconcile-compare {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  font-size: var(--fs-body-sm);
+  color: var(--ink-2);
+}
+
+.reconcile-compare b {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-bold);
+  color: var(--ink);
 }
 
 /* What a bill split between named people will become, listed row by row

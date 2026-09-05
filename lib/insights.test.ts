@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { lastSevenDayCashFlow, isRecurringLogged } from "./insights.ts";
-import type { Entry, RecurringExpense } from "./types.ts";
+import { lastSevenDayCashFlow, isRecurringLogged, unpaidOwnDebts } from "./insights.ts";
+import type { Debtor, Entry, RecurringExpense } from "./types.ts";
 import type { TransactionType } from "./taxonomy.ts";
 import { MS_PER_DAY } from "./constants.ts";
 
@@ -126,5 +126,46 @@ describe("lastSevenDayCashFlow", () => {
     assert.equal(summary.spend, 0);
     assert.equal(summary.avgDaily, 0);
     assert.equal(summary.tone, "unknown");
+  });
+});
+
+describe("unpaidOwnDebts", () => {
+  const card = (name: string, extra: Partial<Debtor> = {}): Debtor => ({
+    id: name, user_id: "u1", name, note: null, opening_balance: 0, kind: "own",
+    monthly_installment: null, total_installments: null, credit_limit: null,
+    credit_card_min_payment_percent: null, icon: null, icon_color: null, ...extra,
+  });
+  const payment = (name: string, amount: number, occurred_at: string): Entry => ({
+    ...makeEntry(`จ่าย ${name}`, amount, occurred_at),
+    transaction_type: "debt_payment", debtor_name: name, debt_impact: -amount,
+  });
+  const balances = [{ name: "บัตรเครดิต", amount: 8200 }, { name: "ผ่อน iPhone", amount: 4000 }];
+
+  it("lists what still owes money and has had nothing paid this cycle", () => {
+    const result = unpaidOwnDebts([card("บัตรเครดิต"), card("ผ่อน iPhone")], balances, [], cycleRange);
+    assert.deepEqual(result.map((item) => item.name), ["บัตรเครดิต", "ผ่อน iPhone"]);
+  });
+
+  it("drops the one that was paid inside the cycle", () => {
+    const entries = [payment("บัตรเครดิต", 2000, "2026-08-26T00:00:00.000Z")];
+    const result = unpaidOwnDebts([card("บัตรเครดิต"), card("ผ่อน iPhone")], balances, entries, cycleRange);
+    assert.deepEqual(result.map((item) => item.name), ["ผ่อน iPhone"]);
+  });
+
+  it("does not count a payment from another cycle", () => {
+    const entries = [payment("บัตรเครดิต", 2000, "2026-07-26T00:00:00.000Z")];
+    assert.equal(unpaidOwnDebts([card("บัตรเครดิต")], balances, entries, cycleRange).length, 1);
+  });
+
+  it("says nothing about a debt that is already clear, or about people who owe the user", () => {
+    assert.equal(unpaidOwnDebts([card("บัตรเครดิต")], [{ name: "บัตรเครดิต", amount: 0 }], [], cycleRange).length, 0);
+    assert.equal(unpaidOwnDebts([card("เพื่อนเอ", { kind: "lend" })], [{ name: "เพื่อนเอ", amount: 500 }], [], cycleRange).length, 0);
+  });
+
+  it("works out the minimum from the card's percentage, or the instalment", () => {
+    const percent = unpaidOwnDebts([card("บัตรเครดิต", { credit_card_min_payment_percent: 10 })], balances, [], cycleRange);
+    assert.equal(percent[0].minimum, 820);
+    const instalment = unpaidOwnDebts([card("ผ่อน iPhone", { monthly_installment: 1031.55 })], balances, [], cycleRange);
+    assert.equal(instalment[0].minimum, 1031.55);
   });
 });
