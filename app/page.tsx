@@ -2501,6 +2501,12 @@ export default function Home() {
   return (
     <main className="shell">
       <section className={`phone tab-${tab}`} ref={scrollRootRef}>
+        {/* The topbar is a floating pill, so the page scrolls through the gap
+            above and beside it -- a hero balance sliding past the header used
+            to be readable over the top of it. This is the ground that gap
+            needs; it cannot go on .topbar itself without painting over the
+            pill's own frosted background. */}
+        <div className="topbar-scrim" aria-hidden="true" />
         <header className="topbar">
           <div className="home-identity">
             <span className={`home-profile-icon ${displayIconImage ? "has-image" : ""}`}>

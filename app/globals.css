@@ -555,6 +555,38 @@ a:focus-visible {
   animation: view-in var(--t-3) var(--e-out) backwards;
 }
 
+/* The total, and the one thing worth saying about it: how much of it is
+   actually spendable today. Sits under the number as a quiet caption row --
+   the wallets themselves are listed right below, so this is a summary, not a
+   second copy of the list. */
+.wallet-total-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-5);
+  margin-top: var(--s-3);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line-soft);
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+}
+
+.wallet-total-split b {
+  color: var(--ink-2);
+  font-weight: var(--fw-semibold);
+}
+
+.topbar-scrim {
+  position: sticky;
+  top: 0;
+  z-index: calc(var(--z-nav) - 1);
+  height: var(--topbar-block);
+  /* Pulled back up by its own height so it occupies no space of its own:
+     it is the ground the topbar floats on, not a row above it. */
+  margin-bottom: calc(-1 * var(--topbar-block));
+  background: linear-gradient(to bottom, var(--bg) 72%, transparent);
+  pointer-events: none;
+}
+
 .topbar {
   position: sticky;
   top: max(var(--s-2), env(safe-area-inset-top));
@@ -2061,6 +2093,35 @@ a:focus-visible {
 .goal-progress i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width var(--t-3) var(--e-out); }
 
 .recurring-timeline { margin: var(--s-4) 0; padding: var(--s-4); border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+/* A section heading and the one control that belongs to it, on one line:
+   the heatmap's month stepper, the debtor history's edit button, the wallet
+   statement's. This class was used by four screens and had no rule at all,
+   so every one of them stacked the control underneath the heading. */
+.section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+
+.section-title h2 {
+  min-width: 0;
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+}
+
+.section-title > :not(h2) {
+  flex-shrink: 0;
+}
+
+.section-title > button {
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
 .section-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); margin-bottom: var(--s-2); }
 .section-title-row h3 { margin: 0; font-size: var(--fs-body-sm); }
 .section-title-row small { color: var(--ink-3); font-size: var(--fs-micro); }
@@ -3594,28 +3655,30 @@ a:focus-visible {
 
 .wallet-statement {
   display: grid;
-  gap: var(--s-2);
-  padding: var(--s-3);
+  padding: 0 var(--s-4);
   border-radius: var(--r-md);
   background: var(--surface-2);
 }
 
-.wallet-statement > div:first-child {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--s-3);
-}
-
-.wallet-statement small, .wallet-statement p {
+.wallet-statement p {
+  padding: var(--s-4) 0;
   color: var(--ink-3);
   font-size: var(--fs-caption);
 }
 
+/* One line per transaction: what it was over when it was, and what it did to
+   the balance on the right. A hairline between rows instead of a gap, so a
+   long list reads as a statement rather than as a stack of cards. */
 .wallet-statement-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2px var(--s-2);
-  font-size: var(--fs-body);
+  gap: 2px var(--s-3);
+  padding: var(--s-3) 0;
+  font-size: var(--fs-body-sm);
+}
+
+.wallet-statement-row + .wallet-statement-row {
+  border-top: 1px solid var(--line-soft);
 }
 
 .wallet-statement-row span {
@@ -3623,10 +3686,13 @@ a:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: var(--fw-semibold);
 }
 
 .wallet-statement-row small {
   grid-column: 1;
+  color: var(--ink-3);
+  font-size: var(--fs-micro);
 }
 
 .wallet-statement-row b {
@@ -3929,6 +3995,9 @@ button.entry-main {
   text-align: left;
   font-size: var(--fs-body);
   font-weight: var(--fw-semibold);
+  /* A wrapped menu item turns a 3-item menu into a wall of text over the
+     cards underneath it -- the menu grows sideways instead. */
+  white-space: nowrap;
 }
 
 .kebab-menu menu button:hover {
@@ -3937,6 +4006,10 @@ button.entry-main {
 
 .kebab-menu menu button:last-child {
   color: var(--danger);
+  margin-top: 4px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line-soft);
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
 }
 
 .debtor-page-list > .debtor-page-item:last-child .kebab-menu menu {

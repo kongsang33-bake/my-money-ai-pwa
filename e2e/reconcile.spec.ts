@@ -13,7 +13,7 @@ test.describe("reconcile", () => {
     await navigate(app, "wallets");
     const firstWallet = app.locator(".debtor-page-item").first();
     await firstWallet.locator("summary").click();
-    await firstWallet.locator(".kebab-menu button", { hasText: "ปรับยอดให้ตรงบัญชีจริง" }).click();
+    await firstWallet.locator(".kebab-menu button", { hasText: "ปรับยอดให้ตรง" }).click();
 
     const sheet = app.locator(".sheet-backdrop");
     // The sheet opens on the app's own figure, so there is nothing to correct

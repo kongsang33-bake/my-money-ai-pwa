@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft } from "lucide-react";
 import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toFiniteNumber, toMoneyAmount, normalizeBillingDay } from "@/lib/format";
 import { nextBillingInfo } from "@/lib/cycle";
@@ -30,7 +30,13 @@ export function WalletsView({
   onReconcile: (wallet: WalletDisplay) => void;
 }) {
   const total = wallets.reduce((sum, wallet) => sum + wallet.display_balance, 0);
+  // The one split worth making on a total: money that spends itself today
+  // (the cash tag, which is what Home's balance shows) against money that is
+  // deliberately somewhere else -- savings, the coin float, the rest.
+  const spendable = wallets.filter((wallet) => wallet.tag === "cash").reduce((sum, wallet) => sum + wallet.display_balance, 0);
+  const setAside = total - spendable;
   const [openWalletId, setOpenWalletId] = useState<string | null>(null);
+  const statementRef = useRef<HTMLElement | null>(null);
   const entriesByWallet = useMemo(() => {
     const map = new Map<string, Entry[]>();
     for (const entry of entries) {
@@ -56,15 +62,27 @@ export function WalletsView({
         </div>
         <button className="header-add-button" onClick={onAdd}>เพิ่ม</button>
       </div>
-      <section className="debtor-detail-card">
+      <section className="debtor-detail-card wallet-total-card">
         <span>ยอดรวมทุกกระเป๋า</span>
         <strong><CountUpMoney value={total} /></strong>
+        {setAside > 0 && (
+          <p className="wallet-total-split">
+            <span>ใช้ได้ตอนนี้ <b>{moneySign}{formatMoney(spendable)}</b></span>
+            <span>กันไว้ <b>{moneySign}{formatMoney(setAside)}</b></span>
+          </p>
+        )}
       </section>
       <div className="debtor-page-list">
         {wallets.map((wallet) => (
           <article className={`debtor-page-item ${openWalletId === wallet.id ? "active" : ""}`} key={wallet.id}>
             <i className="card-accent" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }} />
-            <button className="debtor-main-button" onClick={() => setOpenWalletId((current) => current === wallet.id ? null : wallet.id)}>
+            <button
+              className="debtor-main-button"
+              onClick={() => {
+                setOpenWalletId((current) => (current === wallet.id ? null : wallet.id));
+                requestAnimationFrame(() => statementRef.current?.scrollIntoView({ block: "nearest" }));
+              }}
+            >
               <span className="debtor-avatar" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>
                 <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} />
               </span>
@@ -79,7 +97,7 @@ export function WalletsView({
             <details className="kebab-menu" name="wallet-kebab">
               <summary>⋮</summary>
               <menu>
-                <button onClick={() => onReconcile(wallet)}>ปรับยอดให้ตรงบัญชีจริง</button>
+                <button onClick={() => onReconcile(wallet)}>ปรับยอดให้ตรง</button>
                 <button onClick={() => onEdit(wallet)}>แก้ไข</button>
                 <button onClick={() => onDelete(wallet)}>ลบ</button>
               </menu>
@@ -89,7 +107,7 @@ export function WalletsView({
         {!wallets.length && <EmptyNote glyph="▣" action={{ label: "เพิ่มกระเป๋า", onClick: onAdd }}>ยังไม่มีกระเป๋าตังค์ สร้างกองเงินแรกของคุณได้เลย</EmptyNote>}
       </div>
       {selectedWallet && (
-        <section className="wallet-statement-panel">
+        <section className="wallet-statement-panel" ref={statementRef}>
           <div className="section-title">
             <h2>รายการใน {selectedWallet.name}</h2>
             <button onClick={() => onEdit(selectedWallet)}>แก้ไขกระเป๋า</button>

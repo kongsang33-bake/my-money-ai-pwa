@@ -20,6 +20,36 @@ test.describe("wallets", () => {
     await expect(card.getByRole("button", { name: "ลบ" })).toBeVisible();
   });
 
+  test("splits the total into what is spendable and what is set aside", async ({ app }) => {
+    const total = app.locator(".wallet-total-card");
+    await expect(total).toContainText("ใช้ได้ตอนนี้");
+    await expect(total).toContainText("กันไว้");
+  });
+
+  test("keeps a section heading and its button on one line", async ({ app }) => {
+    // .section-title had no rule of its own, so the button under every one of
+    // these headings sat on a second line -- here, on Home's heatmap, on the
+    // debtor history.
+    await app.locator(".debtor-page-list .debtor-main-button").first().click();
+    const heading = app.locator(".wallet-statement-panel .section-title h2");
+    const action = app.locator(".wallet-statement-panel .section-title button");
+    const [headingBox, actionBox] = [await heading.boundingBox(), await action.boundingBox()];
+    const centre = (box: NonNullable<typeof headingBox>) => box.y + box.height / 2;
+    expect(Math.abs(centre(headingBox!) - centre(actionBox!))).toBeLessThan(6);
+    expect(actionBox!.x).toBeGreaterThan(headingBox!.x + headingBox!.width);
+  });
+
+  test("reads a wallet's history as a statement: what, when, and the amount", async ({ app }) => {
+    await app.locator(".debtor-page-list .debtor-main-button").first().click();
+    const row = app.locator(".wallet-statement-row").first();
+    const [title, date, amount] = [row.locator("span"), row.locator("small"), row.locator("b")];
+    const [titleBox, dateBox, amountBox] = [await title.boundingBox(), await date.boundingBox(), await amount.boundingBox()];
+    // Date under the title, not beside it -- the first row used to be laid out
+    // by a rule meant for a header that no longer exists.
+    expect(dateBox!.y).toBeGreaterThan(titleBox!.y + titleBox!.height - 2);
+    expect(amountBox!.x).toBeGreaterThan(titleBox!.x + titleBox!.width);
+  });
+
   // NOT tested here, deliberately: what the delete confirmation actually says.
   //
   // Every mutation in app/page.tsx opens with `if (!supabase) return`, and the
