@@ -5,7 +5,7 @@ import { ChevronLeft, TrendingDown, TrendingUp, Users, Wallet as WalletIcon } fr
 import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
 import { formatMoney, formatPercent, formatShortDate, formatSignedMoney, moneySign, toMoneyAmount } from "@/lib/format";
 import { shiftMonthKey } from "@/lib/cycle";
-import type { CashFlowSummary, UnpaidOwnDebt } from "@/lib/insights";
+import { spendingByDay, type CashFlowSummary, type UnpaidOwnDebt } from "@/lib/insights";
 import { categoryColor, categoryTint, nameColor } from "@/lib/category";
 import type { Entry, MoneyGoal, NetWorthDebtFormula, RecurringExpense } from "@/lib/types";
 import { CategoryIcon, WalletAvatarGlyph } from "@/components/shared";
@@ -30,15 +30,7 @@ export const CalendarHeatmap = memo(function CalendarHeatmap({
   defaultDay: string;
   onSelectDay: (day: string) => void;
 }) {
-  const dayTotals = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const entry of entries) {
-      if (entry.transaction_type === "transfer" || entry.wallet_impact >= 0) continue;
-      const key = new Date(entry.occurred_at).toDateString();
-      map.set(key, (map.get(key) ?? 0) + Math.abs(entry.wallet_impact));
-    }
-    return map;
-  }, [entries]);
+  const dayTotals = useMemo(() => spendingByDay(entries), [entries]);
 
   const days = useMemo(() => {
     const list: { key: string; date: Date; amount: number }[] = [];

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { lastSevenDayCashFlow, isRecurringLogged, unpaidOwnDebts } from "./insights.ts";
+import { lastSevenDayCashFlow, isRecurringLogged, spendingByDay, summarizeDayEntries, unpaidOwnDebts } from "./insights.ts";
 import type { Debtor, Entry, RecurringExpense } from "./types.ts";
 import type { TransactionType } from "./taxonomy.ts";
 import { MS_PER_DAY } from "./constants.ts";
@@ -72,6 +72,14 @@ describe("lastSevenDayCashFlow", () => {
   it("ignores transfers, which only move money between the user's own wallets", () => {
     const summary = lastSevenDayCashFlow([makeFlow(1, -500, "transfer"), makeFlow(1, -20)], anchor);
     assert.equal(summary.spend, 20);
+  });
+
+  it("ignores a balance adjustment, so correcting the app is not a spending week", () => {
+    // The card asks "am I spending more than usual?". A reconciliation is the
+    // app admitting its own figure was wrong, so it must not answer yes.
+    const summary = lastSevenDayCashFlow([makeFlow(1, -2179.96, "balance_adjustment"), makeFlow(1, -20)], anchor);
+    assert.equal(summary.spend, 20);
+    assert.equal(summary.days[6].income, 0);
   });
 
   it("reports a payday week as normal pace rather than as a windfall", () => {
@@ -167,5 +175,55 @@ describe("unpaidOwnDebts", () => {
     assert.equal(percent[0].minimum, 820);
     const instalment = unpaidOwnDebts([card("ผ่อน iPhone", { monthly_installment: 1031.55 })], balances, [], cycleRange);
     assert.equal(instalment[0].minimum, 1031.55);
+  });
+});
+
+describe("spendingByDay", () => {
+  it("totals what left the wallet on each day, keyed as the heatmap indexes it", () => {
+    const totals = spendingByDay([makeFlow(1, -50), makeFlow(1, -25), makeFlow(0, -10), makeFlow(0, 900, "income")]);
+    assert.equal(totals.get(new Date(dayBefore(1)).toDateString()), 75);
+    assert.equal(totals.get(new Date(dayBefore(0)).toDateString()), 10);
+  });
+
+  it("leaves out the three types that move a wallet without spending", () => {
+    const totals = spendingByDay([
+      makeFlow(0, -2179.96, "balance_adjustment"),
+      makeFlow(0, -500, "transfer"),
+      makeFlow(0, -1000, "investment_buy"),
+      makeFlow(0, -40),
+    ]);
+    assert.equal(totals.get(new Date(dayBefore(0)).toDateString()), 40);
+  });
+
+  it("has no key at all for a day that only holds an adjustment", () => {
+    // A day with nothing spent must stay an unlit cell, not a bucket-1 square.
+    const totals = spendingByDay([makeFlow(2, -2179.96, "balance_adjustment")]);
+    assert.equal(totals.size, 0);
+  });
+});
+
+describe("summarizeDayEntries", () => {
+  it("splits the day into what came in and what went out, with the largest expense", () => {
+    const summary = summarizeDayEntries([makeFlow(0, -50), makeFlow(0, -120), makeFlow(0, 900, "income")]);
+    assert.equal(summary.count, 3);
+    assert.equal(summary.income, 900);
+    assert.equal(summary.outflow, 170);
+    assert.equal(summary.top?.wallet_impact, -120);
+  });
+
+  it("counts an adjustment as a row but not as money spent", () => {
+    // The screen this feeds showed a reconciliation as both the day's entire
+    // outflow and its "largest transaction".
+    const summary = summarizeDayEntries([makeFlow(0, -2179.96, "balance_adjustment")]);
+    assert.equal(summary.count, 1);
+    assert.equal(summary.income, 0);
+    assert.equal(summary.outflow, 0);
+    assert.equal(summary.top, null);
+  });
+
+  it("keeps an upward adjustment out of the day's income", () => {
+    const summary = summarizeDayEntries([makeFlow(0, 300, "balance_adjustment"), makeFlow(0, 900, "income")]);
+    assert.equal(summary.count, 2);
+    assert.equal(summary.income, 900);
   });
 });

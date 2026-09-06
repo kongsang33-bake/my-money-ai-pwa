@@ -1,6 +1,7 @@
 // Home-screen insight builders: quick-add shortcuts derived from recent
 // history, the day-streak counter, the "how am I doing this cycle" wallet
-// blurb, and the 7-day spend-pace sparkline data.
+// blurb, the 7-day spend-pace sparkline data, and the two per-day roll-ups
+// the spending calendar and the day strip under it read from.
 import {
   CASH_FLOW_WINDOW_DAYS,
   MS_PER_DAY,
@@ -10,6 +11,7 @@ import {
 } from "./constants.ts";
 import { formatMoney, moneySign } from "./format.ts";
 import { daysRemainingInCycle, entriesInRange, startOfDay } from "./cycle.ts";
+import { countsAsEarnedOrSpent } from "./taxonomy.ts";
 import type { Debtor, Entry, QuickShortcut, RecurringExpense } from "./types.ts";
 
 export function deriveQuickShortcuts(entries: Entry[]): QuickShortcut[] {
@@ -156,7 +158,7 @@ export function lastSevenDayCashFlow(entries: Entry[], anchorDate: Date): CashFl
   let firstEntryDay = Infinity;
 
   for (const entry of entries) {
-    if (entry.transaction_type === "transfer") continue;
+    if (!countsAsEarnedOrSpent(entry.transaction_type)) continue;
     const day = startOfDay(new Date(entry.occurred_at));
     if (day < firstEntryDay) firstEntryDay = day;
     if (day >= windowStart && day <= today) {
@@ -204,4 +206,45 @@ export function lastSevenDayCashFlow(entries: Entry[], anchorDate: Date): CashFl
         : "steady";
 
   return { days, spend, income, avgDaily, baselineDaily, deltaPercent, tone };
+}
+
+/**
+ * How much was spent on each calendar day, keyed the way the heatmap indexes
+ * its cells (Date.toDateString()).
+ *
+ * Only money that actually left counts: an entry the wallet gained on, and
+ * anything countsAsEarnedOrSpent rejects, is not a darker square. A balance
+ * adjustment is the one that matters here -- correcting the app after counting
+ * real cash used to light up that day as the heaviest of the month and inflate
+ * the cycle total under the legend.
+ */
+export function spendingByDay(entries: Entry[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const entry of entries) {
+    if (!countsAsEarnedOrSpent(entry.transaction_type) || entry.wallet_impact >= 0) continue;
+    const key = new Date(entry.occurred_at).toDateString();
+    map.set(key, (map.get(key) ?? 0) + Math.abs(entry.wallet_impact));
+  }
+  return map;
+}
+
+export type DaySummary = { count: number; income: number; outflow: number; top: Entry | null };
+
+/**
+ * The strip above the day's list: how many rows it holds, what came in and
+ * went out, and the biggest single expense.
+ *
+ * `count` is every row, because it labels the list below it -- but the money
+ * figures pass through countsAsEarnedOrSpent first, so the same reconciliation
+ * row can be listed as history without being reported as the day's spending.
+ */
+export function summarizeDayEntries(entries: Entry[]): DaySummary {
+  const counted = entries.filter((entry) => countsAsEarnedOrSpent(entry.transaction_type));
+  const spent = counted.filter((entry) => entry.wallet_impact < 0);
+  return {
+    count: entries.length,
+    income: counted.filter((entry) => entry.wallet_impact > 0).reduce((sum, entry) => sum + entry.wallet_impact, 0),
+    outflow: spent.reduce((sum, entry) => sum + Math.abs(entry.wallet_impact), 0),
+    top: [...spent].sort((a, b) => Math.abs(b.wallet_impact) - Math.abs(a.wallet_impact))[0] ?? null,
+  };
 }

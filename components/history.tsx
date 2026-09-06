@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Search, SlidersHorizontal, Users, X } from "lucide-react";
 import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
 import { formatMoney, formatPercent, moneySign } from "@/lib/format";
+import { summarizeDayEntries } from "@/lib/insights";
 import { transactionTypeLabels, type TransactionType } from "@/lib/taxonomy";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { Entry, HistoryFilters } from "@/lib/types";
@@ -11,18 +12,13 @@ import { CategoryIcon } from "@/components/shared";
 import { EmptyNote, Metric, MonthField } from "@/components/primitives";
 
 export function HistoryInsight({ entries }: { entries: Entry[] }) {
-  const nonTransferEntries = entries.filter((entry) => entry.transaction_type !== "transfer");
-  const outflow = nonTransferEntries.filter((entry) => entry.wallet_impact < 0).reduce((sum, entry) => sum + Math.abs(entry.wallet_impact), 0);
-  const income = nonTransferEntries.filter((entry) => entry.wallet_impact > 0).reduce((sum, entry) => sum + entry.wallet_impact, 0);
-  const top = [...nonTransferEntries]
-    .filter((entry) => entry.wallet_impact < 0)
-    .sort((a, b) => Math.abs(b.wallet_impact) - Math.abs(a.wallet_impact))[0];
+  const { count, income, outflow, top } = summarizeDayEntries(entries);
 
   return (
     <section className="history-insight">
       <div>
         <span>มุมมองวันที่เลือก</span>
-        <b>{entries.length} รายการ</b>
+        <b>{count} รายการ</b>
       </div>
       <div>
         <span>เงินเข้า/ออก</span>

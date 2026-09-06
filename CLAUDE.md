@@ -213,10 +213,14 @@ new multi-row shape there, not in a second flatMap at the call site.
 finding the row that is missing, doubled or wrong. What must not happen is
 quietly editing the opening balance to paper over it: `balance_adjustment` is
 its own transaction type for that reason — one dated row carrying the
-difference, excluded from `totalWallet` and `categorySpendAmount` because
-nothing was earned or spent. It is also the one type the AI parser may not
-emit (`PARSEABLE_TRANSACTION_TYPES`), since it is something the user decides
-after counting real money, never something to infer from a sentence.
+difference, kept out of every earned/spent figure because nothing was earned
+or spent. Which types those are is `countsAsEarnedOrSpent` (`lib/taxonomy.ts`)
+and nothing may re-test it by hand: a filter that only skipped `transfer` is
+what let a reconciliation report itself as the day's biggest expense, on the
+calendar, the day strip, the 7-day pace and the "lent out" total at once. It
+is also the one type the AI parser may not emit
+(`PARSEABLE_TRANSACTION_TYPES`), since it is something the user decides after
+counting real money, never something to infer from a sentence.
 
 **The same person can sit in both debt books at once** — they got one round
 in, the user got the next — and settling up in real life is one transfer of

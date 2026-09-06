@@ -23,6 +23,17 @@ export const PARSEABLE_TRANSACTION_TYPES = TRANSACTION_TYPES.filter(
   (type) => type !== "balance_adjustment",
 );
 
+// A wallet moved, but nobody earned or spent anything: a transfer lands the
+// same money in another of the user's own wallets, an investment buy turns it
+// into units, and a balance adjustment is the app admitting its own figure was
+// wrong. Every "how much came in / went out" number has to skip all three --
+// monthly totals, category and budget spend, the spending calendar, the day
+// summary, the 7-day pace -- or a reconciliation the user made to *correct*
+// the app reads back as the biggest thing they spent money on that day.
+export function countsAsEarnedOrSpent(type: TransactionType): boolean {
+  return type !== "transfer" && type !== "investment_buy" && type !== "balance_adjustment";
+}
+
 export const CATEGORIES = ["อาหาร", "เดินทาง", "ของใช้", "ที่อยู่อาศัย", "สุขภาพ", "บันเทิง", "รายได้", "บิลประจำ", "อื่น ๆ"] as const;
 
 export type WalletTag = "cash" | "savings" | "other" | "petty";

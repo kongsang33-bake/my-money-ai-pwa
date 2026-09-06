@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   CATEGORIES, DEBT_TYPES, TRANSACTION_TYPES, TYPES_OWED_TO_USER, TYPES_USER_OWES,
-  transactionKind, transactionTypeLabels, walletTagHints, walletTagLabels,
+  countsAsEarnedOrSpent, transactionKind, transactionTypeLabels, walletTagHints, walletTagLabels,
 } from "./taxonomy.ts";
 
 const WALLET_TAGS = ["cash", "savings", "other", "petty"] as const;
@@ -94,5 +94,20 @@ describe("categories", () => {
     // "อื่น ๆ" is the fallback every unmatched category lands on.
     assert.ok(CATEGORIES.includes("รายได้"));
     assert.ok(CATEGORIES.includes("อื่น ๆ"));
+  });
+});
+
+describe("countsAsEarnedOrSpent", () => {
+  it("rejects the three types that move a wallet without earning or spending", () => {
+    assert.equal(countsAsEarnedOrSpent("transfer"), false);
+    assert.equal(countsAsEarnedOrSpent("investment_buy"), false);
+    assert.equal(countsAsEarnedOrSpent("balance_adjustment"), false);
+  });
+
+  it("accepts every other type, including the ones that only move a debt", () => {
+    for (const type of TRANSACTION_TYPES) {
+      if (type === "transfer" || type === "investment_buy" || type === "balance_adjustment") continue;
+      assert.equal(countsAsEarnedOrSpent(type), true, `${type} should count`);
+    }
   });
 });

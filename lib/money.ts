@@ -3,7 +3,7 @@
 // This is the highest-stakes logic in the app (get it wrong and balances
 // are wrong) so it's kept as pure, dependency-free functions that
 // lib/money.test.ts can exercise directly.
-import { TYPES_OWED_TO_USER, TYPES_USER_OWES, transactionKind, walletTagLabels, type TransactionType, type WalletTag } from "./taxonomy.ts";
+import { TYPES_OWED_TO_USER, TYPES_USER_OWES, countsAsEarnedOrSpent, transactionKind, walletTagLabels, type TransactionType, type WalletTag } from "./taxonomy.ts";
 import { formatMoney, moneySign, toFiniteNumber, toMoneyAmount } from "./format.ts";
 import { cycleBounds, entriesInRange, shiftMonthKey } from "./cycle.ts";
 import { MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE, RECEIPT_TOTAL_TOLERANCE } from "./constants.ts";
@@ -313,7 +313,7 @@ export function calculateImpacts(amount: number, transactionType: TransactionTyp
     // 163-baht dinner as 244.5 spent on food.
     return { wallet_impact: 0, debt_impact: amount, user_share: cardFunded ? 0 : amount, partner_share: 0 };
   }
-  if (transactionType === "transfer" || transactionType === "investment_buy" || transactionType === "balance_adjustment") {
+  if (!countsAsEarnedOrSpent(transactionType)) {
     return { wallet_impact: -amount, debt_impact: 0, user_share: 0, partner_share: 0 };
   }
   // personal_expense and gift. personal_expense reaches this as a card-funded
@@ -431,7 +431,7 @@ export function expandDraftForSave(draft: Draft, wallets: Wallet[]): Draft[] {
 }
 
 export function categorySpendAmount(entry: Entry): number | null {
-  if (entry.transaction_type === "transfer" || entry.transaction_type === "investment_buy" || entry.transaction_type === "balance_adjustment") return null;
+  if (!countsAsEarnedOrSpent(entry.transaction_type)) return null;
   if (entry.wallet_impact > 0 && entry.transaction_type !== "card_charge") return null;
   return entry.user_share > 0 ? entry.user_share : null;
 }
@@ -590,10 +590,7 @@ export function mapTransactionRow(row: {
 
 export function totalWallet(entries: Entry[], direction: EntryKind) {
   return entries
-    // Transfers move money between the user's own wallets, an investment buy
-    // turns it into units, and an adjustment is the app admitting it was
-    // wrong -- none of the three is money the month earned or spent.
-    .filter((entry) => entry.transaction_type !== "transfer" && entry.transaction_type !== "investment_buy" && entry.transaction_type !== "balance_adjustment" && (direction === "income" ? entry.wallet_impact > 0 : entry.wallet_impact < 0))
+    .filter((entry) => countsAsEarnedOrSpent(entry.transaction_type) && (direction === "income" ? entry.wallet_impact > 0 : entry.wallet_impact < 0))
     .reduce((sum, entry) => sum + entry.wallet_impact, 0);
 }
 

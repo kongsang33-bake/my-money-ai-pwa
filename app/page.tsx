@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import NextImage from "next/image";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-import { DEBT_TYPES, TYPES_OWED_TO_USER, TYPES_USER_OWES, walletTagLabels, type TransactionType, type WalletTag } from "@/lib/taxonomy";
+import { DEBT_TYPES, TYPES_OWED_TO_USER, TYPES_USER_OWES, countsAsEarnedOrSpent, walletTagLabels, type TransactionType, type WalletTag } from "@/lib/taxonomy";
 import type {
   AiFinanceContext,
   AiSuggestion,
@@ -1044,7 +1044,7 @@ export default function Home() {
   }, [discretionaryTopCategory, entries, selectedMonth, monthStartDay]);
   const monthlyLentOut = useMemo(
     () => monthlyEntries.reduce((sum, entry) => {
-      if (entry.transaction_type === "transfer" || entry.wallet_impact >= 0) return sum;
+      if (!countsAsEarnedOrSpent(entry.transaction_type) || entry.wallet_impact >= 0) return sum;
       return sum + (Math.abs(entry.wallet_impact) - (categorySpendAmount(entry) ?? 0));
     }, 0),
     [monthlyEntries],
@@ -1052,7 +1052,7 @@ export default function Home() {
   const incomeSummary = useMemo(() => {
     const map = new Map<string, number>();
     for (const entry of monthlyEntries) {
-      if (entry.transaction_type === "transfer" || entry.wallet_impact <= 0) continue;
+      if (!countsAsEarnedOrSpent(entry.transaction_type) || entry.wallet_impact <= 0) continue;
       map.set(entry.category, (map.get(entry.category) ?? 0) + entry.wallet_impact);
     }
     return [...map.entries()].map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount).slice(0, 4);
