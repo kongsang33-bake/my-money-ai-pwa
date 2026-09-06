@@ -916,9 +916,16 @@ export function draftRowCount(draft: Draft): number {
  */
 export function draftTotals(drafts: Draft[], wallets: Wallet[]) {
   const rows = drafts.flatMap((draft) => expandDraftForSave(draft, wallets));
+  const debtMoved = (types: TransactionType[]) =>
+    satang(rows.filter((row) => types.includes(row.transaction_type)).reduce((sum, row) => sum + row.debt_impact, 0));
   return {
     wallet: satang(rows.filter((row) => row.transaction_type !== "transfer").reduce((sum, row) => sum + row.wallet_impact, 0)),
-    debt: satang(rows.reduce((sum, row) => sum + row.debt_impact, 0)),
+    // Kept apart, because they are two different debts pointing in opposite
+    // directions: อ้อน owing 259 and the user owing อ้อน 389 do not add up to
+    // 648 of anything. Summed into one figure they made an evening that ended
+    // roughly square look like 518 of debt appearing out of nowhere.
+    receivable: debtMoved(TYPES_OWED_TO_USER),
+    payable: debtMoved(TYPES_USER_OWES),
   };
 }
 

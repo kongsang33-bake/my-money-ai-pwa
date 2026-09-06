@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from "@playwright/test";
+import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import { normalizeEntry } from "../lib/money.ts";
 import type { Draft, Entry, PreviewSeed } from "../lib/types.ts";
 
@@ -133,6 +133,11 @@ export async function waitForApp(page: Page) {
     const splash = document.getElementById("app-splash");
     return !splash || getComputedStyle(splash).display === "none" || getComputedStyle(splash).opacity === "0";
   }, undefined, { timeout: 15000 });
+  // The specs that assert on geometry (a heading and its button on one line, a
+  // date under its title rather than beside it) measure text laid out in IBM
+  // Plex Sans Thai. Measuring before the webfont swaps in reads fallback
+  // metrics, which is a flake, not a layout bug.
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
 }
 
 /**
@@ -146,6 +151,27 @@ export async function openApp(page: Page, seed: PreviewSeed) {
   }, seed as unknown as Record<string, unknown>);
   await page.goto("/");
   await waitForApp(page);
+}
+
+/**
+ * Waits until an element has stopped moving, before geometry is read off it.
+ *
+ * boundingBox() is one round-trip per element, so measuring a title in one
+ * call and the date under it in the next compares two different layouts while
+ * a panel is still sliding in -- which is why the statement spec failed only
+ * when all three viewports ran at once and the machine was slow enough for the
+ * animation to still be running.
+ */
+export async function waitForStableBox(locator: Locator) {
+  let previous = await locator.boundingBox();
+  await expect
+    .poll(async () => {
+      const current = await locator.boundingBox();
+      const settled = !!current && !!previous && current.x === previous.x && current.y === previous.y;
+      previous = current;
+      return settled;
+    })
+    .toBe(true);
 }
 
 /**

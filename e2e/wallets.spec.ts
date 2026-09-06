@@ -1,4 +1,4 @@
-import { test, expect, navigate } from "./fixture.ts";
+import { test, expect, navigate, waitForStableBox } from "./fixture.ts";
 
 test.describe("wallets", () => {
   test.beforeEach(async ({ app }) => {
@@ -33,6 +33,7 @@ test.describe("wallets", () => {
     await app.locator(".debtor-page-list .debtor-main-button").first().click();
     const heading = app.locator(".wallet-statement-panel .section-title h2");
     const action = app.locator(".wallet-statement-panel .section-title button");
+    await waitForStableBox(heading);
     const [headingBox, actionBox] = [await heading.boundingBox(), await action.boundingBox()];
     const centre = (box: NonNullable<typeof headingBox>) => box.y + box.height / 2;
     expect(Math.abs(centre(headingBox!) - centre(actionBox!))).toBeLessThan(6);
@@ -42,6 +43,7 @@ test.describe("wallets", () => {
   test("reads a wallet's history as a statement: what, when, and the amount", async ({ app }) => {
     await app.locator(".debtor-page-list .debtor-main-button").first().click();
     const row = app.locator(".wallet-statement-row").first();
+    await waitForStableBox(row);
     const [title, date, amount] = [row.locator("span"), row.locator("small"), row.locator("b")];
     const [titleBox, dateBox, amountBox] = [await title.boundingBox(), await date.boundingBox(), await amount.boundingBox()];
     // Date under the title, not beside it -- the first row used to be laid out

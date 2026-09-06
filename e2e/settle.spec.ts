@@ -37,7 +37,9 @@ test.describe("settling up", () => {
     await expect(page.locator(".draft-result .impact-row")).toContainText("อ้อน");
     const summary = page.locator("section .draft-impact").last();
     await expect(summary).toContainText("รวมทุกกระเป๋า +฿ 0");
-    await expect(summary).toContainText("ยอดหนี้ +฿ 389");
+    // The user's own tab, not someone else's: two books, never one number.
+    await expect(summary).toContainText("หนี้ของเรา +฿ 389");
+    await expect(summary).not.toContainText("ลูกหนี้");
   });
 
   test("keeps the wallet picker for an expense the user paid themselves", async ({ app }) => {

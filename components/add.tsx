@@ -534,15 +534,18 @@ export function SplitShareField({
 export function DraftImpact({ items, wallets }: { items: Draft[]; wallets: Wallet[] }) {
   // Totalled from the rows these drafts become, not from the drafts -- see
   // draftTotals. Memoised because expanding mints ids for the linked legs.
-  const { wallet, debt } = useMemo(() => draftTotals(items, wallets), [items, wallets]);
+  const { wallet, receivable, payable } = useMemo(() => draftTotals(items, wallets), [items, wallets]);
 
   return (
     <div className="draft-impact">
       <span>รวมทุกกระเป๋า {formatSignedMoney(wallet)}</span>
-      {/* Both books at once: what people owe the user and what the user owes.
-          Calling the sum "ลูกหนี้" was wrong the moment a row could put money
-          on the user's own tab. */}
-      <span>ยอดหนี้ {formatSignedMoney(debt)}</span>
+      {/* Two books, never one number: what people owe the user and what the
+          user owes are opposite directions, and adding them together produced
+          a figure that matched nothing on any screen. Each is shown only when
+          this batch actually moved it. */}
+      {receivable !== 0 && <span>ลูกหนี้ {formatSignedMoney(receivable)}</span>}
+      {payable !== 0 && <span>หนี้ของเรา {formatSignedMoney(payable)}</span>}
+      {receivable === 0 && payable === 0 && <span>ยอดหนี้ {formatSignedMoney(0)}</span>}
     </div>
   );
 }

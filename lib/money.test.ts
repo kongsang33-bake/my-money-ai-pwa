@@ -1361,7 +1361,7 @@ describe("draftTotals", () => {
     // because the zeroing belongs to the leg it becomes.
     const fronted = { ...base, funding_card_name: "อ้อน" };
     assert.equal(fronted.wallet_impact, -389);
-    assert.deepEqual(draftTotals([fronted], []), { wallet: 0, debt: 389 });
+    assert.deepEqual(draftTotals([fronted], []), { wallet: 0, receivable: 0, payable: 389 });
   });
 
   it("adds up an evening the way it will be saved", () => {
@@ -1374,10 +1374,17 @@ describe("draftTotals", () => {
       { ...base, id: "d4", amount: 130, transaction_type: "debt_payment" as const, debtor_name: "อ้อน", wallet_impact: -130 },
     ].map((draft) => normalizeEntry(draft, false) as Draft);
 
-    assert.equal(draftTotals(evening, []).wallet, -649);
+    const totals = draftTotals(evening, []);
+    assert.equal(totals.wallet, -649);
+    // The two books stay apart: friends end up owing 259.66 (อ้อน's share of
+    // the round the user paid, plus แบงค์'s 33 satang of rounding), the user
+    // ends up owing อ้อน 259. Added together they were reported as 518 of
+    // debt appearing out of an evening that ended roughly square.
+    assert.equal(totals.receivable, 259.66);
+    assert.equal(totals.payable, 259);
   });
 
   it("leaves a plain draft exactly as it is", () => {
-    assert.deepEqual(draftTotals([base], []), { wallet: -389, debt: 0 });
+    assert.deepEqual(draftTotals([base], []), { wallet: -389, receivable: 0, payable: 0 });
   });
 });
