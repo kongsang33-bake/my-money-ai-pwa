@@ -2699,7 +2699,7 @@ export default function Home() {
                     {draftMismatch && (
                       <StateCard tone="error" title="ยอดรวมไม่ตรงกับสลิป" detail={draftMismatch.detail} />
                     )}
-                    <DraftImpact items={drafts} />
+                    <DraftImpact items={drafts} wallets={wallets} />
                     {!!unfinishedTransfers.length && (
                       <p className="pin-hint">มีรายการโอนเงินที่ยังไม่ได้เลือกกระเป๋าปลายทาง</p>
                     )}

@@ -6,7 +6,7 @@ import { CATEGORY_DOT_TINT_ALPHA, MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE } from "@/l
 import { compressSlipImage } from "@/lib/image";
 import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
 import { todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
-import { CARD_FUNDABLE_TYPES, SHARED_EXPENSE_TYPES, defaultWalletId, draftSplitPins, entryDisplayImpact, isCardFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, splitDebtorNames, splitPinMismatch, splitSharesBetween, unnamedDebtor } from "@/lib/money";
+import { CARD_FUNDABLE_TYPES, SHARED_EXPENSE_TYPES, defaultWalletId, draftTotals, draftSplitPins, entryDisplayImpact, isCardFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, splitDebtorNames, splitPinMismatch, splitSharesBetween, unnamedDebtor } from "@/lib/money";
 import { DEBT_TYPES, TYPES_USER_OWES, transactionKind, transactionTypeLabels, type TransactionType } from "@/lib/taxonomy";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
@@ -430,10 +430,15 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
           </div>
         ) : fundingCard ? (
           // Two rows get written here, so the preview shows both: the charge
-          // that lands on the card, and the share that lands on the person.
+          // that lands on whoever paid, and the share that lands on the person
+          // it was split with -- when there is one. An expense someone else
+          // simply covered has no debtor of its own, and "ไม่ระบุ +฿ 0" is not
+          // a line worth printing.
           <div className="impact-row">
             <span>{fundingCard} {formatSignedMoney(draft.amount)}</span>
-            <span>{draft.debtor_name || "ลูกหนี้"} {formatSignedMoney(draft.debt_impact)}</span>
+            {draft.debt_impact !== 0
+              ? <span>{draft.debtor_name || "ลูกหนี้"} {formatSignedMoney(draft.debt_impact)}</span>
+              : <span>กระเป๋า {formatSignedMoney(0)}</span>}
           </div>
         ) : (
           <div className="impact-row">
@@ -526,14 +531,18 @@ export function SplitShareField({
   );
 }
 
-export function DraftImpact({ items }: { items: Draft[] }) {
-  const wallet = items.filter((item) => item.transaction_type !== "transfer").reduce((sum, item) => sum + item.wallet_impact, 0);
-  const debt = items.reduce((sum, item) => sum + item.debt_impact, 0);
+export function DraftImpact({ items, wallets }: { items: Draft[]; wallets: Wallet[] }) {
+  // Totalled from the rows these drafts become, not from the drafts -- see
+  // draftTotals. Memoised because expanding mints ids for the linked legs.
+  const { wallet, debt } = useMemo(() => draftTotals(items, wallets), [items, wallets]);
 
   return (
     <div className="draft-impact">
       <span>รวมทุกกระเป๋า {formatSignedMoney(wallet)}</span>
-      <span>ลูกหนี้ {formatSignedMoney(debt)}</span>
+      {/* Both books at once: what people owe the user and what the user owes.
+          Calling the sum "ลูกหนี้" was wrong the moment a row could put money
+          on the user's own tab. */}
+      <span>ยอดหนี้ {formatSignedMoney(debt)}</span>
     </div>
   );
 }

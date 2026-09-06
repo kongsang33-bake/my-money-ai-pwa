@@ -904,6 +904,24 @@ export function draftRowCount(draft: Draft): number {
   return names.length + (userShare > 0 ? 1 : 0) + card;
 }
 
+/**
+ * What the drafts will actually do to the wallet and to the debt books, read
+ * off the rows they expand into rather than off the drafts themselves.
+ *
+ * A draft is not its rows: one funded by a card or by the friend who paid
+ * still carries -amount on its own wallet_impact, because the zeroing belongs
+ * to the leg it becomes. Summing the drafts therefore reported money leaving a
+ * wallet that never paid -- 1,038 for an evening that cost 649 -- while the
+ * row's own preview, which does expand, said something else two lines above.
+ */
+export function draftTotals(drafts: Draft[], wallets: Wallet[]) {
+  const rows = drafts.flatMap((draft) => expandDraftForSave(draft, wallets));
+  return {
+    wallet: satang(rows.filter((row) => row.transaction_type !== "transfer").reduce((sum, row) => sum + row.wallet_impact, 0)),
+    debt: satang(rows.reduce((sum, row) => sum + row.debt_impact, 0)),
+  };
+}
+
 export function describeDraftSave(drafts: Draft[]): string {
   const rows = drafts.reduce((sum, draft) => sum + draftRowCount(draft), 0);
   // Splitting a bill between five people writes five rows from one reviewed

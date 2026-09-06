@@ -25,6 +25,21 @@ test.describe("settling up", () => {
     await expect(page.locator(".draft-grid-secondary select")).toHaveCount(0);
   });
 
+  test("does not count a funded expense as money leaving a wallet", async ({ page }) => {
+    await openApp(page, {
+      ...buildSeed(),
+      drafts: [seedDraft({ title: "ค่าเบียร์", amount: 389, transaction_type: "personal_expense", debtor_name: "", funding_card_name: "อ้อน" })],
+    });
+    await navigate(page, "add");
+
+    // The row's own preview and the total underneath it have to agree: อ้อน
+    // is owed 389 and no wallet paid anything.
+    await expect(page.locator(".draft-result .impact-row")).toContainText("อ้อน");
+    const summary = page.locator("section .draft-impact").last();
+    await expect(summary).toContainText("รวมทุกกระเป๋า +฿ 0");
+    await expect(summary).toContainText("ยอดหนี้ +฿ 389");
+  });
+
   test("keeps the wallet picker for an expense the user paid themselves", async ({ app }) => {
     await navigate(app, "add");
     // (No draft seeded here: the composer is what shows, and the point is

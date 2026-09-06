@@ -11,6 +11,7 @@ import {
   calculateImpacts,
   describeDraftSave,
   draftRowCount,
+  draftTotals,
   describeWalletDeletion,
   draftSaveTotal,
   expandDraftForSave,
@@ -1345,5 +1346,38 @@ describe("planDebtSettlement", () => {
 
   it("says what it is about to do", () => {
     assert.match(planDebtSettlement("อ้อน", 259.33, 389, ids, at).detail, /รับคืน.*จ่ายคืน.*สุทธิ/);
+  });
+});
+
+describe("draftTotals", () => {
+  const base: Draft = {
+    id: "d1", title: "ค่าเบียร์", category: "อาหาร", amount: 389, type: "expense",
+    transaction_type: "personal_expense", wallet_impact: -389, debt_impact: 0, user_share: 389,
+    partner_share: 0, debtor_name: "", occurred_at: "2026-09-05T12:00:00.000Z", wallet_id: "w1", note: null,
+  };
+
+  it("does not take money out of a wallet that never paid", () => {
+    // "โปรแรก 389, อ้อนออกก่อน": the draft still carries -389 of its own,
+    // because the zeroing belongs to the leg it becomes.
+    const fronted = { ...base, funding_card_name: "อ้อน" };
+    assert.equal(fronted.wallet_impact, -389);
+    assert.deepEqual(draftTotals([fronted], []), { wallet: 0, debt: 389 });
+  });
+
+  it("adds up an evening the way it will be saved", () => {
+    // 778 split three ways that the user paid, 389 that อ้อน paid, 259 back
+    // from แบงค์, 130 handed to อ้อน: 649 out of pocket, not 1,038.
+    const evening: Draft[] = [
+      { ...base, funding_card_name: "อ้อน" },
+      { ...base, id: "d2", amount: 778, transaction_type: "split_half" as const, debtor_name: "อ้อน, แบงค์", wallet_impact: -778 },
+      { ...base, id: "d3", amount: 259, transaction_type: "debt_repayment" as const, debtor_name: "แบงค์", wallet_impact: 259 },
+      { ...base, id: "d4", amount: 130, transaction_type: "debt_payment" as const, debtor_name: "อ้อน", wallet_impact: -130 },
+    ].map((draft) => normalizeEntry(draft, false) as Draft);
+
+    assert.equal(draftTotals(evening, []).wallet, -649);
+  });
+
+  it("leaves a plain draft exactly as it is", () => {
+    assert.deepEqual(draftTotals([base], []), { wallet: -389, debt: 0 });
   });
 });
