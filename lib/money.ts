@@ -25,15 +25,20 @@ import type {
 export const unnamedDebtor = "ไม่ระบุ";
 
 // The two expense types that put money on someone else's tab -- a split
-// partner, a borrower. Both can name several people and both can be paid with
-// a credit card instead of a wallet, which is what separates them from
-// personal spending (already its own types: personal_expense, card_charge).
+// partner, a borrower. Both can name several people, which is what separates
+// them from spending that is only the user's own.
 export const SHARED_EXPENSE_TYPES: TransactionType[] = ["split_half", "lend"];
+
+// ...and the types where the money can have come from somewhere other than a
+// wallet: a credit card, or the friend who got the round in. personal_expense
+// is here because "อ้อนออกให้ก่อน" is exactly that -- no wallet moved, the
+// user owes อ้อน, and the whole thing is still their own spending.
+export const CARD_FUNDABLE_TYPES: TransactionType[] = [...SHARED_EXPENSE_TYPES, "personal_expense"];
 
 // The types that can appear as a leg of a card-funded bill: the shared ones
 // above, the personal_expense that carries the user's own share of a bill
 // split between named people, and the card_charge leg carrying the charge.
-const CARD_FUNDED_LEG_TYPES: TransactionType[] = [...SHARED_EXPENSE_TYPES, "personal_expense", "card_charge"];
+const CARD_FUNDED_LEG_TYPES: TransactionType[] = [...CARD_FUNDABLE_TYPES, "card_charge"];
 
 /**
  * Is this row one leg of a card-funded split/lend?
@@ -362,9 +367,8 @@ export function matchDebtorName(names: string[], candidate: string | null | unde
 export function expandDraftForSave(draft: Draft, wallets: Wallet[]): Draft[] {
   if (draft.transaction_type === "transfer") return expandTransferDraft(draft, wallets);
 
-  const shareable = SHARED_EXPENSE_TYPES.includes(draft.transaction_type);
-  const card = shareable ? draft.funding_card_name?.trim() ?? "" : "";
-  const names = shareable ? splitDebtorNames(draft.debtor_name) : [];
+  const card = CARD_FUNDABLE_TYPES.includes(draft.transaction_type) ? draft.funding_card_name?.trim() ?? "" : "";
+  const names = SHARED_EXPENSE_TYPES.includes(draft.transaction_type) ? splitDebtorNames(draft.debtor_name) : [];
   const perPerson = names.length > 1;
   if (!card && !perPerson) return [draft];
 
@@ -379,7 +383,7 @@ export function expandDraftForSave(draft: Draft, wallets: Wallet[]): Draft[] {
     // once, on rows that would otherwise have no way to say it, and never
     // over a note the user wrote themselves.
     note: draft.note?.trim()
-      || (card ? `จ่ายด้วยบัตร ${card}` : null)
+      || (card ? `จ่ายด้วย ${card}` : null)
       || (perPerson ? `หารกัน ${names.length + (draft.transaction_type === "split_half" ? 1 : 0)} คน` : null),
     wallet_id: card ? null : draft.wallet_id,
     transfer_group_id: groupId,
@@ -784,6 +788,58 @@ export function balanceAdjustmentEntry(
   }, false);
 }
 
+export type DebtSettlement = { receivable: number; payable: number; net: number; detail: string; entries: Entry[] };
+
+/**
+ * Clearing everything with one person, both directions at once.
+ *
+ * The same name can sit in both books -- อ้อน got the first round in (the
+ * user owes her) while the user got the second (she owes him) -- and settling
+ * up in real life is one transfer of the difference. Two rows, not one:
+ * buildDebtSummary groups by name *within* a kind, so a single net payment
+ * would leave both balances standing. What moves is the difference; what the
+ * rows do is take each side to zero.
+ */
+export function planDebtSettlement(
+  name: string,
+  receivable: number,
+  payable: number,
+  ids: { receive: string; pay: string },
+  at: Date,
+): DebtSettlement {
+  const owedToUser = Math.max(0, satang(receivable));
+  const owedByUser = Math.max(0, satang(payable));
+  const occurred_at = at.toISOString();
+  const note = `เคลียร์ยอดกับ ${name}`;
+  const entries: Entry[] = [];
+
+  if (owedToUser > 0) {
+    entries.push(normalizeEntry({
+      id: ids.receive, title: `รับคืนจาก ${name}`, category: "อื่น ๆ", amount: owedToUser,
+      transaction_type: "debt_repayment", debtor_name: name, occurred_at, note,
+    }, false));
+  }
+  if (owedByUser > 0) {
+    entries.push(normalizeEntry({
+      id: ids.pay, title: `จ่ายคืน ${name}`, category: "อื่น ๆ", amount: owedByUser,
+      transaction_type: "debt_payment", debtor_name: name, occurred_at, note,
+    }, false));
+  }
+
+  const net = satang(owedToUser - owedByUser);
+  const detail = entries.length === 0
+    ? `ไม่มียอดค้างกับ ${name}`
+    : [
+        owedToUser > 0 ? `รับคืน ${moneySign}${formatMoney(owedToUser)}` : "",
+        owedByUser > 0 ? `จ่ายคืน ${moneySign}${formatMoney(owedByUser)}` : "",
+        entries.length === 2
+          ? `สุทธิ ${net >= 0 ? "ได้รับ" : "จ่ายออก"} ${moneySign}${formatMoney(Math.abs(net))}`
+          : "",
+      ].filter(Boolean).join(" · ");
+
+  return { receivable: owedToUser, payable: owedByUser, net, detail, entries };
+}
+
 /**
  * The entry a "log this bill now" tap creates from a recurring expense. Pure
  * apart from the id, which the caller supplies so a test can pin it.
@@ -841,9 +897,8 @@ export function draftSaveTotal(drafts: Draft[]): number {
  */
 export function draftRowCount(draft: Draft): number {
   if (draft.transaction_type === "transfer") return draft.transfer_to_wallet_id ? 2 : 1;
-  const shareable = SHARED_EXPENSE_TYPES.includes(draft.transaction_type);
-  const names = shareable ? splitDebtorNames(draft.debtor_name) : [];
-  const card = shareable && draft.funding_card_name?.trim() ? 1 : 0;
+  const names = SHARED_EXPENSE_TYPES.includes(draft.transaction_type) ? splitDebtorNames(draft.debtor_name) : [];
+  const card = CARD_FUNDABLE_TYPES.includes(draft.transaction_type) && draft.funding_card_name?.trim() ? 1 : 0;
   if (names.length < 2) return 1 + card;
   const { userShare } = splitSharesBetween(draft.amount, names, draft.transaction_type, draftSplitPins(draft));
   return names.length + (userShare > 0 ? 1 : 0) + card;

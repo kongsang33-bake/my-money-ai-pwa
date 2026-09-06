@@ -28,6 +28,7 @@ import {
   normalizeEntry,
   partnerShareForPeople,
   peopleFromPartnerShare,
+  planDebtSettlement,
   planEntryUpdate,
   receiptMismatch,
   recurringExpenseEntry,
@@ -862,7 +863,7 @@ describe("expandDraftForSave: a bill paid with a card", () => {
 
   it("leaves a draft that isn't card-funded alone", () => {
     assert.deepEqual(expandDraftForSave({ ...cardSplit, funding_card_name: null }, []), [{ ...cardSplit, funding_card_name: null }]);
-    assert.equal(expandDraftForSave({ ...cardSplit, transaction_type: "personal_expense" }, []).length, 1);
+    assert.equal(expandDraftForSave({ ...cardSplit, transaction_type: "gift" }, []).length, 1);
   });
 
   it("writes the charge to the card and the share to the person, and moves no wallet money", () => {
@@ -894,7 +895,7 @@ describe("expandDraftForSave: a bill paid with a card", () => {
   });
 
   it("says which card paid when the user left no note of their own", () => {
-    assert.equal(expandDraftForSave(cardSplit, [])[0].note, "จ่ายด้วยบัตร SPay");
+    assert.equal(expandDraftForSave(cardSplit, [])[0].note, "จ่ายด้วย SPay");
     assert.equal(expandDraftForSave({ ...cardSplit, note: "กับที่ทำงาน" }, [])[0].note, "กับที่ทำงาน");
   });
 
@@ -1269,5 +1270,80 @@ describe("balanceAdjustmentEntry", () => {
       occurred_at: entry.occurred_at, source_text: null, wallet_id: entry.wallet_id ?? null, note: entry.note ?? null,
     });
     assert.equal(row.wallet_impact, -2039.3);
+  });
+});
+
+describe("expandDraftForSave: an expense someone else fronted", () => {
+  // "โปรแรก 778 หาร 2 กับอ้อน (อ้อนออกก่อน)": the user's own 389, paid by
+  // อ้อน. No wallet moves, the user owes อ้อน, and it is still their spending.
+  const fronted: Draft = {
+    id: "d1", title: "ค่าเบียร์", category: "อาหาร", amount: 389, type: "expense",
+    transaction_type: "personal_expense", wallet_impact: -389, debt_impact: 0, user_share: 389,
+    partner_share: 0, debtor_name: "", occurred_at: "2026-09-05T12:00:00.000Z",
+    wallet_id: "w1", note: null, funding_card_name: "อ้อน",
+  };
+
+  it("owes the person instead of moving money", () => {
+    const [expense, funder] = expandDraftForSave(fronted, []);
+    assert.equal(expense.wallet_impact, 0);
+    assert.equal(expense.user_share, 389);
+    assert.equal(funder.transaction_type, "card_charge");
+    assert.equal(funder.debtor_name, "อ้อน");
+    assert.equal(funder.debt_impact, 389);
+    // ...and the round is counted once, not twice.
+    assert.equal(funder.user_share, 0);
+    assert.equal(expense.wallet_impact + funder.wallet_impact, 0);
+  });
+
+  it("goes back to a plain one-row expense without a funder", () => {
+    const rows = expandDraftForSave({ ...fronted, funding_card_name: null }, []);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].wallet_impact, -389);
+  });
+
+  it("counts as two rows in the confirmation", () => {
+    assert.equal(draftRowCount(fronted), 2);
+  });
+});
+
+describe("planDebtSettlement", () => {
+  const at = new Date("2026-09-05T12:00:00.000Z");
+  const ids = { receive: "r1", pay: "p1" };
+
+  it("takes both sides to zero and moves only the difference", () => {
+    // อ้อน got the first round in (the user owes 389), the user got the
+    // second (she owes 259.33): one 129.67 transfer settles it.
+    const plan = planDebtSettlement("อ้อน", 259.33, 389, ids, at);
+    assert.equal(plan.entries.length, 2);
+    // Rounded because adding two exact satang figures is still floating
+    // point; what matters is that the pair moves the difference and no more.
+    assert.equal(Math.round(plan.entries.reduce((sum, entry) => sum + entry.wallet_impact, 0) * 100) / 100, -129.67);
+    assert.equal(plan.net, -129.67);
+
+    const receive = plan.entries.find((entry) => entry.transaction_type === "debt_repayment")!;
+    const pay = plan.entries.find((entry) => entry.transaction_type === "debt_payment")!;
+    assert.equal(receive.debt_impact, -259.33);
+    assert.equal(pay.debt_impact, -389);
+    assert.equal(receive.debtor_name, "อ้อน");
+    assert.equal(pay.debtor_name, "อ้อน");
+  });
+
+  it("writes one row when only one side owes anything", () => {
+    assert.deepEqual(planDebtSettlement("เอก", 500, 0, ids, at).entries.map((entry) => entry.transaction_type), ["debt_repayment"]);
+    assert.deepEqual(planDebtSettlement("บัตร", 0, 800, ids, at).entries.map((entry) => entry.transaction_type), ["debt_payment"]);
+  });
+
+  it("writes nothing when there is nothing to settle", () => {
+    const plan = planDebtSettlement("เอก", 0, 0, ids, at);
+    assert.equal(plan.entries.length, 0);
+    assert.match(plan.detail, /ไม่มียอดค้าง/);
+  });
+
+  it("ignores a negative balance rather than paying it out", () => {
+    assert.equal(planDebtSettlement("เอก", -500, 0, ids, at).entries.length, 0);
+  });
+
+  it("says what it is about to do", () => {
+    assert.match(planDebtSettlement("อ้อน", 259.33, 389, ids, at).detail, /รับคืน.*จ่ายคืน.*สุทธิ/);
   });
 });

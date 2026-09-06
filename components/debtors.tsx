@@ -25,6 +25,7 @@ export function DebtorsView({
   onSelect,
   onEdit,
   onDelete,
+  onSettle,
 }: {
   debtors: Debtor[];
   entries: Entry[];
@@ -39,12 +40,21 @@ export function DebtorsView({
   onSelect: (debtor: Debtor) => void;
   onEdit: (debtor: Debtor) => void;
   onDelete: (debtor: Debtor) => void;
+  onSettle: (debtor: Debtor) => void;
 }) {
   const debtorEntries = selectedDebtor
     ? entries.filter((entry) => entry.debtor_name.trim().toLowerCase() === selectedDebtor.name.trim().toLowerCase() && entry.debt_impact !== 0)
     : [];
   const summary = activeKind === "own" ? payableSummary : receivableSummary;
-  const selectedAmount = selectedDebtor ? summary.find((item) => item.name.trim().toLowerCase() === selectedDebtor.name.trim().toLowerCase())?.amount ?? 0 : 0;
+  const balanceOf = (list: { name: string; amount: number }[], name: string) =>
+    list.find((item) => item.name.trim().toLowerCase() === name.trim().toLowerCase())?.amount ?? 0;
+  const selectedAmount = selectedDebtor ? balanceOf(summary, selectedDebtor.name) : 0;
+  // The same person can sit in both books at once -- they got one round in,
+  // the user got the next -- and settling up is one transfer of the
+  // difference rather than two payments.
+  const otherSideAmount = selectedDebtor
+    ? balanceOf(selectedDebtor.kind === "own" ? receivableSummary : payableSummary, selectedDebtor.name)
+    : 0;
 
   if (selectedDebtor) {
     return (
@@ -74,6 +84,16 @@ export function DebtorsView({
           )}
           {selectedDebtor.kind === "own" && !!selectedDebtor.credit_limit && (
             <CreditLimitMeter outstanding={selectedAmount} creditLimit={selectedDebtor.credit_limit} />
+          )}
+          {otherSideAmount > 0 && (
+            <p className="debtor-cross-balance">
+              {selectedDebtor.kind === "own" ? "และติดเราอยู่" : "และเราติดเขาอยู่"} {moneySign}{formatMoney(otherSideAmount)}
+            </p>
+          )}
+          {(selectedAmount > 0 || otherSideAmount > 0) && (
+            <button className="debtor-settle-button" onClick={() => onSettle(selectedDebtor)}>
+              เคลียร์ยอดกับ{selectedDebtor.name}
+            </button>
           )}
         </section>
         <DebtorStatementSummary entries={debtorEntries} kind={selectedDebtor.kind} />

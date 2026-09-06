@@ -39,7 +39,7 @@ import {
   buildPortfolioTrend,
   balanceAdjustmentEntry,
   buildTransactionCore,
-  SHARED_EXPENSE_TYPES,
+  CARD_FUNDABLE_TYPES,
   buildWalletLedger,
   calculateImpacts,
   categorySpendAmount,
@@ -54,6 +54,7 @@ import {
   matchDebtorName,
   mapTransactionRow,
   normalizeEntry,
+  planDebtSettlement,
   planEntryUpdate,
   recurringExpenseEntry,
   replaceEntry,
@@ -1204,8 +1205,15 @@ export default function Home() {
             // creates writes a debt onto that card's balance, and a card the
             // model invented would quietly open a debt against a name nobody
             // recognises.
-            const aiCard = SHARED_EXPENSE_TYPES.includes(item.transaction_type)
-              ? matchDebtorName(debtors.filter((debtor) => debtor.kind === "own").map((debtor) => debtor.name), item.paid_with_card)
+            // Who fronted this: a card the user has, or -- for "อ้อนออกให้
+            // ก่อน" -- a person they may never have owed before. An unknown
+            // name is kept rather than dropped, since the review row shows it
+            // as a new debt about to be created and is the place to correct
+            // it; dropping it silently put the money back on a wallet that
+            // never paid.
+            const proposedFunder = (item.paid_with_card ?? "").trim();
+            const aiCard = CARD_FUNDABLE_TYPES.includes(item.transaction_type) && proposedFunder
+              ? matchDebtorName(debtors.filter((debtor) => debtor.kind === "own").map((debtor) => debtor.name), proposedFunder) ?? proposedFunder
               : null;
             const aiDestWalletId = item.transfer_to_wallet_id && wallets.some((wallet) => wallet.id === item.transfer_to_wallet_id) ? item.transfer_to_wallet_id : null;
             const rememberedCategory = categoryMemory.get(item.title.trim().toLowerCase());
@@ -1628,6 +1636,49 @@ export default function Home() {
       action: { label: "ย้อนคืน", onClick: () => { void undoLoggedRecurring(inserted); } },
     });
     return true;
+  }
+
+  /**
+   * Takes both balances with one person to zero: what they owe comes back,
+   * what the user owes goes out, and the wallet moves by the difference --
+   * which is the one transfer that actually happened between them.
+   */
+  async function settleDebtor(debtor: Debtor) {
+    if (!supabase || !user) return;
+    const plan = planDebtSettlement(
+      debtor.name,
+      receivableSummary.find((item) => item.name.trim().toLowerCase() === debtor.name.trim().toLowerCase())?.amount ?? 0,
+      payableSummary.find((item) => item.name.trim().toLowerCase() === debtor.name.trim().toLowerCase())?.amount ?? 0,
+      { receive: crypto.randomUUID(), pay: crypto.randomUUID() },
+      new Date(),
+    );
+    if (!plan.entries.length) {
+      notify({ tone: "info", title: "ไม่มียอดค้าง", detail: plan.detail });
+      return;
+    }
+
+    const confirmed = await requestConfirm({
+      title: `เคลียร์ยอดกับ ${debtor.name}?`,
+      detail: plan.detail,
+      confirmLabel: "เคลียร์ยอด",
+      tone: "default",
+    });
+    if (!confirmed) return;
+
+    setBusy(true);
+    setError("");
+    const { data, error } = await supabase
+      .from(TABLES.transactions)
+      .insert(plan.entries.map((entry) => ({ id: entry.id, user_id: user.id, ...buildTransactionCore(entry, wallets) })))
+      .select(TRANSACTION_COLUMNS);
+    setBusy(false);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setEntries((current) => withEntries(current, (data ?? []).map(mapTransactionRow)));
+    notify({ tone: "success", title: "เคลียร์ยอดแล้ว", detail: plan.detail });
   }
 
   async function updateBudgets(next: Record<string, number>) {
@@ -2746,6 +2797,7 @@ export default function Home() {
             onSelect={(debtor) => setSelectedDebtor(debtor)}
             onEdit={openSheet((debtor: Debtor) => { setEditingDebtor(debtor); setDebtorSheetMode("edit"); })}
             onDelete={deleteDebtor}
+            onSettle={settleDebtor}
           />
         )}
 

@@ -6,7 +6,7 @@ import { CATEGORY_DOT_TINT_ALPHA, MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE } from "@/l
 import { compressSlipImage } from "@/lib/image";
 import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
 import { todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
-import { SHARED_EXPENSE_TYPES, defaultWalletId, draftSplitPins, entryDisplayImpact, isCardFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, splitDebtorNames, splitPinMismatch, splitSharesBetween, unnamedDebtor } from "@/lib/money";
+import { CARD_FUNDABLE_TYPES, SHARED_EXPENSE_TYPES, defaultWalletId, draftSplitPins, entryDisplayImpact, isCardFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, splitDebtorNames, splitPinMismatch, splitSharesBetween, unnamedDebtor } from "@/lib/money";
 import { DEBT_TYPES, TYPES_USER_OWES, transactionKind, transactionTypeLabels, type TransactionType } from "@/lib/taxonomy";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
@@ -177,9 +177,14 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
   // live in the debtors table (kind "own"), not in wallets, which is why the
   // wallet dropdown alone could not express "dinner split with จูน, paid on
   // SPay" -- the one thing this row could not say before.
-  const cards = knownDebtors.filter((debtor) => debtor.kind === "own");
-  const canPayWithCard = SHARED_EXPENSE_TYPES.includes(draft.transaction_type) && cards.length > 0;
+  const knownFunders = knownDebtors.filter((debtor) => debtor.kind === "own").map((debtor) => debtor.name);
+  const canPayWithCard = CARD_FUNDABLE_TYPES.includes(draft.transaction_type);
   const fundingCard = canPayWithCard ? draft.funding_card_name?.trim() || "" : "";
+  // A friend who got the round in is a funder the user has never had before,
+  // so the list has to be able to offer the name the AI just read out of the
+  // sentence -- otherwise the only way to pick it is to go and create the
+  // debt by hand first.
+  const funders = fundingCard && !knownFunders.includes(fundingCard) ? [...knownFunders, fundingCard] : knownFunders;
   const isSplit = draft.transaction_type === "split_half";
   // Several names in the one debtor field means one debt each, worked out at
   // save (expandDraftForSave). The headcount and the share are then the list's
@@ -349,7 +354,7 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
           onChange={(partner_share) => update({ partner_share })}
         />
       )}
-      {canPayWithCard && (
+      {canPayWithCard && !!funders.length && (
         <label className="draft-funding">
           จ่ายด้วย
           <div className="select-shell">
@@ -367,9 +372,9 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
                   <option key={wallet.id} value={`wallet:${wallet.id}`}>{wallet.name}</option>
                 ))}
               </optgroup>
-              <optgroup label="บัตรเครดิต / หนี้ของฉัน">
-                {cards.map((card) => (
-                  <option key={card.id} value={`card:${card.name}`}>{card.name}</option>
+              <optgroup label="บัตรเครดิต / คนที่ออกให้ก่อน">
+                {funders.map((name) => (
+                  <option key={name} value={`card:${name}`}>{knownFunders.includes(name) ? name : `${name} · ใหม่`}</option>
                 ))}
               </optgroup>
             </select>

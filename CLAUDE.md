@@ -196,7 +196,10 @@ shared location instead of typing the value inline.
 thing that turns drafts into rows, and three shapes become several: a
 transfer's two legs, a bill split between named people (one `lend` per name
 plus the user's own `personal_expense`, since `debtor_name` holds one person),
-and a bill paid with a credit card (the charge, plus whoever owes it). Who
+and a bill paid by something other than a wallet — a credit card, or the
+friend who got the round in (`CARD_FUNDABLE_TYPES`, which is why a plain
+`personal_expense` has a funding picker at all: "อ้อนออกให้ก่อน" moves no
+wallet money, owes อ้อน, and is still the user's own spending). Who
 pays what inside a split is `splitSharesBetween`: any slot — a person, or the
 user — can be pinned and the rest divide what is left, with the parts always
 adding back up to the bill. Only
@@ -214,6 +217,12 @@ difference, excluded from `totalWallet` and `categorySpendAmount` because
 nothing was earned or spent. It is also the one type the AI parser may not
 emit (`PARSEABLE_TRANSACTION_TYPES`), since it is something the user decides
 after counting real money, never something to infer from a sentence.
+
+**The same person can sit in both debt books at once** — they got one round
+in, the user got the next — and settling up in real life is one transfer of
+the difference. `planDebtSettlement` writes the two rows that take each side
+to zero rather than one net payment, because `buildDebtSummary` groups by name
+*within* a kind and a net row would leave both balances standing.
 
 **One row moves one debt balance.** `buildDebtSummary` groups by
 `debtor_name` and sums `debt_impact`, so a transaction that moves two of them

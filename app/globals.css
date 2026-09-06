@@ -559,6 +559,25 @@ a:focus-visible {
    actually spendable today. Sits under the number as a quiet caption row --
    the wallets themselves are listed right below, so this is a summary, not a
    second copy of the list. */
+/* The other side of the same person: what they owe when this screen is about
+   what the user owes, and the other way round. */
+.debtor-cross-balance {
+  margin-top: var(--s-2);
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+}
+
+.debtor-settle-button {
+  margin-top: var(--s-3);
+  padding: 10px var(--s-4);
+  border-radius: var(--r-full);
+  background: var(--primary);
+  color: var(--primary-text);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+  justify-self: start;
+}
+
 .wallet-total-split {
   display: flex;
   flex-wrap: wrap;

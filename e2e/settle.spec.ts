@@ -1,0 +1,44 @@
+import { test, expect, navigate, openApp, seedDraft, buildSeed } from "./fixture.ts";
+
+// Two halves of the same evening: an expense someone else fronted, and
+// clearing what is left between you afterwards.
+//
+// Nothing saves here (no Supabase), so these cover what the screens offer and
+// what they say they will write; planDebtSettlement's arithmetic and the rows
+// a fronted expense expands into are unit-tested.
+test.describe("settling up", () => {
+  test("lets a plain expense be funded by the person who got the round in", async ({ page }) => {
+    await openApp(page, {
+      ...buildSeed(),
+      drafts: [seedDraft({ title: "ค่าเบียร์", amount: 389, transaction_type: "personal_expense", debtor_name: "", funding_card_name: "อ้อน" })],
+    });
+    await navigate(page, "add");
+
+    // A funder the user has never owed before is still offered, and is marked
+    // as the new debt it is about to become.
+    const funding = page.locator(".draft-funding select");
+    await expect(funding).toContainText("อ้อน · ใหม่");
+    await expect(funding).toHaveValue("card:อ้อน");
+
+    // No wallet is paying, so the wallet picker steps aside.
+    await page.locator(".draft-details-toggle").click();
+    await expect(page.locator(".draft-grid-secondary select")).toHaveCount(0);
+  });
+
+  test("keeps the wallet picker for an expense the user paid themselves", async ({ app }) => {
+    await navigate(app, "add");
+    // (No draft seeded here: the composer is what shows, and the point is
+    // that the funding picker is not forced on every expense.)
+    await expect(app.locator(".draft-funding")).toHaveCount(0);
+  });
+
+  test("offers to clear both sides with one person", async ({ app }) => {
+    await app.evaluate(() => document.querySelectorAll<HTMLButtonElement>(".bottom-nav > button")[4].click());
+    await app.locator(".more-grid button", { hasText: "จัดการหนี้" }).click();
+    await app.locator(".debtor-page-list .debtor-main-button").first().click();
+
+    const settle = app.locator(".debtor-settle-button");
+    await expect(settle).toBeVisible();
+    await expect(settle).toContainText("เคลียร์ยอดกับ");
+  });
+});
