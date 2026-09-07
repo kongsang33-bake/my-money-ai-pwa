@@ -1754,8 +1754,13 @@ export default function Home() {
     return true;
   }
 
+  // Returns whether the PIN is actually stored now: the caller is what decides
+  // whether to leave the security screen, and a failure here is only ever
+  // reported through pinError -- navigating away regardless told the user they
+  // were protected when they were not, and stranded the error where nothing
+  // cleared it.
   async function savePin(pin: string, nextMode: PinMode = "unlocked") {
-    if (!supabase || !user || !isSixDigitPin(pin)) return;
+    if (!supabase || !user || !isSixDigitPin(pin)) return false;
     setBusy(true);
     setPinError("");
     const pin_salt = createPinSalt();
@@ -1775,13 +1780,15 @@ export default function Home() {
 
     if (error) {
       setPinError(error.message);
-    } else {
-      setProfile(data as Profile);
-      setPinMode(nextMode);
-      if (nextMode === "unlocked") await loadUserData(user.id);
-      notify({ tone: "success", title: "ตั้งรหัส PIN แล้ว", detail: "บัญชีนี้จะถาม PIN ก่อนเข้าใช้งาน" });
+      setBusy(false);
+      return false;
     }
+    setProfile(data as Profile);
+    setPinMode(nextMode);
+    if (nextMode === "unlocked") await loadUserData(user.id);
+    notify({ tone: "success", title: "ตั้งรหัส PIN แล้ว", detail: "บัญชีนี้จะถาม PIN ก่อนเข้าใช้งาน" });
     setBusy(false);
+    return true;
   }
 
   async function verifyPin(pin: string) {
@@ -1872,8 +1879,7 @@ export default function Home() {
   async function changePin(currentPin: string, nextPin: string) {
     const ok = await verifyPin(currentPin);
     if (!ok) return false;
-    await savePin(nextPin, "unlocked");
-    return true;
+    return savePin(nextPin, "unlocked");
   }
 
   async function disablePin(currentPin: string) {
@@ -2875,8 +2881,8 @@ export default function Home() {
             error={pinError}
             onBack={() => { setTab("home"); setPinError(""); }}
             onEnable={async (nextPin) => {
-              await savePin(nextPin, "unlocked");
-              setTab("home");
+              const ok = await savePin(nextPin, "unlocked");
+              if (ok) setTab("home");
             }}
             onChange={async (currentPin, nextPin) => {
               const ok = await changePin(currentPin, nextPin);
