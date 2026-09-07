@@ -55,6 +55,23 @@ test.describe("split review", () => {
     await expect(page.locator(".draft-result .impact-row")).toContainText("1,000");
   });
 
+  // A count in the teens has to be typed through "1", which is below
+  // MIN_SPLIT_PEOPLE and so not a headcount the field can commit -- it used to
+  // drop that keystroke, which left 10-19 reachable only by holding the
+  // stepper. fill() sets the value in one go and would not have caught it.
+  test("takes a headcount typed a digit at a time, through one that is too low", async ({ page }) => {
+    await openWithDraft(page, seedDraft({ amount: 1200 }));
+
+    const count = page.locator(".draft-split-people-count");
+    await count.fill("");
+    await count.pressSequentially("12");
+
+    // 1200 twelve ways: 100 each, 1100 owed back.
+    await expect(count).toHaveValue("12");
+    await expect(page.locator(".draft-split-share .amount-input")).toHaveValue("1100");
+    await expect(page.locator(".draft-split-summary")).toContainText("100");
+  });
+
   test("empties the headcount when the share is one the user typed", async ({ page }) => {
     await openWithDraft(page);
 

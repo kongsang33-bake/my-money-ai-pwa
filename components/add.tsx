@@ -485,6 +485,12 @@ export function SplitShareField({
   const people = peopleFromPartnerShare(amount, partnerShare);
   const name = debtorName && debtorName !== unnamedDebtor ? debtorName : "อีกฝ่าย";
   const setPeople = (next: number) => onChange(partnerShareForPeople(amount, next));
+  // The count on screen is derived from partner_share, so a keystroke that
+  // isn't a headcount yet has nowhere to live -- and "1" on the way to "12"
+  // is exactly that, which is why 10-19 could only be reached by holding the
+  // stepper. This parks the half-typed digits until they become a count worth
+  // committing; the steppers and blur hand the field back to the real value.
+  const [typing, setTyping] = useState<string | null>(null);
 
   return (
     <div className="draft-split-share">
@@ -493,7 +499,7 @@ export function SplitShareField({
         <span className="draft-split-stepper">
           <button
             type="button"
-            onClick={() => setPeople((people ?? MIN_SPLIT_PEOPLE) - 1)}
+            onClick={() => { setTyping(null); setPeople((people ?? MIN_SPLIT_PEOPLE) - 1); }}
             disabled={!!people && people <= MIN_SPLIT_PEOPLE}
             aria-label="ลดจำนวนคนที่หาร"
           >
@@ -502,17 +508,24 @@ export function SplitShareField({
           <input
             className="draft-split-people-count"
             inputMode="numeric"
-            value={people ?? ""}
+            value={typing ?? people ?? ""}
             placeholder="—"
             aria-label="จำนวนคนที่หารบิลนี้"
             onChange={(event) => {
-              const next = Number(event.target.value.replace(/\D/g, ""));
-              if (next >= MIN_SPLIT_PEOPLE) setPeople(Math.min(next, MAX_SPLIT_PEOPLE));
+              const digits = event.target.value.replace(/\D/g, "");
+              const next = Number(digits);
+              if (digits && next >= MIN_SPLIT_PEOPLE) {
+                setTyping(null);
+                setPeople(Math.min(next, MAX_SPLIT_PEOPLE));
+              } else {
+                setTyping(digits);
+              }
             }}
+            onBlur={() => setTyping(null)}
           />
           <button
             type="button"
-            onClick={() => setPeople((people ?? MIN_SPLIT_PEOPLE - 1) + 1)}
+            onClick={() => { setTyping(null); setPeople((people ?? MIN_SPLIT_PEOPLE - 1) + 1); }}
             disabled={!!people && people >= MAX_SPLIT_PEOPLE}
             aria-label="เพิ่มจำนวนคนที่หาร"
           >
