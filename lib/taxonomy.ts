@@ -68,6 +68,30 @@ export const transactionTypeLabels: Record<TransactionType, string> = {
   balance_adjustment: "ปรับยอดให้ตรงบัญชี",
 };
 
+// Neither of these can be typed into an entry form. The signed wallet_impact
+// that makes them mean anything is built somewhere else -- units and cost
+// basis on the portfolio screen for an investment buy, the difference between
+// the app's figure and the counted money on the wallet screen for an
+// adjustment (balanceAdjustmentEntry) -- and normalizeEntry takes that impact
+// as given rather than deriving it from the amount. Picked from a form there
+// is no impact to take, so the row shows an amount and moves nothing: ~700
+// on screen, zero out of the wallet, and filtered out of every total by
+// countsAsEarnedOrSpent. A row that already is one of these still names its
+// own type in the edit sheet, which is what `keepType` is for.
+export const FORM_ONLY_DERIVED_TYPES: TransactionType[] = ["investment_buy", "balance_adjustment"];
+
+export function isFormOnlyDerivedType(type: TransactionType): boolean {
+  return FORM_ONLY_DERIVED_TYPES.includes(type);
+}
+
+// The options a transaction-type <select> may offer, in label order. Pass the
+// row's existing type as `keepType` so an already-saved investment buy or
+// balance adjustment can still display itself.
+export function transactionTypeOptions(keepType?: TransactionType): [TransactionType, string][] {
+  return (Object.entries(transactionTypeLabels) as [TransactionType, string][])
+    .filter(([value]) => !isFormOnlyDerivedType(value) || value === keepType);
+}
+
 export const transactionKind: Record<TransactionType, EntryKind> = {
   income: "income",
   debt_repayment: "income",

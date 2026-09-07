@@ -2,7 +2,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   CATEGORIES, DEBT_TYPES, TRANSACTION_TYPES, TYPES_OWED_TO_USER, TYPES_USER_OWES,
-  countsAsEarnedOrSpent, transactionKind, transactionTypeLabels, walletTagHints, walletTagLabels,
+  countsAsEarnedOrSpent, transactionKind, transactionTypeLabels, transactionTypeOptions,
+  walletTagHints, walletTagLabels,
 } from "./taxonomy.ts";
 
 const WALLET_TAGS = ["cash", "savings", "other", "petty"] as const;
@@ -109,5 +110,29 @@ describe("countsAsEarnedOrSpent", () => {
       if (type === "transfer" || type === "investment_buy" || type === "balance_adjustment") continue;
       assert.equal(countsAsEarnedOrSpent(type), true, `${type} should count`);
     }
+  });
+});
+
+describe("transactionTypeOptions", () => {
+  it("offers no type whose wallet_impact a form cannot build", () => {
+    const offered = transactionTypeOptions().map(([value]) => value);
+    // Both would save an amount that moves nothing: normalizeEntry takes the
+    // impact as given for a balance adjustment, and a form has none to give.
+    assert.equal(offered.includes("balance_adjustment"), false);
+    assert.equal(offered.includes("investment_buy"), false);
+  });
+
+  it("offers everything else, labelled", () => {
+    const offered = transactionTypeOptions();
+    assert.equal(offered.length, TRANSACTION_TYPES.length - 2);
+    for (const [value, label] of offered) {
+      assert.equal(label, transactionTypeLabels[value]);
+    }
+  });
+
+  it("keeps the row's own type on the list so an existing row can name itself", () => {
+    const offered = transactionTypeOptions("balance_adjustment").map(([value]) => value);
+    assert.equal(offered.includes("balance_adjustment"), true);
+    assert.equal(offered.includes("investment_buy"), false);
   });
 });

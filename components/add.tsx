@@ -7,7 +7,7 @@ import { compressSlipImage } from "@/lib/image";
 import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
 import { todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
 import { CARD_FUNDABLE_TYPES, SHARED_EXPENSE_TYPES, defaultWalletId, draftTotals, draftSplitPins, entryDisplayImpact, isCardFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, splitDebtorNames, splitPinMismatch, splitSharesBetween, unnamedDebtor } from "@/lib/money";
-import { DEBT_TYPES, TYPES_USER_OWES, transactionKind, transactionTypeLabels, type TransactionType } from "@/lib/taxonomy";
+import { DEBT_TYPES, TYPES_USER_OWES, isFormOnlyDerivedType, transactionKind, transactionTypeLabels, transactionTypeOptions, type TransactionType } from "@/lib/taxonomy";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
 import { CategoryIcon, CategoryPicker } from "@/components/shared";
@@ -234,7 +234,7 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
         ชนิดรายการ
         <div className="select-shell">
           <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType, ambiguous: false })}>
-          {Object.entries(transactionTypeLabels).filter(([value]) => value !== "investment_buy").map(([value, label]) => (
+          {transactionTypeOptions().map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
@@ -740,7 +740,7 @@ export function ManualEntryForm({
           ชนิดรายการ
           <div className="select-shell">
             <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
-            {Object.entries(transactionTypeLabels).filter(([value]) => value !== "investment_buy").map(([value, label]) => (
+            {transactionTypeOptions().map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
@@ -881,6 +881,14 @@ export function EditSheet({
   const [destWalletId, setDestWalletId] = useState<string | null>(null);
   const wasTransfer = originalType === "transfer";
   const wasInvestmentBuy = originalType === "investment_buy";
+  // A reconciliation carries the difference it was written for in its
+  // wallet_impact, and normalizeEntry keeps that impact as given rather than
+  // re-deriving it from the amount (see balanceAdjustmentEntry). Editing the
+  // amount here would leave the row claiming one figure and moving another --
+  // the exact drift this type exists to correct -- so amount and type are
+  // locked together the way a transfer's are. Getting it wrong is fixed by
+  // deleting the row and reconciling the wallet again.
+  const wasBalanceAdjustment = originalType === "balance_adjustment";
   const isTransfer = entry.transaction_type === "transfer";
   const convertingToTransfer = isTransfer && !wasTransfer;
   const transferInvalid = convertingToTransfer && (!destWalletId || destWalletId === entry.wallet_id);
@@ -903,6 +911,7 @@ export function EditSheet({
 
       {wasTransfer && <p className="pin-hint">รายการโอนเงินแก้ไขได้เฉพาะชื่อ วันที่ และหมายเหตุ — ลบได้ทั้งสองฝั่งพร้อมกัน</p>}
       {cardFundedLeg && <p className="pin-hint">รายการนี้จ่ายด้วยบัตร จึงถูกบันทึกเป็นสองแถวคู่กัน (ยอดบนบัตร + ส่วนที่หารกัน) — ยอดเงินและชนิดรายการแก้ที่นี่ไม่ได้ ต้องลบแล้วบันทึกใหม่ ส่วนที่อีกฝ่ายคืนแก้ได้ตามปกติ</p>}
+      {wasBalanceAdjustment && <p className="pin-hint">รายการปรับยอดถือยอดส่วนต่างที่ทำให้กระเป๋าตรงกับเงินจริง จึงแก้จำนวนเงินและชนิดรายการที่นี่ไม่ได้ — ถ้ายอดยังไม่ตรง ให้ลบรายการนี้แล้วปรับยอดใหม่จากหน้ากระเป๋าเงิน</p>}
       {wasInvestmentBuy && <p className="pin-hint">รายการลงทุนแก้ไขได้เฉพาะชื่อ วันที่ และหมายเหตุ — ลบรายการนี้จะไม่ปรับหน่วย/ทุนในพอร์ตให้อัตโนมัติ ต้องไปแก้ในหน้าพอร์ตลงทุนเอง</p>}
       {convertingToTransfer && <p className="pin-hint">เลือกกระเป๋าปลายทางก่อนบันทึกเป็นรายการโอน</p>}
 
@@ -926,8 +935,8 @@ export function EditSheet({
       <label>
         ชนิดรายการ
         <div className="select-shell">
-          <select value={entry.transaction_type} disabled={wasTransfer || wasInvestmentBuy || cardFundedLeg} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
-          {Object.entries(transactionTypeLabels).filter(([value]) => value !== "investment_buy" || wasInvestmentBuy).map(([value, label]) => (
+          <select value={entry.transaction_type} disabled={isFormOnlyDerivedType(originalType) || wasTransfer || cardFundedLeg} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
+          {transactionTypeOptions(originalType).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
@@ -941,7 +950,7 @@ export function EditSheet({
         <AmountInput
           value={entry.amount}
           onChange={(amount) => update({ amount, partner_share: retargetPartnerShare(entry.amount, entry.partner_share, amount) })}
-          disabled={wasTransfer || cardFundedLeg}
+          disabled={wasTransfer || cardFundedLeg || wasBalanceAdjustment}
         />
       </label>
       {entry.transaction_type === "split_half" && (
