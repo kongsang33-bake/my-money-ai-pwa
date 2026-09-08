@@ -412,6 +412,12 @@ export function expandDraftForSave(draft: Draft, wallets: Wallet[]): Draft[] {
   if (perPerson) {
     const { shares, userShare } = splitSharesBetween(draft.amount, names, draft.transaction_type, draftSplitPins(draft));
     names.forEach((name, index) => {
+      // A pin can leave someone owing nothing -- "ผมออกเอง 1000" on a bill of
+      // 1000 named with three friends divides the rest between them, and the
+      // rest is zero. A 0-baht debt is not a debt: it would sit in the history
+      // saying nothing and have createMissingDebtors open a debtor record for
+      // someone who owes nothing. The parts still add up without it.
+      if (shares[index] === 0) return;
       legs.push(normalizeEntry({
         ...shared,
         id: `${draft.id}-${index}`,
@@ -446,7 +452,9 @@ export function expandDraftForSave(draft: Draft, wallets: Wallet[]): Draft[] {
       note: draft.note,
     }, false));
   }
-  return legs;
+  // Only reachable from a bill of zero, where every leg is zero: expanding it
+  // into no rows at all would drop the draft on save without saying so.
+  return legs.length ? legs : [draft];
 }
 
 export function categorySpendAmount(entry: Entry): number | null {
@@ -916,8 +924,11 @@ export function draftRowCount(draft: Draft): number {
   const names = SHARED_EXPENSE_TYPES.includes(draft.transaction_type) ? splitDebtorNames(draft.debtor_name) : [];
   const card = CARD_FUNDABLE_TYPES.includes(draft.transaction_type) && draft.funding_card_name?.trim() ? 1 : 0;
   if (names.length < 2) return 1 + card;
-  const { userShare } = splitSharesBetween(draft.amount, names, draft.transaction_type, draftSplitPins(draft));
-  return names.length + (userShare > 0 ? 1 : 0) + card;
+  const { shares, userShare } = splitSharesBetween(draft.amount, names, draft.transaction_type, draftSplitPins(draft));
+  // Same rule expandDraftForSave applies: a slot left at zero writes no row,
+  // and a draft that expands to nothing at all is still saved as itself.
+  const rows = shares.filter((share) => share > 0).length + (userShare > 0 ? 1 : 0);
+  return (rows || (card ? 0 : 1)) + card;
 }
 
 /**

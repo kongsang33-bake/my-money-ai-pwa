@@ -1418,3 +1418,35 @@ describe("retypedTo", () => {
     assert.equal(renamed.partner_share, 200);
   });
 });
+
+describe("expandDraftForSave: a slot left with nothing to owe", () => {
+  const party: Draft = {
+    id: "d1", title: "ค่าเบียร์", category: "อาหาร", amount: 1000, type: "expense",
+    transaction_type: "split_half", wallet_impact: -1000, debt_impact: 0, user_share: 1000,
+    partner_share: 0, debtor_name: "อ้อน, แบงค์, วิน", occurred_at: "2026-09-05T12:00:00.000Z",
+    wallet_id: "w1", note: null,
+  };
+
+  it("writes no row for someone a pin left owing zero", () => {
+    // "ผมออกเอง" on the whole bill: the parts still add up, so splitPinMismatch
+    // has nothing to complain about -- but three 0-baht debts would sit in the
+    // history saying nothing, and open three debtor records besides.
+    const rows = expandDraftForSave({ ...party, split_self_share: 1000 }, []);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].transaction_type, "personal_expense");
+    assert.equal(rows[0].amount, 1000);
+    assert.equal(draftRowCount({ ...party, split_self_share: 1000 }), 1);
+  });
+
+  it("keeps the people who do owe something", () => {
+    const rows = expandDraftForSave({ ...party, split_shares: [600, null, null], split_self_share: 400 }, []);
+    assert.deepEqual(rows.map((row) => [row.debtor_name, row.amount]), [["อ้อน", 600], ["", 400]]);
+    assert.equal(draftRowCount({ ...party, split_shares: [600, null, null], split_self_share: 400 }), 2);
+  });
+
+  it("still saves a bill of nothing as itself rather than dropping it", () => {
+    const rows = expandDraftForSave({ ...party, amount: 0 }, []);
+    assert.equal(rows.length, 1);
+    assert.equal(draftRowCount({ ...party, amount: 0 }), 1);
+  });
+});
