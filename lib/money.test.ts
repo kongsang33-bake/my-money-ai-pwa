@@ -35,6 +35,7 @@ import {
   recurringExpenseEntry,
   replaceEntry,
   retargetPartnerShare,
+  retypedTo,
   unnamedDebtor,
   walletDeletionMove,
   withEntries,
@@ -1386,5 +1387,34 @@ describe("draftTotals", () => {
 
   it("leaves a plain draft exactly as it is", () => {
     assert.deepEqual(draftTotals([base], []), { wallet: -389, receivable: 0, payable: 0 });
+  });
+});
+
+describe("retypedTo", () => {
+  const dinner = makeEntry({ amount: 300, title: "ข้าวเย็น", category: "อาหาร" });
+
+  it("splits a plain expense down the middle when it becomes a split", () => {
+    // partner_share is 0 on every non-split type, and 0 is a share the user
+    // could have chosen -- so carried across as-is it read as "จูน owes
+    // nothing" and saved the whole 300 as the user's own spending.
+    const split = normalizeEntry({ ...dinner, ...retypedTo("split_half"), debtor_name: "จูน" }, false);
+    assert.equal(split.partner_share, 150);
+    assert.equal(split.user_share, 150);
+    assert.equal(split.debt_impact, 150);
+    assert.equal(split.wallet_impact, -300);
+  });
+
+  it("does the same from the other side, where the partner owed all of it", () => {
+    const lent = normalizeEntry({ ...dinner, transaction_type: "lend", debtor_name: "จูน" }, false);
+    assert.equal(lent.partner_share, 300);
+    const split = normalizeEntry({ ...lent, ...retypedTo("split_half") }, false);
+    assert.equal(split.partner_share, 150);
+    assert.equal(split.user_share, 150);
+  });
+
+  it("leaves a share the user set alone while the type stays put", () => {
+    const split = normalizeEntry({ ...dinner, transaction_type: "split_half", partner_share: 200, debtor_name: "จูน" }, false);
+    const renamed = normalizeEntry({ ...split, title: "ข้าวเย็นกับจูน" }, false);
+    assert.equal(renamed.partner_share, 200);
   });
 });

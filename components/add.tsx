@@ -6,7 +6,7 @@ import { CATEGORY_DOT_TINT_ALPHA, MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE } from "@/l
 import { compressSlipImage } from "@/lib/image";
 import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
 import { todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
-import { CARD_FUNDABLE_TYPES, SHARED_EXPENSE_TYPES, defaultWalletId, draftTotals, draftSplitPins, entryDisplayImpact, isCardFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, splitDebtorNames, splitPinMismatch, splitSharesBetween, unnamedDebtor } from "@/lib/money";
+import { CARD_FUNDABLE_TYPES, SHARED_EXPENSE_TYPES, defaultWalletId, draftTotals, draftSplitPins, entryDisplayImpact, isCardFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, retypedTo, splitDebtorNames, splitPinMismatch, splitSharesBetween, unnamedDebtor } from "@/lib/money";
 import { DEBT_TYPES, TYPES_USER_OWES, isFormOnlyDerivedType, transactionKind, transactionTypeLabels, transactionTypeOptions, type TransactionType } from "@/lib/taxonomy";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
@@ -233,7 +233,7 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
       <label>
         ชนิดรายการ
         <div className="select-shell">
-          <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType, ambiguous: false })}>
+          <select value={draft.transaction_type} onChange={(event) => update({ ...retypedTo(event.target.value as TransactionType), ambiguous: false })}>
           {transactionTypeOptions().map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -742,8 +742,8 @@ export function ManualEntryForm({
   return (
     <div className="manual-entry-form">
       <div className="report-period-toggle entry-kind-toggle">
-        <button type="button" className={isExpense ? "active" : ""} onClick={() => update({ transaction_type: "personal_expense" })}>รายจ่าย</button>
-        <button type="button" className={!isExpense ? "active" : ""} onClick={() => update({ transaction_type: "income" })}>รายรับ</button>
+        <button type="button" className={isExpense ? "active" : ""} onClick={() => update(retypedTo("personal_expense"))}>รายจ่าย</button>
+        <button type="button" className={!isExpense ? "active" : ""} onClick={() => update(retypedTo("income"))}>รายรับ</button>
       </div>
       <button type="button" className="text-button entry-advanced-toggle" onClick={() => setAdvancedTypeOpen((current) => !current)}>
         {advancedTypeOpen ? "ซ่อนตัวเลือกเพิ่มเติม" : "รายการพิเศษ (ออกให้ก่อน, หารร่วม, ผ่อนหนี้, โอนเงิน ฯลฯ)"}
@@ -752,7 +752,7 @@ export function ManualEntryForm({
         <label>
           ชนิดรายการ
           <div className="select-shell">
-            <select value={draft.transaction_type} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
+            <select value={draft.transaction_type} onChange={(event) => update(retypedTo(event.target.value as TransactionType))}>
             {transactionTypeOptions().map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -948,7 +948,7 @@ export function EditSheet({
       <label>
         ชนิดรายการ
         <div className="select-shell">
-          <select value={entry.transaction_type} disabled={isFormOnlyDerivedType(originalType) || wasTransfer || cardFundedLeg} onChange={(event) => update({ transaction_type: event.target.value as TransactionType })}>
+          <select value={entry.transaction_type} disabled={isFormOnlyDerivedType(originalType) || wasTransfer || cardFundedLeg} onChange={(event) => update(retypedTo(event.target.value as TransactionType))}>
           {transactionTypeOptions(originalType).map(([value, label]) => (
             <option key={value} value={value}>
               {label}

@@ -235,6 +235,25 @@ export function partnerShareOf(amount: number, partnerShare?: number | null) {
 }
 
 /**
+ * Changing a row's transaction type, without carrying the old type's share
+ * into the new one.
+ *
+ * partner_share only means something on a split, and every other type stores 0
+ * there. Retyping a plain expense to split_half therefore reached
+ * partnerShareOf with 0 -- which reads as "they owe nothing", not "nobody has
+ * said yet" -- and saved a 300-baht dinner as 300 of the user's own spending
+ * with จูน owing none of it. A lend retyped the same way carried
+ * partner_share = amount and made them owe the whole bill. Neither is
+ * visible: the manual form has no share box at all.
+ *
+ * Clearing it hands the row back to the even split partnerShareOf falls back
+ * to, which is what the share box shows and what the user can then change.
+ */
+export function retypedTo(transaction_type: TransactionType): { transaction_type: TransactionType; partner_share: undefined } {
+  return { transaction_type, partner_share: undefined };
+}
+
+/**
  * What the others owe back when a bill is split evenly between `people` (the
  * user included) and the user paid all of it: everything but their own share.
  *
