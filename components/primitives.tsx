@@ -61,6 +61,31 @@ export const ElapsedSeconds = memo(function ElapsedSeconds() {
   return <>{seconds}</>;
 });
 
+/**
+ * The "what does this number even mean" affordance next to a piece of the
+ * app's own vocabulary -- เงินพร้อมใช้สุทธิ, อัตราเงินเหลือ, มูลค่าสุทธิ.
+ * Every one of those is obvious once someone tells you, and nothing in the
+ * app ever did.
+ *
+ * Built on <details> rather than component state on purpose: it sits inside
+ * cards that re-render on every data change (the hero counts up on each
+ * save), and a <details> keeps its own open/closed state in the DOM, so an
+ * explanation left open does not snap shut under it.
+ */
+export function InfoHint({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <details className="info-hint">
+      <summary aria-label={`${label} คืออะไร`} title={`${label} คืออะไร`}>
+        <Info aria-hidden="true" />
+      </summary>
+      {/* A <span>, not a <p>: these hints sit inside label <span>s (the hero
+          caption, the insight-tile labels), where a block element would be
+          invalid nesting. The CSS makes it a block. */}
+      <span>{children}</span>
+    </details>
+  );
+}
+
 export function EmptyNote({ glyph, children, action }: { glyph: string; children: React.ReactNode; action?: EmptyAction }) {
   return (
     <div className="empty-note">

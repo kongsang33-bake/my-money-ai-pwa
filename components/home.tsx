@@ -5,11 +5,11 @@ import { ChevronLeft, TrendingDown, TrendingUp, Users, Wallet as WalletIcon } fr
 import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
 import { formatMoney, formatPercent, formatShortDate, formatSignedMoney, moneySign, toMoneyAmount } from "@/lib/format";
 import { shiftMonthKey } from "@/lib/cycle";
-import { spendingByDay, type CashFlowSummary, type UnpaidOwnDebt } from "@/lib/insights";
+import { spendingByDay, type CashFlowSummary, type SetupStep, type UnpaidOwnDebt } from "@/lib/insights";
 import { categoryColor, categoryTint, nameColor } from "@/lib/category";
 import type { Entry, MoneyGoal, NetWorthDebtFormula, RecurringExpense } from "@/lib/types";
 import { CategoryIcon, WalletAvatarGlyph } from "@/components/shared";
-import { CountUpMoney, DateField, EmptyNote, MonthField, SheetFrame, SkeletonList, decimalInputPattern } from "@/components/primitives";
+import { CountUpMoney, DateField, EmptyNote, InfoHint, MonthField, SheetFrame, SkeletonList, decimalInputPattern } from "@/components/primitives";
 
 export const CalendarHeatmap = memo(function CalendarHeatmap({
   start,
@@ -124,7 +124,16 @@ export function HeroWalletCard({
   return (
     <div className={`wallet-card primary-wallet hero-wallet hero-${insight.tone}`}>
       <div className="hero-wallet-top">
-        <span>เงินพร้อมใช้สุทธิ</span>
+        {/* The hint is a sibling of the label, not a child: the label carries
+            an opacity, and opacity makes a group whose alpha every descendant
+            inherits and none can undo -- which washed the popover out. Same
+            reason for the insight tiles below. */}
+        <div className="insight-label">
+          <span>เงินพร้อมใช้สุทธิ</span>
+          <InfoHint label="เงินพร้อมใช้สุทธิ">
+            ยอดรวมของกระเป๋าประเภท &ldquo;เงินใช้จ่าย&rdquo; ตามที่จดไว้ ไม่รวมเงินที่กันไว้ในกระเป๋าออม และไม่รวมหนี้
+          </InfoHint>
+        </div>
         <em>{insight.label}</em>
       </div>
       {streak >= 2 && (
@@ -167,17 +176,27 @@ export function HomeInsightGrid({
   return (
     <section className={`home-insight-wrap ${hideNetWorthCard ? "two-up" : ""}`} aria-label="ภาพรวมทรัพย์สิน">
       <div className={`home-insight-card savings-rate ${savingsPositive ? "income" : "expense"}`}>
-        <span>
-          <i className={`home-insight-icon ${savingsPositive ? "income" : "expense"}`}>
-            {savingsPositive ? <TrendingUp size={13} strokeWidth={2.25} aria-hidden="true" /> : <TrendingDown size={13} strokeWidth={2.25} aria-hidden="true" />}
-          </i>
-          อัตราเงินเหลือ
-        </span>
+        <div className="insight-label">
+          <span>
+            <i className={`home-insight-icon ${savingsPositive ? "income" : "expense"}`}>
+              {savingsPositive ? <TrendingUp size={13} strokeWidth={2.25} aria-hidden="true" /> : <TrendingDown size={13} strokeWidth={2.25} aria-hidden="true" />}
+            </i>
+            อัตราเงินเหลือ
+          </span>
+          <InfoHint label="อัตราเงินเหลือ">
+            รายรับลบรายจ่ายในรอบนี้ คิดเป็นกี่เปอร์เซ็นต์ของรายรับ · ยิ่งสูงยิ่งเหลือเก็บมาก ติดลบคือใช้เกินที่หาได้
+          </InfoHint>
+        </div>
         <strong>{Number.isFinite(savingsRate) ? formatPercent(savingsRate) : "0%"}</strong>
         <small>เทียบกับรายรับในรอบนี้</small>
       </div>
       <div className="home-insight-card obligation">
-        <span><i className="home-insight-icon neutral"><Users size={13} strokeWidth={2.25} aria-hidden="true" /></i>ภาระหนี้เดือนนี้</span>
+        <div className="insight-label">
+          <span><i className="home-insight-icon neutral"><Users size={13} strokeWidth={2.25} aria-hidden="true" /></i>ภาระหนี้เดือนนี้</span>
+          <InfoHint label="ภาระหนี้เดือนนี้">
+            เงินที่ต้องจ่ายคืนในรอบนี้จากหนี้ของคุณเอง เช่น ค่างวด หรือขั้นต่ำของบัตร ไม่ใช่ยอดหนี้ทั้งก้อน
+          </InfoHint>
+        </div>
         <strong>{moneySign}{formatMoney(monthlyObligationTotal)}</strong>
         <small>
           จากหนี้คงเหลือรวม {moneySign}{formatMoney(payableTotal)}
@@ -186,7 +205,12 @@ export function HomeInsightGrid({
       </div>
       {!hideNetWorthCard && (
         <div className={`home-insight-card net-worth ${netWorthTone}`}>
-          <span><i className="home-insight-icon neutral"><WalletIcon size={13} strokeWidth={2.25} aria-hidden="true" /></i>มูลค่าสุทธิ</span>
+          <div className="insight-label">
+            <span><i className="home-insight-icon neutral"><WalletIcon size={13} strokeWidth={2.25} aria-hidden="true" /></i>มูลค่าสุทธิ</span>
+            <InfoHint label="มูลค่าสุทธิ">
+              เงินในกระเป๋าทั้งหมด บวกเงินที่คนอื่นติดคุณ บวกพอร์ตลงทุน ลบหนี้ที่คุณติดคนอื่น · ตัวเลขใหญ่คือเปลี่ยนไปเท่าไหร่จากเดือนก่อน
+            </InfoHint>
+          </div>
           <strong>{formatSignedMoney(netWorthDelta)}</strong>
           <small>
             ปัจจุบัน {formatSignedMoney(netWorth)} · {netWorthFormula === "obligation" ? "หักเฉพาะภาระเดือนนี้" : "หักหนี้เต็มจำนวน"}
@@ -361,7 +385,7 @@ export function GoalsView({
         {goals.map((goal) => (
           <GoalItem key={goal.id} goal={goal} onDelete={onDelete} />
         ))}
-        {!goals.length && <EmptyNote glyph="●" action={{ label: "สร้างเป้าหมาย", onClick: onAdd }}>ตั้งเป้าหมายแรก แล้วติดตามความคืบหน้าได้จากที่นี่</EmptyNote>}
+        {!goals.length && <EmptyNote glyph="●" action={{ label: "สร้างเป้าหมาย", onClick: onAdd }}>ตั้งก้อนเงินที่อยากเก็บให้ได้ เช่น เงินฉุกเฉิน หรือทริปที่วางไว้ · ใส่ยอดเป้าหมายแล้วแอพจะคิดความคืบหน้าให้</EmptyNote>}
       </div>
     </div>
   );
@@ -513,27 +537,83 @@ export function SpendingPersonalityCard({
   );
 }
 
-export function FirstRunHomeState({
-  onCreateWallet,
-  onSetBudget,
-  onAddEntry,
+/**
+ * What a new account sees where a seasoned one sees its numbers: the four
+ * things that still need doing, in order, with the next one as the only
+ * button that looks like a button.
+ *
+ * It replaced FirstRunHomeState, which offered the same three jobs as three
+ * equal buttons at the very bottom of Home -- under every analysis card, so
+ * you scrolled past five empty ฿0 tiles to reach the only thing on the screen
+ * that could do anything. This sits directly under the hero, and the steps
+ * tick themselves off (buildSetupChecklist) rather than being dismissed.
+ */
+export function HomeStartChecklist({
+  steps,
+  remaining,
+  waitingForInsights,
+  onStep,
+  onHide,
 }: {
-  onCreateWallet: () => void;
-  onSetBudget: () => void;
-  onAddEntry: () => void;
+  steps: SetupStep[];
+  remaining: number;
+  waitingForInsights: boolean;
+  onStep: (key: SetupStep["key"]) => void;
+  onHide: () => void;
 }) {
+  const next = steps.find((step) => !step.done) ?? null;
+  const done = steps.length - remaining;
+
   return (
-    <section className="first-run-card">
-      <span className="empty-glyph" aria-hidden="true">฿</span>
+    <section className="start-checklist" aria-label="ขั้นตอนเริ่มต้นใช้งาน">
+      <div className="start-checklist-head">
+        <div>
+          <p className="eyebrow">เริ่มต้นใช้งาน</p>
+          <h2>ทำอีก {remaining} ขั้น</h2>
+        </div>
+        <button className="text-button" onClick={onHide}>ซ่อน</button>
+      </div>
+      <div className="start-checklist-progress" role="progressbar" aria-valuenow={done} aria-valuemin={0} aria-valuemax={steps.length}>
+        <i style={{ width: `${(done / steps.length) * 100}%` }} />
+      </div>
+      <ol className="start-checklist-steps">
+        {steps.map((step) => (
+          <li key={step.key} className={step.done ? "done" : ""}>
+            <span className="start-checklist-mark" aria-hidden="true">{step.done ? "✓" : "○"}</span>
+            <span>
+              <b>{step.label}</b>
+              <small>{step.detail}</small>
+            </span>
+            {!step.done && step.key !== next?.key && (
+              <button className="text-button" onClick={() => onStep(step.key)}>{step.action}</button>
+            )}
+          </li>
+        ))}
+      </ol>
+      {next && <button className="save" onClick={() => onStep(next.key)}>{next.action}</button>}
+      {waitingForInsights && (
+        <p className="start-checklist-note">จดสัก 3 รายการ แล้วการ์ดวิเคราะห์ (อัตราเงินเหลือ ภาระหนี้ กราฟใช้จ่าย) จะขึ้นให้เอง</p>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The one thing that makes the app look broken rather than empty: entries
+ * saved while no wallet exists get wallet_id null (buildTransactionCore ->
+ * defaultWalletId), and buildWalletLedger has no wallet to put them on, so
+ * the balance stays at zero however much has been jotted. Creating any wallet
+ * fixes it retroactively -- the ledger already falls back to the default
+ * wallet for a null wallet_id -- so this says exactly that.
+ */
+export function MissingWalletNotice({ entryCount, onCreateWallet }: { entryCount: number; onCreateWallet: () => void }) {
+  return (
+    <section className="missing-wallet-notice">
       <div>
-        <b>เริ่มจัดการเงินก้อนแรก</b>
-        <small>สร้างกระเป๋า ใส่ยอดตั้งต้น แล้วลองจดรายการแรกเพื่อให้แดชบอร์ดมีข้อมูลจริง</small>
+        <b>ยอดเงินยังไม่ขยับ เพราะยังไม่มีกระเป๋า</b>
+        <small>{entryCount} รายการที่จดไว้ยังไม่ถูกนับเข้ายอดเงิน · สร้างกระเป๋าแล้วใส่ยอดที่มีอยู่จริง รายการเก่าจะถูกนับให้ย้อนหลังทันที</small>
       </div>
-      <div className="first-run-actions">
-        <button onClick={onCreateWallet}>สร้างกระเป๋า</button>
-        <button onClick={onSetBudget}>ตั้งงบ</button>
-        <button onClick={onAddEntry}>จดรายการแรก</button>
-      </div>
+      <button onClick={onCreateWallet}>สร้างกระเป๋า</button>
     </section>
   );
 }

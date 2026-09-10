@@ -38,21 +38,35 @@ test.describe("navigation", () => {
   });
 
 
-  // Every side-menu entry is a screen you navigate to, not a sheet that opens
-  // over the tab you were on: it gets a back button, keeps the bottom nav
-  // live, and does not scroll-lock the page behind it.
+  // Every menu entry is a screen you navigate to, not a sheet that opens over
+  // the tab you were on: it gets a back button, keeps the bottom nav live,
+  // and does not scroll-lock the page behind it.
+  //
+  // Which menu it is reached from is the second thing checked here. งบประมาณ,
+  // ถาม AI and ส่งออกรีพอร์ท are money features and live under the nav's
+  // "อื่น ๆ" with the rest of them; the drawer holds the account and nothing
+  // else. They used to be split down no line at all.
   const MENU_SCREENS = [
-    { label: "งบประมาณ", heading: "งบประมาณต่อเดือน" },
-    { label: "ถาม AI เรื่องเงิน", heading: "ถาม AI เรื่องเงิน" },
-    { label: "ส่งออกรีพอร์ท", heading: "รีพอร์ท Excel / Sheets" },
-    { label: "จัดการโปรไฟล์", heading: "จัดการโปรไฟล์" },
-    { label: "รหัส PIN", heading: "เปิดใช้ PIN" },
-  ];
+    { label: "งบประมาณ", heading: "งบประมาณต่อเดือน", from: "more" },
+    { label: "ถาม AI เรื่องเงิน", heading: "ถาม AI เรื่องเงิน", from: "more" },
+    { label: "ส่งออกรีพอร์ท", heading: "รีพอร์ท Excel / Sheets", from: "more" },
+    { label: "จัดการโปรไฟล์", heading: "จัดการโปรไฟล์", from: "drawer" },
+    { label: "รหัส PIN", heading: "เปิดใช้ PIN", from: "drawer" },
+  ] as const;
 
-  for (const { label, heading } of MENU_SCREENS) {
-    test(`opens ${label} as its own screen`, async ({ app }) => {
+  async function openMenuScreen(app: Parameters<typeof navigate>[0], label: string, from: "more" | "drawer") {
+    if (from === "drawer") {
       await app.locator(".menu-button").click();
       await app.locator(".side-menu-list button", { hasText: label }).click();
+      return;
+    }
+    await navigate(app, "more");
+    await app.locator(".more-grid button", { hasText: label }).click();
+  }
+
+  for (const { label, heading, from } of MENU_SCREENS) {
+    test(`opens ${label} as its own screen`, async ({ app }) => {
+      await openMenuScreen(app, label, from);
 
       await expect(app.locator(".add-title h2")).toHaveText(heading);
       // The drawer is gone and nothing modal took its place.
@@ -72,8 +86,7 @@ test.describe("navigation", () => {
   // out of reach here (no Supabase, and /api/ask needs a key), so this covers
   // everything up to the send.
   test("lays Ask AI out as a chat screen", async ({ app }) => {
-    await app.locator(".menu-button").click();
-    await app.locator(".side-menu-list button", { hasText: "ถาม AI เรื่องเงิน" }).click();
+    await openMenuScreen(app, "ถาม AI เรื่องเงิน", "more");
     await expect(app.locator(".ask-ai-composer")).toBeVisible();
 
     const box = await app.evaluate(() => {
@@ -99,16 +112,14 @@ test.describe("navigation", () => {
   });
 
   test("fills the composer from an example chip", async ({ app }) => {
-    await app.locator(".menu-button").click();
-    await app.locator(".side-menu-list button", { hasText: "ถาม AI เรื่องเงิน" }).click();
+    await openMenuScreen(app, "ถาม AI เรื่องเงิน", "more");
     await app.locator(".ask-ai-examples button").first().click();
     await expect(app.locator(".ask-ai-input")).not.toHaveValue("");
     await expect(app.locator(".ask-ai-send")).toBeEnabled();
   });
 
   test("grows the composer with a multi-line question", async ({ app }) => {
-    await app.locator(".menu-button").click();
-    await app.locator(".side-menu-list button", { hasText: "ถาม AI เรื่องเงิน" }).click();
+    await openMenuScreen(app, "ถาม AI เรื่องเงิน", "more");
     const input = app.locator(".ask-ai-input");
     const before = (await input.boundingBox())!.height;
     await input.fill("บรรทัดหนึ่ง\nบรรทัดสอง\nบรรทัดสาม");
@@ -116,8 +127,7 @@ test.describe("navigation", () => {
   });
 
   test("keeps a menu screen reachable from the bottom nav", async ({ app }) => {
-    await app.locator(".menu-button").click();
-    await app.locator(".side-menu-list button", { hasText: "งบประมาณ" }).click();
+    await openMenuScreen(app, "งบประมาณ", "more");
     await expect(app.locator(".add-title h2")).toHaveText("งบประมาณต่อเดือน");
 
     // Tapping a nav tab from a menu screen leaves it, the way it would from
@@ -190,10 +200,9 @@ test.describe("navigation", () => {
       expect(label!.right, `${tab} label inside the pill`).toBeLessThanOrEqual(pill.right + 1);
     }
 
-    // A side-menu screen selects no tab: the pill fades out where it stands
+    // A menu screen selects no tab: the pill fades out where it stands
     // rather than sliding off to somewhere arbitrary.
-    await app.locator(".menu-button").click();
-    await app.locator(".side-menu-list button", { hasText: "งบประมาณ" }).click();
+    await openMenuScreen(app, "จัดการโปรไฟล์", "drawer");
     await app.waitForTimeout(400);
     expect((await geometry()).opacity).toBe(0);
   });

@@ -177,7 +177,9 @@ export function DebtorsView({
         })}
         {!visibleDebtors.length && (
           <EmptyNote glyph="◆" action={{ label: "เพิ่ม", onClick: onAdd }}>
-            {activeKind === "own" ? "ยังไม่มีหนี้ของฉัน" : "ยังไม่มีรายชื่อลูกหนี้"}
+            {activeKind === "own"
+              ? "หนี้ที่คุณติดคนอื่น — บัตรเครดิต ค่างวด หรือเงินที่ยืมเพื่อนมา · เพิ่มไว้แล้วแอพจะคอยเตือนยอดที่ต้องจ่ายในแต่ละรอบ"
+              : "เงินที่คนอื่นติดคุณ · ปกติแอพจะสร้างชื่อให้เองเมื่อคุณจดว่าออกให้ใครไปก่อน จะเพิ่มเองตรงนี้ก็ได้"}
           </EmptyNote>
         )}
       </div>
@@ -466,7 +468,7 @@ export function BudgetsView({
 
   return (
     <PageFrame onBack={onBack} eyebrow="ตั้งค่า" title="งบประมาณต่อเดือน" className="budget-page">
-        <p className="budget-hint">ตั้งวงเงินต่อหมวดหมู่ เว้นว่างไว้ถ้าไม่ต้องการจำกัด</p>
+        <p className="budget-hint">ตั้งวงเงินที่ตั้งใจจะใช้ในหนึ่งเดือนของแต่ละหมวด แล้วหน้าแรกจะบอกว่าใช้ไปกี่เปอร์เซ็นต์แล้ว · เว้นว่างไว้ถ้าหมวดไหนไม่อยากจำกัด</p>
         {expenseCategories.map((category) => (
           <label key={category} className="budget-row">
             <span className="cat-dot" style={{ background: categoryTint(category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(category) }}><CategoryIcon category={category} /></span>

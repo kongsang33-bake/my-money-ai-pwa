@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { lastSevenDayCashFlow, isRecurringLogged, spendingByDay, summarizeDayEntries, unpaidOwnDebts } from "./insights.ts";
+import { buildSetupChecklist, buildWalletInsight, lastSevenDayCashFlow, isRecurringLogged, spendingByDay, summarizeDayEntries, unpaidOwnDebts } from "./insights.ts";
 import type { Debtor, Entry, RecurringExpense } from "./types.ts";
 import type { TransactionType } from "./taxonomy.ts";
 import { MS_PER_DAY } from "./constants.ts";
@@ -225,5 +225,54 @@ describe("summarizeDayEntries", () => {
     const summary = summarizeDayEntries([makeFlow(0, 300, "balance_adjustment"), makeFlow(0, 900, "income")]);
     assert.equal(summary.count, 2);
     assert.equal(summary.income, 900);
+  });
+});
+
+describe("buildWalletInsight", () => {
+  const cycleEnd = new Date(Date.now() + 10 * MS_PER_DAY);
+
+  it("says the opening balance was never set when there is no wallet", () => {
+    // Zero with no wallet is not a quiet month -- it is an app that cannot
+    // count anything yet, and the hero has to say which one it is.
+    const insight = buildWalletInsight(0, 0, cycleEnd, false);
+    assert.equal(insight.label, "ยังไม่เริ่ม");
+    assert.equal(insight.perDay, 0);
+  });
+
+  it("reads a real wallet that has spent nothing yet as a fresh cycle", () => {
+    const insight = buildWalletInsight(5000, 0, cycleEnd, true);
+    assert.equal(insight.label, "เริ่มรอบใหม่");
+  });
+
+  it("defaults to having a wallet, so existing callers are unchanged", () => {
+    assert.equal(buildWalletInsight(-500, 100, cycleEnd).label, "ต้องระวัง");
+  });
+});
+
+describe("buildSetupChecklist", () => {
+  const empty = { walletCount: 0, entryCount: 0, budgetCount: 0, recurringCount: 0, pinEnabled: false };
+
+  it("points a brand-new account at the wallet first", () => {
+    const { steps, remaining, next } = buildSetupChecklist(empty);
+    assert.equal(steps.length, 4);
+    assert.equal(remaining, 4);
+    assert.equal(next?.key, "wallet");
+  });
+
+  it("counts either a budget or a recurring bill as planning done", () => {
+    assert.equal(buildSetupChecklist({ ...empty, budgetCount: 1 }).steps[2].done, true);
+    assert.equal(buildSetupChecklist({ ...empty, recurringCount: 1 }).steps[2].done, true);
+  });
+
+  it("stops asking once everything but the PIN is done, so it cannot nag forever", () => {
+    const running = buildSetupChecklist({ walletCount: 1, entryCount: 40, budgetCount: 2, recurringCount: 0, pinEnabled: false });
+    assert.equal(running.coreDone, true);
+    assert.equal(running.remaining, 1);
+  });
+
+  it("has nothing left for an account that arrived already set up", () => {
+    const { remaining, next } = buildSetupChecklist({ walletCount: 2, entryCount: 300, budgetCount: 3, recurringCount: 2, pinEnabled: true });
+    assert.equal(remaining, 0);
+    assert.equal(next, null);
   });
 });

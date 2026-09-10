@@ -292,7 +292,7 @@ export function MonthSummary({
             );
           })
         ) : (
-          <EmptyNote glyph="▣">ยังไม่มีรายจ่ายในเดือนนี้</EmptyNote>
+          <EmptyNote glyph="▣">ยังไม่มีรายจ่ายในเดือนนี้ · พอมีรายการแล้ว ตรงนี้จะแยกให้เห็นว่าเงินไปหมดกับหมวดไหน</EmptyNote>
         )}
         {lentOut > 0 && (
           <div className="category-bar category-bar-lent">

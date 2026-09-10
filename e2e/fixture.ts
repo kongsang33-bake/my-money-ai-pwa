@@ -91,6 +91,17 @@ export function buildSeed(now = Date.now()): PreviewSeed {
 }
 
 /**
+ * An account with nothing in it: the state a real user is in the first time
+ * they sign in, and the only one that reaches the setup gate. Same user and
+ * profile as buildSeed so the two differ in exactly one thing -- whether
+ * there is any money data -- which is what app/page.tsx decides on.
+ */
+export function buildEmptySeed(): PreviewSeed {
+  const full = buildSeed();
+  return { ...full, entries: [], wallets: [], debtors: [], recurringExpenses: [], goals: [], budgets: {} };
+}
+
+/**
  * A row sitting in "ตรวจสอบก่อนบันทึก", as the AI-parse step would have left
  * it. Seeded through PreviewSeed.drafts because the real route there needs a
  * Gemini key the suite does not have -- see the note on that field.
@@ -129,6 +140,19 @@ export async function navigate(page: Page, tab: keyof typeof NAV) {
 /** Waits for the boot splash to finish and get out of the way. */
 export async function waitForApp(page: Page) {
   await expect(page.locator(".bottom-nav")).toBeVisible({ timeout: 15000 });
+  await waitForSplash(page);
+}
+
+/**
+ * The same wait for a screen that has no bottom nav -- the first-run setup
+ * gate, which replaces the whole app until it is finished or skipped.
+ */
+export async function waitForSetup(page: Page) {
+  await expect(page.locator(".setup-screen")).toBeVisible({ timeout: 15000 });
+  await waitForSplash(page);
+}
+
+async function waitForSplash(page: Page) {
   await page.waitForFunction(() => {
     const splash = document.getElementById("app-splash");
     return !splash || getComputedStyle(splash).display === "none" || getComputedStyle(splash).opacity === "0";
@@ -146,11 +170,21 @@ export async function waitForApp(page: Page) {
  * looks for it -- no flash of signed-out UI and no race for a spec to trip on.
  */
 export async function openApp(page: Page, seed: PreviewSeed) {
+  await injectSeed(page, seed);
+  await waitForApp(page);
+}
+
+/** openApp's counterpart for an empty account, which boots into the gate. */
+export async function openSetup(page: Page, seed: PreviewSeed = buildEmptySeed()) {
+  await injectSeed(page, seed);
+  await waitForSetup(page);
+}
+
+async function injectSeed(page: Page, seed: PreviewSeed) {
   await page.addInitScript((injected) => {
     (window as unknown as { __MONII_PREVIEW__: unknown }).__MONII_PREVIEW__ = injected;
   }, seed as unknown as Record<string, unknown>);
   await page.goto("/");
-  await waitForApp(page);
 }
 
 /**

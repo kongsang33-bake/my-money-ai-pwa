@@ -64,7 +64,7 @@ import {
   unnamedDebtor,
   withEntries,
 } from "@/lib/money";
-import { buildWalletInsight, computeStreak, deriveQuickShortcuts, isRecurringLogged, lastSevenDayCashFlow, unpaidOwnDebts } from "@/lib/insights";
+import { buildSetupChecklist, buildWalletInsight, computeStreak, deriveQuickShortcuts, isRecurringLogged, lastSevenDayCashFlow, unpaidOwnDebts, type SetupStep } from "@/lib/insights";
 import { buildAiExamples, buildCategoryMemory } from "@/lib/ai-memory";
 import { nameColor } from "@/lib/category";
 import { createPinSalt, hashPin, isSixDigitPin, pinBackgroundLockMs, pinBlocked, pinMaxAttempts, recordFailedPinAttempt, registerFaceId, timingSafeEqual, verifyFaceId } from "@/lib/pin";
@@ -73,6 +73,7 @@ import {
   AI_CONTEXT_MAX_LENGTH,
   ENTRY_PAGE_MAX_REQUESTS,
   ENTRY_PAGE_SIZE,
+  INSIGHT_MIN_ENTRIES,
   RESTORE_ID_BATCH_SIZE,
   BUDGET_COLUMNS,
   DEBTOR_COLUMNS,
@@ -103,12 +104,13 @@ import {
   CalendarHeatmap,
   CashFlowTrendCard,
   DueSoonCard,
-  FirstRunHomeState,
   GoalCard,
   GoalEditSheet,
   GoalsView,
   HeroWalletCard,
   HomeInsightGrid,
+  HomeStartChecklist,
+  MissingWalletNotice,
   SpendingPersonalityCard,
   SuccessPulse,
   UnpaidCardsCard,
@@ -137,6 +139,10 @@ const MoreSheet = dynamic(() => import("@/components/sheets").then((m) => m.More
 const ProfileView = dynamic(() => import("@/components/sheets").then((m) => m.ProfileView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const ReportExportView = dynamic(() => import("@/components/sheets").then((m) => m.ReportExportView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const SideMenu = dynamic(() => import("@/components/sheets").then((m) => m.SideMenu), { ssr: false });
+
+// The first-run setup gate. Only an account with nothing in it ever renders
+// it, so it has no business in the bundle everyone else downloads.
+const SetupFlow = dynamic(() => import("@/components/onboarding").then((m) => m.SetupFlow), { ssr: false });
 
 const DebtorsView = dynamic(() => import("@/components/debtors").then((m) => m.DebtorsView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const DebtorEditSheet = dynamic(() => import("@/components/debtors").then((m) => m.DebtorEditSheet), { ssr: false });
@@ -213,6 +219,34 @@ function localNetWorthDisplayStorageKey(userId: string) {
   return `money-ai-net-worth-display:${userId}`;
 }
 
+// Two one-bit UI preferences with no place in the database: whether this user
+// has already been through (or waved off) the first-run setup gate, and
+// whether they have hidden Home's start checklist. localStorage rather than a
+// profiles column on purpose -- both are about what to show on a screen, not
+// about the account's money, and the question that actually matters ("does
+// this account have a wallet, an entry, a plan yet?") is answered by the data
+// itself, so nothing here needs to survive a re-install to stay correct.
+function setupFlagKey(userId: string, name: "gate" | "checklist") {
+  return `money-ai-setup:${name}:${userId}`;
+}
+
+function loadSetupFlag(userId: string, name: "gate" | "checklist") {
+  try {
+    return window.localStorage.getItem(setupFlagKey(userId, name)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function rememberSetupFlag(userId: string, name: "gate" | "checklist") {
+  try {
+    window.localStorage.setItem(setupFlagKey(userId, name), "1");
+  } catch {
+    // localStorage unavailable -- worst case the gate offers itself again on
+    // the next load, which is recoverable and loses nothing.
+  }
+}
+
 function loadLocalNetWorthDisplaySettings(userId: string): NetWorthDisplaySettings {
   try {
     const raw = window.localStorage.getItem(localNetWorthDisplayStorageKey(userId));
@@ -246,6 +280,12 @@ export default function Home() {
   // prop to set it back to "".
   const [composerResetKey, setComposerResetKey] = useState(0);
   const [addMode, setAddMode] = useState<"ai" | "manual">("ai");
+  // Seed text for the AI composer, handed over by the setup flow so a first
+  // entry starts from an example instead of an empty box. It only lands
+  // because bumping composerResetKey remounts AiComposer (see above).
+  const [composerInitialText, setComposerInitialText] = useState("");
+  const [setupGateDismissed, setSetupGateDismissed] = useState(false);
+  const [checklistHidden, setChecklistHidden] = useState(false);
   const [quickAddPreset, setQuickAddPreset] = useState<QuickShortcut | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [receiptTotal, setReceiptTotal] = useState(0);
@@ -298,6 +338,9 @@ export default function Home() {
   const scrollRootRef = useRef<HTMLElement | null>(null);
   const backgroundedAtRef = useRef<number | null>(null);
   const authUserIdRef = useRef<string | null | undefined>(undefined);
+  // The user whose data has finished loading at least once -- see loadUserData
+  // and showSetupGate below.
+  const loadedUserIdRef = useRef<string | null>(null);
   const cycleMonthSettingRef = useRef<string | null>(null);
   const displayName = profile?.nickname?.trim() || user?.user_metadata?.full_name || user?.user_metadata?.name || "เงินของฉัน";
   const displayIcon = profile?.app_icon?.trim() || user?.email?.[0]?.toUpperCase() || "฿";
@@ -306,6 +349,19 @@ export default function Home() {
   const netWorthDisplay: NetWorthDisplaySettings = profile
     ? { formula: profile.net_worth_formula, hideCard: profile.net_worth_hide_card }
     : defaultNetWorthDisplaySettings;
+
+  // Seeded from localStorage on the first render a user is known, and
+  // re-seeded if the signed-in user changes. Adjusted during render (React's
+  // documented pattern for derived-from-props state, same as PinGate's mode
+  // reset) rather than in an effect, which would paint one frame offering the
+  // setup gate to someone who had already waved it off.
+  const [setupFlagsUserId, setSetupFlagsUserId] = useState<string | null>(null);
+  const currentUserId = user?.id ?? null;
+  if (setupFlagsUserId !== currentUserId) {
+    setSetupFlagsUserId(currentUserId);
+    setSetupGateDismissed(currentUserId ? loadSetupFlag(currentUserId, "gate") : false);
+    setChecklistHidden(currentUserId ? loadSetupFlag(currentUserId, "checklist") : false);
+  }
 
   useEffect(() => {
     const settingKey = profile ? `${profile.user_id}:${monthStartDay}` : null;
@@ -344,6 +400,9 @@ export default function Home() {
     setProfile(seed.profile as unknown as Profile);
     setPinMode("unlocked");
     setReady(true);
+    // The seed IS this account's fetched state, so it stands in for the read
+    // loadUserData would otherwise have done -- see showSetupGate.
+    loadedUserIdRef.current = seed.user.id;
     setEntries(seed.entries);
     setWallets(seed.wallets);
     setDebtors(seed.debtors);
@@ -694,6 +753,11 @@ export default function Home() {
     try {
       await migrateLocalDataIfNeeded(userId);
       await Promise.all([loadEntries(), loadDebtors(), loadWallets(), loadRecurringExpenses(), loadInvestments(), loadInvestmentPrices(), loadBudgets(), loadGoals()]);
+      // "This account really is empty" is only true once its rows have
+      // actually been fetched. Without this the setup gate could be offered
+      // to an existing user in the frame between unlocking and the first
+      // read landing, when every collection is still at its initial [].
+      loadedUserIdRef.current = userId;
     } finally {
       setDataLoading(false);
     }
@@ -710,6 +774,7 @@ export default function Home() {
     setGoals([]);
     setDrafts([]);
     setReceiptTotal(0);
+    setComposerInitialText("");
     setComposerResetKey((key) => key + 1);
     setEditing(null);
     setDataLoading(false);
@@ -718,6 +783,7 @@ export default function Home() {
   const preparePinGate = useCallback(async (userId: string) => {
     setPinMode("checking");
     setPinError("");
+    loadedUserIdRef.current = null;
     clearPrivateState();
     const nextProfile = await loadProfile();
     if (nextProfile?.pin_hash && nextProfile.pin_salt) {
@@ -875,6 +941,31 @@ export default function Home() {
   const portfolioTotalGainPercent = portfolioTotalCost > 0 ? (portfolioTotalGain / portfolioTotalCost) * 100 : null;
   const streak = useMemo(() => computeStreak(entries), [entries]);
   const quickShortcuts = useMemo(() => deriveQuickShortcuts(entries), [entries]);
+  const pinEnabled = !!profile?.pin_hash && !!profile.pin_salt;
+  const budgetCount = Object.keys(budgets).length;
+  const setupChecklist = useMemo(
+    () => buildSetupChecklist({
+      walletCount: wallets.length,
+      entryCount: entries.length,
+      budgetCount,
+      recurringCount: recurringExpenses.length,
+      pinEnabled,
+    }),
+    [wallets.length, entries.length, budgetCount, recurringExpenses.length, pinEnabled],
+  );
+  // An account with literally nothing in it is a first run, whatever the
+  // profile says -- so there is no stored "onboarded" flag to get out of sync,
+  // and an account that already carries anything can never be sent back
+  // through the gate. Only a deliberate skip is remembered.
+  const accountIsEmpty =
+    !wallets.length && !entries.length && !debtors.length && !recurringExpenses.length
+    && !goals.length && !budgetCount;
+  const showSetupGate =
+    !dataLoading && loadedUserIdRef.current === currentUserId && accountIsEmpty && !setupGateDismissed;
+  const showStartChecklist = !checklistHidden && !setupChecklist.coreDone;
+  // Under this, every analysis card on Home is a confident-looking zero. Home
+  // holds them back and shows the checklist instead -- see the Home tab below.
+  const hasEnoughForInsights = entries.length >= INSIGHT_MIN_ENTRIES;
   const receivableSummary = useMemo(
     () => buildDebtSummary(debtors, entries, "lend", TYPES_OWED_TO_USER),
     [debtors, entries],
@@ -962,7 +1053,10 @@ export default function Home() {
   const netWorthPayable = netWorthDisplay.formula === "obligation" ? monthlyObligationTotal : payableTotal;
   const netWorth = walletBalanceTotal + receivableTotal - netWorthPayable + portfolioTotalValue;
   const savingsRate = monthlyIncome > 0 ? (monthlyBalance / monthlyIncome) * 100 : 0;
-  const walletInsight = useMemo(() => buildWalletInsight(mainWallet, monthlyOutflow, cycleRange.end), [mainWallet, monthlyOutflow, cycleRange.end]);
+  const walletInsight = useMemo(
+    () => buildWalletInsight(mainWallet, monthlyOutflow, cycleRange.end, wallets.length > 0),
+    [mainWallet, monthlyOutflow, cycleRange.end, wallets.length],
+  );
   const cashFlowSummary = useMemo(() => lastSevenDayCashFlow(entries, new Date()), [entries]);
   const monthlyTrend = useMemo(
     () => buildMonthlyTrend(entries, wallets, debtors, selectedMonth, monthStartDay, 6, portfolioTotalValue, netWorthDisplay.formula),
@@ -978,11 +1072,14 @@ export default function Home() {
       text: `${shortcut.title} ${shortcut.amount}`,
       shortcut,
     }));
+    // Four shapes, not four lunches: one plain expense, several in one go,
+    // a bill split, money coming back. Someone who has never used the app
+    // learns what it can be told from these more than from any help text.
     const defaults = [
-      { label: "อาหารกลางวัน", detail: "120", text: "อาหารกลางวัน 120 บาท" },
-      { label: "กาแฟ", detail: "65", text: "กาแฟ 65 บาท" },
+      { label: "รายการเดียว", detail: "กาแฟ 65 บาท", text: "กาแฟ 65 บาท" },
+      { label: "หลายรายการรวดเดียว", detail: "ข้าว 120 · กาแฟ 65 · แท็กซี่ 80", text: "ข้าวเที่ยง 120 กาแฟ 65 ค่าแท็กซี่ 80" },
+      { label: "หารกับเพื่อน", detail: "ค่าข้าวเย็น 900", text: "จ่ายค่าข้าวเย็น 900 หารกับจูน" },
       { label: "เพื่อนคืนเงิน", detail: "500", text: "เพื่อนเอโอนคืน 500 บาท" },
-      { label: "ออกให้ก่อน", detail: "300", text: "ออกให้เพื่อนก่อน 300 บาท" },
     ];
     return [...fromHistory, ...defaults].slice(0, 4);
   }, [quickShortcuts]);
@@ -1115,6 +1212,42 @@ export default function Home() {
   }, []);
 
   const addWithAiAction = useMemo(() => ({ label: "จดด้วย AI", onClick: openAddTab }), [openAddTab]);
+
+  const openWalletCreateSheet = useCallback(() => {
+    setError("");
+    setEditingWallet(null);
+    setWalletSheetMode("create");
+  }, []);
+
+  // Where each checklist step goes. The steps themselves are data
+  // (buildSetupChecklist); this is the only place that knows a step key means
+  // a screen, so adding a step is one entry here and one there.
+  const goToSetupStep = useCallback((key: SetupStep["key"]) => {
+    if (key === "wallet") openWalletCreateSheet();
+    else if (key === "entry") openAddTab();
+    else if (key === "plan") setTab("budgets");
+    else setTab("security");
+  }, [openWalletCreateSheet, openAddTab]);
+
+  const hideStartChecklist = useCallback(() => {
+    setChecklistHidden(true);
+    if (user) rememberSetupFlag(user.id, "checklist");
+  }, [user]);
+
+  // Leaving the setup gate, with or without an example sentence to carry into
+  // the composer. Bumping composerResetKey is what makes the seed land: the
+  // composer owns its own text and only reads `initialText` at mount.
+  const finishSetup = useCallback((startText?: string) => {
+    setSetupGateDismissed(true);
+    if (user) rememberSetupFlag(user.id, "gate");
+    if (startText) {
+      setComposerInitialText(startText);
+      setComposerResetKey((key) => key + 1);
+      openAddTab();
+    } else {
+      setTab("home");
+    }
+  }, [user, openAddTab]);
 
   function retrySync() {
     setError("");
@@ -1362,6 +1495,7 @@ export default function Home() {
       setEntries((current) => withEntries(current, inserted));
       setDrafts([]);
       setReceiptTotal(0);
+      setComposerInitialText("");
       setComposerResetKey((key) => key + 1);
       setTab("home");
       setSavePulse(normalizedItems.length);
@@ -2555,6 +2689,21 @@ export default function Home() {
     );
   }
 
+  // An account with nothing in it gets the setup flow instead of a Home made
+  // entirely of zeros -- see components/onboarding.tsx.
+  if (showSetupGate) {
+    return (
+      <SetupFlow
+        displayName={displayName}
+        busy={busy}
+        error={error}
+        onCreateWallet={createWallet}
+        onFinish={finishSetup}
+        onSkip={() => finishSetup()}
+      />
+    );
+  }
+
   return (
     <main className="shell">
       <section className={`phone tab-${tab}`} ref={scrollRootRef}>
@@ -2591,16 +2740,34 @@ export default function Home() {
                 <section className="wallet-grid single-wallet">
                   <HeroWalletCard balance={mainWallet} insight={walletInsight} streak={streak} />
                 </section>
-                <HomeInsightGrid
-                  netWorth={netWorth}
-                  netWorthDelta={netWorthDelta}
-                  netWorthFormula={netWorthDisplay.formula}
-                  hideNetWorthCard={netWorthDisplay.hideCard}
-                  savingsRate={savingsRate}
-                  monthlyIncome={monthlyIncome}
-                  monthlyObligationTotal={monthlyObligationTotal}
-                  payableTotal={payableTotal}
-                />
+                {!wallets.length && !!entries.length && (
+                  <MissingWalletNotice entryCount={entries.length} onCreateWallet={openWalletCreateSheet} />
+                )}
+                {showStartChecklist && (
+                  <HomeStartChecklist
+                    steps={setupChecklist.steps}
+                    remaining={setupChecklist.remaining}
+                    waitingForInsights={!hasEnoughForInsights}
+                    onStep={goToSetupStep}
+                    onHide={hideStartChecklist}
+                  />
+                )}
+                {/* Every card below reads as analysis, and analysis of two
+                    entries is a row of confident zeros -- which is what an
+                    empty account used to open on. Held back until there is
+                    something to analyse; the checklist above says so. */}
+                {hasEnoughForInsights && (
+                  <HomeInsightGrid
+                    netWorth={netWorth}
+                    netWorthDelta={netWorthDelta}
+                    netWorthFormula={netWorthDisplay.formula}
+                    hideNetWorthCard={netWorthDisplay.hideCard}
+                    savingsRate={savingsRate}
+                    monthlyIncome={monthlyIncome}
+                    monthlyObligationTotal={monthlyObligationTotal}
+                    payableTotal={payableTotal}
+                  />
+                )}
                 <QuickAddStrip shortcuts={quickShortcuts.slice(0, 4)} onSelect={(shortcut) => openAddTab("manual", shortcut)} onMore={() => openAddTab()} />
                 {!!goals.length && <GoalCard goals={goals} onAdd={() => setGoalSheetOpen(true)} onDelete={removeGoal} />}
                 {(dueSoonRecurring.length > 0 || budgetGlance.totalBudget > 0) && (
@@ -2610,17 +2777,13 @@ export default function Home() {
                     {budgetGlance.totalBudget > 0 && <BudgetGlanceCard budgetGlance={budgetGlance} onManage={() => setTab("budgets")} />}
                   </div>
                 )}
-                <CashFlowTrendCard summary={cashFlowSummary} />
-                <SpendingPersonalityCard topCategory={discretionaryTopCategory} trend={discretionaryCategoryTrend} monthlyOutflow={monthlyOutflow} hasBillsOnly={!discretionaryTopCategory && monthlyOutflow > 0} />
+                {hasEnoughForInsights && (
+                  <>
+                    <CashFlowTrendCard summary={cashFlowSummary} />
+                    <SpendingPersonalityCard topCategory={discretionaryTopCategory} trend={discretionaryCategoryTrend} monthlyOutflow={monthlyOutflow} hasBillsOnly={!discretionaryTopCategory && monthlyOutflow > 0} />
+                  </>
+                )}
               </>
-            )}
-
-            {!dataLoading && !wallets.length && !entries.length && !debtors.length && (
-              <FirstRunHomeState
-                onCreateWallet={openSheet(() => { setEditingWallet(null); setWalletSheetMode("create"); })}
-                onSetBudget={() => setTab("budgets")}
-                onAddEntry={() => openAddTab()}
-              />
             )}
 
             {!dataLoading && !!secondaryWallets.length && (
@@ -2665,6 +2828,9 @@ export default function Home() {
                 <AiComposer
                   key={composerResetKey}
                   suggestions={aiSuggestions}
+                  initialText={composerInitialText}
+                  showPrimer={!entries.length}
+                  noWallet={!wallets.length}
                   entryDate={entryDate}
                   maxDate={todayDateInput()}
                   onChangeEntryDate={setEntryDate}
@@ -3030,9 +3196,6 @@ export default function Home() {
             onClose={menuDismiss.requestClose}
             onLogout={() => { menuDismiss.requestClose(); setLogoutOpen(true); }}
             onOpenProfile={() => { menuDismiss.requestClose(); setTab("profile"); }}
-            onOpenBudgets={() => { menuDismiss.requestClose(); setTab("budgets"); }}
-            onOpenReport={() => { menuDismiss.requestClose(); setTab("report"); }}
-            onOpenAsk={() => { menuDismiss.requestClose(); setTab("ask"); }}
             onOpenPin={() => { menuDismiss.requestClose(); setTab("security"); }}
             theme={theme}
             onSetTheme={changeTheme}
@@ -3046,10 +3209,14 @@ export default function Home() {
             onOpenRecurring={() => { moreDismiss.requestClose(); setTab("recurring"); }}
             onOpenGoals={() => { moreDismiss.requestClose(); setTab("goals"); }}
             onOpenPortfolio={() => { moreDismiss.requestClose(); setTab("portfolio"); }}
+            onOpenBudgets={() => { moreDismiss.requestClose(); setTab("budgets"); }}
+            onOpenAsk={() => { moreDismiss.requestClose(); setTab("ask"); }}
+            onOpenReport={() => { moreDismiss.requestClose(); setTab("report"); }}
             receivableTotal={receivableTotal}
             payableTotal={payableTotal}
             recurringTotal={recurringExpenses.reduce((sum, item) => sum + item.amount, 0)}
             portfolioTotal={portfolioTotalValue}
+            budgetTotal={Object.values(budgets).reduce((sum, amount) => sum + amount, 0)}
             closing={moreDismiss.closing}
             originPoint={moreOrigin}
           />

@@ -8,7 +8,7 @@ import { walletTagHints, walletTagLabels, type WalletTag } from "@/lib/taxonomy"
 import { nameColor, recurringIconOptions } from "@/lib/category";
 import type { Entry, RecurringExpense, Wallet, WalletDisplay } from "@/lib/types";
 import { IconColorPicker, RecurringAvatarGlyph, WalletAvatarGlyph } from "@/components/shared";
-import { AmountInput, CountUpMoney, EmptyNote, SheetFrame, SkeletonList, StateCard, decimalInputPattern } from "@/components/primitives";
+import { AmountInput, CountUpMoney, EmptyNote, InfoHint, SheetFrame, SkeletonList, StateCard, decimalInputPattern } from "@/components/primitives";
 
 export function WalletsView({
   wallets,
@@ -104,7 +104,7 @@ export function WalletsView({
             </details>
           </article>
         ))}
-        {!wallets.length && <EmptyNote glyph="▣" action={{ label: "เพิ่มกระเป๋า", onClick: onAdd }}>ยังไม่มีกระเป๋าตังค์ สร้างกองเงินแรกของคุณได้เลย</EmptyNote>}
+        {!wallets.length && <EmptyNote glyph="▣" action={{ label: "เพิ่มกระเป๋า", onClick: onAdd }}>กระเป๋าคือที่ที่เงินอยู่จริง — เงินสด บัญชีธนาคาร เงินออม · ต้องมีอย่างน้อยหนึ่งใบ ไม่งั้นรายการที่จดจะไม่ถูกนับเข้ายอดเงิน</EmptyNote>}
       </div>
       {selectedWallet && (
         <section className="wallet-statement-panel" ref={statementRef}>
@@ -174,7 +174,11 @@ export function ReconcileSheet({
     <SheetFrame onClose={onClose} closing={closing}>
       <div className="sheet-head">
         <div>
-          <p className="eyebrow">ปรับยอดให้ตรงบัญชีจริง</p>
+          <p className="eyebrow">
+            {"ปรับยอดให้ตรงบัญชีจริง"}<InfoHint label="ปรับยอดให้ตรง">
+              ใช้เมื่อยอดในแอพไม่ตรงกับเงินจริง · ส่วนต่างจะถูกบันทึกเป็นรายการแยกหนึ่งรายการ ไม่นับเป็นรายรับหรือรายจ่าย เพราะไม่มีเงินเข้าออกจริง
+            </InfoHint>
+          </p>
           <h2>{wallet.name}</h2>
         </div>
         <button onClick={onClose}>x</button>
@@ -350,7 +354,7 @@ export function RecurringExpensesView({
             </details>
           </article>
         ))}
-        {!items.length && <EmptyNote glyph="↻" action={{ label: "เพิ่มรายจ่ายประจำ", onClick: onAdd }}>ยังไม่มีรายจ่ายประจำ ลองเพิ่มค่าสมัครสมาชิกที่จ่ายทุกเดือน เช่น Netflix, Claude Pro</EmptyNote>}
+        {!items.length && <EmptyNote glyph="↻" action={{ label: "เพิ่มรายจ่ายประจำ", onClick: onAdd }}>บิลที่ตัดเงินทุกเดือนเวลาเดิม — ค่าเน็ต ค่าไฟ ค่าสมาชิก · เพิ่มไว้แล้วหน้าแรกจะเตือนก่อนถึงกำหนด และกดบันทึกได้ในปุ่มเดียว</EmptyNote>}
       </div>
     </div>
   );

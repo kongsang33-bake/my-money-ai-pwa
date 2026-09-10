@@ -194,6 +194,15 @@ export const SPEND_BASELINE_MIN_DAYS = 14;
 // calls it high or low rather than normal.
 export const SPEND_BASELINE_TOLERANCE_PERCENT = 10;
 
+// How many entries an account needs before Home shows the analysis cards
+// (savings rate, debt load, net worth, the 7-day pace, the spending
+// personality). Under this, every one of them renders a confident-looking
+// zero or a "ยังไม่มีข้อมูล" -- a wall of empty analytics is the first thing
+// a new account used to show, and it reads as a broken app rather than an
+// empty one. Home holds them back and shows the setup checklist instead
+// (buildSetupChecklist below).
+export const INSIGHT_MIN_ENTRIES = 3;
+
 
 // Tallest the Ask-AI composer grows before it starts scrolling internally
 // (~5 lines). The textarea auto-grows in JS off scrollHeight, so the ceiling

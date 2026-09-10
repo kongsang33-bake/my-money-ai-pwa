@@ -29,6 +29,9 @@ import { AmountInput, DateField, EmptyNote, SheetFrame, StateCard } from "@/comp
 // app/page.tsx after a successful save, and clearPrivateState on logout).
 export function AiComposer({
   suggestions,
+  initialText = "",
+  showPrimer = false,
+  noWallet = false,
   entryDate,
   maxDate,
   onChangeEntryDate,
@@ -43,6 +46,15 @@ export function AiComposer({
   onAttached,
 }: {
   suggestions: AiSuggestion[];
+  // Seed for the textarea, used once at mount. The parent remounts this
+  // component to change what is in it (see `composerResetKey` in
+  // app/page.tsx), so this is a starting value, not a controlled prop --
+  // which is what lets the setup flow hand over an example sentence.
+  initialText?: string;
+  // One line explaining what can be typed here at all. Shown only while the
+  // account has no entries yet, so it teaches once instead of nagging.
+  showPrimer?: boolean;
+  noWallet?: boolean;
   entryDate: string;
   maxDate: string;
   onChangeEntryDate: (value: string) => void;
@@ -56,7 +68,7 @@ export function AiComposer({
   onError: (message: string) => void;
   onAttached: (count: number) => void;
 }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const [slipImages, setSlipImages] = useState<SlipImage[]>([]);
 
   const applySuggestion = (suggestion: AiSuggestion) => {
@@ -92,6 +104,17 @@ export function AiComposer({
         <span>บันทึกของวันที่</span>
         <DateField value={entryDate} max={maxDate} onChange={onChangeEntryDate} />
       </label>
+
+      {showPrimer && (
+        <p className="composer-primer">
+          พิมพ์เป็นประโยคธรรมดาได้เลย จดหลายรายการในครั้งเดียวก็ได้ หรือแนบรูปสลิปให้ AI อ่านแทนการพิมพ์
+        </p>
+      )}
+      {noWallet && (
+        <p className="composer-primer warn">
+          ยังไม่มีกระเป๋าเงิน — จดได้ตามปกติ แต่ยอดเงินบนหน้าแรกจะยังไม่ขยับจนกว่าจะสร้างกระเป๋า
+        </p>
+      )}
 
       <div className="ai-suggestions">
         <span>แตะตัวอย่างเพื่อเริ่มเร็ว</span>

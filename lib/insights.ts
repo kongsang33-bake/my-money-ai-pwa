@@ -1,7 +1,8 @@
 // Home-screen insight builders: quick-add shortcuts derived from recent
 // history, the day-streak counter, the "how am I doing this cycle" wallet
-// blurb, the 7-day spend-pace sparkline data, and the two per-day roll-ups
-// the spending calendar and the day strip under it read from.
+// blurb, the new-account setup checklist, the 7-day spend-pace sparkline
+// data, and the two per-day roll-ups the spending calendar and the day strip
+// under it read from.
 import {
   CASH_FLOW_WINDOW_DAYS,
   MS_PER_DAY,
@@ -44,9 +45,25 @@ export function computeStreak(entries: Entry[]) {
   return streak;
 }
 
-export function buildWalletInsight(balance: number, outflow: number, cycleEnd: Date) {
+/**
+ * The line under Home's hero balance. `hasWallet` is what separates the two
+ * ways of holding zero: an account whose opening balance has never been set
+ * (nothing to spend down, because nothing was ever counted) from one that
+ * genuinely starts a cycle at zero. Without it the hero told a brand-new
+ * account it had "ยังไม่มีรายจ่ายในรอบนี้" -- true, and completely useless,
+ * next to a balance that cannot move until a wallet exists.
+ */
+export function buildWalletInsight(balance: number, outflow: number, cycleEnd: Date, hasWallet = true) {
   const remainingDays = daysRemainingInCycle(cycleEnd);
   const perDay = balance / remainingDays;
+  if (!hasWallet) {
+    return {
+      tone: "calm",
+      label: "ยังไม่เริ่ม",
+      text: "ยังไม่ได้ตั้งยอดตั้งต้น สร้างกระเป๋าแล้วยอดนี้จะเริ่มนับให้",
+      perDay: 0,
+    };
+  }
   if (balance < 0) {
     return {
       tone: "danger",
@@ -76,6 +93,77 @@ export function buildWalletInsight(balance: number, outflow: number, cycleEnd: D
     label: "ยังดูดี",
     text: `เหลือใช้ได้ประมาณ ${moneySign}${formatMoney(perDay)} ต่อวัน`,
     perDay,
+  };
+}
+
+export type SetupStepKey = "wallet" | "entry" | "plan" | "pin";
+
+export type SetupStep = {
+  key: SetupStepKey;
+  label: string;
+  detail: string;
+  action: string;
+  done: boolean;
+};
+
+/**
+ * The four things that turn an empty account into a working one, in the order
+ * they stop being confusing: a wallet (until one exists every entry saves with
+ * a null wallet_id and buildWalletLedger cannot count it, so the balance sits
+ * at zero however much gets jotted), a first entry, something forward-looking
+ * to compare against, and the lock.
+ *
+ * Every step reads state the app already has -- nothing here is stored, so a
+ * step un-ticks itself if its data goes away, and an account that arrived from
+ * an earlier version starts fully ticked rather than being told to redo work.
+ */
+export function buildSetupChecklist(input: {
+  walletCount: number;
+  entryCount: number;
+  budgetCount: number;
+  recurringCount: number;
+  pinEnabled: boolean;
+}): { steps: SetupStep[]; remaining: number; next: SetupStep | null; coreDone: boolean } {
+  const steps: SetupStep[] = [
+    {
+      key: "wallet",
+      label: "สร้างกระเป๋าเงิน",
+      detail: "ใส่ยอดที่มีอยู่ตอนนี้ เพื่อให้ทุกรายการมีที่ให้บวกลบ",
+      action: "สร้างกระเป๋า",
+      done: input.walletCount > 0,
+    },
+    {
+      key: "entry",
+      label: "จดรายการแรก",
+      detail: "พิมพ์เป็นประโยคธรรมดา แล้วให้ AI แยกให้",
+      action: "จดรายการ",
+      done: input.entryCount > 0,
+    },
+    {
+      key: "plan",
+      label: "ตั้งงบหรือรายจ่ายประจำ",
+      detail: "บอกแอพว่าเดือนหนึ่งมีอะไรต้องจ่ายบ้าง",
+      action: "ตั้งงบ",
+      done: input.budgetCount > 0 || input.recurringCount > 0,
+    },
+    {
+      key: "pin",
+      label: "ล็อกแอพด้วย PIN",
+      detail: "กันคนอื่นเปิดดูเงินของคุณบนเครื่องเดียวกัน",
+      action: "ตั้ง PIN",
+      done: input.pinEnabled,
+    },
+  ];
+  const remaining = steps.filter((step) => !step.done).length;
+  return {
+    steps,
+    remaining,
+    next: steps.find((step) => !step.done) ?? null,
+    // What decides whether Home still shows the checklist at all. The lock is
+    // deliberately outside it: it is worth offering while someone is setting
+    // up, but an account that is otherwise running should not carry a
+    // permanent to-do card because its owner chose not to use a PIN.
+    coreDone: steps.every((step) => step.key === "pin" || step.done),
   };
 }
 

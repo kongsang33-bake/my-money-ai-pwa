@@ -336,15 +336,20 @@ export function ReportSummaryTiles({ income, outflow, balance, count }: { income
   );
 }
 
+/**
+ * The account drawer, and only the account: profile, lock, theme, sign out.
+ *
+ * งบประมาณ / ถาม AI / ส่งออกรีพอร์ท used to live here too, which put three
+ * ways of working with your money behind a hamburger next to "ออกจากระบบ" --
+ * a new user looking for budgets had no reason to open this. They are in
+ * MoreSheet now, with the rest of the money features.
+ */
 export function SideMenu({
   user,
   profile,
   onClose,
   onLogout,
   onOpenProfile,
-  onOpenBudgets,
-  onOpenReport,
-  onOpenAsk,
   onOpenPin,
   theme,
   onSetTheme,
@@ -355,9 +360,6 @@ export function SideMenu({
   onClose: () => void;
   onLogout: () => void;
   onOpenProfile: () => void;
-  onOpenBudgets: () => void;
-  onOpenReport: () => void;
-  onOpenAsk: () => void;
   onOpenPin: () => void;
   theme: Theme;
   onSetTheme: (theme: Theme) => void;
@@ -395,21 +397,6 @@ export function SideMenu({
 
         <nav className="side-menu-list">
           <div className="side-menu-section">
-            <p>เครื่องมือ</p>
-            <button onClick={onOpenBudgets}>
-              <TrendingUp size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>งบประมาณ</span>
-            </button>
-            <button onClick={onOpenAsk}>
-              <Lightbulb size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>ถาม AI เรื่องเงิน</span>
-            </button>
-            <button onClick={onOpenReport}>
-              <Download size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>ส่งออกรีพอร์ท</span>
-            </button>
-          </div>
-          <div className="side-menu-section">
             <p>ตั้งค่า</p>
             <button onClick={onOpenProfile}>
               <UserCog size={16} strokeWidth={2.25} aria-hidden="true" />
@@ -439,16 +426,30 @@ export function SideMenu({
   );
 }
 
+/**
+ * Everything you can do with your money, in one place -- the counterpart to
+ * SideMenu, which is now everything about your account.
+ *
+ * The split used to run along no line at all: four money features here, three
+ * more (budgets, the finance chat, the export) hidden in the hamburger. Each
+ * tile also says what it is for in a line, because "จัดการหนี้" with a number
+ * under it tells someone who has never used the app nothing about when they
+ * would tap it.
+ */
 export function MoreSheet({
   onClose,
   onOpenDebtors,
   onOpenRecurring,
   onOpenGoals,
   onOpenPortfolio,
+  onOpenBudgets,
+  onOpenAsk,
+  onOpenReport,
   receivableTotal,
   payableTotal,
   recurringTotal,
   portfolioTotal,
+  budgetTotal,
   closing,
   originPoint,
 }: {
@@ -457,10 +458,14 @@ export function MoreSheet({
   onOpenRecurring: () => void;
   onOpenGoals: () => void;
   onOpenPortfolio: () => void;
+  onOpenBudgets: () => void;
+  onOpenAsk: () => void;
+  onOpenReport: () => void;
   receivableTotal: number;
   payableTotal: number;
   recurringTotal: number;
   portfolioTotal: number;
+  budgetTotal: number;
   closing?: boolean;
   originPoint?: SheetOrigin | null;
 }) {
@@ -478,21 +483,41 @@ export function MoreSheet({
         <button onClick={onOpenDebtors}>
           <span className="more-tile-icon"><Users size={20} strokeWidth={2.25} aria-hidden="true" /></span>
           <span>จัดการหนี้</span>
+          <small>ใครติดเงินคุณ คุณติดใคร บัตรเครดิตและค่างวด</small>
           <b>{debtNet < 0 ? "−" : ""}{moneySign}{formatMoney(Math.abs(debtNet))}</b>
         </button>
         <button onClick={onOpenRecurring}>
           <span className="more-tile-icon"><Receipt size={20} strokeWidth={2.25} aria-hidden="true" /></span>
           <span>รายจ่ายประจำ</span>
+          <small>บิลที่ตัดเงินทุกเดือน ให้แอพเตือนก่อนถึงกำหนด</small>
           <b>{moneySign}{formatMoney(recurringTotal)}</b>
+        </button>
+        <button onClick={onOpenBudgets}>
+          <span className="more-tile-icon"><TrendingUp size={20} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span>งบประมาณ</span>
+          <small>ตั้งวงเงินต่อหมวด แล้วดูว่าใช้ไปเท่าไหร่แล้ว</small>
+          <b>{budgetTotal ? `${moneySign}${formatMoney(budgetTotal)}` : "ยังไม่ตั้ง"}</b>
         </button>
         <button onClick={onOpenGoals}>
           <span className="more-tile-icon"><PiggyBank size={20} strokeWidth={2.25} aria-hidden="true" /></span>
           <span>เป้าหมายการเงิน</span>
+          <small>ตั้งเป้าเก็บเงิน แล้วตามความคืบหน้า</small>
         </button>
         <button onClick={onOpenPortfolio}>
           <span className="more-tile-icon"><LineChart size={20} strokeWidth={2.25} aria-hidden="true" /></span>
           <span>พอร์ตลงทุน</span>
+          <small>กองทุนและหุ้นที่ถืออยู่ กำไรขาดทุนรวม</small>
           <b>{moneySign}{formatMoney(portfolioTotal)}</b>
+        </button>
+        <button onClick={onOpenAsk}>
+          <span className="more-tile-icon"><Lightbulb size={20} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span>ถาม AI เรื่องเงิน</span>
+          <small>ถามเป็นคำถามได้ เช่น เดือนนี้ใช้อะไรเยอะสุด</small>
+        </button>
+        <button onClick={onOpenReport}>
+          <span className="more-tile-icon"><Download size={20} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span>ส่งออกรีพอร์ท</span>
+          <small>ดาวน์โหลดเป็นไฟล์ CSV เปิดใน Excel ได้</small>
         </button>
       </div>
     </SheetFrame>
