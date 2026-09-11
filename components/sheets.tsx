@@ -6,20 +6,17 @@ import type { User } from "@supabase/supabase-js";
 import {
   ArrowUp,
   Check,
+  ChevronRight,
   Copy,
   Download,
   Lightbulb,
   LineChart,
   Lock,
-  Moon,
   PiggyBank,
   Receipt,
-  Sun,
   Trash2,
   TrendingUp,
-  UserCog,
   Users,
-  X,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { AI_CHAT_HISTORY_LIMIT, AI_CHAT_MESSAGE_COLUMNS, AI_CONTEXT_MAX_LENGTH, ASK_COMPOSER_MAX_HEIGHT, MONTH_START_DAY_MAX, MONTH_START_DAY_MIN, TABLES } from "@/lib/constants";
@@ -30,7 +27,7 @@ import { totalWallet } from "@/lib/money";
 import { buildReportCsv, downloadCsv } from "@/lib/csv";
 import { compressProfileImage } from "@/lib/image";
 import { nameInitial } from "@/lib/category";
-import type { AiChatMessage, AiFinanceContext, Entry, NetWorthDisplaySettings, Profile, ReportPeriod, Theme, Wallet } from "@/lib/types";
+import type { AiChatMessage, AiFinanceContext, Entry, NetWorthDisplaySettings, Profile, ReportPeriod, Wallet } from "@/lib/types";
 import { MonthField, PageFrame, SheetFrame, StateCard, useEscapeToClose, useFocusTrap } from "@/components/primitives";
 import type { SheetOrigin } from "@/components/primitives";
 
@@ -337,96 +334,6 @@ export function ReportSummaryTiles({ income, outflow, balance, count }: { income
 }
 
 /**
- * The account drawer, and only the account: profile, lock, theme, sign out.
- *
- * งบประมาณ / ถาม AI / ส่งออกรีพอร์ท used to live here too, which put three
- * ways of working with your money behind a hamburger next to "ออกจากระบบ" --
- * a new user looking for budgets had no reason to open this. They are in
- * MoreSheet now, with the rest of the money features.
- */
-export function SideMenu({
-  user,
-  profile,
-  onClose,
-  onLogout,
-  onOpenProfile,
-  onOpenPin,
-  theme,
-  onSetTheme,
-  closing,
-}: {
-  user: User;
-  profile: Profile | null;
-  onClose: () => void;
-  onLogout: () => void;
-  onOpenProfile: () => void;
-  onOpenPin: () => void;
-  theme: Theme;
-  onSetTheme: (theme: Theme) => void;
-  closing?: boolean;
-}) {
-  const metadata = user.user_metadata ?? {};
-  const name = profile?.nickname || metadata.full_name || metadata.name || "ผู้ใช้";
-  const appIcon = profile?.app_icon || user.email?.[0]?.toUpperCase() || "฿";
-  const appIconImage = profile?.app_icon_image || "";
-
-  useEscapeToClose(onClose);
-  const asideRef = useFocusTrap<HTMLElement>(!closing);
-
-  return (
-    <div className={`side-menu-backdrop ${closing ? "closing" : ""}`} onClick={onClose}>
-      <aside
-        ref={asideRef}
-        role="dialog"
-        aria-modal="true"
-        tabIndex={-1}
-        className={`side-menu ${closing ? "closing" : ""}`}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="profile-head drawer-account">
-          <div className={`avatar ${appIconImage ? "has-image" : ""}`}>
-            {appIconImage && <NextImage className="profile-image" src={appIconImage} alt="" width={44} height={44} unoptimized />}
-            {!appIconImage && appIcon}
-          </div>
-          <div>
-            <b>{name}</b>
-            <small>{user.email}</small>
-          </div>
-          <button className="drawer-close" onClick={onClose} aria-label="ปิดเมนู" title="ปิดเมนู"><X size={18} strokeWidth={2.25} aria-hidden="true" /></button>
-        </div>
-
-        <nav className="side-menu-list">
-          <div className="side-menu-section">
-            <p>ตั้งค่า</p>
-            <button onClick={onOpenProfile}>
-              <UserCog size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>จัดการโปรไฟล์</span>
-            </button>
-            <button onClick={onOpenPin}>
-              <Lock size={16} strokeWidth={2.25} aria-hidden="true" />
-              <span>รหัส PIN</span>
-            </button>
-          </div>
-        </nav>
-
-        <div className="side-menu-footer">
-          <div className={`theme-toggle theme-toggle-${theme}`} role="group" aria-label="ธีมสีของแอพ">
-            <span className="theme-toggle-thumb" aria-hidden="true" />
-            <button className={theme === "light" ? "active" : ""} onClick={() => onSetTheme("light")} aria-label="ธีมสว่าง" title="ธีมสว่าง">
-              <Sun size={16} strokeWidth={2.25} aria-hidden="true" />
-            </button>
-            <button className={theme === "dark" ? "active" : ""} onClick={() => onSetTheme("dark")} aria-label="ธีมมืด" title="ธีมมืด">
-              <Moon size={16} strokeWidth={2.25} aria-hidden="true" />
-            </button>
-          </div>
-          <button className="logout-button" onClick={onLogout}>ออกจากระบบ</button>
-        </div>
-      </aside>
-    </div>
-  );
-}
-
-/**
  * Everything you can do with your money, in one place -- the counterpart to
  * SideMenu, which is now everything about your account.
  *
@@ -538,22 +445,39 @@ const aiContextTemplate = [
   "เก็บเหรียญ = เปิดเครื่องเก็บรายได้ เป็นรายรับเข้ากระเป๋าเหรียญสำรอง",
 ].join("\n");
 
+/**
+ * The whole account in one screen: who you are, how the app counts your
+ * month, what the AI knows about your vocabulary, the lock, and the way out.
+ *
+ * It absorbed the side drawer, which by the end held two links (one of them
+ * to here) and a sign-out button, and paid for them with a permanent
+ * hamburger in the topbar and an overlay layer of its own. Tapping your own
+ * name and face in the topbar opens this instead.
+ */
 export function ProfileView({
   profile,
+  user,
   busy,
   error,
+  pinEnabled,
   onBack,
   onSave,
   netWorthDisplay,
   onSaveNetWorthDisplay,
+  onOpenPin,
+  onLogout,
 }: {
   profile: Profile | null;
+  user: User;
   busy: boolean;
   error: string;
+  pinEnabled: boolean;
   onBack: () => void;
   onSave: (next: { nickname: string; app_icon: string; app_icon_image: string; month_start_day: number; ai_context: string }) => Promise<boolean>;
   netWorthDisplay: NetWorthDisplaySettings;
   onSaveNetWorthDisplay: (next: NetWorthDisplaySettings) => void;
+  onOpenPin: () => void;
+  onLogout: () => void;
 }) {
   const [nickname, setNickname] = useState(profile?.nickname ?? "");
   const app_icon = profile?.app_icon ?? "";
@@ -581,15 +505,15 @@ export function ProfileView({
   };
 
   return (
-    <PageFrame onBack={onBack} eyebrow="ตั้งค่า" title="จัดการโปรไฟล์" className="profile-page">
+    <PageFrame onBack={onBack} eyebrow="ตั้งค่า" title="บัญชีของฉัน" className="profile-page">
       <section className="profile-editor-preview" aria-label="ตัวอย่างโปรไฟล์">
         <span className={`profile-editor-avatar ${app_icon_image ? "has-image" : ""}`}>
           {app_icon_image ? <NextImage className="profile-image" src={app_icon_image} alt="รูปโปรไฟล์ปัจจุบัน" width={72} height={72} unoptimized /> : (app_icon || nameInitial(profileName))}
         </span>
         <div>
-          <small>รูปโปรไฟล์ปัจจุบัน</small>
+          <small>บัญชีที่ล็อกอินอยู่</small>
           <b>{profileName}</b>
-          <span>เปลี่ยนรูปหรือชื่อได้ด้านล่าง</span>
+          <span>{user.email}</span>
         </div>
       </section>
       <label>
@@ -658,6 +582,21 @@ export function ProfileView({
       <button className="save" onClick={submit} disabled={busy}>
         {busy ? "กำลังบันทึก..." : "บันทึก"}
       </button>
+
+      {/* Below the save button on purpose: neither of these edits the form
+          above, and putting them in the same flow would make "บันทึก" look
+          like it applied to them too. */}
+      <section className="account-actions">
+        <button className="account-action-row" onClick={onOpenPin}>
+          <Lock size={16} strokeWidth={2.25} aria-hidden="true" />
+          <span>
+            <b>รหัส PIN</b>
+            <small>{pinEnabled ? "เปิดใช้อยู่ · เปลี่ยนรหัสหรือปิดได้" : "ยังไม่ได้ตั้ง · ล็อกแอพกันคนอื่นเปิดดู"}</small>
+          </span>
+          <ChevronRight size={16} strokeWidth={2.25} aria-hidden="true" />
+        </button>
+        <button className="logout-button" onClick={onLogout}>ออกจากระบบ</button>
+      </section>
     </PageFrame>
   );
 }

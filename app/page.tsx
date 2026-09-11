@@ -93,7 +93,7 @@ import {
   TRANSACTION_COLUMNS,
   WALLET_COLUMNS,
 } from "@/lib/constants";
-import { ChevronLeft, Menu, X } from "lucide-react";
+import { ChevronLeft, Moon, Sun } from "lucide-react";
 import { WalletAvatarGlyph } from "@/components/shared";
 import { BottomNav } from "@/components/bottom-nav";
 import { captureSheetOrigin, ConfirmDialog, CountUpMoney, ElapsedSeconds, ErrorActions, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss } from "@/components/primitives";
@@ -138,7 +138,6 @@ const ConfirmLogout = dynamic(() => import("@/components/sheets").then((m) => m.
 const MoreSheet = dynamic(() => import("@/components/sheets").then((m) => m.MoreSheet), { ssr: false });
 const ProfileView = dynamic(() => import("@/components/sheets").then((m) => m.ProfileView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const ReportExportView = dynamic(() => import("@/components/sheets").then((m) => m.ReportExportView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
-const SideMenu = dynamic(() => import("@/components/sheets").then((m) => m.SideMenu), { ssr: false });
 
 // The first-run setup gate. Only an account with nothing in it ever renders
 // it, so it has no business in the bundle everyone else downloads.
@@ -290,7 +289,6 @@ export default function Home() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [receiptTotal, setReceiptTotal] = useState(0);
   const [editing, setEditing] = useState<Entry | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   // Where the "อื่น ๆ" nav button sat when it was tapped, so the sheet can
   // expand out of it instead of just sliding up from the bottom edge.
@@ -849,7 +847,6 @@ export default function Home() {
   }, [ready]);
 
   const overlayOpen =
-    menuOpen ||
     moreOpen ||
     !!editing ||
     !!debtorSheetMode ||
@@ -899,7 +896,6 @@ export default function Home() {
       backgroundedAtRef.current = null;
       if (!backgroundedAt || pinMode !== "unlocked" || !profile?.pin_hash) return;
       if (Date.now() - backgroundedAt < pinBackgroundLockMs) return;
-      setMenuOpen(false);
       setRecapOpen(false);
       setDebtorSheetMode(null);
       setWalletSheetMode(null);
@@ -2652,8 +2648,6 @@ export default function Home() {
   const investmentPriceDismiss = useDismiss(!!investmentPriceTarget, () => setInvestmentPriceTarget(null));
   const investmentConfirmDismiss = useDismiss(!!investmentConfirmTarget, () => setInvestmentConfirmTarget(null));
   const investmentAiDismiss = useDismiss(investmentAiSheetOpen, () => setInvestmentAiSheetOpen(false));
-  const menuDismiss = useDismiss(menuOpen, () => setMenuOpen(false));
-  const menuVisible = menuDismiss.mounted && !menuDismiss.closing;
   const moreDismiss = useDismiss(moreOpen, () => setMoreOpen(false));
   const goalSheetDismiss = useDismiss(goalSheetOpen, () => setGoalSheetOpen(false));
   const recapDismiss = useDismiss(recapOpen, () => setRecapOpen(false));
@@ -2714,18 +2708,31 @@ export default function Home() {
             pill's own frosted background. */}
         <div className="topbar-scrim" aria-hidden="true" />
         <header className="topbar">
-          <div className="home-identity">
+          {/* The greeting IS the way into the account -- tapping your own name
+              and face is where anyone looks for "my settings", and it saved a
+              whole drawer whose only job was to hold two links to here. */}
+          <button className="home-identity" onClick={() => setTab("profile")} aria-label="บัญชีและการตั้งค่า">
             <span className={`home-profile-icon ${displayIconImage ? "has-image" : ""}`}>
               {displayIconImage && <NextImage className="profile-image" src={displayIconImage} alt="" width={42} height={42} unoptimized />}
               {!displayIconImage && displayIcon}
             </span>
-            <div>
-            <p className="eyebrow">สวัสดี</p>
-              <h1>{displayName}</h1>
-            </div>
-          </div>
-          <button className={`menu-button ${menuVisible ? "active" : ""}`} onClick={() => { if (menuVisible) menuDismiss.requestClose(); else setMenuOpen(true); }} title={menuVisible ? "ปิดเมนู" : "เมนู"} aria-label={menuVisible ? "ปิดเมนู" : "เปิดเมนู"} aria-expanded={menuVisible}>
-            {menuVisible ? <X size={18} strokeWidth={2.25} aria-hidden="true" /> : <Menu size={18} strokeWidth={2.25} aria-hidden="true" />}
+            <span>
+              <span className="eyebrow">สวัสดี</span>
+              <b>{displayName}</b>
+            </span>
+          </button>
+          {/* The one setting worth a permanent button: it is the only one
+              people flip more than once, and at two states it needs no menu
+              to choose from -- the icon shows where the tap will take you. */}
+          <button
+            className="menu-button"
+            onClick={() => changeTheme(theme === "dark" ? "light" : "dark")}
+            title={theme === "dark" ? "ใช้ธีมสว่าง" : "ใช้ธีมมืด"}
+            aria-label={theme === "dark" ? "เปลี่ยนเป็นธีมสว่าง" : "เปลี่ยนเป็นธีมมืด"}
+          >
+            {theme === "dark"
+              ? <Sun size={18} strokeWidth={2.25} aria-hidden="true" />
+              : <Moon size={18} strokeWidth={2.25} aria-hidden="true" />}
           </button>
         </header>
 
@@ -3030,12 +3037,16 @@ export default function Home() {
         {tab === "profile" && (
           <ProfileView
             profile={profile}
+            user={user}
             busy={busy}
             error={error}
+            pinEnabled={pinEnabled}
             onBack={() => setTab("home")}
             onSave={saveProfile}
             netWorthDisplay={netWorthDisplay}
             onSaveNetWorthDisplay={updateNetWorthDisplay}
+            onOpenPin={() => setTab("security")}
+            onLogout={() => setLogoutOpen(true)}
           />
         )}
 
@@ -3187,19 +3198,6 @@ export default function Home() {
             onAnalyze={analyzeInvestmentText}
             onSave={(input) => createPendingInvestmentPurchase(input)}
             closing={investmentAiDismiss.closing}
-          />
-        )}
-        {menuDismiss.mounted && (
-          <SideMenu
-            user={user}
-            profile={profile}
-            onClose={menuDismiss.requestClose}
-            onLogout={() => { menuDismiss.requestClose(); setLogoutOpen(true); }}
-            onOpenProfile={() => { menuDismiss.requestClose(); setTab("profile"); }}
-            onOpenPin={() => { menuDismiss.requestClose(); setTab("security"); }}
-            theme={theme}
-            onSetTheme={changeTheme}
-            closing={menuDismiss.closing}
           />
         )}
         {moreDismiss.mounted && (

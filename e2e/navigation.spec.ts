@@ -30,11 +30,13 @@ test.describe("navigation", () => {
     expect(await app.evaluate(() => (document.querySelector(".phone") as HTMLElement).style.overflowY)).toBe("");
   });
 
-  test("opens and closes the side menu", async ({ app }) => {
-    await app.locator(".menu-button").click();
-    await expect(app.locator(".side-menu")).toBeVisible();
-    await app.locator(".side-menu-backdrop").click({ position: { x: 8, y: 400 } });
-    await expect(app.locator(".side-menu")).toHaveCount(0);
+  test("opens the account screen from the topbar identity", async ({ app }) => {
+    // There is no drawer any more: your own name and face in the topbar is
+    // the way in, and it goes to a screen rather than an overlay.
+    await app.locator(".home-identity").click();
+    await expect(app.locator(".add-title h2")).toHaveText("บัญชีของฉัน");
+    await expect(app.locator(".sheet-backdrop")).toHaveCount(0);
+    await expect(app.getByRole("button", { name: "ออกจากระบบ" })).toBeVisible();
   });
 
 
@@ -42,22 +44,21 @@ test.describe("navigation", () => {
   // the tab you were on: it gets a back button, keeps the bottom nav live,
   // and does not scroll-lock the page behind it.
   //
-  // Which menu it is reached from is the second thing checked here. งบประมาณ,
-  // ถาม AI and ส่งออกรีพอร์ท are money features and live under the nav's
-  // "อื่น ๆ" with the rest of them; the drawer holds the account and nothing
-  // else. They used to be split down no line at all.
+  // Where it is reached from is the second thing checked here: every money
+  // feature is under the nav's "อื่น ๆ", and the account is behind the
+  // topbar identity. They used to be split down no line at all, across an
+  // "อื่น ๆ" sheet and a hamburger drawer.
   const MENU_SCREENS = [
     { label: "งบประมาณ", heading: "งบประมาณต่อเดือน", from: "more" },
     { label: "ถาม AI เรื่องเงิน", heading: "ถาม AI เรื่องเงิน", from: "more" },
     { label: "ส่งออกรีพอร์ท", heading: "รีพอร์ท Excel / Sheets", from: "more" },
-    { label: "จัดการโปรไฟล์", heading: "จัดการโปรไฟล์", from: "drawer" },
-    { label: "รหัส PIN", heading: "เปิดใช้ PIN", from: "drawer" },
+    { label: "รหัส PIN", heading: "เปิดใช้ PIN", from: "account" },
   ] as const;
 
-  async function openMenuScreen(app: Parameters<typeof navigate>[0], label: string, from: "more" | "drawer") {
-    if (from === "drawer") {
-      await app.locator(".menu-button").click();
-      await app.locator(".side-menu-list button", { hasText: label }).click();
+  async function openMenuScreen(app: Parameters<typeof navigate>[0], label: string, from: "more" | "account") {
+    if (from === "account") {
+      await app.locator(".home-identity").click();
+      await app.locator(".account-action-row", { hasText: label }).click();
       return;
     }
     await navigate(app, "more");
@@ -69,8 +70,8 @@ test.describe("navigation", () => {
       await openMenuScreen(app, label, from);
 
       await expect(app.locator(".add-title h2")).toHaveText(heading);
-      // The drawer is gone and nothing modal took its place.
-      await expect(app.locator(".side-menu")).toHaveCount(0);
+      // Whatever it was opened from has closed, and nothing modal took its
+      // place -- these are screens, not sheets stacked over the last tab.
       await expect(app.locator(".sheet-backdrop")).toHaveCount(0);
       // A page, so the app scroller is still live and the nav still reachable.
       expect(await app.evaluate(() => (document.querySelector(".phone") as HTMLElement).style.overflowY)).toBe("");
@@ -202,7 +203,7 @@ test.describe("navigation", () => {
 
     // A menu screen selects no tab: the pill fades out where it stands
     // rather than sliding off to somewhere arbitrary.
-    await openMenuScreen(app, "จัดการโปรไฟล์", "drawer");
+    await app.locator(".home-identity").click();
     await app.waitForTimeout(400);
     expect((await geometry()).opacity).toBe(0);
   });

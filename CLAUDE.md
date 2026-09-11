@@ -109,6 +109,15 @@ in a browser before starting a design task.**
   `fill: none; stroke: currentColor` set explicitly in CSS; `lucide-react`
   icons already handle this internally via their `strokeWidth` prop, so
   they don't need it.
+- **The topbar holds the account and one setting, not a menu.** Your own
+  avatar and greeting (`.home-identity`) is a button into the account screen
+  (`ProfileView` — profile, month start, AI context, net worth display, PIN,
+  sign out), and the button on the right flips the theme in one tap. There
+  was a hamburger drawer here; once every money feature moved into the nav's
+  "อื่น ๆ" it held two links and a sign-out button, and paid for them with a
+  permanent topbar button and an overlay layer. Don't reintroduce a drawer to
+  hold a setting — a new one belongs on the account screen, or in
+  "อื่น ๆ" if it is about money rather than about the account.
 - **`.phone` is the real, edge-to-edge app root at every width — not a
   device mockup.** There is no rounded-card-with-drop-shadow "phone frame"
   centered on a differently-colored backdrop any more; that read as a

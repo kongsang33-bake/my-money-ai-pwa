@@ -640,10 +640,33 @@ a:focus-visible {
   }
 }
 
+/* The account button: the avatar and greeting, tappable as one. Padding
+   rather than a visible fill -- it should read as the identity it always
+   was, not as a control bolted into the topbar. */
 .home-identity {
   display: flex;
   align-items: center;
   gap: var(--s-2);
+  min-width: 0;
+  padding: var(--s-1) var(--s-2);
+  margin-inline-start: calc(var(--s-2) * -1);
+  border-radius: var(--r-full);
+  background: transparent;
+  text-align: left;
+  transition: transform var(--t-press) var(--e-out), background var(--t-2) var(--e-out);
+}
+
+.home-identity:hover, .home-identity:focus-visible {
+  background: var(--surface-2);
+}
+
+.home-identity:active {
+  transform: scale(0.98);
+}
+
+.home-identity > span:last-child {
+  display: grid;
+  min-width: 0;
 }
 
 .home-profile-icon {
@@ -716,10 +739,13 @@ a:focus-visible {
   font-size: var(--fs-body);
 }
 
-.home-identity h1 {
+.home-identity b {
   font-size: var(--fs-body);
   font-weight: var(--fw-bold);
   line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .topbar .eyebrow {
@@ -768,7 +794,22 @@ a:focus-visible {
   }
 
   .phone.tab-home .topbar .eyebrow,
-  .phone.tab-home .home-identity h1 {
+  .phone.tab-home .home-identity b {
+    color: var(--hero-text);
+  }
+
+  /* The topbar shares the hero's coral fill on Home, so both buttons in it
+     have to invert with it -- the theme switch used --ink-2, which is all
+     but invisible there. */
+  .phone.tab-home .menu-button {
+    color: var(--hero-text);
+  }
+
+  .phone.tab-home .home-identity:hover,
+  .phone.tab-home .home-identity:focus-visible,
+  .phone.tab-home .menu-button:hover,
+  .phone.tab-home .menu-button:focus-visible {
+    background: var(--overlay-on-primary);
     color: var(--hero-text);
   }
 
@@ -905,7 +946,7 @@ a:focus-visible {
    flipped. Keying off the live backdrops rather than that state also brings
    it back the moment one is marked .closing, so it has slid back into place
    underneath the more sheet by the time that finishes collapsing onto it. */
-.phone:has(.sheet-backdrop:not(.closing), .dialog-backdrop:not(.closing), .side-menu-backdrop:not(.closing)) .bottom-nav {
+.phone:has(.sheet-backdrop:not(.closing), .dialog-backdrop:not(.closing)) .bottom-nav {
   --nav-shift: calc(100% + var(--s-5));
   opacity: 0;
   pointer-events: none;
@@ -1130,7 +1171,7 @@ a:focus-visible {
 }
 
 /* Segmented toggles: theme switch, lend/own, month/year */
-.theme-toggle, .report-period-toggle {
+.report-period-toggle {
   position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1145,7 +1186,7 @@ a:focus-visible {
   margin-top: 6px;
 }
 
-.theme-toggle button, .report-period-toggle button {
+.report-period-toggle button {
   position: relative;
   z-index: 1;
   display: inline-flex;
@@ -1160,35 +1201,11 @@ a:focus-visible {
   transition: background var(--t-2) var(--e-out), color var(--t-2) var(--e-out), transform var(--t-2) var(--e-out);
 }
 
-.theme-toggle button.active, .report-period-toggle button.active {
+.report-period-toggle button.active {
   background: var(--primary);
   color: var(--primary-text);
 }
 
-.theme-toggle button {
-  min-height: 36px;
-  padding: 8px;
-  background: transparent;
-}
-
-.theme-toggle button.active {
-  background: transparent;
-  color: var(--primary-text);
-}
-
-.theme-toggle-thumb {
-  position: absolute;
-  inset: 4px auto 4px 4px;
-  width: calc(50% - 4px);
-  border-radius: var(--r-md);
-  background: var(--primary);
-  box-shadow: var(--sh-1);
-  transition: transform var(--t-3) var(--e-out);
-}
-
-.theme-toggle-dark .theme-toggle-thumb {
-  transform: translateX(100%);
-}
 
 .pin-mode-toggle {
   grid-template-columns: none;
@@ -4358,7 +4375,7 @@ button.entry-main {
    is animating and every frame counts. --overlay-scrim already does the
    separating work at 45%/60% opacity; the blur under it was costing a
    scroll-and-open budget nobody could see. */
-.sheet-backdrop, .dialog-backdrop, .side-menu-backdrop {
+.sheet-backdrop, .dialog-backdrop {
   position: fixed;
   inset: 0;
   background: var(--overlay-scrim);
@@ -4373,10 +4390,6 @@ button.entry-main {
   z-index: var(--z-dialog);
 }
 
-.side-menu-backdrop {
-  justify-content: flex-end;
-  z-index: var(--z-drawer);
-}
 
 .sheet-backdrop {
   z-index: var(--z-sheet);
@@ -4773,61 +4786,6 @@ button.entry-main {
   margin: var(--s-3) 0;
 }
 
-/* Side menu */
-.side-menu {
-  width: min(86%, 344px);
-  height: 100%;
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
-  border-left: 1px solid var(--line);
-  padding: max(var(--s-5), env(safe-area-inset-top)) var(--s-4) max(var(--s-5), env(safe-area-inset-bottom));
-  display: flex;
-  flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: auto;
-  backdrop-filter: blur(24px) saturate(1.08);
-  box-shadow: var(--sh-3);
-  animation: drawer-in var(--t-3) var(--e-out) both;
-}
-
-/* Same trade as .topbar's coarse-pointer rule: a full-height translucent
-   panel re-filters everything behind it on every frame of its slide-in.
-   Kept next to the rule it overrides (not up with .topbar's) because the
-   two have equal specificity, so only source order decides the winner. */
-@media (hover: none), (pointer: coarse) {
-  .side-menu {
-    background: color-mix(in srgb, var(--surface) 98%, transparent);
-    backdrop-filter: none;
-  }
-}
-
-.profile-head {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  padding-bottom: var(--s-4);
-  border-bottom: 1px solid var(--line-soft);
-  margin-bottom: var(--s-4);
-}
-
-.drawer-account {
-  padding: var(--s-2) 0 var(--s-4);
-}
-
-.drawer-close {
-  width: 34px;
-  height: 34px;
-  margin-left: auto;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--r-full);
-  background: var(--surface-2);
-  color: var(--ink-2);
-  display: grid;
-  place-items: center;
-  transition: transform var(--t-press) var(--e-out), background var(--t-2) var(--e-out);
-}
-
-.drawer-close:active { transform: scale(0.92); }
-
 .avatar {
   width: 44px;
   height: 44px;
@@ -4843,75 +4801,56 @@ button.entry-main {
   flex-shrink: 0;
 }
 
-.profile-head b {
-  display: block;
-  font-size: var(--fs-body-sm);
-}
-
-.profile-head small {
-  display: block;
-  font-size: var(--fs-caption);
-  color: var(--ink-3);
-}
-
-.side-menu-list {
+/* The foot of the account screen: the lock, and the way out. Bare tier --
+   these are two actions after a form, not a card of their own, and a box
+   around them would make them look like more settings to fill in. */
+.account-actions {
   display: grid;
-  gap: var(--s-5);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-3);
+  margin-top: var(--s-7);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--line-soft);
 }
 
-.side-menu-section {
+.account-action-row {
   display: grid;
-  gap: var(--s-1);
-}
-
-.side-menu-section p {
-  color: var(--ink-3);
-  font-size: var(--fs-micro);
-  font-weight: var(--fw-semibold);
-  text-transform: uppercase;
-}
-
-.side-menu-list button {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--s-2);
-  padding: var(--s-3) var(--s-2);
+  gap: var(--s-3);
+  min-height: 44px;
+  padding: var(--s-3);
+  margin-inline: calc(var(--s-3) * -1);
   border-radius: var(--r-md);
   background: transparent;
-  font-weight: var(--fw-semibold);
-  font-size: var(--fs-body);
   text-align: left;
-  min-height: 44px;
+  color: var(--ink-3);
   transition: transform var(--t-press) var(--e-out), background var(--t-2) var(--e-out);
 }
 
-.side-menu-list button:hover {
+.account-action-row:hover, .account-action-row:focus-visible {
   background: var(--surface-2);
 }
 
-.side-menu-list button:active {
-  transform: scale(0.98);
+.account-action-row:active {
+  transform: scale(0.99);
 }
 
-.side-menu-list button svg {
-  color: var(--ink-3);
-}
-
-.side-menu-list button b {
-  color: var(--ink-3);
-  font-size: var(--fs-caption);
-  min-width: 48px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.side-menu-footer {
-  margin-top: auto;
+.account-action-row > span {
   display: grid;
-  gap: var(--s-3);
-  padding: var(--s-5) 0 var(--s-1);
-  border-top: 1px solid var(--line-soft);
+  min-width: 0;
+}
+
+.account-action-row b {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+}
+
+.account-action-row small {
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+  color: var(--ink-3);
 }
 
 /* -------------------------------------------------------------------------
@@ -5979,10 +5918,6 @@ button.entry-main {
   to { opacity: 0; }
 }
 
-@keyframes drawer-in {
-  from { opacity: 0.6; transform: translateX(24px); }
-  to { opacity: 1; transform: translateX(0); }
-}
 
 @keyframes pop-in {
   from { opacity: 0; transform: scale(0.94) translateY(6px); }
@@ -6016,10 +5951,6 @@ button.entry-main {
   to { opacity: 0; transform: translateY(24px); }
 }
 
-@keyframes drawer-out {
-  from { opacity: 1; transform: translateX(0); }
-  to { opacity: 0; transform: translateX(24px); }
-}
 
 @keyframes pop-out {
   from { opacity: 1; transform: scale(1) translateY(0); }
@@ -6030,7 +5961,7 @@ button.entry-main {
    its "-in" animation so it doesn't just vanish; see the Dismissable
    helper in app/page.tsx, which keeps the overlay mounted until the
    animation finishes. */
-.sheet-backdrop.closing, .dialog-backdrop.closing, .side-menu-backdrop.closing {
+.sheet-backdrop.closing, .dialog-backdrop.closing {
   animation: fade-out var(--t-2) ease both;
 }
 
@@ -6053,9 +5984,6 @@ button.entry-main {
   animation: scrim-out-late var(--t-3) var(--e-in-out) both;
 }
 
-.side-menu.closing {
-  animation: drawer-out var(--t-3) var(--e-out) both;
-}
 
 .confirm-dialog.closing {
   animation: pop-out var(--t-2) var(--e-out) both;
@@ -6254,9 +6182,6 @@ button.entry-main {
     padding: var(--s-6);
   }
 
-  .side-menu {
-    width: min(360px, calc(100vw - 48px));
-  }
 
   .bottom-nav {
     position: fixed;
