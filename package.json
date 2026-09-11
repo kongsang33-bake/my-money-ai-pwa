@@ -12,6 +12,7 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "test": "node --experimental-strip-types --test lib/*.test.ts",
     "test:e2e": "playwright test",
+    "verify:design": "node scripts/verify-no-hardcoded-colors.mjs",
     "verify:preview-stripped": "sh scripts/verify-preview-stripped.sh"
   },
   "dependencies": {

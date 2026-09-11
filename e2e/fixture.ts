@@ -188,6 +188,30 @@ async function injectSeed(page: Page, seed: PreviewSeed) {
 }
 
 /**
+ * Waits out every entrance animation on the page.
+ *
+ * Not waiting was the first thing the design audit got wrong: the card ladder and
+ * the view transition both start at opacity 0 with animation-fill-mode:
+ * backwards, so measuring too early reported perfectly good text as 1.00:1
+ * against its own background. Infinite animations (the loading shimmer) are
+ * left out because they never finish, and the whole wait is bounded in case
+ * something else is running forever.
+ */
+export async function waitForAnimations(page: Page) {
+  await page.evaluate(async () => {
+    const running = document
+      .getAnimations()
+      .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+      .map((animation) => animation.finished.catch(() => undefined));
+    await Promise.race([
+      Promise.all(running),
+      new Promise((resolve) => window.setTimeout(resolve, 2000)),
+    ]);
+  });
+  await page.waitForTimeout(120);
+}
+
+/**
  * Waits until an element has stopped moving, before geometry is read off it.
  *
  * boundingBox() is one round-trip per element, so measuring a title in one

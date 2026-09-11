@@ -164,6 +164,20 @@ token value.
   silently now that the error boundary keeps the app on its feet. If
   Playwright cannot download its own browser, point `E2E_CHROMIUM_PATH` at
   an existing Chromium binary.
+- **The design rules in this file are checked, not just written down.**
+  `npm run verify:design` fails on a colour written as a literal anywhere
+  outside the `:root` token blocks (the rule under "Use the token scales"),
+  with four documented exceptions it names when it fails. `e2e/a11y.spec.ts`
+  measures the *rendered* page on every screen, in both themes, at all three
+  widths, for three things a screenshot only catches if you happen to look:
+  WCAG 1.4.3 contrast, WCAG 2.5.8 target size (24×24), and content wider than
+  `.phone` — which is invisible by construction, since `.phone` sets
+  `overflow-x: hidden` and simply clips it. Target size and overflow are held
+  at zero. Contrast is ratcheted against `e2e/contrast-baseline.json`: the
+  palette has ~34 pairs that do not reach AA today, clearing them is a
+  deliberate re-tuning rather than a bug fix, and the ledger exists so the
+  list cannot quietly grow in the meantime. Read the comment at the top of
+  that spec before regenerating it.
 - **The e2e suite stops at the first write, and that is not a gap you can
   close with another spec.** It runs without Supabase credentials, and every
   mutation in `app/page.tsx` opens with `if (!supabase) return` — so save,
