@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { test, expect, buildSeed, navigate, openApp, openSetup, waitForApp } from "./fixture.ts";
+import { test, expect, buildEmptySeed, buildSeed, navigate, openApp, openSetup, waitForApp } from "./fixture.ts";
 import { auditScreen, type Finding, type ScreenAudit } from "./audit.ts";
 
 // The objective half of a design review, run on every screen, in both themes,
@@ -70,6 +70,14 @@ for (const theme of ["light", "dark"] as const) {
     await page.getByRole("button", { name: "ไปหน้าแรกก่อน" }).click();
     await waitForApp(page);
     audits.push(await auditScreen(page, `${theme}/home-empty`));
+
+    // The state where money has been jotted with no wallet to count it: one
+    // bold-tier warning card that no other screen shows.
+    await openApp(page, {
+      ...buildEmptySeed(),
+      entries: buildSeed().entries.slice(0, 5).map((entry) => ({ ...entry, wallet_id: null })),
+    });
+    audits.push(await auditScreen(page, `${theme}/home-no-wallet`));
 
     // Then an account with real data in it, where every card is populated.
     await openApp(page, buildSeed());

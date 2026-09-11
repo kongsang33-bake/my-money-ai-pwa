@@ -182,11 +182,15 @@ token value.
   WCAG 1.4.3 contrast, WCAG 2.5.8 target size (24×24), and content wider than
   `.phone` — which is invisible by construction, since `.phone` sets
   `overflow-x: hidden` and simply clips it. Target size and overflow are held
-  at zero. Contrast is ratcheted against `e2e/contrast-baseline.json`: the
-  palette has ~34 pairs that do not reach AA today, clearing them is a
-  deliberate re-tuning rather than a bug fix, and the ledger exists so the
-  list cannot quietly grow in the meantime. Read the comment at the top of
-  that spec before regenerating it.
+  at zero. Contrast is ratcheted against `e2e/contrast-baseline.json`: 26
+  pairs in the palette still do not reach AA, clearing them is a deliberate
+  re-tuning rather than a bug fix, and the ledger exists so the list cannot
+  quietly grow in the meantime. Read the comment at the top of that spec
+  before regenerating it. The money colours were the first group cleared —
+  see the `--income`/`--expense` comment in `globals.css` for the
+  text-weight vs fill-weight split that made it possible. What is left is
+  mostly the coral hero family (white on `--hero-bg`), the `--cat-*` avatar
+  initials, and the heatmap's two darkest buckets.
 - **The e2e suite stops at the first write, and that is not a gap you can
   close with another spec.** It runs without Supabase credentials, and every
   mutation in `app/page.tsx` opens with `if (!supabase) return` — so save,

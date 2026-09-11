@@ -48,11 +48,15 @@
      --ink-inverse (flips opposite the theme, which for dark mode's citrus
      analogue would still land near-white — wrong direction here) */
   --accent-contrast: var(--ink);
-  /* dark mode's --income is deliberately the same acid as --primary (see the
-     dark block below) — text on a --income fill needs the same per-theme
-     contrast treatment as --accent-contrast, for the same reason. --expense
-     never gets bright enough in either theme to need this. */
-  --income-contrast: var(--text-on-color);
+  /* Text on a full-strength --income-fill, in both themes, for the same
+     reason --accent-contrast exists: the income fill is a bright hue on both
+     sides (mint here, the same acid as --primary in dark), and white on it
+     reads at 2.35:1. Dark ink is the only thing that works over either.
+     --expense-fill needs the same treatment for the opposite halves of the
+     pair: its light-mode fill is deep enough for white, its dark-mode fill
+     is a light pink that white cannot sit on. */
+  --income-contrast: var(--ink);
+  --expense-contrast: var(--text-on-color);
   --primary: #241536;
   --primary-hover: #34204c;
   --primary-text: #fff3e1;
@@ -77,10 +81,18 @@
   --overlay-on-primary-border: rgba(255, 255, 255, 0.3);
   --shimmer-sheen: rgba(255, 255, 255, 0.35);
 
-  /* semantic amounts */
-  --income: #2fbf87;
+  /* Semantic amounts. These are the colours money is WRITTEN in -- every
+     +฿ and −฿ on the timeline, the statement, the pace verdict -- so they
+     are picked to clear WCAG AA (4.5:1) as 13-15px text on all three light
+     grounds (--bg, --surface, --surface-2), not to look good as a 300px
+     tile. Darkened from the original mint/magenta in OKLCH with the hue
+     held and as much chroma kept as the gamut allowed, which is why they
+     are still unmistakably green and pink rather than the muddy result of
+     scaling toward black. The bright originals live on below as
+     --income-fill / --expense-fill, which is what large areas use. */
+  --income: #037b53;
   --income-soft: #e3f7ee;
-  --expense: #e63c8c;
+  --expense: #cb1a76;
   --expense-soft: #fdeaf3;
   /* Large-area ("bold tier") variants of the three fill hues. A color that
      reads as confident on a 12px bar, a chip or a 56px FAB turns into a
@@ -88,12 +100,18 @@
      what actually makes a theme tiring to look at, not the hue itself. So
      every full-tile fill goes through these instead of --income/--expense/
      --accent directly, and only the small uses keep the undimmed hue.
-     Light mode is a color-blocked bento by design, so here they're plain
-     aliases; the dark block below is where they diverge. */
-  --income-fill: var(--income);
-  --expense-fill: var(--expense);
+     Light mode is a color-blocked bento by design, so --accent-fill is a
+     plain alias here; the dark block below is where it diverges.
+
+     --income-fill/--expense-fill are pinned rather than aliased, and hold
+     the bright mint and magenta the semantic tokens above used to be. That
+     is the mirror of the same argument: a colour sized for a 300px tile is
+     too light to read at 13px, and one tuned for 13px is too heavy spread
+     over a tile. */
+  --income-fill: #2fbf87;
+  --expense-fill: #e63c8c;
   --accent-fill: var(--accent);
-  --danger: #d6234b;
+  --danger: #d11b47;
   --danger-soft: #fce7eb;
   --danger-border: #f5b9c7;
 
@@ -270,6 +288,7 @@
   --accent-line: rgba(94, 208, 230, 0.32);
   --accent-contrast: #101116;
   --income-contrast: #101116;
+  --expense-contrast: #101116;
   --primary: #c7e05c;
   --primary-hover: #d3e97a;
   --primary-text: #101116;
@@ -1960,7 +1979,7 @@ a:focus-visible {
 }
 
 .start-checklist-steps li.done {
-  color: var(--ink-4);
+  color: var(--ink-3);
 }
 
 .start-checklist-mark {
@@ -1974,9 +1993,13 @@ a:focus-visible {
   color: var(--ink-3);
 }
 
+/* The soft/semantic pair rather than a fill and a contrast token: --income
+   is a deep green in light and a bright acid in dark, so no single text
+   colour sits on it in both themes. --income-soft is the tint made to carry
+   --income as text, and a quieter tick suits a finished step anyway. */
 .start-checklist-steps li.done .start-checklist-mark {
-  background: var(--income);
-  color: var(--income-contrast);
+  background: var(--income-soft);
+  color: var(--income);
 }
 
 .start-checklist-steps b {
@@ -2014,8 +2037,10 @@ a:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--s-3);
-  background: var(--expense-fill);
-  color: var(--text-on-color);
+  /* --expense, not --expense-fill: the tile fill is tuned for one big number
+     over it, and this card's second line is 13px of explanation. */
+  background: var(--expense);
+  color: var(--expense-contrast);
 }
 
 .missing-wallet-notice b {
@@ -2024,22 +2049,25 @@ a:focus-visible {
   font-weight: var(--fw-semibold);
 }
 
+/* No opacity here, unlike the usual caption: this is the line that explains
+   why the balance is wrong, and dimming it is what pushed it under AA. */
 .missing-wallet-notice small {
   display: block;
   margin-top: var(--s-1);
   font-size: var(--fs-caption);
   line-height: var(--lh-snug);
-  color: var(--text-on-color);
-  opacity: 0.86;
 }
 
+/* A ground of its own rather than a translucent overlay on the fill -- a
+   white-ish wash over a saturated card is never dark enough for white text
+   to sit on. Inverted instead: the card's colour becomes the label. */
 .missing-wallet-notice button {
   justify-self: start;
   padding: 10px var(--s-4);
   border-radius: var(--r-full);
-  background: var(--overlay-on-primary-strong);
-  border: 1px solid var(--overlay-on-primary-border);
-  color: var(--text-on-color);
+  background: var(--expense-contrast);
+  border: none;
+  color: var(--expense);
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
 }
