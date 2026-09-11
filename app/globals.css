@@ -70,7 +70,7 @@
   /* the one full-bleed "hero" identity fill (balance card) — deliberately
      its own token, not --primary, so the hero stays a singular moment and
      buttons elsewhere don't compete with it */
-  --hero-bg: #d1402f;
+  --hero-bg: #ba594a;
   --hero-text: #ffffff;
   --hero-amount: #ffffff;
   --hero-border: none;
@@ -154,7 +154,7 @@
      comma-separated box-shadow list unconditionally (see .add-button) */
   --glow-primary: 0 0 0 rgba(36, 21, 54, 0);
   --overlay-scrim: rgba(58, 48, 40, 0.38);
-  --focus-ring: rgba(209, 64, 47, 0.45);
+  --focus-ring: rgba(186, 89, 74, 0.45);
 
   /* scales */
   /* Fixed-chrome heights, named so a screen that wants to fill exactly the
@@ -1544,16 +1544,27 @@ a:focus-visible {
   pointer-events: none;
 }
 
+/* z-index 2, above .hero-amount and .hero-wallet-foot, which both sit at 1.
+   This row carries the balance label's InfoHint, and position+z-index here
+   make a stacking context its popover cannot escape however high its own
+   z-index goes -- so at 1 it tied with the amount, and the amount, coming
+   later in the DOM, painted the numeral straight over the explanation. Same
+   trap as the kebab-menu note further up this file. */
 .hero-wallet-top {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--s-4);
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
-.hero-wallet-top span {
+/* Scoped through .insight-label rather than matching any span inside: this
+   rule and .info-hint > span are the same specificity (one class, one
+   element), so whichever sits later in the file wins -- and this one does.
+   That painted the hint's popover in the hero's white at 0.68 opacity,
+   i.e. white on its own white panel, invisible. */
+.hero-wallet-top > .insight-label > span {
   color: var(--hero-text);
   opacity: 0.68;
   font-size: var(--fs-body);

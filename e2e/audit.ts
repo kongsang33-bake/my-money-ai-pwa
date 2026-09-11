@@ -40,6 +40,14 @@ export type ScreenAudit = {
  * the phone is clipped without a scrollbar to show for it.
  */
 export async function auditScreen(page: Page, screen: string): Promise<ScreenAudit> {
+  // Open every explanation popover first. They are <details>, so they render
+  // nothing until opened -- which meant the audit never looked at them, and a
+  // popover that inherited the hero's white text onto its own white panel
+  // shipped invisible. An open popover can only cover other text, never sit
+  // under it, so it cannot disturb the backgrounds measured for anything else.
+  await page.evaluate(() => {
+    for (const hint of document.querySelectorAll("details.info-hint")) hint.setAttribute("open", "");
+  });
   await waitForAnimations(page);
   return page.evaluate(({ screen }) => {
     type Rgba = { r: number; g: number; b: number; a: number };
@@ -163,6 +171,18 @@ export async function auditScreen(page: Page, screen: string): Promise<ScreenAud
         .join("")
         .trim();
       if (!ownText || !visible(element)) continue;
+
+      // Text with something painted over it is not text anyone is reading,
+      // and measuring it compares a colour against a panel that is not its
+      // background. Opening the explanation popovers made this visible: they
+      // cover the hero's amount, which then measured as white on white.
+      const box = element.getBoundingClientRect();
+      const cx = box.left + box.width / 2;
+      const cy = box.top + box.height / 2;
+      if (cx >= 0 && cy >= 0 && cx <= window.innerWidth && cy <= window.innerHeight) {
+        const top = document.elementFromPoint(cx, cy);
+        if (top && top !== element && !element.contains(top)) continue;
+      }
 
       // 1.4.3 exempts inactive components outright -- a greyed-out save
       // button is meant to read as unavailable, and holding it to 4.5:1 would
