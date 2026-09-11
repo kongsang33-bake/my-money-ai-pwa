@@ -4,27 +4,35 @@ Guidance for working on this codebase — a Thai personal-finance PWA
 (Next.js App Router, single-file `app/page.tsx`, design system in
 `app/globals.css`).
 
-## Design system: Bento (light) / Neon Terminal (dark)
+## Design system: Paper (light) / Quiet Dark (dark)
 
-Monii is for someone who wants tracking money to feel like using a slick,
-confident consumer app, not filling out a ledger. Light mode is a genuinely
-saturated, playful color-blocked bento — full-hue tile fills, very round
-corners, soft colorful shadows, no hairline borders. Dark mode is a
-near-black neon terminal — quiet dark panels, hairline borders, moderate
-"squircle" radius, with boldness spent almost entirely on one glowing acid
-accent (the hero balance, the FAB, the active nav state) rather than on
-fills everywhere. The two are deliberately different visual worlds tied
-together by the same token names, not one palette re-lit for dark mode.
-**A rendered reference of this direction — including the two live variants
-it was chosen from — is committed at `docs/design-reference.html`; open it
-in a browser before starting a design task.**
+Monii should feel like keeping a notebook, not like operating a dashboard.
+Light mode is **paper**: warm off-white grounds with the chroma taken almost
+to zero, a hairline edge and the faintest lift instead of coloured drop
+shadows, corners eased back from pill to sheet, and colour used as ink —
+small marks, deep enough to read — rather than as tile fills. Exactly one
+full colour block survives, the coral hero, which reads as a band across the
+top of the page. Dark mode is **quiet dark**: near-black panels with hairline
+borders and no shadow, and its two loud hues are sage and warm sand, at the
+same lightness as the acid lime and electric cyan they replaced but with the
+chroma that made them glare taken out. The two are still different visual
+worlds tied by the same token names; they are no longer a bright theme and a
+neon one.
 
-- **Palette is per-theme, not just re-hued.** Light: bright cream `--bg`,
+This is the second direction. The first — a saturated color-blocked bento
+against a near-black neon terminal — is what `docs/design-reference.html`
+renders, so read that file as the record of how a direction gets chosen
+here, not as a description of the app today. **The live tokens at the top of
+`app/globals.css` are the reference; read those before starting a design
+task.**
+
+- **Palette is per-theme, not just re-hued.** Light: warm paper `--bg`,
   deep plum-ink `--ink`/`--primary` for text and every button/nav fill, a
-  coral `--hero-bg` reserved for the one full-bleed hero moment, citrus
-  `--accent` for a second bold fill (e.g. the due-soon tile). Dark: carbon
-  `--bg`, acid-lime `--primary` (buttons, FAB, active nav, the hero
-  numeral), electric-cyan `--accent` for secondary structure. `--income`/
+  deep coral `--hero-bg` reserved for the one full-bleed hero moment —
+  deep because white sits on it, which the old bright coral could not carry.
+  `--accent` (citrus) is a mark colour here, not a tile fill. Dark: carbon
+  `--bg`, sage `--primary` (buttons, FAB, active nav, the hero numeral),
+  warm sand `--accent` for secondary structure. `--income`/
   `--expense`/`--danger` carry all positive/negative/destructive meaning
   and are picked to stay distinct from `--primary`/`--accent` in each
   theme — don't reuse a semantic color as a decorative fill or vice versa.
@@ -37,21 +45,30 @@ in a browser before starting a design task.**
 - **Radius, border and shadow are theme tokens too, not just color.**
   `--card-border`/`--card-shadow` (tint-tier surfaces), `--hero-border`/
   `--hero-shadow`/`--hero-amount-glow` (the hero card), and the `--r-*`
-  scale itself all have different *shapes* per theme (light: no border,
-  soft shadow, very round; dark: hairline border, no shadow, moderate
-  radius) — not just different colors. This is what makes a component rule
+  scale itself all have different *shapes* per theme (light: hairline
+  border, the faintest warm-grey lift, sheet-of-paper radius; dark:
+  hairline border, no shadow at all, slightly tighter radius) — not just
+  different colors. The two are closer in shape than they used to be, which
+  is the accepted cost of light mode reading as paper: a page with a
+  coloured drop shadow reads as a tile. This is what makes a component rule
   never need its own `[data-theme="dark"]` override: point a component at
   the token, and both the color and the shape follow the theme.
 - **Three surface tiers, chosen per component, not one card rule for
   everything.** `app/globals.css`'s "Surface tiers" section: **tint** (the
   shared mega-selector rule — a quiet, still-boxed card; most content),
   **bold** (`.surface-bold` utility, or a component's own bold variant like
-  `.home-insight-card.savings-rate` / `.due-soon-card` — a full saturated
-  fill, used sparingly so it stays a highlight), and **bare** (no box at
-  all — `.activity-timeline`, `.quick-add-strip` — content separated by the
+  `.home-insight-card.savings-rate` / `.due-soon-card`), and **bare** (no box
+  at all — `.activity-timeline`, `.quick-add-strip` — content separated by the
   page's own gutter and whitespace, not a border). When adding a new
   section, decide its tier deliberately; don't default to copying the
   nearest existing card.
+  **What "bold" means is itself per-theme, and goes through a token, not a
+  component rule.** `.home-insight-card.savings-rate` and `.due-soon-card`
+  point at `--income-fill` / `--expense-fill` / `--accent-fill`; in dark
+  those are saturated fills, in light they are pale washes on paper, because
+  light spends its one colour block on the hero. Neither component knows.
+  If a new card wants to be loud, give it a fill token and let the token
+  decide per theme — don't write a saturated background into the rule.
 - **Font**: IBM Plex Sans Thai, loaded via `next/font/google` in
   `app/layout.tsx` and exposed as `--font-sans`. Don't add a second font or
   fall back to a system stack without a real reason.
@@ -136,9 +153,21 @@ itself, because the sameness was never in the colors; it was in the
 structure. If a design change here touches only color/size values in
 `globals.css` and zero `className`s or JSX structure in `app/page.tsx`, it
 is very unlikely to be a real redesign — treat that as a signal to stop and
-reconsider, not a sign the work is efficient. A real structural change
-looks like: the Home hero merging with the topbar into one full-bleed
-zone instead of a floating pill over a separate card, or the insight row
+reconsider, not a sign the work is efficient.
+
+A change of *palette direction* is not a counter-example to this, and the
+paper/quiet-dark pass is the one to point at: it is nearly all token values,
+and it was still the right shape of change, because what it set out to alter
+was the mood rather than the layout. The rule above is about the failure it
+is named after — trying to make the app feel like a different app by
+recolouring the same rounded rectangles. Deciding "light mode is paper now"
+and moving the grounds, the shadows, the radius scale and the meaning of the
+bold tier together is a direction; swapping hex codes inside an unchanged
+one is not. If you cannot say in a sentence what the new direction IS, you
+are doing the second thing.
+
+A real structural change looks like: the Home hero merging with the topbar
+into one full-bleed zone instead of a floating pill over a separate card, or the insight row
 becoming an asymmetric bento grid instead of a swipeable carousel of
 equal-sized cards (both in `app/page.tsx` + `app/globals.css` together).
 When redesigning a screen, decide its layout and surface tiers first, the

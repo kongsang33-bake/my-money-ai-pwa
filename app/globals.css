@@ -20,14 +20,19 @@
 :root {
   --font-sans: var(--font-sans), "Noto Sans Thai", -apple-system, "Segoe UI", sans-serif;
 
-  /* surfaces — bright warm cream, never the old muted beige */
-  --bg: #fff3e1;
-  --surface: #ffffff;
-  --surface-2: #ffead1;
-  --surface-3: #ffdfb8;
-  --line: #f0e4d2;
-  --line-soft: #f5ecdd;
-  --line-strong: #e8d2ac;
+  /* Surfaces — soft paper. Every one of these is the old cream's own hue
+     with the chroma taken almost to zero in OKLCH, so the warmth survives
+     and the orange does not: a page you could write on, not a peach tile.
+     --surface is the freshest sheet and sits ABOVE --bg on purpose, which
+     is what makes a card read as paper laid on a desk rather than a hole
+     cut in it. */
+  --bg: #f9f5f0;
+  --surface: #fffdfa;
+  --surface-2: #f1ece6;
+  --surface-3: #e6e1d9;
+  --line: #e5dfd6;
+  --line-soft: #efeae4;
+  --line-strong: #d3cbbf;
 
   /* text — deep plum-ink (chosen, not pure black: has a violet cast) */
   --ink: #241536;
@@ -40,7 +45,7 @@
      accent is the secondary citrus hue (no longer reserved for AI-only) */
   --accent: #ffc93c;
   --accent-strong: #e8ae1e;
-  --accent-soft: #fff3ce;
+  --accent-soft: #fcefd1;
   --accent-line: rgba(255, 201, 60, 0.45);
   /* --accent is a bright/light hue in both themes (citrus here, electric
      cyan in dark) — text on a full-strength --accent fill needs a genuinely
@@ -52,11 +57,12 @@
      reason --accent-contrast exists: the income fill is a bright hue on both
      sides (mint here, the same acid as --primary in dark), and white on it
      reads at 2.35:1. Dark ink is the only thing that works over either.
-     --expense-fill needs the same treatment for the opposite halves of the
-     pair: its light-mode fill is deep enough for white, its dark-mode fill
-     is a light pink that white cannot sit on. */
+     --expense-fill is the same story from the other side. In light both
+     fills are pale washes on paper, so both take ink; in dark both are
+     saturated and light, so both take the carbon ground. Either way the
+     answer is "the dark one", which is why neither is --text-on-color. */
   --income-contrast: var(--ink);
-  --expense-contrast: var(--text-on-color);
+  --expense-contrast: var(--ink);
   --primary: #241536;
   --primary-hover: #34204c;
   --primary-text: #fff3e1;
@@ -64,7 +70,7 @@
   /* the one full-bleed "hero" identity fill (balance card) — deliberately
      its own token, not --primary, so the hero stays a singular moment and
      buttons elsewhere don't compete with it */
-  --hero-bg: #ff6b57;
+  --hero-bg: #d1402f;
   --hero-text: #ffffff;
   --hero-amount: #ffffff;
   --hero-border: none;
@@ -91,28 +97,27 @@
      scaling toward black. The bright originals live on below as
      --income-fill / --expense-fill, which is what large areas use. */
   --income: #037b53;
-  --income-soft: #e3f7ee;
+  --income-soft: #e0f7ea;
   --expense: #cb1a76;
-  --expense-soft: #fdeaf3;
+  --expense-soft: #ffeaf0;
   /* Large-area ("bold tier") variants of the three fill hues. A color that
      reads as confident on a 12px bar, a chip or a 56px FAB turns into a
      light source once it fills a 300px tile — which on a dark ground is
      what actually makes a theme tiring to look at, not the hue itself. So
      every full-tile fill goes through these instead of --income/--expense/
      --accent directly, and only the small uses keep the undimmed hue.
-     Light mode is a color-blocked bento by design, so --accent-fill is a
-     plain alias here; the dark block below is where it diverges.
-
-     --income-fill/--expense-fill are pinned rather than aliased, and hold
-     the bright mint and magenta the semantic tokens above used to be. That
-     is the mirror of the same argument: a colour sized for a 300px tile is
-     too light to read at 13px, and one tuned for 13px is too heavy spread
-     over a tile. */
-  --income-fill: #2fbf87;
-  --expense-fill: #e63c8c;
-  --accent-fill: var(--accent);
+     In light mode they are pale washes: the paper theme spends its one
+     colour block on the hero and nothing else, so the tiles that used to
+     be saturated (the savings rate, the due-soon bill) are tinted paper
+     with the semantic colour as their ink. No component rule knows about
+     this -- .home-insight-card.savings-rate and .due-soon-card point at the
+     fill token, and the token is a wash here and a fill in dark. That is
+     the whole reason the tier goes through a token at all. */
+  --income-fill: #daf4e6;
+  --expense-fill: #ffe5ed;
+  --accent-fill: #fbebc9;
   --danger: #d11b47;
-  --danger-soft: #fce7eb;
+  --danger-soft: #ffeaeb;
   --danger-border: #f5b9c7;
 
   /* category palette (8-slot, re-saturated for the bold palette) */
@@ -136,17 +141,20 @@
      --card-border/--card-shadow are what the shared card block below and
      any future component consume, so the border-vs-shadow language for a
      "card" is itself a token, not hardcoded per component */
-  --sh-1: 0 2px 6px rgba(36, 21, 54, 0.08);
-  --sh-2: 0 12px 26px -12px rgba(36, 21, 54, 0.28);
-  --sh-3: 0 28px 56px -18px rgba(36, 21, 54, 0.32);
-  --card-border: none;
-  --card-shadow: var(--sh-2);
+  /* Paper on a desk: a hairline edge and the faintest lift, in warm grey
+     rather than the old plum. The bento's colourful drop shadows were the
+     other half of what made this theme read as tiles instead of pages. */
+  --sh-1: 0 1px 2px rgba(74, 58, 46, 0.06);
+  --sh-2: 0 2px 8px -3px rgba(74, 58, 46, 0.10);
+  --sh-3: 0 12px 28px -12px rgba(74, 58, 46, 0.16);
+  --card-border: 1px solid var(--line);
+  --card-shadow: var(--sh-1);
   --tile-edge-width: 0px;
   /* a real zero-effect shadow, not the none keyword, so it can sit in a
      comma-separated box-shadow list unconditionally (see .add-button) */
   --glow-primary: 0 0 0 rgba(36, 21, 54, 0);
-  --overlay-scrim: rgba(36, 21, 54, 0.45);
-  --focus-ring: rgba(255, 107, 87, 0.45);
+  --overlay-scrim: rgba(58, 48, 40, 0.38);
+  --focus-ring: rgba(209, 64, 47, 0.45);
 
   /* scales */
   /* Fixed-chrome heights, named so a screen that wants to fill exactly the
@@ -180,14 +188,14 @@
   --s-8: 40px;
   --s-9: 56px;
 
-  /* radius — committed to "very round" for this theme; every step is
-     rounder than the old scale, not just the large ones */
-  --r-xs: 10px;
-  --r-sm: 14px;
-  --r-md: 20px;
-  --r-lg: 28px;
-  --r-xl: 34px;
-  --r-2xl: 42px;
+  /* Radius — eased back from the bento's "very round" to the corner of a
+     card of paper. Still soft, no longer a pill. */
+  --r-xs: 7px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-xl: 22px;
+  --r-2xl: 28px;
   --r-full: 999px;
 
   /* type scale — 9 steps, re-ratioed so the top of the scale can actually
@@ -254,14 +262,17 @@
       between the two extremes. --bg sits a few steps off black and --ink a
       few steps off white so the pair lands ~12:1 — still comfortably AAA,
       no longer a headlight.
-   2. Fully-saturated neons at near-maximum lightness (the old #e8ff52 /
-      #4de8ff / #ff3d7f) bloom on dark ground: the eye can't focus the
-      fringe, so edges shimmer. Every loud hue here is pulled down in
-      lightness and chroma just far enough to stop blooming while staying
-      unmistakably neon, and the glows that multiply the effect
-      (--glow-primary, --hero-amount-glow) are roughly half their old
-      alpha. Keep new hues in the same lightness band as their neighbours
-      rather than matching a swatch picked on a white screen. */
+   2. Saturated hues at near-maximum lightness bloom on dark ground: the
+      eye cannot focus the fringe, so edges shimmer. This theme has been
+      pulled back twice for that reason. First from fluorescent (#e8ff52 /
+      #4de8ff / #ff3d7f) to acid; then, when acid lime and electric cyan
+      still read as glare at low brightness, off the neon axis entirely to
+      sage and warm sand. Lightness is unchanged in both moves -- what came
+      out was chroma, which is what blooms. The glows that multiply the
+      effect (--glow-primary, --hero-amount-glow) stay at roughly half
+      their original alpha. Keep new hues in the same lightness AND chroma
+      band as their neighbours, rather than matching a swatch picked on a
+      white screen. */
 :root[data-theme="dark"] {
   --bg: #101116;
   --surface: #171922;
@@ -277,63 +288,73 @@
   --ink-4: #6f6d80;
   --ink-inverse: #101116;
 
-  /* primary is acid — the one loud color in this theme, spent on buttons,
-     the nav's active state and the FAB; accent (electric cyan) marks
-     secondary structure (insight-tile edges, the heatmap ramp). Both are
-     one lightness step below "fluorescent" on purpose — see the comfort
-     note above. */
-  --accent: #5ed0e6;
-  --accent-strong: #86dced;
-  --accent-soft: #16303a;
-  --accent-line: rgba(94, 208, 230, 0.32);
+  /* primary is the one loud color in this theme, spent on buttons, the
+     nav's active state and the FAB; accent marks secondary structure
+     (insight-tile edges, the heatmap ramp). The pair used to be acid lime
+     and electric cyan — a cold, high-chroma combination that glares on a
+     near-black ground. Sage and warm sand hold the same two jobs at the
+     same lightness, with the chroma that made them tiring taken out. */
+  --accent: #d3b27f;
+  --accent-strong: #e7c592;
+  --accent-soft: #2a1c05;
+  --accent-line: rgba(211, 178, 127, 0.30);
   --accent-contrast: #101116;
   --income-contrast: #101116;
   --expense-contrast: #101116;
-  --primary: #c7e05c;
-  --primary-hover: #d3e97a;
+  /* Sage, not the acid lime it was. The acid read as "terminal" but it is
+     a light source at this chroma, and this is an app someone opens in bed:
+     the whole point of the dark theme is that it should be restful. Same
+     lightness, same "positive/go" meaning, roughly two thirds the chroma. */
+  --primary: #a4cc86;
+  --primary-hover: #b7e099;
   --primary-text: #101116;
 
   /* the hero has no fill at all here — it's the same near-black as the
      page, and boldness is spent entirely on the glowing amount instead */
   --hero-bg: #101116;
   --hero-text: #8d8b9e;
-  --hero-amount: #c7e05c;
+  --hero-amount: #a4cc86;
   --hero-border: 1px dashed var(--line);
   --hero-shadow: none;
-  --hero-amount-glow: 0 0 24px rgba(199, 224, 92, 0.18);
+  --hero-amount-glow: 0 0 24px rgba(164, 204, 134, 0.16);
 
   --shimmer-sheen: rgba(255, 255, 255, 0.06);
 
-  /* dark merges "expense" and "danger" into one hot-pink alert hue —
-     income intentionally shares --primary's acid (both read as "positive/
-     go"), which only works because they never appear in the same element */
-  --income: #c7e05c;
-  --income-soft: #212a12;
-  --expense: #ee5b8d;
+  /* dark merges "expense" and "danger" into one alert hue — income
+     intentionally shares --primary's sage (both read as "positive/go"),
+     which only works because they never appear in the same element. The
+     pink is a softened rose now for the same comfort reason as --primary. */
+  --income: #a4cc86;
+  --income-soft: #1a2413;
+  --expense: #e47697;
   --expense-soft: #2b1620;
-  /* roughly half the luminance of the hues above (see the light block for
-     why): enough that a full tile stops glaring, still unmistakably the
-     same acid / hot-pink / cyan family */
-  --income-fill: #a8c04d;
-  --expense-fill: #cc4d78;
-  --accent-fill: #4fa8bd;
-  --danger: #ee5b8d;
+  /* A step down in lightness from the hues above (see the light block for
+     why): enough that a full tile stops glaring, still the same family. */
+  --income-fill: #85ac67;
+  --expense-fill: #c25779;
+  --accent-fill: #b39361;
+  --danger: #e47697;
   --danger-soft: #2b1620;
   --danger-border: #4d2634;
 
-  --cat-travel: #5ed0e6;
-  --cat-food: #f08055;
-  --cat-bills: #4fd6ad;
-  --cat-home: #e5c05a;
-  --cat-entertainment: #e57fbe;
-  --cat-goods: #9887ee;
-  --cat-health: #ec6f85;
-  --cat-other: #7d7a8f;
+  /* Same eight hues, chroma eased by about a quarter. A category chip is
+     a 14px dot next to text, so it needs to be identifiable, not vivid --
+     eight fully saturated dots down a list was the other thing making this
+     theme tiring. */
+  --cat-travel: #7ec8d8;
+  --cat-food: #d9896b;
+  --cat-bills: #76ccae;
+  --cat-home: #d8be7b;
+  --cat-entertainment: #d289b4;
+  --cat-goods: #958bd4;
+  --cat-health: #d57c89;
+  --cat-other: #7a7887;
 
-  --seq-1: #17323c;
-  --seq-2: #204b58;
-  --seq-3: #34798c;
-  --seq-4: #5ed0e6;
+  /* The heatmap ramp follows --accent, so it moves to sand with it. */
+  --seq-1: #3e2901;
+  --seq-2: #614820;
+  --seq-3: #876d44;
+  --seq-4: #b59a70;
 
   /* elevation — panels are flat and bordered, not shadowed; the only
      shadow work left is a colored glow, reserved for the FAB/hero */
@@ -343,9 +364,9 @@
   --card-border: 1px solid var(--line);
   --card-shadow: none;
   --tile-edge-width: 3px;
-  --glow-primary: 0 0 22px -2px rgba(199, 224, 92, 0.3);
+  --glow-primary: 0 0 22px -2px rgba(164, 204, 134, 0.28);
   --overlay-scrim: rgba(0, 0, 0, 0.6);
-  --focus-ring: rgba(199, 224, 92, 0.4);
+  --focus-ring: rgba(164, 204, 134, 0.4);
 
   /* radius — a flatter, "moderate squircle" scale; every step is tighter
      than light mode's, not just re-hued */
@@ -2033,20 +2054,26 @@ a:focus-visible {
 /* Bold tier, and the one place on Home that earns it: money has been jotted
    and none of it is being counted, which is the difference between an app
    that is empty and one that looks broken. */
+/* Tinted paper with the alert colour as its edge and its heading, not a
+   saturated block. Light mode spends its one colour block on the hero, and
+   a warning does not need to shout over a page this quiet to be seen. It
+   also sidesteps a real problem: --expense is deep in light and pale in
+   dark, so no single text colour sits on it in both themes -- as ink on a
+   wash, the question never comes up. */
 .missing-wallet-notice {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--s-3);
-  /* --expense, not --expense-fill: the tile fill is tuned for one big number
-     over it, and this card's second line is 13px of explanation. */
-  background: var(--expense);
-  color: var(--expense-contrast);
+  background: var(--expense-soft);
+  border: 1px solid var(--expense);
+  color: var(--ink-2);
 }
 
 .missing-wallet-notice b {
   display: block;
   font-size: var(--fs-h3);
   font-weight: var(--fw-semibold);
+  color: var(--expense);
 }
 
 /* No opacity here, unlike the usual caption: this is the line that explains
@@ -2065,9 +2092,9 @@ a:focus-visible {
   justify-self: start;
   padding: 10px var(--s-4);
   border-radius: var(--r-full);
-  background: var(--expense-contrast);
+  background: var(--expense);
   border: none;
-  color: var(--expense);
+  color: var(--expense-soft);
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
 }
