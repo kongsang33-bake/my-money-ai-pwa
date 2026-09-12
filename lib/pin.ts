@@ -9,7 +9,18 @@ import type { User } from "@supabase/supabase-js";
 export const pinLength = 6;
 export const pinMaxAttempts = 5;
 export const pinBlockMs = 60 * 60 * 1000;
-export const pinBackgroundLockMs = 2 * 60 * 1000;
+/**
+ * How long the app may sit in the background before it asks for the PIN or
+ * Face ID again.
+ *
+ * Two minutes was punishing on a phone: checking the bank app to type in a
+ * balance, or tapping a notification and coming back, both took longer than
+ * that, so the lock fired on nearly every real errand the app sends you on.
+ * Fifteen still re-locks well inside the window where a phone is put down
+ * and picked up by someone else, and the phone's own auto-lock is the
+ * backstop underneath it either way.
+ */
+export const pinBackgroundLockMs = 15 * 60 * 1000;
 export const pinHashIterations = 150000;
 export const isSixDigitPin = (value: string) => /^\d{6}$/.test(value);
 
@@ -140,7 +151,19 @@ export async function registerFaceId(user: User): Promise<string | null> {
           { type: "public-key", alg: -7 },
           { type: "public-key", alg: -257 },
         ],
-        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+        authenticatorSelection: {
+          authenticatorAttachment: "platform",
+          userVerification: "required",
+          // Ask for a credential this app looks up BY ID, not one the
+          // platform lists in its own account chooser. A discoverable
+          // credential (the default a synced passkey gets) makes iOS open
+          // "Sign in to … with your passkey for <email>" and wait for a tap
+          // before it will even offer Face ID -- a whole extra sheet in front
+          // of what is meant to be a glance. We already know which credential
+          // we want; verifyFaceId names it.
+          residentKey: "discouraged",
+          requireResidentKey: false,
+        },
         timeout: WEBAUTHN_TIMEOUT_MS,
       },
     }) as PublicKeyCredential | null;
@@ -157,7 +180,11 @@ export async function verifyFaceId(credentialId: string): Promise<boolean> {
     const assertion = await navigator.credentials.get({
       publicKey: {
         challenge,
-        allowCredentials: [{ id: base64UrlToBytes(credentialId), type: "public-key" }],
+        // transports says "this one is on the device in your hand", which is
+        // what lets the browser skip asking how you would like to sign in
+        // (this device / a phone nearby / a security key) and go straight to
+        // the biometric prompt.
+        allowCredentials: [{ id: base64UrlToBytes(credentialId), type: "public-key", transports: ["internal"] }],
         userVerification: "required",
         timeout: WEBAUTHN_TIMEOUT_MS,
       },

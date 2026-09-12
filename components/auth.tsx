@@ -310,6 +310,15 @@ export function SecurityView({
             {webauthnEnabled ? (
               <>
                 <p className="pin-hint">เปิดใช้งานแล้วบนเครื่องนี้</p>
+                {/* A credential registered before the residentKey change is
+                    still a synced passkey, and the platform keeps putting its
+                    own "sign in with your passkey" sheet in front of the scan.
+                    Re-registering is the only way to replace it, and nothing
+                    else in the app would ever tell them that. */}
+                <p className="pin-hint">
+                  ถ้าตอนปลดล็อกยังมีหน้าถามยืนยันพาสคีย์ขึ้นก่อนสแกนหน้า ให้ปิดแล้วเปิดใหม่อีกครั้ง —
+                  จะลงทะเบียนใหม่เป็นแบบที่เข้าสแกนได้ทันที
+                </p>
                 <button className="danger pin-danger-button" onClick={() => onDisableFaceId(currentPin)} disabled={busy || !isSixDigitPin(currentPin)}>
                   {busy ? "กำลังปิด Face ID" : "ปิดใช้งาน Face ID"}
                 </button>
