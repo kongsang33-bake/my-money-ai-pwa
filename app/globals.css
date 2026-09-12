@@ -4919,6 +4919,18 @@ button.entry-main {
   color: var(--ink-3);
 }
 
+/* The lock-window picker at the foot of the security screen. Same bare tier
+   and same rule above it as .account-actions on the account screen, for the
+   same reason: it sits after a form it has nothing to do with. */
+.lock-delay {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-2);
+  margin-top: var(--s-7);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--line-soft);
+}
+
 /* -------------------------------------------------------------------------
    More sheet (feature launcher)
    ------------------------------------------------------------------------- */

@@ -67,7 +67,7 @@ import {
 import { buildSetupChecklist, buildWalletInsight, computeStreak, deriveQuickShortcuts, isRecurringLogged, lastSevenDayCashFlow, unpaidOwnDebts, type SetupStep } from "@/lib/insights";
 import { buildAiExamples, buildCategoryMemory } from "@/lib/ai-memory";
 import { nameColor } from "@/lib/category";
-import { createPinSalt, hashPin, isSixDigitPin, pinBackgroundLockMs, pinBlocked, pinMaxAttempts, recordFailedPinAttempt, registerFaceId, timingSafeEqual, verifyFaceId } from "@/lib/pin";
+import { createPinSalt, defaultLockDelay, hashPin, isLockDelayKey, isSixDigitPin, lockDelayMs, pinBlocked, pinMaxAttempts, recordFailedPinAttempt, registerFaceId, timingSafeEqual, verifyFaceId, type LockDelayKey } from "@/lib/pin";
 import { authHeaders } from "@/lib/api";
 import {
   AI_CONTEXT_MAX_LENGTH,
@@ -237,6 +237,23 @@ function loadSetupFlag(userId: string, name: "gate" | "checklist") {
   }
 }
 
+// How long the app may sit in the background before it locks. Per user AND
+// per device on purpose: the right answer depends on whose hands this
+// particular phone passes through, so syncing one answer to every device
+// would be the wrong shape even if it were free.
+function lockDelayStorageKey(userId: string) {
+  return `money-ai-lock-delay:${userId}`;
+}
+
+function loadLockDelay(userId: string): LockDelayKey {
+  try {
+    const stored = window.localStorage.getItem(lockDelayStorageKey(userId));
+    return isLockDelayKey(stored) ? stored : defaultLockDelay;
+  } catch {
+    return defaultLockDelay;
+  }
+}
+
 function rememberSetupFlag(userId: string, name: "gate" | "checklist") {
   try {
     window.localStorage.setItem(setupFlagKey(userId, name), "1");
@@ -285,6 +302,7 @@ export default function Home() {
   const [composerInitialText, setComposerInitialText] = useState("");
   const [setupGateDismissed, setSetupGateDismissed] = useState(false);
   const [checklistHidden, setChecklistHidden] = useState(false);
+  const [lockDelay, setLockDelay] = useState<LockDelayKey>(defaultLockDelay);
   const [quickAddPreset, setQuickAddPreset] = useState<QuickShortcut | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [receiptTotal, setReceiptTotal] = useState(0);
@@ -359,6 +377,7 @@ export default function Home() {
     setSetupFlagsUserId(currentUserId);
     setSetupGateDismissed(currentUserId ? loadSetupFlag(currentUserId, "gate") : false);
     setChecklistHidden(currentUserId ? loadSetupFlag(currentUserId, "checklist") : false);
+    setLockDelay(currentUserId ? loadLockDelay(currentUserId) : defaultLockDelay);
   }
 
   useEffect(() => {
@@ -895,7 +914,7 @@ export default function Home() {
       const backgroundedAt = backgroundedAtRef.current;
       backgroundedAtRef.current = null;
       if (!backgroundedAt || pinMode !== "unlocked" || !profile?.pin_hash) return;
-      if (Date.now() - backgroundedAt < pinBackgroundLockMs) return;
+      if (Date.now() - backgroundedAt < lockDelayMs(lockDelay)) return;
       setRecapOpen(false);
       setDebtorSheetMode(null);
       setWalletSheetMode(null);
@@ -910,7 +929,7 @@ export default function Home() {
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [pinMode, profile?.pin_hash]);
+  }, [pinMode, profile?.pin_hash, lockDelay]);
 
   const walletLedger = useMemo(() => buildWalletLedger(wallets, entries), [wallets, entries]);
   const walletTotals = walletLedger.totals;
@@ -1224,6 +1243,17 @@ export default function Home() {
     else if (key === "plan") setTab("budgets");
     else setTab("security");
   }, [openWalletCreateSheet, openAddTab]);
+
+  const changeLockDelay = useCallback((next: LockDelayKey) => {
+    setLockDelay(next);
+    if (!user) return;
+    try {
+      window.localStorage.setItem(lockDelayStorageKey(user.id), next);
+    } catch {
+      // Storage blocked: the choice holds for this session and reverts to the
+      // default next launch, which is the safe direction to fail in.
+    }
+  }, [user]);
 
   const hideStartChecklist = useCallback(() => {
     setChecklistHidden(true);
@@ -3054,6 +3084,8 @@ export default function Home() {
           <SecurityView
             pinEnabled={!!profile?.pin_hash && !!profile.pin_salt}
             webauthnEnabled={!!profile?.webauthn_enabled}
+            lockDelay={lockDelay}
+            onChangeLockDelay={changeLockDelay}
             busy={busy}
             error={pinError}
             onBack={() => { setTab("home"); setPinError(""); }}

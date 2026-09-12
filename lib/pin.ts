@@ -11,16 +11,48 @@ export const pinMaxAttempts = 5;
 export const pinBlockMs = 60 * 60 * 1000;
 /**
  * How long the app may sit in the background before it asks for the PIN or
- * Face ID again.
+ * Face ID again — the owner's choice, because the right answer depends on
+ * whose hands the phone passes through, which the app cannot know.
  *
- * Two minutes was punishing on a phone: checking the bank app to type in a
- * balance, or tapping a notification and coming back, both took longer than
- * that, so the lock fired on nearly every real errand the app sends you on.
- * Fifteen still re-locks well inside the window where a phone is put down
- * and picked up by someone else, and the phone's own auto-lock is the
- * backstop underneath it either way.
+ * It became a setting after the unavoidable half of the problem turned out
+ * to be unavoidable: on iOS, Safari puts its own consent sheet in front of
+ * every Face ID prompt a web app asks for, and no WebAuthn option removes
+ * it. So the only lever left is how OFTEN that prompt happens, and two
+ * minutes — the original — was less than a real errand. Checking the bank
+ * app to read a balance, or following a notification and coming back, both
+ * outlast it, so the app re-locked on almost every trip it sends you on.
+ *
+ * "never" means the lock only runs on a genuine cold start; coming back
+ * from another app never re-locks. The phone's own auto-lock is the backstop
+ * underneath every one of these.
  */
-export const pinBackgroundLockMs = 15 * 60 * 1000;
+export type LockDelayKey = "instant" | "5m" | "15m" | "1h" | "never";
+
+export const defaultLockDelay: LockDelayKey = "15m";
+
+export const lockDelayOptions: { key: LockDelayKey; label: string; ms: number }[] = [
+  { key: "instant", label: "ทันทีที่ออกจากแอพ", ms: 0 },
+  { key: "5m", label: "หลังผ่านไป 5 นาที", ms: 5 * 60 * 1000 },
+  { key: "15m", label: "หลังผ่านไป 15 นาที", ms: 15 * 60 * 1000 },
+  { key: "1h", label: "หลังผ่านไป 1 ชั่วโมง", ms: 60 * 60 * 1000 },
+  { key: "never", label: "ไม่ล็อกจนกว่าจะปิดแอพ", ms: Number.POSITIVE_INFINITY },
+];
+
+export function isLockDelayKey(value: unknown): value is LockDelayKey {
+  return lockDelayOptions.some((option) => option.key === value);
+}
+
+/**
+ * The delay a stored key means, in milliseconds. Anything unrecognised —
+ * a hand-edited localStorage value, a key removed in a later version —
+ * falls back to the default rather than to zero or to infinity, because
+ * both of those are a surprise: one locks constantly, the other never.
+ */
+export function lockDelayMs(key: unknown): number {
+  const match = lockDelayOptions.find((option) => option.key === key);
+  if (match) return match.ms;
+  return lockDelayOptions.find((option) => option.key === defaultLockDelay)!.ms;
+}
 export const pinHashIterations = 150000;
 export const isSixDigitPin = (value: string) => /^\d{6}$/.test(value);
 

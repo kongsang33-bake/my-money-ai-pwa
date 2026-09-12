@@ -12,9 +12,10 @@ import type { Profile } from "./types.ts";
 (globalThis as unknown as { window: typeof globalThis }).window = globalThis;
 
 const {
-  base64ToBytes, base64UrlToBytes, bytesToBase64, createPinSalt, hashPin,
-  isSixDigitPin, pinBlockMs, pinBlocked, pinHashIterations, pinLength, pinMaxAttempts,
-  recordFailedPinAttempt, timingSafeEqual,
+  base64ToBytes, base64UrlToBytes, bytesToBase64, createPinSalt, defaultLockDelay,
+  hashPin, isLockDelayKey, isSixDigitPin, lockDelayMs, lockDelayOptions, pinBlockMs,
+  pinBlocked, pinHashIterations, pinLength, pinMaxAttempts, recordFailedPinAttempt,
+  timingSafeEqual,
 } = await import("./pin.ts");
 
 function profileWithBlock(pin_blocked_until: string | null): Profile {
@@ -290,5 +291,29 @@ describe("recordFailedPinAttempt", () => {
     const profile = profileWithAttempts(2);
     recordFailedPinAttempt(profile, now);
     assert.equal(profile.pin_failed_attempts, 2);
+  });
+});
+
+describe("lockDelayMs", () => {
+  it("resolves every offered key to its own delay", () => {
+    for (const option of lockDelayOptions) assert.equal(lockDelayMs(option.key), option.ms);
+  });
+
+  it("treats \"never\" as a delay nothing can exceed", () => {
+    assert.equal(lockDelayMs("never"), Number.POSITIVE_INFINITY);
+    assert.equal(Date.now() - 0 < lockDelayMs("never"), true);
+  });
+
+  it("falls back to the default for anything unrecognised", () => {
+    // Not to 0 and not to Infinity: one would lock on every app switch, the
+    // other would never lock again -- both are a surprise from a value the
+    // user never chose.
+    const fallback = lockDelayMs(defaultLockDelay);
+    for (const bad of [undefined, null, "", "30m", 900000, {}]) assert.equal(lockDelayMs(bad), fallback);
+  });
+
+  it("agrees with isLockDelayKey about what is offered", () => {
+    for (const option of lockDelayOptions) assert.equal(isLockDelayKey(option.key), true);
+    for (const bad of ["30m", "", null, undefined]) assert.equal(isLockDelayKey(bad), false);
   });
 });

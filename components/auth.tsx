@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import NextImage from "next/image";
 import type { User } from "@supabase/supabase-js";
-import { Delete, Lock, ScanFace } from "lucide-react";
+import { ChevronDown, Delete, Lock, ScanFace } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { clampInteger } from "@/lib/format";
-import { isPlatformAuthenticatorAvailable, isSixDigitPin, pinLength, pinMaxAttempts } from "@/lib/pin";
+import { isPlatformAuthenticatorAvailable, isSixDigitPin, lockDelayOptions, pinLength, pinMaxAttempts, type LockDelayKey } from "@/lib/pin";
 import type { PinMode, Profile } from "@/lib/types";
 import { PageFrame } from "@/components/primitives";
 
@@ -217,6 +217,8 @@ export function PinKeypad({
 export function SecurityView({
   pinEnabled,
   webauthnEnabled,
+  lockDelay,
+  onChangeLockDelay,
   busy,
   error,
   onBack,
@@ -228,6 +230,8 @@ export function SecurityView({
 }: {
   pinEnabled: boolean;
   webauthnEnabled: boolean;
+  lockDelay: LockDelayKey;
+  onChangeLockDelay: (next: LockDelayKey) => void;
   busy: boolean;
   error: string;
   onBack: () => void;
@@ -332,6 +336,30 @@ export function SecurityView({
               </>
             )}
           </>
+        )}
+
+        {/* Below the form and behind a rule, because it changes nothing about
+            the PIN itself and needs no current PIN to save -- it takes effect
+            the moment it is picked. Kept out of the mode toggle above for the
+            same reason: those three are all things you do TO the PIN. */}
+        {pinEnabled && (
+          <section className="lock-delay">
+            <label>
+              ถามรหัสอีกครั้งเมื่อไหร่
+              <div className="select-shell">
+                <select value={lockDelay} onChange={(event) => onChangeLockDelay(event.target.value as LockDelayKey)}>
+                  {lockDelayOptions.map((option) => (
+                    <option key={option.key} value={option.key}>{option.label}</option>
+                  ))}
+                </select>
+                <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+              </div>
+            </label>
+            <p className="pin-hint">
+              นับจากตอนที่สลับออกไปแอปอื่น · เลือก &ldquo;ไม่ล็อกจนกว่าจะปิดแอพ&rdquo; แล้วสลับกลับมาจะไม่ต้องปลดล็อกเลย
+              เจอแค่ตอนเปิดแอพใหม่ — ตัวล็อกหน้าจอของเครื่องยังทำงานอยู่ใต้ทุกตัวเลือก
+            </p>
+          </section>
         )}
     </PageFrame>
   );
