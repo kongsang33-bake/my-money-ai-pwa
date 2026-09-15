@@ -32,7 +32,7 @@ import {
   planDebtSettlement,
   planEntryUpdate,
   receiptMismatch,
-  recurringExpenseEntry,
+  recurringExpenseEntries,
   replaceEntry,
   retargetPartnerShare,
   retypedTo,
@@ -583,11 +583,12 @@ describe("planEntryUpdate", () => {
   });
 });
 
-describe("recurringExpenseEntry", () => {
+describe("recurringExpenseEntries", () => {
   const billingDate = new Date("2026-09-05T00:00:00.000Z");
+  const wallets = [savingsWallet, cashWallet];
 
   it("books the bill as a personal expense in the bills category", () => {
-    const entry = recurringExpenseEntry({ name: "Netflix", amount: 419 }, billingDate, [cashWallet], "id-1");
+    const [entry] = recurringExpenseEntries({ name: "Netflix", amount: 419 }, billingDate, [cashWallet], "id-1");
     assert.equal(entry.title, "Netflix");
     assert.equal(entry.category, "บิลประจำ");
     assert.equal(entry.transaction_type, "personal_expense");
@@ -595,7 +596,7 @@ describe("recurringExpenseEntry", () => {
   });
 
   it("takes money out of the wallet rather than putting it in", () => {
-    const entry = recurringExpenseEntry({ name: "Netflix", amount: 419 }, billingDate, [cashWallet], "id-1");
+    const [entry] = recurringExpenseEntries({ name: "Netflix", amount: 419 }, billingDate, [cashWallet], "id-1");
     assert.equal(entry.wallet_impact, -419);
     assert.equal(entry.debt_impact, 0);
   });
@@ -603,17 +604,83 @@ describe("recurringExpenseEntry", () => {
   it("dates the entry to the billing day, not to today", () => {
     // A bill logged late still belongs to the cycle it was charged in, or it
     // lands in the wrong month's totals.
-    const entry = recurringExpenseEntry({ name: "ค่าเน็ต", amount: 599 }, billingDate, [cashWallet], "id-1");
+    const [entry] = recurringExpenseEntries({ name: "ค่าเน็ต", amount: 599 }, billingDate, [cashWallet], "id-1");
     assert.equal(entry.occurred_at, billingDate.toISOString());
   });
 
-  it("uses the default wallet", () => {
-    const entry = recurringExpenseEntry({ name: "Netflix", amount: 419 }, billingDate, [savingsWallet, cashWallet], "id-1");
+  it("falls back to the default wallet when the bill names none", () => {
+    const [entry] = recurringExpenseEntries({ name: "Netflix", amount: 419 }, billingDate, wallets, "id-1");
     assert.equal(entry.wallet_id, "cash");
   });
 
+  it("takes the bill out of the wallet the user picked, not the default one", () => {
+    const [entry] = recurringExpenseEntries({ name: "Netflix", amount: 419, wallet_id: "savings" }, billingDate, wallets, "id-1");
+    assert.equal(entry.wallet_id, "savings");
+  });
+
   it("uses the id it is given", () => {
-    assert.equal(recurringExpenseEntry({ name: "x", amount: 1 }, billingDate, [cashWallet], "chosen").id, "chosen");
+    assert.equal(recurringExpenseEntries({ name: "x", amount: 1 }, billingDate, [cashWallet], "chosen")[0].id, "chosen");
+  });
+
+  it("writes a card-paid bill as the same two linked rows a card-paid dinner is", () => {
+    const rows = recurringExpenseEntries(
+      { name: "Netflix", amount: 419, funding_card_name: "บัตรเครดิต" },
+      billingDate,
+      wallets,
+      "id-1",
+    );
+    assert.equal(rows.length, 2);
+    const [expense, charge] = rows;
+    assert.equal(expense.transaction_type, "personal_expense");
+    assert.equal(charge.transaction_type, "card_charge");
+    assert.equal(charge.debtor_name, "บัตรเครดิต");
+    assert.ok(expense.transfer_group_id);
+    assert.equal(expense.transfer_group_id, charge.transfer_group_id);
+  });
+
+  it("leaves the wallet alone when the card paid, and puts the whole bill on the card", () => {
+    // The bank has not taken the money yet -- that happens when the card's own
+    // bill is paid. Deducting it here would be the app spending money twice.
+    const [expense, charge] = recurringExpenseEntries(
+      { name: "Netflix", amount: 419, funding_card_name: "บัตรเครดิต" },
+      billingDate,
+      wallets,
+      "id-1",
+    );
+    assert.equal(expense.wallet_impact, 0);
+    assert.equal(charge.wallet_impact, 0);
+    assert.equal(charge.debt_impact, 419);
+  });
+
+  it("counts a card-paid bill once as spending, on the expense leg only", () => {
+    const [expense, charge] = recurringExpenseEntries(
+      { name: "Netflix", amount: 419, funding_card_name: "บัตรเครดิต" },
+      billingDate,
+      wallets,
+      "id-1",
+    );
+    assert.equal(expense.user_share, 419);
+    assert.equal(charge.user_share, 0);
+  });
+
+  it("ignores a stored wallet when a card is what pays", () => {
+    // Both columns can hold a value if the row was edited oddly; the card is
+    // the one that decides, the same way a draft's funding card overrides its
+    // wallet.
+    const rows = recurringExpenseEntries(
+      { name: "Netflix", amount: 419, wallet_id: "savings", funding_card_name: "บัตรเครดิต" },
+      billingDate,
+      wallets,
+      "id-1",
+    );
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0].wallet_impact, 0);
+  });
+
+  it("treats a blank card name as no card at all", () => {
+    const rows = recurringExpenseEntries({ name: "Netflix", amount: 419, funding_card_name: "   " }, billingDate, wallets, "id-1");
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].wallet_impact, -419);
   });
 });
 

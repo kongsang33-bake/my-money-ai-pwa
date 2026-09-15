@@ -865,24 +865,41 @@ export function planDebtSettlement(
 }
 
 /**
- * The entry a "log this bill now" tap creates from a recurring expense. Pure
+ * The rows a "log this bill now" tap creates from a recurring expense. Pure
  * apart from the id, which the caller supplies so a test can pin it.
+ *
+ * Usually one row. A bill charged to a credit card is two, and they are the
+ * same two that any card-paid expense already becomes -- so this builds a
+ * draft and hands it to expandDraftForSave rather than writing the pair
+ * itself. That matters more than the line count it saves: the expense leg
+ * moving no wallet money and the charge claiming none of the spending is one
+ * rule with one author, and a subscription is not a reason for a second copy
+ * of it.
+ *
+ * A card-funded draft leaves wallet_id null on purpose; buildTransactionCore
+ * fills in the default wallet at insert time, which is harmless on a row whose
+ * wallet_impact is already zero.
  */
-export function recurringExpenseEntry(
-  item: { name: string; amount: number },
+export function recurringExpenseEntries(
+  item: { name: string; amount: number; wallet_id?: string | null; funding_card_name?: string | null },
   billingDate: Date,
   wallets: Wallet[],
   id: string,
-): Entry {
-  return normalizeEntry({
-    id,
-    title: item.name,
-    category: "บิลประจำ",
-    amount: item.amount,
-    transaction_type: "personal_expense",
-    occurred_at: billingDate.toISOString(),
-    wallet_id: defaultWalletId(wallets),
-  });
+): Entry[] {
+  const card = item.funding_card_name?.trim() || "";
+  const draft: Draft = {
+    ...normalizeEntry({
+      id,
+      title: item.name,
+      category: "บิลประจำ",
+      amount: item.amount,
+      transaction_type: "personal_expense",
+      occurred_at: billingDate.toISOString(),
+      wallet_id: card ? null : item.wallet_id ?? defaultWalletId(wallets),
+    }),
+    funding_card_name: card || null,
+  };
+  return expandDraftForSave(draft, wallets).map((row) => normalizeEntry(row));
 }
 
 /**

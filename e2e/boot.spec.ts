@@ -16,6 +16,17 @@ test.describe("boot", () => {
     }
   });
 
+  test("keeps a paused bill out of the due-soon card", async ({ app }) => {
+    // Pausing exists so a cancelled subscription can keep its history without
+    // still being counted -- so the row staying on the list and the row
+    // staying out of the reminders are the same feature, and only the second
+    // half is invisible until it breaks. ฟิตเนส is paused and due sooner than
+    // either live bill, so it would sit at the top of this card if it leaked.
+    const card = app.locator(".due-soon-card");
+    await expect(card).toContainText("Netflix");
+    await expect(card).not.toContainText("ฟิตเนส");
+  });
+
   test("reaches every tab without an uncaught error", async ({ app }) => {
     // Debtors, Wallets and Portfolio are dynamic imports; before this suite
     // existed, a broken chunk there was only ever found by tapping the tab by

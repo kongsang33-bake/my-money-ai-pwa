@@ -109,6 +109,13 @@ export type WalletDisplay = Wallet & {
   transaction_delta: number;
 };
 
+// `wallet_id` and `funding_card_name` are the two halves of one question --
+// what pays this bill -- and never both: a card-paid subscription moves no
+// wallet money, which is exactly what a Draft says with the same two field
+// names. recurringExpenseEntries hands them straight to expandDraftForSave.
+//
+// `is_active` is a cancelled-but-remembered bill: still in the list, still
+// carrying its history, out of every total and never asking to be logged.
 export type RecurringExpense = {
   id: string;
   user_id: string;
@@ -117,6 +124,9 @@ export type RecurringExpense = {
   billing_day: number;
   icon: string | null;
   icon_color: string | null;
+  wallet_id: string | null;
+  funding_card_name: string | null;
+  is_active: boolean;
 };
 
 export type Investment = {

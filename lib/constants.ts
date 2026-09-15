@@ -95,7 +95,7 @@ export const DEBTOR_COLUMNS =
 
 export const WALLET_COLUMNS = "id,user_id,name,tag,balance,icon,icon_color,is_default";
 
-export const RECURRING_EXPENSE_COLUMNS = "id,user_id,name,amount,billing_day,icon,icon_color";
+export const RECURRING_EXPENSE_COLUMNS = "id,user_id,name,amount,billing_day,icon,icon_color,wallet_id,funding_card_name,is_active";
 
 export const INVESTMENT_COLUMNS = "id,user_id,name,code,units,cost_basis,icon,icon_color";
 

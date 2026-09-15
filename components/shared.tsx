@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreHorizontal, type LucideIcon } from "lucide-react";
+import { ChevronDown, MoreHorizontal, type LucideIcon } from "lucide-react";
 import {
   categories,
   categoryColor,
@@ -14,6 +14,8 @@ import {
   walletIconMap,
   walletIconOptions,
 } from "@/lib/category";
+import { defaultWalletId } from "@/lib/money";
+import type { Wallet } from "@/lib/types";
 
 export function CategoryIcon({ category, size = 14 }: { category: string; size?: number }) {
   const Icon = categoryIconMap[category] ?? MoreHorizontal;
@@ -93,5 +95,77 @@ export function IconColorPicker({
         ))}
       </div>
     </div>
+  );
+}
+
+/** "wallet:<id>" / "card:<name>" -- one dropdown, two kinds of funding. */
+function splitFundingValue(value: string): [source: string, value: string] {
+  const separator = value.indexOf(":");
+  return [value.slice(0, separator), value.slice(separator + 1)];
+}
+
+/**
+ * Where the money for one expense came from: a wallet, or a name that fronts
+ * it -- a credit card, or the friend who got the round in. Cards live in the
+ * debtors table (kind "own"), not in wallets, which is why a wallet dropdown
+ * alone could never express "paid on SPay".
+ *
+ * Shared by the draft card in the Add tab and the recurring-bill sheet,
+ * because they are asking the same question about the same two columns: a
+ * subscription charged to a card is stored as the same pair of rows a
+ * card-paid dinner is (expandDraftForSave), so it would be strange for them
+ * to be asked in two different shapes.
+ *
+ * `cardName` is offered even when it is not in `funderNames`: the AI can read
+ * a name out of a sentence that the user has no debtor record for yet, and the
+ * only other way to pick it would be to go and create the debt by hand first.
+ */
+export function FundingSelect({
+  label = "จ่ายด้วย",
+  className = "",
+  walletId,
+  cardName,
+  wallets,
+  funderNames,
+  onChange,
+}: {
+  label?: React.ReactNode;
+  className?: string;
+  walletId: string | null;
+  cardName: string | null;
+  wallets: Wallet[];
+  funderNames: string[];
+  onChange: (funding: { wallet_id: string | null; funding_card_name: string | null }) => void;
+}) {
+  const card = cardName?.trim() || "";
+  const funders = card && !funderNames.includes(card) ? [...funderNames, card] : funderNames;
+
+  return (
+    <label className={className}>
+      {label}
+      <div className="select-shell">
+        <select
+          value={card ? `card:${card}` : `wallet:${walletId || defaultWalletId(wallets) || ""}`}
+          onChange={(event) => {
+            const [source, value] = splitFundingValue(event.target.value);
+            onChange(source === "card"
+              ? { funding_card_name: value, wallet_id: null }
+              : { funding_card_name: null, wallet_id: value || null });
+          }}
+        >
+          <optgroup label="กระเป๋า">
+            {wallets.map((wallet) => (
+              <option key={wallet.id} value={`wallet:${wallet.id}`}>{wallet.name}</option>
+            ))}
+          </optgroup>
+          <optgroup label="บัตรเครดิต / คนที่ออกให้ก่อน">
+            {funders.map((name) => (
+              <option key={name} value={`card:${name}`}>{funderNames.includes(name) ? name : `${name} · ใหม่`}</option>
+            ))}
+          </optgroup>
+        </select>
+        <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+      </div>
+    </label>
   );
 }

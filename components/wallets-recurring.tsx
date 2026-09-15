@@ -6,8 +6,8 @@ import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toFiniteNumb
 import { nextBillingInfo } from "@/lib/cycle";
 import { walletTagHints, walletTagLabels, type WalletTag } from "@/lib/taxonomy";
 import { nameColor, recurringIconOptions } from "@/lib/category";
-import type { Entry, RecurringExpense, Wallet, WalletDisplay } from "@/lib/types";
-import { IconColorPicker, RecurringAvatarGlyph, WalletAvatarGlyph } from "@/components/shared";
+import type { Debtor, Entry, RecurringExpense, Wallet, WalletDisplay } from "@/lib/types";
+import { FundingSelect, IconColorPicker, RecurringAvatarGlyph, WalletAvatarGlyph } from "@/components/shared";
 import { AmountInput, CountUpMoney, EmptyNote, InfoHint, SheetFrame, SkeletonList, StateCard, decimalInputPattern } from "@/components/primitives";
 
 export function WalletsView({
@@ -280,22 +280,31 @@ export function WalletEditSheet({
 }
 export function RecurringExpensesView({
   items,
+  wallets,
   loading,
   onBack,
   onAdd,
   onEdit,
   onDelete,
+  onToggleActive,
 }: {
   items: RecurringExpense[];
+  wallets: Wallet[];
   loading: boolean;
   onBack: () => void;
   onAdd: () => void;
   onEdit: (item: RecurringExpense) => void;
   onDelete: (item: RecurringExpense) => void;
+  onToggleActive: (item: RecurringExpense) => void;
 }) {
-  const total = items.reduce((sum, item) => sum + item.amount, 0);
+  // A paused bill is still on the list -- that is the point of pausing rather
+  // than deleting -- but it is not money going out, so it stays out of the
+  // total and out of the schedule.
+  const active = items.filter((item) => item.is_active);
+  const pausedCount = items.length - active.length;
+  const total = active.reduce((sum, item) => sum + item.amount, 0);
   const today = new Date();
-  const upcoming = items
+  const upcoming = active
     .map((item) => {
       const { billingDate, daysUntil } = nextBillingInfo(item, today);
       return { item, date: billingDate, days: daysUntil };
@@ -317,6 +326,7 @@ export function RecurringExpensesView({
       <section className="debtor-detail-card">
         <span>ยอดรวมต่อเดือน</span>
         <strong><CountUpMoney value={total} /></strong>
+        {pausedCount > 0 && <small>ไม่นับรายการที่หยุดไว้ {pausedCount} รายการ</small>}
       </section>
       {!!upcoming.length && (
         <section className="recurring-timeline" aria-label="กำหนดตัดเงินถัดไป">
@@ -334,21 +344,22 @@ export function RecurringExpensesView({
       )}
       <div className="debtor-page-list">
         {items.map((item) => (
-          <article className="debtor-page-item" key={item.id}>
+          <article className={`debtor-page-item${item.is_active ? "" : " is-paused"}`} key={item.id}>
             <i className="card-accent" style={{ background: item.icon_color ?? nameColor(item.name) }} />
             <button className="debtor-main-button" onClick={() => onEdit(item)}>
               <span className="debtor-avatar" style={{ background: item.icon_color ?? nameColor(item.name) }}>
                 <RecurringAvatarGlyph iconKey={item.icon} fallbackName={item.name} />
               </span>
               <div>
-                <span>{item.name}</span>
-                <small>ตัดเงินทุกวันที่ {item.billing_day} · {moneySign}{formatMoney(item.amount)}</small>
+                <span>{item.name}{!item.is_active && <em className="recurring-paused-tag">หยุดไว้</em>}</span>
+                <small className="recurring-meta">ตัดเงินทุกวันที่ {item.billing_day} · {moneySign}{formatMoney(item.amount)} · {fundingLabel(item, wallets)}</small>
               </div>
             </button>
             <details className="kebab-menu" name="recurring-kebab">
               <summary>⋮</summary>
               <menu>
                 <button onClick={() => onEdit(item)}>แก้ไข</button>
+                <button onClick={() => onToggleActive(item)}>{item.is_active ? "หยุดชั่วคราว" : "ใช้งานต่อ"}</button>
                 <button onClick={() => onDelete(item)}>ลบ</button>
               </menu>
             </details>
@@ -366,10 +377,28 @@ export type RecurringExpenseInput = {
   billing_day: number;
   icon: string | null;
   icon_color: string | null;
+  wallet_id: string | null;
+  funding_card_name: string | null;
+  is_active: boolean;
 };
+
+/**
+ * What pays this bill, in words: the card or person that fronts it, or the
+ * wallet it comes out of. A wallet that has since been deleted (the column is
+ * `on delete set null`) reads the same as one that was never picked, because
+ * that is what will happen on the next tap -- logging falls back to the
+ * default wallet.
+ */
+function fundingLabel(item: RecurringExpense, wallets: Wallet[]) {
+  const card = item.funding_card_name?.trim();
+  if (card) return card;
+  return wallets.find((wallet) => wallet.id === item.wallet_id)?.name ?? "กระเป๋าหลัก";
+}
 
 export function RecurringExpenseEditSheet({
   item,
+  wallets,
+  debtors,
   busy,
   error,
   onClose,
@@ -378,6 +407,8 @@ export function RecurringExpenseEditSheet({
   closing,
 }: {
   item: RecurringExpense | null;
+  wallets: Wallet[];
+  debtors: Debtor[];
   busy: boolean;
   error: string;
   onClose: () => void;
@@ -390,10 +421,25 @@ export function RecurringExpenseEditSheet({
   const [billingDay, setBillingDay] = useState(item?.billing_day ?? 1);
   const [icon, setIcon] = useState<string | null>(item?.icon ?? null);
   const [iconColor, setIconColor] = useState<string | null>(item?.icon_color ?? null);
+  const [walletId, setWalletId] = useState<string | null>(item?.wallet_id ?? null);
+  const [fundingCard, setFundingCard] = useState<string | null>(item?.funding_card_name ?? null);
+  const [isActive, setIsActive] = useState(item?.is_active ?? true);
+  // The same list the Add tab offers: cards and instalments are debtors of
+  // kind "own", and they are the only debts a bill of your own can land on.
+  const funderNames = useMemo(() => debtors.filter((debtor) => debtor.kind === "own").map((debtor) => debtor.name), [debtors]);
 
   const submit = async () => {
     if (!name.trim()) return;
-    const payload: RecurringExpenseInput = { name, amount: toMoneyAmount(amountText), billing_day: billingDay, icon, icon_color: iconColor };
+    const payload: RecurringExpenseInput = {
+      name,
+      amount: toMoneyAmount(amountText),
+      billing_day: billingDay,
+      icon,
+      icon_color: iconColor,
+      wallet_id: fundingCard ? null : walletId,
+      funding_card_name: fundingCard,
+      is_active: isActive,
+    };
     const saved = item ? await onUpdate(item, payload) : await onCreate(payload);
     if (saved) onClose();
   };
@@ -427,6 +473,26 @@ export function RecurringExpenseEditSheet({
           <ChevronDown className="select-shell-chevron" aria-hidden="true" />
         </div>
       </label>
+      <FundingSelect
+        label={(
+          <>
+            ตัดจาก
+            <InfoHint label="ช่องทางที่บิลนี้ตัดเงิน">
+              เลือกบัตรไว้ แล้วกด &quot;บันทึกเลย&quot; จากหน้าแรก ยอดจะไปขึ้นเป็นหนี้บัตรใบนั้นแทนที่จะหักออกจากกระเป๋า — เหมือนตอนรูดบัตรจ่ายค่าข้าว เงินยังไม่ออกจากบัญชีจนกว่าจะจ่ายบิลบัตร
+            </InfoHint>
+          </>
+        )}
+        walletId={walletId}
+        cardName={fundingCard}
+        wallets={wallets}
+        funderNames={funderNames}
+        onChange={({ wallet_id, funding_card_name }) => { setWalletId(wallet_id); setFundingCard(funding_card_name); }}
+      />
+      <div className="report-period-toggle">
+        <button type="button" className={isActive ? "active" : ""} onClick={() => setIsActive(true)}>ใช้งานอยู่</button>
+        <button type="button" className={isActive ? "" : "active"} onClick={() => setIsActive(false)}>หยุดชั่วคราว</button>
+      </div>
+      {!isActive && <small className="cycle-note">ยังเก็บไว้ในรายการและในประวัติ แต่ไม่นับในยอดรวมและไม่เตือนก่อนถึงกำหนด</small>}
       {error && <StateCard tone="error" title="บันทึกไม่สำเร็จ" detail={error} />}
       <button className="save" onClick={submit} disabled={busy || !name.trim()}>
         {busy ? "กำลังบันทึก..." : "บันทึก"}

@@ -57,7 +57,7 @@ describe("entriesInRange", () => {
 
 describe("nextBillingInfo", () => {
   function makeItem(billing_day: number): RecurringExpense {
-    return { id: "r1", user_id: "u1", name: "Netflix", amount: 199, billing_day, icon: null, icon_color: null };
+    return { id: "r1", user_id: "u1", name: "Netflix", amount: 199, billing_day, icon: null, icon_color: null, wallet_id: null, funding_card_name: null, is_active: true };
   }
 
   it("clamps billing_day 31 to the 28th in February (non-leap year)", () => {

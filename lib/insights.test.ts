@@ -6,7 +6,7 @@ import type { TransactionType } from "./taxonomy.ts";
 import { MS_PER_DAY } from "./constants.ts";
 
 function makeItem(name: string, amount: number): RecurringExpense {
-  return { id: "r1", user_id: "u1", name, amount, billing_day: 5, icon: null, icon_color: null };
+  return { id: "r1", user_id: "u1", name, amount, billing_day: 5, icon: null, icon_color: null, wallet_id: null, funding_card_name: null, is_active: true };
 }
 
 function makeEntry(title: string, amount: number, occurred_at: string): Entry {

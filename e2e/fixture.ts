@@ -80,8 +80,15 @@ export function buildSeed(now = Date.now()): PreviewSeed {
       { id: "preview-d2", user_id: USER_ID, name: "บัตรเครดิต", note: null, opening_balance: 8200, kind: "own", monthly_installment: 2000, total_installments: null, credit_limit: 50000, credit_card_min_payment_percent: 10, icon: null, icon_color: null },
     ],
     recurringExpenses: [
-      { id: "preview-r1", user_id: USER_ID, name: "Netflix", amount: 419, billing_day: soon(2), icon: null, icon_color: null },
-      { id: "preview-r2", user_id: USER_ID, name: "ค่าเน็ต", amount: 599, billing_day: soon(4), icon: null, icon_color: null },
+      // Netflix is charged to the card and ค่าเน็ต comes out of a wallet, so
+      // both funding shapes -- and the two-row save the card one expands to --
+      // are on screen whenever the due-soon tile renders.
+      { id: "preview-r1", user_id: USER_ID, name: "Netflix", amount: 419, billing_day: soon(2), icon: null, icon_color: null, wallet_id: null, funding_card_name: "บัตรเครดิต", is_active: true },
+      { id: "preview-r2", user_id: USER_ID, name: "ค่าเน็ต", amount: 599, billing_day: soon(4), icon: null, icon_color: null, wallet_id: "preview-w1", funding_card_name: null, is_active: true },
+      // Paused, and deliberately due sooner than either live bill: if the
+      // filters that keep a cancelled subscription out of the due-soon card
+      // and the monthly total ever come off, this is the row that shows it.
+      { id: "preview-r3", user_id: USER_ID, name: "ฟิตเนส", amount: 1200, billing_day: soon(1), icon: null, icon_color: null, wallet_id: "preview-w1", funding_card_name: null, is_active: false },
     ],
     goals: [
       { id: "preview-g1", name: "เที่ยวญี่ปุ่น", target: 80000, saved: 32000, deadline: new Date(now + 120 * 86400000).toISOString().slice(0, 10) },

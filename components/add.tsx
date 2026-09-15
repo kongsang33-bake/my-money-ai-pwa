@@ -10,7 +10,7 @@ import { CARD_FUNDABLE_TYPES, SHARED_EXPENSE_TYPES, defaultWalletId, draftTotals
 import { DEBT_TYPES, TYPES_USER_OWES, isFormOnlyDerivedType, transactionKind, transactionTypeLabels, transactionTypeOptions, type TransactionType } from "@/lib/taxonomy";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
-import { CategoryIcon, CategoryPicker } from "@/components/shared";
+import { CategoryIcon, CategoryPicker, FundingSelect } from "@/components/shared";
 import { AmountInput, DateField, EmptyNote, SheetFrame, StateCard } from "@/components/primitives";
 
 // The whole "let AI write it for me" half of the Add tab: the example chips,
@@ -203,11 +203,6 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
   const knownFunders = knownDebtors.filter((debtor) => debtor.kind === "own").map((debtor) => debtor.name);
   const canPayWithCard = CARD_FUNDABLE_TYPES.includes(draft.transaction_type);
   const fundingCard = canPayWithCard ? draft.funding_card_name?.trim() || "" : "";
-  // A friend who got the round in is a funder the user has never had before,
-  // so the list has to be able to offer the name the AI just read out of the
-  // sentence -- otherwise the only way to pick it is to go and create the
-  // debt by hand first.
-  const funders = fundingCard && !knownFunders.includes(fundingCard) ? [...knownFunders, fundingCard] : knownFunders;
   const isSplit = draft.transaction_type === "split_half";
   // Several names in the one debtor field means one debt each, worked out at
   // save (expandDraftForSave). The headcount and the share are then the list's
@@ -377,33 +372,15 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
           onChange={(partner_share) => update({ partner_share })}
         />
       )}
-      {canPayWithCard && !!funders.length && (
-        <label className="draft-funding">
-          จ่ายด้วย
-          <div className="select-shell">
-            <select
-              value={fundingCard ? `card:${fundingCard}` : `wallet:${draft.wallet_id || defaultWalletId(wallets) || ""}`}
-              onChange={(event) => {
-                const [source, value] = splitFundingValue(event.target.value);
-                update(source === "card"
-                  ? { funding_card_name: value, wallet_id: null }
-                  : { funding_card_name: null, wallet_id: value || null });
-              }}
-            >
-              <optgroup label="กระเป๋า">
-                {wallets.map((wallet) => (
-                  <option key={wallet.id} value={`wallet:${wallet.id}`}>{wallet.name}</option>
-                ))}
-              </optgroup>
-              <optgroup label="บัตรเครดิต / คนที่ออกให้ก่อน">
-                {funders.map((name) => (
-                  <option key={name} value={`card:${name}`}>{knownFunders.includes(name) ? name : `${name} · ใหม่`}</option>
-                ))}
-              </optgroup>
-            </select>
-            <ChevronDown className="select-shell-chevron" aria-hidden="true" />
-          </div>
-        </label>
+      {canPayWithCard && (!!knownFunders.length || !!fundingCard) && (
+        <FundingSelect
+          className="draft-funding"
+          walletId={draft.wallet_id ?? null}
+          cardName={fundingCard}
+          wallets={wallets}
+          funderNames={knownFunders}
+          onChange={update}
+        />
       )}
       <button
         type="button"
@@ -472,12 +449,6 @@ export function DraftRow({ draft, knownDebtors, wallets, onChange, onRemove }: {
       </div>
     </div>
   );
-}
-
-/** "wallet:<id>" / "card:<name>" -- one dropdown, two kinds of funding. */
-function splitFundingValue(value: string): [source: string, value: string] {
-  const separator = value.indexOf(":");
-  return [value.slice(0, separator), value.slice(separator + 1)];
 }
 
 /**

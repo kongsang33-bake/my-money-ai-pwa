@@ -2489,6 +2489,30 @@ a:focus-visible {
 .recurring-service b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-body); }
 .recurring-timeline-row strong { font-size: var(--fs-body); white-space: nowrap; }
 
+/* A paused bill: still on the list, still carrying its history, just no
+   longer money going out. It reads as set-down rather than disabled -- the
+   row is still a working button, so it keeps its full-strength name and only
+   the surrounding detail steps back. */
+.debtor-page-item.is-paused .debtor-avatar,
+.debtor-page-item.is-paused .card-accent { opacity: 0.45; }
+.debtor-page-item.is-paused .debtor-main-button small { color: var(--ink-3); }
+/* Three facts on one line -- the billing day, the amount, and what pays it --
+   and the shared one-line .debtor-main-button small drops the last of them to
+   an ellipsis on a phone. Which card a subscription is charged to is the
+   whole reason the line is worth reading, so it wraps here instead. */
+.debtor-main-button small.recurring-meta { white-space: normal; }
+.recurring-paused-tag {
+  margin-left: var(--s-2);
+  padding: 2px var(--s-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  color: var(--ink-3);
+  font-size: var(--fs-micro);
+  font-style: normal;
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
 /* Ask AI is a chat screen, not a form: the page itself does not scroll, the
    thread does, and the composer holds the bottom edge the way a messaging
    app's does. That is why it needs an exact height rather than a min-height

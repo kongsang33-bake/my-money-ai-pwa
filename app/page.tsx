@@ -56,7 +56,7 @@ import {
   normalizeEntry,
   planDebtSettlement,
   planEntryUpdate,
-  recurringExpenseEntry,
+  recurringExpenseEntries,
   replaceEntry,
   payableForDisplay,
   receiptMismatch,
@@ -994,6 +994,7 @@ export default function Home() {
     const now = new Date();
     const currentCycleRange = cycleBounds(currentCycleMonthKey(monthStartDay, now), monthStartDay);
     return recurringExpenses
+      .filter((item) => item.is_active)
       .map((item) => ({ item, ...nextBillingInfo(item, now), isLogged: isRecurringLogged(item, entries, currentCycleRange) }))
       .filter(({ daysUntil }) => daysUntil >= 0 && daysUntil <= 3)
       .sort((a, b) => a.daysUntil - b.daysUntil);
@@ -1204,7 +1205,7 @@ export default function Home() {
     },
     walletBalances: displayWallets.map((wallet) => ({ name: wallet.name, balance: wallet.display_balance })),
     categories: categorySummary.filter((item) => item.amount > 0),
-    recurringTotal: recurringExpenses.reduce((sum, item) => sum + item.amount, 0),
+    recurringTotal: recurringExpenses.reduce((sum, item) => sum + (item.is_active ? item.amount : 0), 0),
     receivableTotal,
     payableTotal,
     transactionCount: monthlyEntries.length,
@@ -1730,45 +1731,66 @@ export default function Home() {
   // Undo for one-tap recurring logging skips deleteEntry's confirm prompt on
   // purpose -- tapping "ย้อนคืน" right after the toast appears IS the
   // confirmation, the same way restoreEntries has no prompt of its own.
-  const undoLoggedRecurring = useCallback(async (entry: Entry) => {
-    if (!supabase) return;
-    const { error } = await supabase.from(TABLES.transactions).delete().eq("id", entry.id);
+  const undoLoggedRecurring = useCallback(async (logged: Entry[]) => {
+    if (!supabase || !logged.length) return;
+    // A bill charged to a card was written as two linked rows, and they only
+    // balance as a pair -- taking back one would leave the card owing money
+    // for spending that is no longer in the history.
+    const ids = logged.map((entry) => entry.id);
+    const { error } = await supabase.from(TABLES.transactions).delete().in("id", ids);
     if (error) {
       notify({ tone: "error", title: "ย้อนคืนไม่สำเร็จ", detail: error.message });
       return;
     }
-    setEntries((current) => current.filter((item) => item.id !== entry.id));
+    const undone = new Set(ids);
+    setEntries((current) => current.filter((item) => !undone.has(item.id)));
   }, [notify]);
 
-  const logRecurringNow = useCallback(async (item: RecurringExpense, billingDate: Date) => {
+  /**
+   * One tap on "บันทึกเลย" in the due-soon card.
+   *
+   * Usually one row, and two when the bill is charged to a credit card -- the
+   * same pair any card-paid expense is stored as, built by the same function
+   * (recurringExpenseEntries), so the card's balance hears about a
+   * subscription the way it hears about a dinner. A plain function rather than
+   * a useCallback because it needs createMissingDebtors, which is one too: a
+   * card named on a bill may be a debtor the user has never opened.
+   */
+  async function logRecurringNow(item: RecurringExpense, billingDate: Date) {
     if (!supabase || !user) return;
     setBusy(true);
     setError("");
-    const normalized = recurringExpenseEntry(item, billingDate, wallets, crypto.randomUUID());
+    const normalized = recurringExpenseEntries(item, billingDate, wallets, crypto.randomUUID());
     const { data, error } = await supabase
       .from(TABLES.transactions)
-      .insert({ id: normalized.id, user_id: user.id, ...buildTransactionCore(normalized, wallets) })
+      .insert(normalized.map((entry) => ({
+        id: entry.id,
+        user_id: user.id,
+        ...buildTransactionCore(entry, wallets),
+        transfer_group_id: entry.transfer_group_id,
+      })))
       .select(TRANSACTION_COLUMNS);
 
     if (error) {
       setError(error.message);
     } else {
-      const inserted = data?.[0] ? mapTransactionRow(data[0]) : normalized;
-      setEntries((current) => withEntries(current, [inserted]));
+      await createMissingDebtors(normalized);
+      const inserted = data?.length ? data.map(mapTransactionRow) : normalized;
+      setEntries((current) => withEntries(current, inserted));
       notify({
         tone: "success",
         title: "บันทึกรายจ่ายประจำแล้ว",
-        detail: `${item.name} ${moneySign}${formatMoney(item.amount)}`,
+        detail: `${item.name} ${moneySign}${formatMoney(item.amount)}${item.funding_card_name?.trim() ? ` · ${item.funding_card_name.trim()}` : ""}`,
         action: { label: "ย้อนคืน", onClick: () => { void undoLoggedRecurring(inserted); } },
       });
     }
     setBusy(false);
-  }, [user, wallets, notify, undoLoggedRecurring]);
+  }
 
   /**
    * Writes the one entry that makes a wallet match the money that is really
-   * there. Same single-row insert path as logging a recurring bill, undo
-   * included -- an adjustment is a normal entry, not a special mode.
+   * there. Same insert path as logging a recurring bill, undo included -- an
+   * adjustment is a normal entry, not a special mode.
    */
   async function reconcileWallet(wallet: WalletDisplay, realBalance: number) {
     if (!supabase || !user) return false;
@@ -1793,7 +1815,7 @@ export default function Home() {
       tone: "success",
       title: "ปรับยอดแล้ว",
       detail: `${wallet.name} ${moneySign}${formatMoney(toMoneyAmount(realBalance))}`,
-      action: { label: "ย้อนคืน", onClick: () => { void undoLoggedRecurring(inserted); } },
+      action: { label: "ย้อนคืน", onClick: () => { void undoLoggedRecurring([inserted]); } },
     });
     return true;
   }
@@ -2411,6 +2433,9 @@ export default function Home() {
         billing_day: normalizeBillingDay(input.billing_day),
         icon: input.icon,
         icon_color: input.icon_color,
+        wallet_id: input.wallet_id,
+        funding_card_name: input.funding_card_name,
+        is_active: input.is_active,
       })
       .select(RECURRING_EXPENSE_COLUMNS)
       .single();
@@ -2437,6 +2462,9 @@ export default function Home() {
         billing_day: billingDay,
         icon: patch.icon,
         icon_color: patch.icon_color,
+        wallet_id: patch.wallet_id,
+        funding_card_name: patch.funding_card_name,
+        is_active: patch.is_active,
         updated_at: new Date().toISOString(),
       })
       .eq("id", item.id);
@@ -2450,6 +2478,33 @@ export default function Home() {
     setBusy(false);
     return true;
   }
+  /**
+   * Pause or resume from the list's kebab, without opening the sheet.
+   * Cancelling a subscription is the moment the row stops being a monthly
+   * cost, and also the moment its history becomes the only record that it ever
+   * was one -- so this is deliberately the easy action and deleting is not.
+   */
+  async function toggleRecurringActive(item: RecurringExpense) {
+    const resumed = !item.is_active;
+    const saved = await updateRecurringExpense(item, {
+      name: item.name,
+      amount: item.amount,
+      billing_day: item.billing_day,
+      icon: item.icon,
+      icon_color: item.icon_color,
+      wallet_id: item.wallet_id,
+      funding_card_name: item.funding_card_name,
+      is_active: resumed,
+    });
+    if (saved) {
+      notify({
+        tone: "info",
+        title: resumed ? "กลับมาใช้งานแล้ว" : "หยุดรายการไว้ชั่วคราว",
+        detail: resumed ? `${item.name} นับในยอดรวมและเตือนก่อนถึงกำหนดอีกครั้ง` : `${item.name} ยังอยู่ในรายการ แต่ไม่นับในยอดรวม`,
+      });
+    }
+  }
+
   async function deleteRecurringExpense(item: RecurringExpense) {
     if (!supabase) return;
     const confirmed = await requestConfirm({
@@ -3026,11 +3081,13 @@ export default function Home() {
         {tab === "recurring" && (
           <RecurringExpensesView
             items={recurringExpenses}
+            wallets={wallets}
             loading={dataLoading}
             onBack={() => setTab("home")}
             onAdd={openSheet(() => { setEditingRecurringExpense(null); setRecurringSheetMode("create"); })}
             onEdit={openSheet((item: RecurringExpense) => { setEditingRecurringExpense(item); setRecurringSheetMode("edit"); })}
             onDelete={deleteRecurringExpense}
+            onToggleActive={toggleRecurringActive}
           />
         )}
 
@@ -3167,6 +3224,8 @@ export default function Home() {
         {recurringSheetDismiss.mounted && recurringSheetMode && (
           <RecurringExpenseEditSheet
             item={recurringSheetMode === "edit" ? editingRecurringExpense : null}
+            wallets={wallets}
+            debtors={debtors}
             busy={busy}
             error={error}
             onClose={recurringSheetDismiss.requestClose}
