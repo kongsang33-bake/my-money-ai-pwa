@@ -2,12 +2,30 @@
 // a user-configurable start day to the same day next month (not always the
 // calendar month), plus recurring-expense billing-date rollover.
 import { MS_PER_DAY } from "./constants.ts";
+import type { BillingIntervalUnit } from "./taxonomy.ts";
 import { formatShortDate, localDateInput, monthKey } from "./format.ts";
-import type { Entry, RecurringExpense, ReportPeriod } from "./types.ts";
+import type { Entry, ReportPeriod } from "./types.ts";
+
+/**
+ * Local midnight on a yyyy-mm-dd date, parsed from its parts rather than
+ * through new Date(value): a bare date string parses as UTC, which lands on
+ * the day before for anyone behind UTC. An unusable value falls back to
+ * today, because a bill whose date failed to parse should still appear
+ * somewhere a user can see and fix it.
+ */
+export function dateFromInput(value: string): Date {
+  const [year, month, day] = (value ?? "").split("-").map(Number);
+  if (!year || !month || !day) {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  }
+  return new Date(year, month - 1, day);
+}
 
 export function withDate(dateInput: string, hours: number, minutes: number, seconds: number) {
-  const [year, month, day] = dateInput.split("-").map(Number);
-  return new Date(year, month - 1, day, hours, minutes, seconds).toISOString();
+  const date = dateFromInput(dateInput);
+  date.setHours(hours, minutes, seconds, 0);
+  return date.toISOString();
 }
 export const fromDateInput = (value: string) => {
   const now = new Date();
@@ -121,17 +139,62 @@ export function entriesInRange(entries: Entry[], start: Date, end: Date) {
   });
 }
 
-// Recurring expenses bill on a fixed day-of-month, clamped to whatever the
-// current/next month actually has (e.g. billing_day 31 bills on the 30th in
-// a 30-day month) — rolls to next month once this month's date has passed.
-export function nextBillingInfo(item: RecurringExpense, now: Date): { billingDate: Date; daysUntil: number } {
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const daysInThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  let billingDate = new Date(now.getFullYear(), now.getMonth(), Math.min(item.billing_day, daysInThisMonth));
-  if (billingDate < startOfToday) {
-    const daysInNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0).getDate();
-    billingDate = new Date(now.getFullYear(), now.getMonth() + 1, Math.min(item.billing_day, daysInNextMonth));
+/** A recurring bill's schedule, which is all the date math below needs. */
+export type BillingSchedule = { anchor_date: string; interval_unit: BillingIntervalUnit; interval_count: number };
+
+const safeIntervalCount = (count: number) => Math.max(1, Math.trunc(count) || 1);
+
+/**
+ * The anchor moved forward by whole billing periods.
+ *
+ * Month arithmetic always clamps from the anchor's own day-of-month, never
+ * from the previous occurrence: a bill anchored on the 31st falls on the 28th
+ * in February and back on the 31st in March. Stepping month by month from the
+ * clamped date instead would walk the bill permanently backwards to the 28th,
+ * which is the classic way a subscription tracker loses a day a year.
+ */
+export function addBillingPeriods(anchor: Date, unit: BillingIntervalUnit, count: number, periods: number): Date {
+  const step = safeIntervalCount(count);
+  if (unit === "week") {
+    return new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + periods * step * 7);
   }
+  const months = periods * step;
+  const daysInTarget = new Date(anchor.getFullYear(), anchor.getMonth() + months + 1, 0).getDate();
+  return new Date(anchor.getFullYear(), anchor.getMonth() + months, Math.min(anchor.getDate(), daysInTarget));
+}
+
+/**
+ * When the bill next comes due, counting from its anchor date rather than
+ * from the current month -- which is what lets a yearly or quarterly bill
+ * exist at all.
+ *
+ * An anchor in the future is itself the answer: a subscription whose first
+ * charge is next month has not billed yet, and saying so is the whole point
+ * of asking for a first billing date instead of a day number.
+ */
+export function nextBillingInfo(item: BillingSchedule, now: Date): { billingDate: Date; daysUntil: number } {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const anchor = dateFromInput(item.anchor_date);
+  const step = safeIntervalCount(item.interval_count);
+
+  // Jump straight to roughly the right period rather than stepping one cycle
+  // at a time -- a weekly bill anchored years ago is hundreds of periods back,
+  // and a loop from zero would do that work on every render. The estimate can
+  // land a period early (month lengths, a mid-period anchor), never late, so
+  // the correction below runs at most a couple of times.
+  let periods = 0;
+  if (anchor < startOfToday) {
+    periods = item.interval_unit === "week"
+      ? Math.floor((startOfToday.getTime() - anchor.getTime()) / (MS_PER_DAY * 7 * step))
+      : Math.floor(((startOfToday.getFullYear() - anchor.getFullYear()) * 12 + startOfToday.getMonth() - anchor.getMonth()) / step);
+  }
+
+  let billingDate = addBillingPeriods(anchor, item.interval_unit, step, periods);
+  while (billingDate < startOfToday) {
+    periods += 1;
+    billingDate = addBillingPeriods(anchor, item.interval_unit, step, periods);
+  }
+
   const daysUntil = Math.round((billingDate.getTime() - startOfToday.getTime()) / MS_PER_DAY);
   return { billingDate, daysUntil };
 }

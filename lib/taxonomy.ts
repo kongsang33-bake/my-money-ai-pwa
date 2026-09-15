@@ -34,6 +34,35 @@ export function countsAsEarnedOrSpent(type: TransactionType): boolean {
   return type !== "transfer" && type !== "investment_buy" && type !== "balance_adjustment";
 }
 
+// How often a recurring bill comes round: a count of weeks or of months.
+// Two units cover every cycle a subscription actually uses -- quarterly is
+// three months, half-yearly six, yearly twelve -- so the presets below are
+// names for counts rather than cases the date math has to know about.
+export type BillingIntervalUnit = "week" | "month";
+
+export const BILLING_CYCLE_PRESETS: { unit: BillingIntervalUnit; count: number; label: string }[] = [
+  { unit: "week", count: 1, label: "ทุกสัปดาห์" },
+  { unit: "month", count: 1, label: "ทุกเดือน" },
+  { unit: "month", count: 3, label: "ทุก 3 เดือน" },
+  { unit: "month", count: 6, label: "ทุก 6 เดือน" },
+  { unit: "month", count: 12, label: "ทุกปี" },
+];
+
+export const billingIntervalUnitLabels: Record<BillingIntervalUnit, string> = {
+  week: "สัปดาห์",
+  month: "เดือน",
+};
+
+/**
+ * The cycle in words. A preset says its own name ("ทุกปี" reads better than
+ * "ทุก 12 เดือน"); anything else is spelled out from the count, which is what
+ * makes "กำหนดเอง" a way of entering a cycle rather than a third kind of one.
+ */
+export function describeBillingCycle(unit: BillingIntervalUnit, count: number): string {
+  const preset = BILLING_CYCLE_PRESETS.find((option) => option.unit === unit && option.count === count);
+  return preset ? preset.label : `ทุก ${count} ${billingIntervalUnitLabels[unit]}`;
+}
+
 export const CATEGORIES = ["อาหาร", "เดินทาง", "ของใช้", "ที่อยู่อาศัย", "สุขภาพ", "บันเทิง", "รายได้", "บิลประจำ", "อื่น ๆ"] as const;
 
 export type WalletTag = "cash" | "savings" | "other" | "petty";

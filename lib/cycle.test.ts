@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { cycleBounds, entriesInRange, nextBillingInfo, shiftMonthKey } from "./cycle.ts";
-import type { Entry, RecurringExpense } from "./types.ts";
+import type { Entry } from "./types.ts";
 
 describe("cycleBounds", () => {
   it("startDay 1 matches the plain calendar month", () => {
@@ -56,20 +56,27 @@ describe("entriesInRange", () => {
 });
 
 describe("nextBillingInfo", () => {
-  function makeItem(billing_day: number): RecurringExpense {
-    return { id: "r1", user_id: "u1", name: "Netflix", amount: 199, billing_day, icon: null, icon_color: null, wallet_id: null, funding_card_name: null, is_active: true };
-  }
+  const monthly = (anchor_date: string, interval_count = 1) => ({ anchor_date, interval_unit: "month" as const, interval_count });
+  const weekly = (anchor_date: string, interval_count = 1) => ({ anchor_date, interval_unit: "week" as const, interval_count });
 
-  it("clamps billing_day 31 to the 28th in February (non-leap year)", () => {
+  it("clamps a day-31 anchor to the 28th in February (non-leap year)", () => {
     const now = new Date(2026, 1, 1); // Feb 1, 2026 (not a leap year)
-    const { billingDate } = nextBillingInfo(makeItem(31), now);
+    const { billingDate } = nextBillingInfo(monthly("2026-01-31"), now);
     assert.equal(billingDate.getMonth(), 1);
     assert.equal(billingDate.getDate(), 28);
   });
 
+  it("goes back to the 31st in March rather than staying on February's 28th", () => {
+    // The bug this guards: stepping a month on from the *clamped* date walks
+    // the bill permanently backwards, losing a day a year.
+    const { billingDate } = nextBillingInfo(monthly("2026-01-31"), new Date(2026, 2, 1));
+    assert.equal(billingDate.getMonth(), 2);
+    assert.equal(billingDate.getDate(), 31);
+  });
+
   it("rolls to next month once this month's billing date has passed", () => {
     const now = new Date(2026, 2, 20); // March 20, 2026
-    const { billingDate, daysUntil } = nextBillingInfo(makeItem(5), now);
+    const { billingDate, daysUntil } = nextBillingInfo(monthly("2026-01-05"), now);
     assert.equal(billingDate.getMonth(), 3); // April
     assert.equal(billingDate.getDate(), 5);
     assert.ok(daysUntil > 0);
@@ -77,7 +84,46 @@ describe("nextBillingInfo", () => {
 
   it("billing today counts as 0 days until", () => {
     const now = new Date(2026, 2, 15);
-    const { daysUntil } = nextBillingInfo(makeItem(15), now);
+    assert.equal(nextBillingInfo(monthly("2026-01-15"), now).daysUntil, 0);
+  });
+
+  it("leaves a bill that has not started yet on its first billing date", () => {
+    // A first charge next month is the answer, not a date to roll forward
+    // from -- which is the whole reason the schedule is a date and not a day.
+    const { billingDate, daysUntil } = nextBillingInfo(monthly("2026-04-10"), new Date(2026, 2, 15));
+    assert.equal(billingDate.getMonth(), 3);
+    assert.equal(billingDate.getDate(), 10);
+    assert.equal(daysUntil, 26);
+  });
+
+  it("keeps a quarterly bill on its own quarters, not on the next month", () => {
+    const { billingDate } = nextBillingInfo(monthly("2026-01-10", 3), new Date(2026, 2, 15));
+    assert.equal(billingDate.getMonth(), 3); // April, not March
+    assert.equal(billingDate.getDate(), 10);
+  });
+
+  it("skips a whole year for a yearly bill whose date has passed", () => {
+    const { billingDate } = nextBillingInfo(monthly("2026-03-01", 12), new Date(2026, 2, 15));
+    assert.equal(billingDate.getFullYear(), 2027);
+    assert.equal(billingDate.getMonth(), 2);
+    assert.equal(billingDate.getDate(), 1);
+  });
+
+  it("lands on the same weekday for a weekly bill anchored long ago", () => {
+    const { billingDate } = nextBillingInfo(weekly("2024-01-03"), new Date(2026, 2, 15));
+    assert.equal(billingDate.getDay(), new Date(2024, 0, 3).getDay());
+    assert.ok(billingDate >= new Date(2026, 2, 15));
+    assert.ok(billingDate < new Date(2026, 2, 22));
+  });
+
+  it("counts a fortnightly bill in two-week steps", () => {
+    const { billingDate } = nextBillingInfo(weekly("2026-03-02", 2), new Date(2026, 2, 3));
+    assert.equal(billingDate.getMonth(), 2);
+    assert.equal(billingDate.getDate(), 16);
+  });
+
+  it("falls back to today rather than an invalid date when the anchor is unusable", () => {
+    const { daysUntil } = nextBillingInfo(monthly(""), new Date());
     assert.equal(daysUntil, 0);
   });
 });

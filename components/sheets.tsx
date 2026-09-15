@@ -396,8 +396,11 @@ export function MoreSheet({
         <button onClick={onOpenRecurring}>
           <span className="more-tile-icon"><Receipt size={20} strokeWidth={2.25} aria-hidden="true" /></span>
           <span>รายจ่ายประจำ</span>
-          <small>บิลที่ตัดเงินทุกเดือน ให้แอพเตือนก่อนถึงกำหนด</small>
-          <b>{moneySign}{formatMoney(recurringTotal)}</b>
+          <small>บิลที่ตัดเงินเป็นรอบ ให้แอพเตือนก่อนถึงกำหนด</small>
+          {/* The monthly average, because the bills behind it run on different
+              cycles -- a yearly one counted in full here would read as the
+              biggest monthly cost the user has. */}
+          <b>{moneySign}{formatMoney(recurringTotal)} / เดือน</b>
         </button>
         <button onClick={onOpenBudgets}>
           <span className="more-tile-icon"><TrendingUp size={20} strokeWidth={2.25} aria-hidden="true" /></span>

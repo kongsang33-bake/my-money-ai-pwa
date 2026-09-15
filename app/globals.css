@@ -4573,13 +4573,22 @@ button.entry-main {
    read as two different forms. It also needed :placeholder-shown, a
    placeholder=" " on every field, and a :not() exclusion for each span that
    was not a caption (.cat-dot, then .date-shell-text). */
-.edit-sheet label, .manual-entry-form label {
+/* .sheet-field is the same field, for a group of controls that a <label>
+   must not wrap -- it would attach itself to the first control in the group
+   and announce that one by the group's name. */
+.edit-sheet label, .manual-entry-form label, .edit-sheet .sheet-field {
   position: relative;
   display: block;
   margin: var(--s-4) 0;
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
   color: var(--ink-3);
+}
+
+/* Explicitly block, so the group below it stacks under the name rather than
+   running alongside it (the same trap as a label/value <span> pair). */
+.sheet-field-label {
+  display: block;
 }
 
 .edit-sheet label input, .edit-sheet label select,
@@ -4619,14 +4628,16 @@ button.entry-main {
   text-align: left;
 }
 
-.category-picker {
+.category-picker,
+.cycle-picker {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-2);
   margin-top: 6px;
 }
 
-.category-picker-chip {
+.category-picker-chip,
+.cycle-picker-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -4640,8 +4651,31 @@ button.entry-main {
   transition: background var(--t-2) var(--e-out), border-color var(--t-2) var(--e-out), color var(--t-2) var(--e-out), transform var(--t-press) var(--e-out);
 }
 
-.category-picker-chip:active {
+.category-picker-chip:active,
+.cycle-picker-chip:active {
   transform: scale(0.96);
+}
+
+/* A category chip colours itself from the category (inline, per chip); a
+   billing cycle has no colour of its own, so the chosen one is marked the way
+   the segmented toggles mark theirs. */
+.cycle-picker-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-text);
+}
+
+/* "ทุก ๆ [ 2 ] [ สัปดาห์ ]" -- a number and the unit it counts, which only
+   mean anything read together, so they share one line at any width. */
+.cycle-custom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: var(--s-2);
+  margin-top: 6px;
+}
+
+.cycle-custom > input {
+  width: 100%;
 }
 
 .report-page label input,

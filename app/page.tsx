@@ -30,7 +30,7 @@ import type {
   Wallet,
   WalletDisplay,
 } from "@/lib/types";
-import { clampInteger, formatMoney, formatUnits, moneySign, monthKey, normalizeBillingDay, toFiniteNumber, toMoneyAmount } from "@/lib/format";
+import { clampInteger, formatMoney, formatUnits, moneySign, monthKey, normalizeIntervalCount, toFiniteNumber, toMoneyAmount } from "@/lib/format";
 import { currentCycleMonthKey, cycleBounds, defaultDayForCycle, entriesInRange, fromDateInput, nextBillingInfo, reportLabel, shiftMonthKey, todayDateInput } from "@/lib/cycle";
 import {
   buildDebtSummary,
@@ -57,6 +57,7 @@ import {
   planDebtSettlement,
   planEntryUpdate,
   recurringExpenseEntries,
+  recurringTotals,
   replaceEntry,
   payableForDisplay,
   receiptMismatch,
@@ -174,6 +175,14 @@ const secondaryWalletTags: { tag: WalletTag; label: string; className: string }[
   { tag: "petty", label: walletTagLabels.petty, className: "petty-wallet" },
   { tag: "other", label: walletTagLabels.other, className: "other-wallet" },
 ];
+
+// The order the recurring rows are loaded in, kept as they are created and
+// edited so an optimistic update doesn't make a row jump. Deliberately not
+// "what is due next": bills run on different cycles now, so that question has
+// a different answer every day and is answered where it is shown
+// (RecurringExpensesView), not where the rows are stored.
+const sortRecurringExpenses = (items: RecurringExpense[]) =>
+  [...items].sort((a, b) => a.anchor_date.localeCompare(b.anchor_date));
 
 const defaultNetWorthDisplaySettings: NetWorthDisplaySettings = { formula: "full", hideCard: false };
 
@@ -650,12 +659,12 @@ export default function Home() {
     const { data, error } = await supabase
       .from(TABLES.recurringExpenses)
       .select(RECURRING_EXPENSE_COLUMNS)
-      .order("billing_day", { ascending: true });
+      .order("anchor_date", { ascending: true });
     if (error) {
       setError(error.message);
       return;
     }
-    setRecurringExpenses((data ?? []).map((row) => ({ ...row, amount: toMoneyAmount(row.amount), billing_day: normalizeBillingDay(row.billing_day) })) as RecurringExpense[]);
+    setRecurringExpenses((data ?? []).map((row) => ({ ...row, amount: toMoneyAmount(row.amount), interval_count: normalizeIntervalCount(row.interval_count) })) as RecurringExpense[]);
   }, []);
 
   const loadInvestments = useCallback(async () => {
@@ -1205,7 +1214,7 @@ export default function Home() {
     },
     walletBalances: displayWallets.map((wallet) => ({ name: wallet.name, balance: wallet.display_balance })),
     categories: categorySummary.filter((item) => item.amount > 0),
-    recurringTotal: recurringExpenses.reduce((sum, item) => sum + (item.is_active ? item.amount : 0), 0),
+    recurringTotal: recurringTotals(recurringExpenses).monthly,
     receivableTotal,
     payableTotal,
     transactionCount: monthlyEntries.length,
@@ -2430,7 +2439,9 @@ export default function Home() {
         user_id: user.id,
         name: input.name.trim(),
         amount: toMoneyAmount(input.amount),
-        billing_day: normalizeBillingDay(input.billing_day),
+        anchor_date: input.anchor_date,
+        interval_unit: input.interval_unit,
+        interval_count: normalizeIntervalCount(input.interval_count),
         icon: input.icon,
         icon_color: input.icon_color,
         wallet_id: input.wallet_id,
@@ -2444,8 +2455,8 @@ export default function Home() {
       setBusy(false);
       return false;
     }
-    const created = { ...data, amount: toMoneyAmount(data.amount), billing_day: normalizeBillingDay(data.billing_day) } as RecurringExpense;
-    setRecurringExpenses((current) => [...current, created].sort((a, b) => a.billing_day - b.billing_day));
+    const created = { ...data, amount: toMoneyAmount(data.amount), interval_count: normalizeIntervalCount(data.interval_count) } as RecurringExpense;
+    setRecurringExpenses((current) => sortRecurringExpenses([...current, created]));
     setBusy(false);
     return true;
   }
@@ -2453,13 +2464,15 @@ export default function Home() {
     if (!supabase) return false;
     setBusy(true);
     setError("");
-    const billingDay = normalizeBillingDay(patch.billing_day);
+    const intervalCount = normalizeIntervalCount(patch.interval_count);
     const { error } = await supabase
       .from(TABLES.recurringExpenses)
       .update({
         name: patch.name.trim(),
         amount: toMoneyAmount(patch.amount),
-        billing_day: billingDay,
+        anchor_date: patch.anchor_date,
+        interval_unit: patch.interval_unit,
+        interval_count: intervalCount,
         icon: patch.icon,
         icon_color: patch.icon_color,
         wallet_id: patch.wallet_id,
@@ -2473,8 +2486,8 @@ export default function Home() {
       setBusy(false);
       return false;
     }
-    const updated: RecurringExpense = { ...item, ...patch, name: patch.name.trim(), amount: toMoneyAmount(patch.amount), billing_day: billingDay };
-    setRecurringExpenses((current) => current.map((row) => (row.id === item.id ? updated : row)).sort((a, b) => a.billing_day - b.billing_day));
+    const updated: RecurringExpense = { ...item, ...patch, name: patch.name.trim(), amount: toMoneyAmount(patch.amount), interval_count: intervalCount };
+    setRecurringExpenses((current) => sortRecurringExpenses(current.map((row) => (row.id === item.id ? updated : row))));
     setBusy(false);
     return true;
   }
@@ -2489,7 +2502,9 @@ export default function Home() {
     const saved = await updateRecurringExpense(item, {
       name: item.name,
       amount: item.amount,
-      billing_day: item.billing_day,
+      anchor_date: item.anchor_date,
+      interval_unit: item.interval_unit,
+      interval_count: item.interval_count,
       icon: item.icon,
       icon_color: item.icon_color,
       wallet_id: item.wallet_id,
@@ -2538,7 +2553,7 @@ export default function Home() {
       notify({ tone: "error", title: "ย้อนคืนรายจ่ายประจำไม่สำเร็จ", detail: error.message });
       return;
     }
-    setRecurringExpenses((current) => [...current, item].sort((a, b) => a.billing_day - b.billing_day));
+    setRecurringExpenses((current) => sortRecurringExpenses([...current, item]));
     notify({ tone: "success", title: "ย้อนคืนรายจ่ายประจำแล้ว", detail: item.name });
   }
 
@@ -3303,7 +3318,7 @@ export default function Home() {
             onOpenReport={() => { moreDismiss.requestClose(); setTab("report"); }}
             receivableTotal={receivableTotal}
             payableTotal={payableTotal}
-            recurringTotal={recurringExpenses.reduce((sum, item) => sum + item.amount, 0)}
+            recurringTotal={recurringTotals(recurringExpenses).monthly}
             portfolioTotal={portfolioTotalValue}
             budgetTotal={Object.values(budgets).reduce((sum, amount) => sum + amount, 0)}
             closing={moreDismiss.closing}

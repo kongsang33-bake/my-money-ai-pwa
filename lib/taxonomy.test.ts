@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   CATEGORIES, DEBT_TYPES, TRANSACTION_TYPES, TYPES_OWED_TO_USER, TYPES_USER_OWES,
   countsAsEarnedOrSpent, transactionKind, transactionTypeLabels, transactionTypeOptions,
-  walletTagHints, walletTagLabels,
+  walletTagHints, walletTagLabels, BILLING_CYCLE_PRESETS, describeBillingCycle,
 } from "./taxonomy.ts";
 
 const WALLET_TAGS = ["cash", "savings", "other", "petty"] as const;
@@ -134,5 +134,26 @@ describe("transactionTypeOptions", () => {
     const offered = transactionTypeOptions("balance_adjustment").map(([value]) => value);
     assert.equal(offered.includes("balance_adjustment"), true);
     assert.equal(offered.includes("investment_buy"), false);
+  });
+});
+
+describe("describeBillingCycle", () => {
+  it("gives a preset its own name rather than spelling out the count", () => {
+    assert.equal(describeBillingCycle("month", 12), "ทุกปี");
+    assert.equal(describeBillingCycle("month", 1), "ทุกเดือน");
+    assert.equal(describeBillingCycle("week", 1), "ทุกสัปดาห์");
+  });
+
+  it("spells out a cycle no preset names", () => {
+    // What makes "กำหนดเอง" a way of entering a cycle rather than a kind of
+    // one: an interval with no name still reads as an interval.
+    assert.equal(describeBillingCycle("week", 2), "ทุก 2 สัปดาห์");
+    assert.equal(describeBillingCycle("month", 4), "ทุก 4 เดือน");
+  });
+
+  it("names every preset it offers", () => {
+    for (const preset of BILLING_CYCLE_PRESETS) {
+      assert.equal(describeBillingCycle(preset.unit, preset.count), preset.label);
+    }
   });
 });

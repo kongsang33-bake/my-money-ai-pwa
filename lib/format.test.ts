@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { clampInteger, formatChatTime, formatDateInputValue, formatMonthInputValue, formatSignedMoney, normalizeBillingDay, roundMoney, roundMoneyDeep, toFiniteNumber, toMoneyAmount } from "./format.ts";
+import { clampInteger, formatChatTime, formatDateInputValue, formatMonthInputValue, formatSignedMoney, normalizeIntervalCount, roundMoney, roundMoneyDeep, toFiniteNumber, toMoneyAmount } from "./format.ts";
 
 describe("toFiniteNumber", () => {
   it("parses numeric strings", () => {
@@ -46,14 +46,14 @@ describe("clampInteger", () => {
   });
 });
 
-describe("normalizeBillingDay", () => {
-  it("accepts a valid day of month", () => {
-    assert.equal(normalizeBillingDay(15), 15);
+describe("normalizeIntervalCount", () => {
+  it("accepts a count inside the range", () => {
+    assert.equal(normalizeIntervalCount(15), 15);
   });
 
-  it("clamps an out-of-range day into 1-31", () => {
-    assert.equal(normalizeBillingDay(45), 31);
-    assert.equal(normalizeBillingDay(0), 1);
+  it("clamps a count that would put the next bill out of reach", () => {
+    assert.equal(normalizeIntervalCount(90), 60);
+    assert.equal(normalizeIntervalCount(0), 1);
   });
 });
 

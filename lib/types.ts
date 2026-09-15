@@ -4,7 +4,7 @@
 // to import. A type used by exactly one file stays declared right there
 // instead of being added here -- Tab is the main example, since only
 // app/page.tsx's own routing state needs it.
-import type { EntryKind, TransactionType, WalletTag } from "./taxonomy.ts";
+import type { BillingIntervalUnit, EntryKind, TransactionType, WalletTag } from "./taxonomy.ts";
 
 export type { EntryKind };
 
@@ -121,7 +121,14 @@ export type RecurringExpense = {
   user_id: string;
   name: string;
   amount: number;
-  billing_day: number;
+  // One date it bills on, plus how often it comes round -- not a day of the
+  // month, which could only ever describe a monthly bill. A yearly domain
+  // renewal and a weekly cleaner are the same two fields as Netflix; which
+  // occurrence is next is worked out from the anchor (nextBillingInfo)
+  // rather than stored and kept up to date.
+  anchor_date: string;
+  interval_unit: BillingIntervalUnit;
+  interval_count: number;
   icon: string | null;
   icon_color: string | null;
   wallet_id: string | null;

@@ -3,10 +3,10 @@
 // This is the highest-stakes logic in the app (get it wrong and balances
 // are wrong) so it's kept as pure, dependency-free functions that
 // lib/money.test.ts can exercise directly.
-import { TYPES_OWED_TO_USER, TYPES_USER_OWES, countsAsEarnedOrSpent, transactionKind, walletTagLabels, type TransactionType, type WalletTag } from "./taxonomy.ts";
-import { formatMoney, moneySign, toFiniteNumber, toMoneyAmount } from "./format.ts";
+import { TYPES_OWED_TO_USER, TYPES_USER_OWES, countsAsEarnedOrSpent, transactionKind, walletTagLabels, type BillingIntervalUnit, type TransactionType, type WalletTag } from "./taxonomy.ts";
+import { formatMoney, moneySign, roundMoney, toFiniteNumber, toMoneyAmount } from "./format.ts";
 import { cycleBounds, entriesInRange, shiftMonthKey } from "./cycle.ts";
-import { MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE, RECEIPT_TOTAL_TOLERANCE } from "./constants.ts";
+import { MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE, RECEIPT_TOTAL_TOLERANCE, WEEKS_PER_YEAR } from "./constants.ts";
 import type {
   Debtor,
   DebtorKind,
@@ -19,6 +19,7 @@ import type {
   InvestmentPrice,
   NetWorthDebtFormula,
   PortfolioHolding,
+  RecurringExpense,
   Wallet,
 } from "./types.ts";
 
@@ -862,6 +863,33 @@ export function planDebtSettlement(
       ].filter(Boolean).join(" · ");
 
   return { receivable: owedToUser, payable: owedByUser, net, detail, entries };
+}
+
+/**
+ * What one recurring bill costs over a year.
+ *
+ * This is what makes bills on different cycles comparable at all: a 1,200
+ * yearly domain and a 100 monthly subscription are 1,200 against 1,200, and
+ * reading the stored amounts straight off the rows would have called the
+ * domain the cheaper one by a factor of twelve.
+ */
+export function recurringYearlyAmount(item: { amount: number; interval_unit: BillingIntervalUnit; interval_count: number }): number {
+  const count = Math.max(1, Math.trunc(item.interval_count) || 1);
+  const perYear = item.interval_unit === "week" ? WEEKS_PER_YEAR / count : 12 / count;
+  return item.amount * perYear;
+}
+
+/**
+ * What the subscriptions cost per month and per year -- the two figures the
+ * recurring screen shows and the one the AI is told about, worked out once
+ * here so they cannot disagree.
+ *
+ * Paused bills are left out: that is what pausing means, and a filter the
+ * callers each wrote themselves is a filter one of them will forget.
+ */
+export function recurringTotals(items: RecurringExpense[]): { monthly: number; yearly: number } {
+  const yearly = items.reduce((sum, item) => sum + (item.is_active ? recurringYearlyAmount(item) : 0), 0);
+  return { monthly: roundMoney(yearly / 12), yearly: roundMoney(yearly) };
 }
 
 /**

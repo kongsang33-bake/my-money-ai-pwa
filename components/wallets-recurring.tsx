@@ -2,13 +2,14 @@
 
 import { useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft } from "lucide-react";
-import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toFiniteNumber, toMoneyAmount, normalizeBillingDay } from "@/lib/format";
+import { formatDateTime, formatMoney, formatShortDate, formatSignedMoney, localDateInput, moneySign, toFiniteNumber, toMoneyAmount, normalizeIntervalCount } from "@/lib/format";
 import { nextBillingInfo } from "@/lib/cycle";
-import { walletTagHints, walletTagLabels, type WalletTag } from "@/lib/taxonomy";
+import { recurringTotals } from "@/lib/money";
+import { BILLING_CYCLE_PRESETS, billingIntervalUnitLabels, describeBillingCycle, walletTagHints, walletTagLabels, type BillingIntervalUnit, type WalletTag } from "@/lib/taxonomy";
 import { nameColor, recurringIconOptions } from "@/lib/category";
 import type { Debtor, Entry, RecurringExpense, Wallet, WalletDisplay } from "@/lib/types";
 import { FundingSelect, IconColorPicker, RecurringAvatarGlyph, WalletAvatarGlyph } from "@/components/shared";
-import { AmountInput, CountUpMoney, EmptyNote, InfoHint, SheetFrame, SkeletonList, StateCard, decimalInputPattern } from "@/components/primitives";
+import { AmountInput, CountUpMoney, DateField, EmptyNote, InfoHint, SheetFrame, SkeletonList, StateCard, decimalInputPattern } from "@/components/primitives";
 
 export function WalletsView({
   wallets,
@@ -299,18 +300,18 @@ export function RecurringExpensesView({
 }) {
   // A paused bill is still on the list -- that is the point of pausing rather
   // than deleting -- but it is not money going out, so it stays out of the
-  // total and out of the schedule.
-  const active = items.filter((item) => item.is_active);
-  const pausedCount = items.length - active.length;
-  const total = active.reduce((sum, item) => sum + item.amount, 0);
+  // totals and out of the schedule.
+  const pausedCount = items.filter((item) => !item.is_active).length;
+  const totals = recurringTotals(items);
   const today = new Date();
-  const upcoming = active
-    .map((item) => {
-      const { billingDate, daysUntil } = nextBillingInfo(item, today);
-      return { item, date: billingDate, days: daysUntil };
-    })
-    .sort((a, b) => a.date.getTime() - b.date.getTime())
-    .slice(0, 4);
+  // Bills run on different cycles now, so the stored order (by anchor date)
+  // says nothing about what is coming next. Sorted here, where the dates are
+  // already worked out, rather than in the state the rows are loaded into:
+  // "next due" is a question with a different answer every day.
+  const scheduled = items
+    .map((item) => ({ item, ...nextBillingInfo(item, today) }))
+    .sort((a, b) => Number(b.item.is_active) - Number(a.item.is_active) || a.billingDate.getTime() - b.billingDate.getTime());
+  const upcoming = scheduled.filter(({ item }) => item.is_active).slice(0, 4);
 
   return (
     <div className="view debtor-view">
@@ -319,23 +320,26 @@ export function RecurringExpensesView({
         <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
         <div>
           <p className="eyebrow">รายจ่ายประจำ</p>
-          <h2>ค่าใช้จ่ายรายเดือน</h2>
+          <h2>บิลและค่าสมาชิก</h2>
         </div>
         <button className="header-add-button" onClick={onAdd}>เพิ่ม</button>
       </div>
       <section className="debtor-detail-card">
-        <span>ยอดรวมต่อเดือน</span>
-        <strong><CountUpMoney value={total} /></strong>
-        {pausedCount > 0 && <small>ไม่นับรายการที่หยุดไว้ {pausedCount} รายการ</small>}
+        <span>เฉลี่ยต่อเดือน</span>
+        <strong><CountUpMoney value={totals.monthly} /></strong>
+        {/* A yearly bill is not a monthly one divided by twelve in the bank --
+            it lands all at once -- so the year total is shown next to the
+            average rather than instead of it. */}
+        <small>รวมทั้งปี {moneySign}{formatMoney(totals.yearly)}{pausedCount > 0 ? ` · ไม่นับรายการที่หยุดไว้ ${pausedCount} รายการ` : ""}</small>
       </section>
       {!!upcoming.length && (
         <section className="recurring-timeline" aria-label="กำหนดตัดเงินถัดไป">
           <div className="section-title-row"><h3>กำหนดตัดเงินถัดไป</h3><small>{upcoming.length} รายการ</small></div>
           <div className="recurring-timeline-list">
-            {upcoming.map(({ item, date, days }) => (
+            {upcoming.map(({ item, billingDate, daysUntil }) => (
               <button key={item.id} className="recurring-timeline-row" onClick={() => onEdit(item)}>
-                <span className="recurring-date"><b>{date.getDate()}</b><small>{date.toLocaleDateString("th-TH", { month: "short" })}</small></span>
-                <span className="recurring-service"><i style={{ background: item.icon_color ?? nameColor(item.name) }}><RecurringAvatarGlyph iconKey={item.icon} fallbackName={item.name} size={15} /></i><span><b>{item.name}</b><small>{days === 0 ? "วันนี้" : `อีก ${days} วัน`}</small></span></span>
+                <span className="recurring-date"><b>{billingDate.getDate()}</b><small>{billingDate.toLocaleDateString("th-TH", { month: "short" })}</small></span>
+                <span className="recurring-service"><i style={{ background: item.icon_color ?? nameColor(item.name) }}><RecurringAvatarGlyph iconKey={item.icon} fallbackName={item.name} size={15} /></i><span><b>{item.name}</b><small>{daysUntil === 0 ? "วันนี้" : `อีก ${daysUntil} วัน`} · {describeBillingCycle(item.interval_unit, item.interval_count)}</small></span></span>
                 <strong>{moneySign}{formatMoney(item.amount)}</strong>
               </button>
             ))}
@@ -343,7 +347,7 @@ export function RecurringExpensesView({
         </section>
       )}
       <div className="debtor-page-list">
-        {items.map((item) => (
+        {scheduled.map(({ item, billingDate }) => (
           <article className={`debtor-page-item${item.is_active ? "" : " is-paused"}`} key={item.id}>
             <i className="card-accent" style={{ background: item.icon_color ?? nameColor(item.name) }} />
             <button className="debtor-main-button" onClick={() => onEdit(item)}>
@@ -352,7 +356,7 @@ export function RecurringExpensesView({
               </span>
               <div>
                 <span>{item.name}{!item.is_active && <em className="recurring-paused-tag">หยุดไว้</em>}</span>
-                <small className="recurring-meta">ตัดเงินทุกวันที่ {item.billing_day} · {moneySign}{formatMoney(item.amount)} · {fundingLabel(item, wallets)}</small>
+                <small className="recurring-meta">{describeBillingCycle(item.interval_unit, item.interval_count)}{item.is_active ? ` · ครั้งถัดไป ${formatShortDate(billingDate)}` : ""} · {moneySign}{formatMoney(item.amount)} · {fundingLabel(item, wallets)}</small>
               </div>
             </button>
             <details className="kebab-menu" name="recurring-kebab">
@@ -365,7 +369,7 @@ export function RecurringExpensesView({
             </details>
           </article>
         ))}
-        {!items.length && <EmptyNote glyph="↻" action={{ label: "เพิ่มรายจ่ายประจำ", onClick: onAdd }}>บิลที่ตัดเงินทุกเดือนเวลาเดิม — ค่าเน็ต ค่าไฟ ค่าสมาชิก · เพิ่มไว้แล้วหน้าแรกจะเตือนก่อนถึงกำหนด และกดบันทึกได้ในปุ่มเดียว</EmptyNote>}
+        {!items.length && <EmptyNote glyph="↻" action={{ label: "เพิ่มรายจ่ายประจำ", onClick: onAdd }}>บิลที่ตัดเงินเป็นรอบ — ค่าเน็ตรายเดือน ค่าสมาชิกรายปี ค่าบริการราย 3 เดือน · เพิ่มไว้แล้วหน้าแรกจะเตือนก่อนถึงกำหนด และกดบันทึกได้ในปุ่มเดียว</EmptyNote>}
       </div>
     </div>
   );
@@ -374,13 +378,26 @@ export function RecurringExpensesView({
 export type RecurringExpenseInput = {
   name: string;
   amount: number;
-  billing_day: number;
+  anchor_date: string;
+  interval_unit: BillingIntervalUnit;
+  interval_count: number;
   icon: string | null;
   icon_color: string | null;
   wallet_id: string | null;
   funding_card_name: string | null;
   is_active: boolean;
 };
+
+/**
+ * When the bill next comes due, said under the date field. A first billing
+ * date in the future reads back as itself, which is the confirmation that
+ * "ครั้งแรก" was taken literally and nothing has been charged yet.
+ */
+function nextBillingLabel(schedule: { anchor_date: string; interval_unit: BillingIntervalUnit; interval_count: number }) {
+  const { billingDate, daysUntil } = nextBillingInfo(schedule, new Date());
+  const when = daysUntil === 0 ? "วันนี้" : `อีก ${daysUntil} วัน`;
+  return `${describeBillingCycle(schedule.interval_unit, schedule.interval_count)} · ตัดครั้งถัดไป ${formatShortDate(billingDate, { year: true })} (${when})`;
+}
 
 /**
  * What pays this bill, in words: the card or person that fronts it, or the
@@ -418,7 +435,15 @@ export function RecurringExpenseEditSheet({
 }) {
   const [name, setName] = useState(item?.name ?? "");
   const [amountText, setAmountText] = useState(item?.amount ? String(item.amount) : "");
-  const [billingDay, setBillingDay] = useState(item?.billing_day ?? 1);
+  const [anchorDate, setAnchorDate] = useState(item?.anchor_date || localDateInput(new Date()));
+  const [intervalUnit, setIntervalUnit] = useState<BillingIntervalUnit>(item?.interval_unit ?? "month");
+  const [intervalCount, setIntervalCount] = useState(item?.interval_count ?? 1);
+  // "กำหนดเอง" is not a sixth kind of cycle -- it is the count and unit
+  // showing, for a schedule none of the presets happens to name. Opening the
+  // fields is therefore a question about the current value, not its own state.
+  const [customOpen, setCustomOpen] = useState(
+    !BILLING_CYCLE_PRESETS.some((preset) => preset.unit === (item?.interval_unit ?? "month") && preset.count === (item?.interval_count ?? 1)),
+  );
   const [icon, setIcon] = useState<string | null>(item?.icon ?? null);
   const [iconColor, setIconColor] = useState<string | null>(item?.icon_color ?? null);
   const [walletId, setWalletId] = useState<string | null>(item?.wallet_id ?? null);
@@ -433,7 +458,9 @@ export function RecurringExpenseEditSheet({
     const payload: RecurringExpenseInput = {
       name,
       amount: toMoneyAmount(amountText),
-      billing_day: billingDay,
+      anchor_date: anchorDate,
+      interval_unit: intervalUnit,
+      interval_count: normalizeIntervalCount(intervalCount),
       icon,
       icon_color: iconColor,
       wallet_id: fundingCard ? null : walletId,
@@ -459,20 +486,70 @@ export function RecurringExpenseEditSheet({
         <input autoFocus={!item} value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น Netflix, Claude Pro, YouTube Premium" />
       </label>
       <label>
-        ยอดต่อเดือน
+        ยอดที่ตัดแต่ละครั้ง
         <input inputMode="decimal" value={amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setAmountText(event.target.value); }} />
       </label>
       <label>
-        ตัดเงินทุกวันที่
-        <div className="select-shell">
-          <select value={billingDay} onChange={(event) => setBillingDay(normalizeBillingDay(event.target.value))}>
-          {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-            <option key={day} value={day}>{day}</option>
-          ))}
-        </select>
-          <ChevronDown className="select-shell-chevron" aria-hidden="true" />
-        </div>
+        {item ? "วันตัดเงิน" : "วันตัดเงินครั้งแรก"}
+        <DateField value={anchorDate} onChange={setAnchorDate} />
+        <small className="cycle-note">
+          {nextBillingLabel({ anchor_date: anchorDate, interval_unit: intervalUnit, interval_count: normalizeIntervalCount(intervalCount) })}
+        </small>
       </label>
+      {/* A <div>, not a <label>: a label wrapping a group of controls attaches
+          itself to the first one, so the first cycle chip would announce as
+          "รอบการจ่าย" instead of "ทุกสัปดาห์". The group carries its own
+          aria-label instead. */}
+      <div className="sheet-field">
+        <span className="sheet-field-label">รอบการจ่าย</span>
+        <div className="cycle-picker" role="radiogroup" aria-label="รอบการจ่าย">
+          {BILLING_CYCLE_PRESETS.map((preset) => {
+            const active = !customOpen && intervalUnit === preset.unit && intervalCount === preset.count;
+            return (
+              <button
+                type="button"
+                key={preset.label}
+                role="radio"
+                aria-checked={active}
+                className={`cycle-picker-chip${active ? " active" : ""}`}
+                onClick={() => { setCustomOpen(false); setIntervalUnit(preset.unit); setIntervalCount(preset.count); }}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            role="radio"
+            aria-checked={customOpen}
+            className={`cycle-picker-chip${customOpen ? " active" : ""}`}
+            onClick={() => setCustomOpen(true)}
+          >
+            กำหนดเอง
+          </button>
+        </div>
+      </div>
+      {customOpen && (
+        <label>
+          ทุก ๆ
+          <div className="cycle-custom">
+            <input
+              inputMode="numeric"
+              value={intervalCount}
+              onChange={(event) => setIntervalCount(normalizeIntervalCount(event.target.value))}
+              aria-label="จำนวนรอบ"
+            />
+            <div className="select-shell">
+              <select value={intervalUnit} onChange={(event) => setIntervalUnit(event.target.value as BillingIntervalUnit)} aria-label="หน่วยของรอบ">
+                {(Object.keys(billingIntervalUnitLabels) as BillingIntervalUnit[]).map((unit) => (
+                  <option key={unit} value={unit}>{billingIntervalUnitLabels[unit]}</option>
+                ))}
+              </select>
+              <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+            </div>
+          </div>
+        </label>
+      )}
       <FundingSelect
         label={(
           <>

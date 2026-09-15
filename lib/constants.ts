@@ -4,6 +4,17 @@
 
 export const MS_PER_DAY = 86_400_000;
 
+// Used to put a weekly bill on the same footing as a monthly one ("what does
+// this cost per month?"). 52 rather than 365.25/7: a weekly 100 reading as
+// 5,200 a year is the number the user would have worked out themselves, and
+// the third decimal of a leap-year correction buys nothing they can act on.
+export const WEEKS_PER_YEAR = 52;
+
+// How many weeks/months a custom billing cycle may span. Five years is well
+// past any real subscription and keeps a typo from producing a bill that
+// never comes due again.
+export const MAX_BILLING_INTERVAL_COUNT = 60;
+
 export const DEFAULT_TIMEZONE = "Asia/Bangkok";
 
 export const DATE_INPUT_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -95,7 +106,7 @@ export const DEBTOR_COLUMNS =
 
 export const WALLET_COLUMNS = "id,user_id,name,tag,balance,icon,icon_color,is_default";
 
-export const RECURRING_EXPENSE_COLUMNS = "id,user_id,name,amount,billing_day,icon,icon_color,wallet_id,funding_card_name,is_active";
+export const RECURRING_EXPENSE_COLUMNS = "id,user_id,name,amount,anchor_date,interval_unit,interval_count,icon,icon_color,wallet_id,funding_card_name,is_active";
 
 export const INVESTMENT_COLUMNS = "id,user_id,name,code,units,cost_basis,icon,icon_color";
 

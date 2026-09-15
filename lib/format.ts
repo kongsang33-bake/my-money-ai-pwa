@@ -1,6 +1,7 @@
 // Pure display-formatting and number/date-string coercion helpers, used
 // throughout app/page.tsx and by lib/cycle.ts. No domain knowledge here —
 // see lib/money.ts and lib/cycle.ts for that.
+import { MAX_BILLING_INTERVAL_COUNT } from "./constants.ts";
 
 export const moneySign = "฿ ";
 
@@ -75,4 +76,4 @@ export const clampInteger = (value: unknown, min: number, max: number, fallback:
   const number = Math.trunc(toFiniteNumber(value, fallback));
   return Math.min(max, Math.max(min, number));
 };
-export const normalizeBillingDay = (value: unknown) => clampInteger(value, 1, 31, 1);
+export const normalizeIntervalCount = (value: unknown) => clampInteger(value, 1, MAX_BILLING_INTERVAL_COUNT, 1);

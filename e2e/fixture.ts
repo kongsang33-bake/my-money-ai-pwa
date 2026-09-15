@@ -1,5 +1,6 @@
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import { normalizeEntry } from "../lib/money.ts";
+import { localDateInput } from "../lib/format.ts";
 import type { Draft, Entry, PreviewSeed } from "../lib/types.ts";
 
 // The seeded state every spec runs against, and the helpers for getting into
@@ -58,9 +59,11 @@ function seedEntry(index: number, now: number): Entry {
 
 export function buildSeed(now = Date.now()): PreviewSeed {
   const today = new Date(now);
-  // Keep both recurring bills inside the "due soon" window so the Home tile
-  // that renders them is always exercised, whatever day the suite runs.
-  const soon = (days: number) => Math.min(28, ((today.getDate() + days - 1) % 28) + 1);
+  // A recurring bill's schedule is an anchor date now, so these are real dates
+  // rather than days of the month -- which also lets the seed hold a bill that
+  // has not started yet and one that runs yearly.
+  const billsOn = (days: number) =>
+    localDateInput(new Date(today.getFullYear(), today.getMonth(), today.getDate() + days));
 
   return {
     user: { id: USER_ID, email: "preview@example.com", user_metadata: { full_name: "พรีวิว" } },
@@ -83,12 +86,18 @@ export function buildSeed(now = Date.now()): PreviewSeed {
       // Netflix is charged to the card and ค่าเน็ต comes out of a wallet, so
       // both funding shapes -- and the two-row save the card one expands to --
       // are on screen whenever the due-soon tile renders.
-      { id: "preview-r1", user_id: USER_ID, name: "Netflix", amount: 419, billing_day: soon(2), icon: null, icon_color: null, wallet_id: null, funding_card_name: "บัตรเครดิต", is_active: true },
-      { id: "preview-r2", user_id: USER_ID, name: "ค่าเน็ต", amount: 599, billing_day: soon(4), icon: null, icon_color: null, wallet_id: "preview-w1", funding_card_name: null, is_active: true },
+      { id: "preview-r1", user_id: USER_ID, name: "Netflix", amount: 419, anchor_date: billsOn(2), interval_unit: "month", interval_count: 1, icon: null, icon_color: null, wallet_id: null, funding_card_name: "บัตรเครดิต", is_active: true },
+      { id: "preview-r2", user_id: USER_ID, name: "ค่าเน็ต", amount: 599, anchor_date: billsOn(4), interval_unit: "month", interval_count: 1, icon: null, icon_color: null, wallet_id: "preview-w1", funding_card_name: null, is_active: true },
       // Paused, and deliberately due sooner than either live bill: if the
       // filters that keep a cancelled subscription out of the due-soon card
-      // and the monthly total ever come off, this is the row that shows it.
-      { id: "preview-r3", user_id: USER_ID, name: "ฟิตเนส", amount: 1200, billing_day: soon(1), icon: null, icon_color: null, wallet_id: "preview-w1", funding_card_name: null, is_active: false },
+      // and the totals ever come off, this is the row that shows it.
+      { id: "preview-r3", user_id: USER_ID, name: "ฟิตเนส", amount: 1200, anchor_date: billsOn(1), interval_unit: "month", interval_count: 1, icon: null, icon_color: null, wallet_id: "preview-w1", funding_card_name: null, is_active: false },
+      // A yearly and a quarterly bill, so every screen that adds subscriptions
+      // up has to divide them down to a month rather than counting 2,400 as a
+      // monthly cost -- and so the cycle label has something to say beyond
+      // "ทุกเดือน".
+      { id: "preview-r4", user_id: USER_ID, name: "โดเมนเว็บ", amount: 1200, anchor_date: billsOn(40), interval_unit: "month", interval_count: 12, icon: null, icon_color: null, wallet_id: null, funding_card_name: "บัตรเครดิต", is_active: true },
+      { id: "preview-r5", user_id: USER_ID, name: "ประกันรถ", amount: 2400, anchor_date: billsOn(21), interval_unit: "month", interval_count: 3, icon: null, icon_color: null, wallet_id: "preview-w1", funding_card_name: null, is_active: true },
     ],
     goals: [
       { id: "preview-g1", name: "เที่ยวญี่ปุ่น", target: 80000, saved: 32000, deadline: new Date(now + 120 * 86400000).toISOString().slice(0, 10) },

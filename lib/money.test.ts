@@ -33,6 +33,8 @@ import {
   planEntryUpdate,
   receiptMismatch,
   recurringExpenseEntries,
+  recurringTotals,
+  recurringYearlyAmount,
   replaceEntry,
   retargetPartnerShare,
   retypedTo,
@@ -40,7 +42,7 @@ import {
   walletDeletionMove,
   withEntries,
 } from "./money.ts";
-import type { Debtor, Draft, Entry, HistoryFilters, Investment, InvestmentPrice, Wallet } from "./types.ts";
+import type { Debtor, Draft, Entry, HistoryFilters, Investment, InvestmentPrice, RecurringExpense, Wallet } from "./types.ts";
 
 function makeEntry(overrides: Partial<Entry> = {}): Entry {
   return {
@@ -580,6 +582,65 @@ describe("planEntryUpdate", () => {
     const edited = makeEntry({ id: "e1", transaction_type: "transfer", wallet_id: "cash" });
     const plan = planEntryUpdate(edited, undefined, wallets, "savings");
     assert.equal(plan.kind, "convert-to-transfer");
+  });
+});
+
+describe("recurringYearlyAmount", () => {
+  it("counts a monthly bill twelve times", () => {
+    assert.equal(recurringYearlyAmount({ amount: 100, interval_unit: "month", interval_count: 1 }), 1200);
+  });
+
+  it("counts a yearly bill once", () => {
+    // The comparison the app could not make before: a 1,200 yearly domain and
+    // a 100 monthly subscription cost the same, and reading the stored amounts
+    // straight off the rows called the domain twelve times the cheaper one.
+    assert.equal(recurringYearlyAmount({ amount: 1200, interval_unit: "month", interval_count: 12 }), 1200);
+  });
+
+  it("counts a quarterly bill four times", () => {
+    assert.equal(recurringYearlyAmount({ amount: 600, interval_unit: "month", interval_count: 3 }), 2400);
+  });
+
+  it("counts a weekly bill by the year's weeks, not by the month's", () => {
+    assert.equal(recurringYearlyAmount({ amount: 100, interval_unit: "week", interval_count: 1 }), 5200);
+    assert.equal(recurringYearlyAmount({ amount: 100, interval_unit: "week", interval_count: 2 }), 2600);
+  });
+
+  it("treats a nonsense interval count as one rather than dividing by zero", () => {
+    assert.equal(recurringYearlyAmount({ amount: 100, interval_unit: "month", interval_count: 0 }), 1200);
+  });
+});
+
+describe("recurringTotals", () => {
+  const bill = (overrides: Partial<RecurringExpense>): RecurringExpense => ({
+    id: "r1", user_id: "u1", name: "x", amount: 100, anchor_date: "2026-09-01",
+    interval_unit: "month", interval_count: 1, icon: null, icon_color: null,
+    wallet_id: null, funding_card_name: null, is_active: true, ...overrides,
+  });
+
+  it("spreads bills on different cycles over the same month", () => {
+    const totals = recurringTotals([
+      bill({ id: "a", amount: 100 }),
+      bill({ id: "b", amount: 1200, interval_count: 12 }),
+    ]);
+    assert.equal(totals.yearly, 2400);
+    assert.equal(totals.monthly, 200);
+  });
+
+  it("leaves a paused bill out of both figures", () => {
+    const totals = recurringTotals([bill({ id: "a" }), bill({ id: "b", amount: 900, is_active: false })]);
+    assert.equal(totals.yearly, 1200);
+    assert.equal(totals.monthly, 100);
+  });
+
+  it("rounds to satang instead of handing on float noise", () => {
+    // 419 a month divided back out per month is 418.99999... in binary, and
+    // the AI context prints whatever it is given verbatim.
+    assert.equal(recurringTotals([bill({ amount: 419 })]).monthly, 419);
+  });
+
+  it("is zero for a list with nothing running", () => {
+    assert.deepEqual(recurringTotals([]), { monthly: 0, yearly: 0 });
   });
 });
 
