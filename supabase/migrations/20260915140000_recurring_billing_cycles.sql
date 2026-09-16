@@ -28,6 +28,8 @@ alter table public.recurring_expenses
   alter column anchor_date set default current_date,
   alter column anchor_date set not null;
 
--- Dropped rather than left in place: two columns that both claim to say when
--- a bill falls due is exactly how one of them goes stale.
-alter table public.recurring_expenses drop column if exists billing_day;
+-- billing_day is deliberately left in place here, and dropped by its own
+-- migration once the new code is live. Between the two, a deploy still
+-- running the old code keeps a column to select and a schedule to write,
+-- and the new code already has everything it reads -- so neither version of
+-- the app is ever looking at a table that does not match it.
