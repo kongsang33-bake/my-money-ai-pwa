@@ -11,7 +11,7 @@ import {
   SPEND_BASELINE_WINDOW_DAYS,
 } from "./constants.ts";
 import { formatMoney, moneySign } from "./format.ts";
-import { daysRemainingInCycle, entriesInRange, startOfDay } from "./cycle.ts";
+import { currentBillingPeriod, daysRemainingInCycle, entriesInRange, startOfDay } from "./cycle.ts";
 import { countsAsEarnedOrSpent } from "./taxonomy.ts";
 import type { Debtor, Entry, QuickShortcut, RecurringExpense } from "./types.ts";
 
@@ -167,12 +167,19 @@ export function buildSetupChecklist(input: {
   };
 }
 
-// A recurring item counts as "already logged" this cycle once a matching
-// title+amount entry exists in the cycle range -- not by any stored link to
-// the recurring row, since one-tap logging (DueSoonCard) just inserts a
-// plain transaction like a manual entry would.
-export function isRecurringLogged(item: RecurringExpense, entries: Entry[], cycleRange: { start: Date; end: Date }) {
-  return entriesInRange(entries, cycleRange.start, cycleRange.end).some(
+// A recurring item counts as "already logged" once a matching title+amount
+// entry exists in the billing period the next charge belongs to -- not by any
+// stored link to the recurring row, since one-tap logging (DueSoonCard) just
+// inserts a plain transaction like a manual entry would.
+//
+// The window is the bill's own period, not the user's month: those agreed
+// while every bill was monthly, but a weekly bill logged once would otherwise
+// read as paid for the rest of the month and never offer its next three
+// charges. A card-paid bill writes two rows, and either of them matching is
+// the same answer, so .some() is still the right question.
+export function isRecurringLogged(item: RecurringExpense, entries: Entry[], now: Date) {
+  const period = currentBillingPeriod(item, now);
+  return entriesInRange(entries, period.start, period.end).some(
     (entry) => entry.title.trim() === item.name.trim() && entry.amount === item.amount,
   );
 }

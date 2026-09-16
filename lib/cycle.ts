@@ -87,8 +87,16 @@ export function startMonthCycleBounds(startMonthKey: string, startDay: number) {
   return { start, end };
 }
 
+// The midpoint is counted in days and rebuilt from calendar parts, not taken
+// as the average of two timestamps. Across a daylight-saving change the two
+// ends are an hour apart in wall-clock terms, and that hour is enough to pull
+// an exact-midnight midpoint back into the previous month: a 15th-start cycle
+// in a DST timezone filed Feb 15 - Mar 15 under February, though thirteen of
+// its days are in February and fifteen are in March. Thailand has no DST, so
+// nothing here ever saw it; a browser somewhere else would have.
 export function cycleMajorityMonthKey(start: Date, end: Date) {
-  return monthKey(new Date((start.getTime() + end.getTime()) / 2));
+  const days = Math.round((startOfDay(end) - startOfDay(start)) / MS_PER_DAY);
+  return monthKey(new Date(start.getFullYear(), start.getMonth(), start.getDate() + Math.floor(days / 2)));
 }
 
 export function cycleBounds(majorityMonthKey: string, startDay: number) {
@@ -173,6 +181,20 @@ export function addBillingPeriods(anchor: Date, unit: BillingIntervalUnit, count
  * of asking for a first billing date instead of a day number.
  */
 export function nextBillingInfo(item: BillingSchedule, now: Date): { billingDate: Date; daysUntil: number } {
+  const { billingDate } = resolveNextOccurrence(item, now);
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const daysUntil = Math.round((billingDate.getTime() - startOfToday.getTime()) / MS_PER_DAY);
+  return { billingDate, daysUntil };
+}
+
+/**
+ * The next occurrence, with the anchor and the period index that produced it
+ * -- which is what lets the period *before* it be worked out exactly, rather
+ * than by stepping a period back from a date that may itself have been clamped
+ * (a bill anchored on the 31st would come back as the 28th of the month before
+ * February, not the 31st).
+ */
+function resolveNextOccurrence(item: BillingSchedule, now: Date): { anchor: Date; periods: number; billingDate: Date } {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const anchor = dateFromInput(item.anchor_date);
   const step = safeIntervalCount(item.interval_count);
@@ -195,6 +217,33 @@ export function nextBillingInfo(item: BillingSchedule, now: Date): { billingDate
     billingDate = addBillingPeriods(anchor, item.interval_unit, step, periods);
   }
 
-  const daysUntil = Math.round((billingDate.getTime() - startOfToday.getTime()) / MS_PER_DAY);
-  return { billingDate, daysUntil };
+  return { anchor, periods, billingDate };
+}
+
+/**
+ * The stretch of time the *upcoming* bill belongs to: everything after the
+ * previous occurrence, through the end of the day the next one falls on.
+ *
+ * This is the window "has this bill been paid yet?" has to be asked in, and
+ * it is a different question from "has it been paid this month". They only
+ * ever gave the same answer while every bill was monthly: a weekly bill
+ * logged on the 1st would otherwise read as already paid on the 8th, the
+ * 15th and the 22nd, and the one-tap button for those three charges would
+ * never appear.
+ *
+ * Both ends are whole local days, built from calendar parts: the day after
+ * the previous occurrence, through the end of the billing day itself. Whole
+ * days rather than instants because the previous charge is not always logged
+ * at midnight -- one-tap logging dates its row there, but somebody typing the
+ * bill in themselves that morning gets the time they typed it, and an instant
+ * boundary would hand that row to the next period and call the next charge
+ * paid.
+ */
+export function currentBillingPeriod(item: BillingSchedule, now: Date): { start: Date; end: Date } {
+  const { anchor, periods, billingDate } = resolveNextOccurrence(item, now);
+  const previous = addBillingPeriods(anchor, item.interval_unit, safeIntervalCount(item.interval_count), periods - 1);
+  return {
+    start: new Date(previous.getFullYear(), previous.getMonth(), previous.getDate() + 1),
+    end: new Date(billingDate.getFullYear(), billingDate.getMonth(), billingDate.getDate() + 1),
+  };
 }

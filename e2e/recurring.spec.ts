@@ -36,6 +36,24 @@ test.describe("recurring bills", () => {
     }
   });
 
+  test("lets the custom count be cleared and retyped, settling on blur", async ({ app }) => {
+    // Normalising on every keystroke refills the field the moment it is
+    // emptied, so selecting the 1 and typing 14 leaves 141 or 114 depending on
+    // where the caret was. Unit tests cannot see this: the clamp they check is
+    // correct, it is being run on the wrong thing.
+    await app.locator(".debtor-page-list .debtor-main-button").first().click();
+    const count = app.getByLabel("จำนวนรอบ");
+    await app.getByRole("radio", { name: "กำหนดเอง" }).click();
+    await count.fill("");
+    await expect(count).toHaveValue("");
+    await count.fill("14");
+    await expect(count).toHaveValue("14");
+    await expect(app.locator(".edit-sheet .cycle-note").first()).toContainText("ทุก 14 เดือน");
+    await count.fill("");
+    await count.blur();
+    await expect(count).toHaveValue("1");
+  });
+
   test("opens the count and unit fields only for a cycle no preset names", async ({ app }) => {
     await app.locator(".debtor-page-list .debtor-main-button").first().click();
     const sheet = app.locator(".edit-sheet");

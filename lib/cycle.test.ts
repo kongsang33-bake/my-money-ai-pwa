@@ -1,13 +1,18 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { cycleBounds, entriesInRange, nextBillingInfo, shiftMonthKey } from "./cycle.ts";
+import { cycleBounds, cycleMajorityMonthKey, entriesInRange, nextBillingInfo, shiftMonthKey } from "./cycle.ts";
+import { localDateInput } from "./format.ts";
 import type { Entry } from "./types.ts";
 
 describe("cycleBounds", () => {
+  // Read back as local dates, never through toISOString(): a cycle boundary is
+  // local midnight, so in Bangkok -- the timezone this app is actually used in
+  // -- the UTC spelling of it is the day before, and these assertions would
+  // fail on a correct result.
   it("startDay 1 matches the plain calendar month", () => {
     const { start, end } = cycleBounds("2026-03", 1);
-    assert.equal(start.toISOString().slice(0, 10), "2026-03-01");
-    assert.equal(end.toISOString().slice(0, 10), "2026-04-01");
+    assert.equal(localDateInput(start), "2026-03-01");
+    assert.equal(localDateInput(end), "2026-04-01");
   });
 
   it("startDay 15 into a short month (Feb): majority falls short of the requested key, so it shifts back a month", () => {
@@ -17,8 +22,8 @@ describe("cycleBounds", () => {
     // starting a month earlier (Jan 15 - Feb 15) instead, whose majority
     // (17 days in Feb) genuinely is "2026-02".
     const { start, end } = cycleBounds("2026-02", 15);
-    assert.equal(start.toISOString().slice(0, 10), "2026-01-15");
-    assert.equal(end.toISOString().slice(0, 10), "2026-02-15");
+    assert.equal(localDateInput(start), "2026-01-15");
+    assert.equal(localDateInput(end), "2026-02-15");
   });
 
   it("startDay 28 near a December/January boundary", () => {
@@ -29,6 +34,22 @@ describe("cycleBounds", () => {
     assert.equal(end.getFullYear(), 2026);
     assert.equal(end.getMonth(), 0); // January
     assert.equal(end.getDate(), 28);
+  });
+});
+
+describe("cycleMajorityMonthKey", () => {
+  it("gives the month that holds most of the cycle's days", () => {
+    assert.equal(cycleMajorityMonthKey(new Date(2026, 1, 15), new Date(2026, 2, 15)), "2026-03");
+    assert.equal(cycleMajorityMonthKey(new Date(2026, 0, 15), new Date(2026, 1, 15)), "2026-01");
+  });
+
+  it("counts days rather than averaging two timestamps", () => {
+    // Feb 15 - Mar 15 spans a daylight-saving change in a DST timezone, which
+    // leaves the two ends 671 hours apart instead of 672. Averaging them puts
+    // the midpoint at 23:30 on Feb 28 and files a cycle that is mostly March
+    // under February. Counting days cannot drift by an hour.
+    const march = new Date(2026, 2, 15);
+    assert.equal(cycleMajorityMonthKey(new Date(2026, 1, 15), march), "2026-03");
   });
 });
 

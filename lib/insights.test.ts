@@ -5,8 +5,12 @@ import type { Debtor, Entry, RecurringExpense } from "./types.ts";
 import type { TransactionType } from "./taxonomy.ts";
 import { MS_PER_DAY } from "./constants.ts";
 
-function makeItem(name: string, amount: number): RecurringExpense {
-  return { id: "r1", user_id: "u1", name, amount, anchor_date: "2026-08-05", interval_unit: "month", interval_count: 1, icon: null, icon_color: null, wallet_id: null, funding_card_name: null, is_active: true };
+function makeItem(name: string, amount: number, schedule: Partial<RecurringExpense> = {}): RecurringExpense {
+  return {
+    id: "r1", user_id: "u1", name, amount, anchor_date: "2026-08-05",
+    interval_unit: "month", interval_count: 1, icon: null, icon_color: null,
+    wallet_id: null, funding_card_name: null, is_active: true, ...schedule,
+  };
 }
 
 function makeEntry(title: string, amount: number, occurred_at: string): Entry {
@@ -20,24 +24,62 @@ function makeEntry(title: string, amount: number, occurred_at: string): Entry {
 const cycleRange = { start: new Date("2026-08-01T00:00:00.000Z"), end: new Date("2026-09-01T00:00:00.000Z") };
 
 describe("isRecurringLogged", () => {
-  it("is false when no matching entry exists in the cycle", () => {
-    const entries = [makeEntry("Netflix", 199, "2026-08-10T00:00:00.000Z")];
-    assert.equal(isRecurringLogged(makeItem("Spotify", 129), entries, cycleRange), false);
+  // A monthly bill anchored on the 5th, asked on the 20th: the charge it is
+  // being asked about is next month's, and the window runs back to this
+  // month's 5th.
+  const asked = new Date(2026, 7, 20);
+  const monthly = (name: string, amount: number) => makeItem(name, amount, { anchor_date: "2026-08-05" });
+
+  it("is false when no matching entry exists in the period", () => {
+    const entries = [makeEntry("Netflix", 199, new Date(2026, 7, 10, 9, 0).toISOString())];
+    assert.equal(isRecurringLogged(monthly("Spotify", 129), entries, asked), false);
   });
 
-  it("is true when a matching title+amount entry exists in the cycle", () => {
-    const entries = [makeEntry("Netflix", 199, "2026-08-10T00:00:00.000Z")];
-    assert.equal(isRecurringLogged(makeItem("Netflix", 199), entries, cycleRange), true);
+  it("is true when a matching title+amount entry exists in the period", () => {
+    const entries = [makeEntry("Netflix", 199, new Date(2026, 7, 10, 9, 0).toISOString())];
+    assert.equal(isRecurringLogged(monthly("Netflix", 199), entries, asked), true);
   });
 
   it("is false when the amount differs, even with the same title", () => {
-    const entries = [makeEntry("Netflix", 199, "2026-08-10T00:00:00.000Z")];
-    assert.equal(isRecurringLogged(makeItem("Netflix", 249), entries, cycleRange), false);
+    const entries = [makeEntry("Netflix", 199, new Date(2026, 7, 10, 9, 0).toISOString())];
+    assert.equal(isRecurringLogged(monthly("Netflix", 249), entries, asked), false);
   });
 
-  it("ignores a matching entry outside the cycle range", () => {
-    const entries = [makeEntry("Netflix", 199, "2026-07-20T00:00:00.000Z")];
-    assert.equal(isRecurringLogged(makeItem("Netflix", 199), entries, cycleRange), false);
+  it("ignores a matching entry from a period that has already been and gone", () => {
+    const entries = [makeEntry("Netflix", 199, new Date(2026, 6, 20, 9, 0).toISOString())];
+    assert.equal(isRecurringLogged(monthly("Netflix", 199), entries, asked), false);
+  });
+
+  it("asks about this week's charge, not this month's, for a weekly bill", () => {
+    // The bug this guards: a weekly bill logged on the 5th read as paid for
+    // the whole month, so the 12th, 19th and 26th never offered the one-tap
+    // button and the card claimed they were already done.
+    //
+    // The row is dated the way recurringExpenseEntries dates one -- midnight
+    // *local* to whoever is running it -- rather than at a fixed UTC instant.
+    // The boundary between one billing period and the next is local midnight
+    // too, so a Z-suffixed literal here would only line up with it in UTC and
+    // would put this row in the wrong period for the country the app is for.
+    const weekly = makeItem("ค่าขยะ", 50, { anchor_date: "2026-08-05", interval_unit: "week" });
+    const loggedOnThe5th = [makeEntry("ค่าขยะ", 50, new Date(2026, 7, 5).toISOString())];
+    // Asked on the 5th itself: that charge is today's, and it is logged.
+    assert.equal(isRecurringLogged(weekly, loggedOnThe5th, new Date(2026, 7, 5)), true);
+    // Asked on the 6th: the charge in question is the 12th's, still unpaid.
+    assert.equal(isRecurringLogged(weekly, loggedOnThe5th, new Date(2026, 7, 6)), false);
+    // ...and the same when the 5th's charge was typed in by hand that morning
+    // rather than tapped at midnight, which is the only time one-tap logging
+    // ever writes. A boundary on the instant rather than the day would hand
+    // that row to the 12th and call it paid.
+    const typedInThatMorning = [makeEntry("ค่าขยะ", 50, new Date(2026, 7, 5, 9, 15).toISOString())];
+    assert.equal(isRecurringLogged(weekly, typedInThatMorning, new Date(2026, 7, 6)), false);
+    assert.equal(isRecurringLogged(weekly, typedInThatMorning, new Date(2026, 7, 5)), true);
+  });
+
+  it("counts a bill logged a day early against the charge it was paying", () => {
+    // Someone who types the bill in themselves when the SMS arrives dates it
+    // a day or two before the billing date; that is still this charge.
+    const entries = [makeEntry("Netflix", 199, new Date(2026, 8, 3, 9, 30).toISOString())];
+    assert.equal(isRecurringLogged(monthly("Netflix", 199), entries, new Date(2026, 8, 3)), true);
   });
 });
 

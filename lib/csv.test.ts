@@ -68,9 +68,13 @@ describe("csvRow", () => {
 });
 
 describe("buildReportCsv", () => {
+  // Dated by local parts, not by a UTC literal: the report's cycle runs from
+  // local midnight to local midnight, so "2026-08-01T03:00Z" is inside August
+  // in Bangkok and the evening of July 31st in Los Angeles -- and this fixture
+  // would then be testing whether the row is excluded, not included.
   const inAugust = [
-    makeEntry({ title: "กาแฟ", amount: 100, occurred_at: "2026-08-05T03:00:00.000Z" }),
-    makeEntry({ title: "เงินเดือน", amount: 45000, occurred_at: "2026-08-01T03:00:00.000Z", transaction_type: "income" }),
+    makeEntry({ title: "กาแฟ", amount: 100, occurred_at: new Date(2026, 7, 5, 10, 0).toISOString() }),
+    makeEntry({ title: "เงินเดือน", amount: 45000, occurred_at: new Date(2026, 7, 1, 10, 0).toISOString(), transaction_type: "income" }),
   ];
 
   it("starts with a UTF-8 BOM so Excel opens Thai text correctly", () => {
@@ -97,7 +101,7 @@ describe("buildReportCsv", () => {
   it("excludes entries outside the selected cycle", () => {
     const csv = buildAugust([
       ...inAugust,
-      makeEntry({ title: "นอกรอบ", amount: 999, occurred_at: "2026-07-15T03:00:00.000Z" }),
+      makeEntry({ title: "นอกรอบ", amount: 999, occurred_at: new Date(2026, 6, 15, 10, 0).toISOString() }),
     ]);
     assert.ok(!csv.includes("นอกรอบ"));
     assert.ok(csv.includes('"จำนวนรายการ","2"'), "the out-of-range row must not be counted either");

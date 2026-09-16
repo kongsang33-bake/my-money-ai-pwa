@@ -1001,13 +1001,12 @@ export default function Home() {
 
   const dueSoonRecurring = useMemo(() => {
     const now = new Date();
-    const currentCycleRange = cycleBounds(currentCycleMonthKey(monthStartDay, now), monthStartDay);
     return recurringExpenses
       .filter((item) => item.is_active)
-      .map((item) => ({ item, ...nextBillingInfo(item, now), isLogged: isRecurringLogged(item, entries, currentCycleRange) }))
+      .map((item) => ({ item, ...nextBillingInfo(item, now), isLogged: isRecurringLogged(item, entries, now) }))
       .filter(({ daysUntil }) => daysUntil >= 0 && daysUntil <= 3)
       .sort((a, b) => a.daysUntil - b.daysUntil);
-  }, [recurringExpenses, entries, monthStartDay]);
+  }, [recurringExpenses, entries]);
 
   // Cards and instalments with nothing paid against them this cycle. A card
   // charge never moved the wallet, so the bill being paid is a separate entry

@@ -437,7 +437,12 @@ export function RecurringExpenseEditSheet({
   const [amountText, setAmountText] = useState(item?.amount ? String(item.amount) : "");
   const [anchorDate, setAnchorDate] = useState(item?.anchor_date || localDateInput(new Date()));
   const [intervalUnit, setIntervalUnit] = useState<BillingIntervalUnit>(item?.interval_unit ?? "month");
-  const [intervalCount, setIntervalCount] = useState(item?.interval_count ?? 1);
+  // Held as text, the way the amount field above it is: normalising on every
+  // keystroke means the field can never be empty, so clearing it to retype
+  // snaps straight back to 1 and a two-digit count has to be typed around the
+  // digit already sitting there. The number is settled on blur and on save.
+  const [intervalCountText, setIntervalCountText] = useState(String(item?.interval_count ?? 1));
+  const intervalCount = normalizeIntervalCount(intervalCountText);
   // "กำหนดเอง" is not a sixth kind of cycle -- it is the count and unit
   // showing, for a schedule none of the presets happens to name. Opening the
   // fields is therefore a question about the current value, not its own state.
@@ -460,7 +465,7 @@ export function RecurringExpenseEditSheet({
       amount: toMoneyAmount(amountText),
       anchor_date: anchorDate,
       interval_unit: intervalUnit,
-      interval_count: normalizeIntervalCount(intervalCount),
+      interval_count: intervalCount,
       icon,
       icon_color: iconColor,
       wallet_id: fundingCard ? null : walletId,
@@ -493,7 +498,7 @@ export function RecurringExpenseEditSheet({
         {item ? "วันตัดเงิน" : "วันตัดเงินครั้งแรก"}
         <DateField value={anchorDate} onChange={setAnchorDate} />
         <small className="cycle-note">
-          {nextBillingLabel({ anchor_date: anchorDate, interval_unit: intervalUnit, interval_count: normalizeIntervalCount(intervalCount) })}
+          {nextBillingLabel({ anchor_date: anchorDate, interval_unit: intervalUnit, interval_count: intervalCount })}
         </small>
       </label>
       {/* A <div>, not a <label>: a label wrapping a group of controls attaches
@@ -512,7 +517,7 @@ export function RecurringExpenseEditSheet({
                 role="radio"
                 aria-checked={active}
                 className={`cycle-picker-chip${active ? " active" : ""}`}
-                onClick={() => { setCustomOpen(false); setIntervalUnit(preset.unit); setIntervalCount(preset.count); }}
+                onClick={() => { setCustomOpen(false); setIntervalUnit(preset.unit); setIntervalCountText(String(preset.count)); }}
               >
                 {preset.label}
               </button>
@@ -535,8 +540,9 @@ export function RecurringExpenseEditSheet({
           <div className="cycle-custom">
             <input
               inputMode="numeric"
-              value={intervalCount}
-              onChange={(event) => setIntervalCount(normalizeIntervalCount(event.target.value))}
+              value={intervalCountText}
+              onChange={(event) => { if (/^\d{0,2}$/.test(event.target.value)) setIntervalCountText(event.target.value); }}
+              onBlur={() => setIntervalCountText(String(intervalCount))}
               aria-label="จำนวนรอบ"
             />
             <div className="select-shell">
