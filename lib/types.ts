@@ -37,10 +37,11 @@ export type Entry = {
 //
 // `funding_card_name` is client-only for the same reason, but for a different
 // one too: it is an instruction for the save, not a field of the row. It says
-// this split/lend was paid with a credit card rather than a wallet, and
-// expandCardFundedDraft turns it into the second row that carries the charge
-// (lib/money.ts) — by the time anything is written, the pair itself is the
-// record of it.
+// this split/lend/expense was paid by something other than a wallet — a
+// credit card, someone the user owes, or someone who owes the user — and
+// expandDraftForSave turns it into the second row that carries the funding,
+// pointed whichever way fundingLegType says (lib/money.ts). By the time
+// anything is written, the pair itself is the record of it.
 //
 // `split_shares` and `split_self_share` are the same kind of thing for a bill
 // split between named people: what one person, or the user, is paying, with

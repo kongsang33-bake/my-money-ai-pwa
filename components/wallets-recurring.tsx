@@ -416,6 +416,7 @@ export function RecurringExpenseEditSheet({
   item,
   wallets,
   debtors,
+  receivable,
   busy,
   error,
   onClose,
@@ -426,6 +427,7 @@ export function RecurringExpenseEditSheet({
   item: RecurringExpense | null;
   wallets: Wallet[];
   debtors: Debtor[];
+  receivable: { name: string; amount: number }[];
   busy: boolean;
   error: string;
   onClose: () => void;
@@ -454,9 +456,6 @@ export function RecurringExpenseEditSheet({
   const [walletId, setWalletId] = useState<string | null>(item?.wallet_id ?? null);
   const [fundingCard, setFundingCard] = useState<string | null>(item?.funding_card_name ?? null);
   const [isActive, setIsActive] = useState(item?.is_active ?? true);
-  // The same list the Add tab offers: cards and instalments are debtors of
-  // kind "own", and they are the only debts a bill of your own can land on.
-  const funderNames = useMemo(() => debtors.filter((debtor) => debtor.kind === "own").map((debtor) => debtor.name), [debtors]);
 
   const submit = async () => {
     if (!name.trim()) return;
@@ -561,14 +560,15 @@ export function RecurringExpenseEditSheet({
           <>
             ตัดจาก
             <InfoHint label="ช่องทางที่บิลนี้ตัดเงิน">
-              เลือกบัตรไว้ แล้วกด &quot;บันทึกเลย&quot; จากหน้าแรก ยอดจะไปขึ้นเป็นหนี้บัตรใบนั้นแทนที่จะหักออกจากกระเป๋า — เหมือนตอนรูดบัตรจ่ายค่าข้าว เงินยังไม่ออกจากบัญชีจนกว่าจะจ่ายบิลบัตร
+              เลือกบัตรไว้ แล้วกด &quot;บันทึกเลย&quot; จากหน้าแรก ยอดจะไปขึ้นเป็นหนี้บัตรใบนั้นแทนที่จะหักออกจากกระเป๋า — เหมือนตอนรูดบัตรจ่ายค่าข้าว เงินยังไม่ออกจากบัญชีจนกว่าจะจ่ายบิลบัตร · ถ้าเลือกเป็นคนที่ติดเราอยู่ บิลนี้จะไปหักจากยอดที่เขาติดเราแทน เงินไม่ออกจากกระเป๋าและไม่มีหนี้ก้อนใหม่
             </InfoHint>
           </>
         )}
         walletId={walletId}
         cardName={fundingCard}
         wallets={wallets}
-        funderNames={funderNames}
+        debtors={debtors}
+        receivable={receivable}
         onChange={({ wallet_id, funding_card_name }) => { setWalletId(wallet_id); setFundingCard(funding_card_name); }}
       />
       <div className="report-period-toggle">

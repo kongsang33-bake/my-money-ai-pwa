@@ -36,13 +36,15 @@ export const SHARED_EXPENSE_TYPES: TransactionType[] = ["split_half", "lend"];
 // user owes อ้อน, and the whole thing is still their own spending.
 export const CARD_FUNDABLE_TYPES: TransactionType[] = [...SHARED_EXPENSE_TYPES, "personal_expense"];
 
-// The types that can appear as a leg of a card-funded bill: the shared ones
-// above, the personal_expense that carries the user's own share of a bill
-// split between named people, and the card_charge leg carrying the charge.
-const CARD_FUNDED_LEG_TYPES: TransactionType[] = [...CARD_FUNDABLE_TYPES, "card_charge"];
+// The types that can appear as a leg of a funded bill: the shared ones above,
+// the personal_expense that carries the user's own share of a bill split
+// between named people, and the two legs that carry the funding itself -- a
+// card_charge when the bill put the user further in debt, a debt_repayment
+// when it paid down what the person who fronted it already owed them.
+const FUNDED_LEG_TYPES: TransactionType[] = [...CARD_FUNDABLE_TYPES, "card_charge", "debt_repayment"];
 
 /**
- * Is this row one leg of a card-funded split/lend?
+ * Is this row one leg of a funded split/lend/expense?
  *
  * One row can only ever move one debt balance: buildDebtSummary groups by
  * debtor_name and sums debt_impact. "Dinner split with จูน, paid on the SPay
@@ -52,14 +54,44 @@ const CARD_FUNDED_LEG_TYPES: TransactionType[] = [...CARD_FUNDABLE_TYPES, "card_
  * together by deleteEntry.
  *
  * Being a leg is what makes the two rows add up instead of double-counting:
- * the expense leg moves no wallet money (the card paid), and the card leg
- * claims none of the spending (the expense leg already counts the user's
- * share). Legacy rows can't be mistaken for one -- nothing but a transfer
- * ever carried a transfer_group_id before this, and transfers are excluded
- * by type.
+ * the expense leg moves no wallet money (whoever fronted it paid), and the
+ * funding leg claims none of the spending (the expense leg already counts the
+ * user's share). The debt_repayment leg needs it in the other direction too:
+ * on its own that type is money coming back into a wallet, and as a funding
+ * leg nothing comes back -- the meal จูน bought is what settled the 70, so
+ * counting it as income would invent a payday the user never had.
+ *
+ * Legacy rows can't be mistaken for one -- nothing but a transfer ever
+ * carried a transfer_group_id before this, transfers are excluded by type,
+ * and planDebtSettlement writes its repayment without a group.
  */
-export function isCardFundedLeg(entry: { transaction_type: TransactionType; transfer_group_id?: string | null }) {
-  return !!entry.transfer_group_id && CARD_FUNDED_LEG_TYPES.includes(entry.transaction_type);
+export function isFundedLeg(entry: { transaction_type: TransactionType; transfer_group_id?: string | null }) {
+  return !!entry.transfer_group_id && FUNDED_LEG_TYPES.includes(entry.transaction_type);
+}
+
+/** The same person, however either side spelled or spaced the name. */
+export function sameDebtorName(a: string | null | undefined, b: string | null | undefined): boolean {
+  const key = (name: string | null | undefined) => (name ?? "").trim().toLowerCase();
+  const left = key(a);
+  return !!left && left === key(b);
+}
+
+/**
+ * Which way the funding leg of a bill somebody else paid should point.
+ *
+ * The same sentence -- "จูนออกให้ก่อน" -- means opposite things depending on
+ * which book จูน is in. A card, or a friend the user owes, takes on the bill
+ * and the user's debt grows (card_charge). Someone who already owes the user
+ * has just worked part of it off: the 70 จูน spent on dinner is 70 she no
+ * longer has to pay back (debt_repayment), which is the paper offset the user
+ * would otherwise have to fake with a repayment row and a matching expense.
+ *
+ * The debtor's own kind decides it, so nothing has to be typed twice and a
+ * name that is in neither book behaves the way it always has.
+ */
+export function fundingLegType(funderName: string, debtors: Debtor[]): "card_charge" | "debt_repayment" {
+  const funder = debtors.find((debtor) => sameDebtorName(debtor.name, funderName));
+  return funder?.kind === "lend" ? "debt_repayment" : "card_charge";
 }
 
 /**
@@ -301,27 +333,31 @@ export function retargetPartnerShare(previousAmount: number, previousPartnerShar
 export type ImpactOptions = {
   /** What the other person owes back on a split. Defaults to half. */
   partnerShare?: number | null;
-  /** This row is one leg of a card-funded pair -- see isCardFundedLeg. */
-  cardFunded?: boolean;
+  /** This row is one leg of a funded pair -- see isFundedLeg. */
+  funded?: boolean;
 };
 
 export function calculateImpacts(amount: number, transactionType: TransactionType, options: ImpactOptions = {}) {
-  const cardFunded = !!options.cardFunded;
+  const funded = !!options.funded;
   if (transactionType === "income") {
     return { wallet_impact: amount, debt_impact: 0, user_share: amount, partner_share: 0 };
   }
   if (transactionType === "lend") {
-    return { wallet_impact: cardFunded ? 0 : -amount, debt_impact: amount, user_share: 0, partner_share: amount };
+    return { wallet_impact: funded ? 0 : -amount, debt_impact: amount, user_share: 0, partner_share: amount };
   }
   if (transactionType === "borrow") {
     return { wallet_impact: amount, debt_impact: amount, user_share: 0, partner_share: 0 };
   }
   if (transactionType === "split_half") {
     const partner = partnerShareOf(amount, options.partnerShare);
-    return { wallet_impact: cardFunded ? 0 : -amount, debt_impact: partner, user_share: amount - partner, partner_share: partner };
+    return { wallet_impact: funded ? 0 : -amount, debt_impact: partner, user_share: amount - partner, partner_share: partner };
   }
   if (transactionType === "debt_repayment") {
-    return { wallet_impact: amount, debt_impact: -amount, user_share: 0, partner_share: 0 };
+    // As the funding leg of a bill they fronted, the repayment is in kind:
+    // จูน spending 70 on dinner is 70 off what she owes, and no wallet of the
+    // user's opens or closes over it. Paying it back in cash is the other
+    // shape of this row and still moves a wallet.
+    return { wallet_impact: funded ? 0 : amount, debt_impact: -amount, user_share: 0, partner_share: 0 };
   }
   if (transactionType === "debt_payment") {
     return { wallet_impact: -amount, debt_impact: -amount, user_share: amount, partner_share: 0 };
@@ -331,15 +367,15 @@ export function calculateImpacts(amount: number, transactionType: TransactionTyp
     // full but none of it is the user's own spending -- the expense leg it
     // came with counts their share, and counting it here too would show a
     // 163-baht dinner as 244.5 spent on food.
-    return { wallet_impact: 0, debt_impact: amount, user_share: cardFunded ? 0 : amount, partner_share: 0 };
+    return { wallet_impact: 0, debt_impact: amount, user_share: funded ? 0 : amount, partner_share: 0 };
   }
   if (!countsAsEarnedOrSpent(transactionType)) {
     return { wallet_impact: -amount, debt_impact: 0, user_share: 0, partner_share: 0 };
   }
-  // personal_expense and gift. personal_expense reaches this as a card-funded
-  // leg too -- the user's own share of a bill their card paid -- where the
-  // spending is still theirs but no wallet moved.
-  return { wallet_impact: cardFunded ? 0 : -amount, debt_impact: 0, user_share: amount, partner_share: 0 };
+  // personal_expense and gift. personal_expense reaches this as a funded leg
+  // too -- the user's own share of a bill their card, or the person who got
+  // it, paid -- where the spending is still theirs but no wallet moved.
+  return { wallet_impact: funded ? 0 : -amount, debt_impact: 0, user_share: amount, partner_share: 0 };
 }
 
 /**
@@ -374,27 +410,34 @@ export function matchDebtorName(names: string[], candidate: string | null | unde
  *   ผม" is four debts of 300 and 300 of the user's own spending, because
  *   buildDebtSummary groups by debtor_name and one row can only name one
  *   person;
- * - a bill paid with a credit card, where the charge lands on the card and
- *   the expense on whoever owes it.
+ * - a bill somebody else paid, where the funding lands on them and the
+ *   expense on whoever owes it. Which way their balance moves is
+ *   fundingLegType's to decide: a card or a creditor takes the bill on, a
+ *   person who already owed the user works part of it off.
  *
- * Only the card-funded shape links its rows with a transfer_group_id, and
- * that is deliberate: the group id is also what tells a row it moved no
- * wallet money (isCardFundedLeg), so grouping the plain per-person rows --
- * which did each move their own share out of the wallet -- would zero them
- * out. They stand alone; the card-funded ones are grouped and deleted
- * together.
+ * Only the funded shape links its rows with a transfer_group_id, and that is
+ * deliberate: the group id is also what tells a row it moved no wallet money
+ * (isFundedLeg), so grouping the plain per-person rows -- which did each move
+ * their own share out of the wallet -- would zero them out. They stand alone;
+ * the funded ones are grouped and deleted together.
+ *
+ * `debtors` is only read to tell those two fundings apart, so leaving it out
+ * keeps the behaviour this had before there was a second one: whoever paid is
+ * owed for it.
  */
-export function expandDraftForSave(draft: Draft, wallets: Wallet[]): Draft[] {
+export function expandDraftForSave(draft: Draft, wallets: Wallet[], debtors: Debtor[] = []): Draft[] {
   if (draft.transaction_type === "transfer") return expandTransferDraft(draft, wallets);
 
-  const card = CARD_FUNDABLE_TYPES.includes(draft.transaction_type) ? draft.funding_card_name?.trim() ?? "" : "";
+  const funder = CARD_FUNDABLE_TYPES.includes(draft.transaction_type) ? draft.funding_card_name?.trim() ?? "" : "";
+  const fundingType = funder ? fundingLegType(funder, debtors) : null;
+  const settlesDebt = fundingType === "debt_repayment";
   const names = SHARED_EXPENSE_TYPES.includes(draft.transaction_type) ? splitDebtorNames(draft.debtor_name) : [];
   const perPerson = names.length > 1;
-  if (!card && !perPerson) return [draft];
+  if (!funder && !perPerson) return [draft];
 
-  // Every leg of a card-funded bill carries the group id; a plain per-person
-  // split carries none (see above).
-  const groupId = card ? crypto.randomUUID() : null;
+  // Every leg of a funded bill carries the group id; a plain per-person split
+  // carries none (see above).
+  const groupId = funder ? crypto.randomUUID() : null;
   const shared = {
     category: draft.category,
     occurred_at: draft.occurred_at,
@@ -403,9 +446,9 @@ export function expandDraftForSave(draft: Draft, wallets: Wallet[]): Draft[] {
     // once, on rows that would otherwise have no way to say it, and never
     // over a note the user wrote themselves.
     note: draft.note?.trim()
-      || (card ? `จ่ายด้วย ${card}` : null)
+      || (funder ? (settlesDebt ? `${funder} ออกให้ก่อน · หักจากยอดที่ติดเรา` : `จ่ายด้วย ${funder}`) : null)
       || (perPerson ? `หารกัน ${names.length + (draft.transaction_type === "split_half" ? 1 : 0)} คน` : null),
-    wallet_id: card ? null : draft.wallet_id,
+    wallet_id: funder ? null : draft.wallet_id,
     transfer_group_id: groupId,
   };
 
@@ -442,15 +485,18 @@ export function expandDraftForSave(draft: Draft, wallets: Wallet[]): Draft[] {
     legs.push(normalizeEntry({ ...draft, ...shared }, false));
   }
 
-  if (card) {
+  if (funder && fundingType) {
     legs.push(normalizeEntry({
       ...shared,
-      id: `${draft.id}-card`,
+      id: `${draft.id}-funding`,
       title: draft.title,
       amount: draft.amount,
-      transaction_type: "card_charge",
-      debtor_name: card,
-      note: draft.note,
+      transaction_type: fundingType,
+      debtor_name: funder,
+      // The charge row needs no note saying it was paid with the card it is
+      // named after. The repayment row does: on its own it reads as money
+      // coming back from จูน, and what happened is that she bought dinner.
+      note: draft.note?.trim() || (settlesDebt ? `หักจากยอดที่${funder}ติดเรา` : null),
     }, false));
   }
   // Only reachable from a bill of zero, where every leg is zero: expanding it
@@ -464,8 +510,23 @@ export function categorySpendAmount(entry: Entry): number | null {
   return entry.user_share > 0 ? entry.user_share : null;
 }
 
+/**
+ * What one row shows as its amount in the history and on the timeline -- which
+ * is not always what it did to a wallet.
+ *
+ * A funded bill is two rows and only one of them may carry the number, or the
+ * day reads as double what it cost. The expense leg moves no wallet money, so
+ * the funding leg is the one that shows it: a card_charge for the full charge,
+ * and a debt_repayment leg for a bill someone who owed the user fronted. That
+ * second one is money spent just as much as the card is -- the 70 came out of
+ * what เอก owed instead of out of a wallet -- and reading its wallet_impact
+ * would print ฿0 against both rows and a lunch that looks like it never
+ * happened.
+ */
 export function entryDisplayImpact(entry: Entry): number {
-  return entry.transaction_type === "card_charge" ? -entry.amount : entry.wallet_impact;
+  if (entry.transaction_type === "card_charge") return -entry.amount;
+  if (entry.transaction_type === "debt_repayment" && isFundedLeg(entry)) return -entry.amount;
+  return entry.wallet_impact;
 }
 
 export function normalizeEntry(input: EntryInput, applyDebtorDefault = true): Entry {
@@ -479,7 +540,7 @@ export function normalizeEntry(input: EntryInput, applyDebtorDefault = true): En
     ? { wallet_impact: input.wallet_impact ?? -amount, debt_impact: 0, user_share: 0, partner_share: 0 }
     : calculateImpacts(amount, transaction_type, {
         partnerShare: input.partner_share,
-        cardFunded: isCardFundedLeg({ transaction_type, transfer_group_id: input.transfer_group_id }),
+        funded: isFundedLeg({ transaction_type, transfer_group_id: input.transfer_group_id }),
       });
   const trimmedDebtorName = input.debtor_name?.trim() ?? "";
   return {
@@ -896,15 +957,16 @@ export function recurringTotals(items: RecurringExpense[]): { monthly: number; y
  * The rows a "log this bill now" tap creates from a recurring expense. Pure
  * apart from the id, which the caller supplies so a test can pin it.
  *
- * Usually one row. A bill charged to a credit card is two, and they are the
- * same two that any card-paid expense already becomes -- so this builds a
- * draft and hands it to expandDraftForSave rather than writing the pair
- * itself. That matters more than the line count it saves: the expense leg
+ * Usually one row. A bill somebody else covers -- a credit card, or the
+ * partner who pays for the internet and takes it off what they owe -- is two,
+ * and they are the same two that any funded expense already becomes, so this
+ * builds a draft and hands it to expandDraftForSave rather than writing the
+ * pair itself. That matters more than the line count it saves: the expense leg
  * moving no wallet money and the charge claiming none of the spending is one
  * rule with one author, and a subscription is not a reason for a second copy
  * of it.
  *
- * A card-funded draft leaves wallet_id null on purpose; buildTransactionCore
+ * A funded draft leaves wallet_id null on purpose; buildTransactionCore
  * fills in the default wallet at insert time, which is harmless on a row whose
  * wallet_impact is already zero.
  */
@@ -913,6 +975,7 @@ export function recurringExpenseEntries(
   billingDate: Date,
   wallets: Wallet[],
   id: string,
+  debtors: Debtor[] = [],
 ): Entry[] {
   const card = item.funding_card_name?.trim() || "";
   const draft: Draft = {
@@ -927,7 +990,7 @@ export function recurringExpenseEntries(
     }),
     funding_card_name: card || null,
   };
-  return expandDraftForSave(draft, wallets).map((row) => normalizeEntry(row));
+  return expandDraftForSave(draft, wallets, debtors).map((row) => normalizeEntry(row));
 }
 
 /**
@@ -985,9 +1048,14 @@ export function draftRowCount(draft: Draft): number {
  * to the leg it becomes. Summing the drafts therefore reported money leaving a
  * wallet that never paid -- 1,038 for an evening that cost 649 -- while the
  * row's own preview, which does expand, said something else two lines above.
+ *
+ * `debtors` is passed on for the same reason it is passed to a save: without
+ * it a bill จูน fronted expands into a debt of the user's, and the batch
+ * total would report 70 of new debt where the row above it says her balance
+ * fell.
  */
-export function draftTotals(drafts: Draft[], wallets: Wallet[]) {
-  const rows = drafts.flatMap((draft) => expandDraftForSave(draft, wallets));
+export function draftTotals(drafts: Draft[], wallets: Wallet[], debtors: Debtor[] = []) {
+  const rows = drafts.flatMap((draft) => expandDraftForSave(draft, wallets, debtors));
   const debtMoved = (types: TransactionType[]) =>
     satang(rows.filter((row) => types.includes(row.transaction_type)).reduce((sum, row) => sum + row.debt_impact, 0));
   return {

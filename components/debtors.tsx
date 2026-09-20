@@ -11,6 +11,21 @@ import { CategoryIcon, IconColorPicker, WalletAvatarGlyph } from "@/components/s
 import { CountUpMoney, EmptyNote, PageFrame, SheetFrame, SkeletonList, StateCard, decimalInputPattern } from "@/components/primitives";
 import { EntryList } from "@/components/add";
 
+/**
+ * What a balance says out loud, including when it has gone past zero.
+ *
+ * Offsetting a bill against what someone owes can overshoot -- จูน buys a
+ * 70-baht dinner while she still owed 30 -- and buildDebtSummary keeps the
+ * real number rather than clamping it. The honest reading of "ยืมเรา −40" is
+ * that the two of them have swapped sides, so it is said in words: a minus
+ * sign on a debt screen reads as a data-entry mistake, which is exactly what
+ * this is not.
+ */
+function balanceReading(kind: DebtorKind, name: string, amount: number): { label: string; value: number } {
+  if (amount >= 0) return { label: kind === "own" ? "ยอดหนี้คงเหลือ" : "ยอดค้างปัจจุบัน", value: amount };
+  return { label: kind === "own" ? `${name}ติดเราอยู่` : `ตอนนี้เราติด${name}อยู่`, value: -amount };
+}
+
 export function DebtorsView({
   debtors,
   entries,
@@ -49,6 +64,7 @@ export function DebtorsView({
   const balanceOf = (list: { name: string; amount: number }[], name: string) =>
     list.find((item) => item.name.trim().toLowerCase() === name.trim().toLowerCase())?.amount ?? 0;
   const selectedAmount = selectedDebtor ? balanceOf(summary, selectedDebtor.name) : 0;
+  const selectedReading = balanceReading(selectedDebtor?.kind ?? activeKind, selectedDebtor?.name ?? "", selectedAmount);
   // The same person can sit in both books at once -- they got one round in,
   // the user got the next -- and settling up is one transfer of the
   // difference rather than two payments.
@@ -70,8 +86,8 @@ export function DebtorsView({
           </div>
         </div>
         <section className="debtor-detail-card">
-          <span>{selectedDebtor.kind === "own" ? "ยอดหนี้คงเหลือ" : "ยอดค้างปัจจุบัน"}</span>
-          <strong><CountUpMoney value={selectedAmount} /></strong>
+          <span>{selectedReading.label}</span>
+          <strong><CountUpMoney value={selectedReading.value} /></strong>
           {selectedDebtor.kind === "own" && selectedDebtor.credit_card_min_payment_percent ? (
             <small>ขั้นต่ำเดือนนี้ประมาณ {moneySign}{formatMoney(monthlyDebtObligation(selectedDebtor, selectedAmount))} ({selectedDebtor.credit_card_min_payment_percent}% ของยอดคงเหลือ)</small>
           ) : selectedDebtor.kind === "own" && selectedDebtor.monthly_installment ? (
@@ -158,7 +174,7 @@ export function DebtorsView({
                       {installmentStatusText(debtor, amount)}
                     </small>
                   ) : (
-                    <small>{debtor.note || "ไม่มีหมายเหตุ"} · ค้าง {moneySign}{formatMoney(amount)}</small>
+                    <small>{debtor.note || "ไม่มีหมายเหตุ"} · {amount < 0 ? "เราติดเขา" : "ค้าง"} {moneySign}{formatMoney(Math.abs(amount))}</small>
                   )}
                   {debtor.kind === "own" && !!debtor.credit_limit && (
                     <CreditLimitMeter outstanding={amount} creditLimit={debtor.credit_limit} />

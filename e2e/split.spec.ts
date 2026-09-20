@@ -6,8 +6,8 @@ import { test, expect, navigate, openApp, seedDraft, buildSeed } from "./fixture
 //
 // Nothing here saves. Every mutation in app/page.tsx opens with
 // `if (!supabase) return`, so a tap on บันทึก would be a no-op that proves
-// nothing -- the two-row expansion a card-funded split saves as is covered by
-// unit tests on expandCardFundedDraft instead.
+// nothing -- the two-row expansion a funded split saves as is covered by
+// unit tests on expandDraftForSave instead.
 test.describe("split review", () => {
   const openWithDraft = async (page: Parameters<typeof openApp>[0], draft = seedDraft()) => {
     await openApp(page, { ...buildSeed(), drafts: [draft] });
@@ -189,6 +189,25 @@ test.describe("split review", () => {
     // ...and the wallet picker steps aside, since no wallet is paying.
     await page.locator(".draft-details-toggle").click();
     await expect(page.locator(".draft-grid-secondary select")).toHaveCount(0);
+  });
+
+  test("offers someone who already owes the user, and takes the bill off what they owe", async ({ page }) => {
+    // The other direction of the same field: เอก owes 1,500, so a bill เอก
+    // fronts is not a new debt of the user's -- it comes off that balance,
+    // which is the offset the user used to fake with a repayment row plus a
+    // matching expense.
+    await openWithDraft(page);
+
+    const funding = page.locator(".draft-funding select");
+    await expect(funding).toContainText("เอก");
+    await expect(funding).toContainText("ติดเราอยู่");
+    await funding.selectOption("card:เอก");
+
+    // Minus, not plus: the balance goes down by what the bill cost.
+    const result = page.locator(".draft-result .impact-row");
+    await expect(result).toContainText("เอก");
+    await expect(result).toContainText("−");
+    await expect(result).toContainText("163");
   });
 
   test("keeps the same headcount when the amount changes", async ({ page }) => {

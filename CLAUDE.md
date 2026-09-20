@@ -263,8 +263,8 @@ wallet money, owes อ้อน, and is still the user's own spending). Who
 pays what inside a split is `splitSharesBetween`: any slot — a person, or the
 user — can be pinned and the rest divide what is left, with the parts always
 adding back up to the bill. Only
-the card-funded shape links its rows with a `transfer_group_id` — that same id
-is what tells a row it moved no wallet money (`isCardFundedLeg`), so grouping
+the funded shape links its rows with a `transfer_group_id` — that same id
+is what tells a row it moved no wallet money (`isFundedLeg`), so grouping
 the plain per-person rows would zero out money that really did leave. Add a
 new multi-row shape there, not in a second flatMap at the call site.
 
@@ -294,12 +294,27 @@ at once — a bill split with someone but paid on a credit card, which the card
 owes in full and the other person owes a share of — is stored as *two* rows
 sharing a `transfer_group_id`, the way a transfer already was. `calculateImpacts`
 is what keeps the pair from double-counting (the expense leg moves no wallet
-money, the `card_charge` leg claims none of the spending), `expandCardFundedDraft`
-is the only thing that creates one, and `isCardFundedLeg` is the only test for
+money, the funding leg claims none of the spending), `expandDraftForSave`
+is the only thing that creates one, and `isFundedLeg` is the only test for
 whether a row is part of one. Reach for that pair rather than a new
 `transaction_type` or a second debtor column the next time one event has to
 touch two balances — and note `partner_share` is a real stored number now, not
 always half, so nothing may re-derive a split from `amount / 2`.
+
+**Who fronted a bill decides which way its funding leg points, and that is
+`fundingLegType`'s call alone.** A card, or anyone the user owes, takes the
+bill on and the user's debt grows (`card_charge`). Someone who already owes
+the user has instead worked part of it off, so the leg is a `debt_repayment`
+with the group id that makes it weightless: the dinner จูน bought is 70 she
+no longer owes, no wallet opens, and nothing counts it as income — which is
+the whole point, since the by-hand version of this (a repayment row plus a
+matching expense) balanced the wallet while telling the month it had earned
+70 baht that never existed. The debtor's own `kind` is the only input, so
+the same picker, the same field and the same pair of rows serve both
+directions; an offset that overshoots leaves the balance negative on purpose
+(`buildDebtSummary` keeps it, `balanceReading` says it in words) rather than
+splitting itself against a balance read at save time, which would depend on
+the day the row was typed rather than the day it happened.
 
 Don't duplicate: hex colors (must be a CSS custom property in
 `app/globals.css`), Supabase table names and `.select(...)` column lists

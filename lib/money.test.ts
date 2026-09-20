@@ -11,13 +11,16 @@ import {
   calculateImpacts,
   describeDraftSave,
   draftRowCount,
+  entryDisplayImpact,
   draftTotals,
   describeWalletDeletion,
   draftSaveTotal,
   expandDraftForSave,
   expandTransferDraft,
   incompleteTransferDrafts,
-  isCardFundedLeg,
+  isFundedLeg,
+  fundingLegType,
+  sameDebtorName,
   isMultiPersonSplit,
   splitDebtorNames,
   splitPinMismatch,
@@ -42,6 +45,7 @@ import {
   walletDeletionMove,
   withEntries,
 } from "./money.ts";
+import { TYPES_OWED_TO_USER } from "./taxonomy.ts";
 import type { Debtor, Draft, Entry, HistoryFilters, Investment, InvestmentPrice, RecurringExpense, Wallet } from "./types.ts";
 
 function makeEntry(overrides: Partial<Entry> = {}): Entry {
@@ -130,19 +134,19 @@ describe("calculateImpacts", () => {
   });
 
   it("split_half on a card: the debt is the partner's share and no wallet moves", () => {
-    assert.deepEqual(calculateImpacts(163, "split_half", { cardFunded: true }), {
+    assert.deepEqual(calculateImpacts(163, "split_half", { funded: true }), {
       wallet_impact: 0, debt_impact: 81.5, user_share: 81.5, partner_share: 81.5,
     });
   });
 
   it("lend on a card: still owed in full, but the money came off the card", () => {
-    assert.deepEqual(calculateImpacts(500, "lend", { cardFunded: true }), {
+    assert.deepEqual(calculateImpacts(500, "lend", { funded: true }), {
       wallet_impact: 0, debt_impact: 500, user_share: 0, partner_share: 500,
     });
   });
 
   it("card_charge as a split's funding leg: the card owes it all, the user spent none of it here", () => {
-    assert.deepEqual(calculateImpacts(163, "card_charge", { cardFunded: true }), {
+    assert.deepEqual(calculateImpacts(163, "card_charge", { funded: true }), {
       wallet_impact: 0, debt_impact: 163, user_share: 0, partner_share: 0,
     });
   });
@@ -738,6 +742,23 @@ describe("recurringExpenseEntries", () => {
     assert.equal(rows[0].wallet_impact, 0);
   });
 
+  it("takes a bill the partner pays off what they owe instead of owing them for it", () => {
+    // ค่าเน็ตจูนจ่ายทุกเดือน แล้วหักจากยอดที่จูนติดเรา: one bill, no wallet
+    // movement, no new debt of the user's -- จูน is simply owed 599 less.
+    const [expense, funding] = recurringExpenseEntries(
+      { name: "ค่าเน็ต", amount: 599, funding_card_name: "จูน" },
+      billingDate,
+      wallets,
+      "id-1",
+      [makeDebtor({ name: "จูน", kind: "lend" })],
+    );
+    assert.equal(expense.wallet_impact, 0);
+    assert.equal(expense.user_share, 599);
+    assert.equal(funding.transaction_type, "debt_repayment");
+    assert.equal(funding.debt_impact, -599);
+    assert.equal(funding.wallet_impact, 0);
+  });
+
   it("treats a blank card name as no card at all", () => {
     const rows = recurringExpenseEntries({ name: "Netflix", amount: 419, funding_card_name: "   " }, billingDate, wallets, "id-1");
     assert.equal(rows.length, 1);
@@ -943,18 +964,54 @@ describe("receiptMismatch", () => {
   });
 });
 
-describe("isCardFundedLeg", () => {
-  it("is a leg only when a split/lend/card row carries a group id", () => {
-    assert.equal(isCardFundedLeg({ transaction_type: "split_half", transfer_group_id: "g1" }), true);
-    assert.equal(isCardFundedLeg({ transaction_type: "lend", transfer_group_id: "g1" }), true);
-    assert.equal(isCardFundedLeg({ transaction_type: "card_charge", transfer_group_id: "g1" }), true);
-    assert.equal(isCardFundedLeg({ transaction_type: "split_half", transfer_group_id: null }), false);
+describe("isFundedLeg", () => {
+  it("is a leg only when a split/lend/funding row carries a group id", () => {
+    assert.equal(isFundedLeg({ transaction_type: "split_half", transfer_group_id: "g1" }), true);
+    assert.equal(isFundedLeg({ transaction_type: "lend", transfer_group_id: "g1" }), true);
+    assert.equal(isFundedLeg({ transaction_type: "card_charge", transfer_group_id: "g1" }), true);
+    assert.equal(isFundedLeg({ transaction_type: "debt_repayment", transfer_group_id: "g1" }), true);
+    assert.equal(isFundedLeg({ transaction_type: "split_half", transfer_group_id: null }), false);
+  });
+
+  it("leaves a repayment that was actually paid in cash alone", () => {
+    // planDebtSettlement writes one of these with no group, and it has to keep
+    // moving a wallet -- being a leg is what makes a repayment weightless.
+    assert.equal(isFundedLeg({ transaction_type: "debt_repayment", transfer_group_id: null }), false);
   });
 
   it("never mistakes a transfer leg for one", () => {
     // Transfers are the other thing that shares a transfer_group_id, and were
-    // the only thing that did before card funding existed.
-    assert.equal(isCardFundedLeg({ transaction_type: "transfer", transfer_group_id: "g1" }), false);
+    // the only thing that did before funded bills existed.
+    assert.equal(isFundedLeg({ transaction_type: "transfer", transfer_group_id: "g1" }), false);
+  });
+});
+
+describe("fundingLegType", () => {
+  const debtors = [makeDebtor({ id: "d1", name: "SPay", kind: "own" }), makeDebtor({ id: "d2", name: "จูน", kind: "lend" })];
+
+  it("puts a bill a card paid onto the card as a new charge", () => {
+    assert.equal(fundingLegType("SPay", debtors), "card_charge");
+  });
+
+  it("takes a bill someone who owes the user paid off their balance instead", () => {
+    assert.equal(fundingLegType("จูน", debtors), "debt_repayment");
+    assert.equal(fundingLegType("  จูน ", debtors), "debt_repayment");
+  });
+
+  it("treats a name in neither book as someone the user now owes", () => {
+    assert.equal(fundingLegType("อ้อน", debtors), "card_charge");
+    assert.equal(fundingLegType("จูน", []), "card_charge");
+  });
+});
+
+describe("sameDebtorName", () => {
+  it("ignores case and surrounding space", () => {
+    assert.equal(sameDebtorName(" SPay ", "spay"), true);
+  });
+
+  it("is never true for a missing name", () => {
+    assert.equal(sameDebtorName("", ""), false);
+    assert.equal(sameDebtorName(null, undefined), false);
   });
 });
 
@@ -1083,6 +1140,85 @@ describe("matchDebtorName", () => {
     assert.equal(matchDebtorName(cards, "กสิกร"), null);
     assert.equal(matchDebtorName(cards, ""), null);
     assert.equal(matchDebtorName(cards, undefined), null);
+  });
+});
+
+describe("entryDisplayImpact", () => {
+  const row = (overrides: Partial<Entry>) => normalizeEntry({
+    id: "1", title: "ข้าวเที่ยง", category: "อาหาร", amount: 70, transaction_type: "personal_expense",
+    occurred_at: "2026-09-05T00:00:00.000Z", ...overrides,
+  }, false);
+
+  it("shows an ordinary row's wallet movement", () => {
+    assert.equal(entryDisplayImpact(row({})), -70);
+  });
+
+  it("puts the number on the funding leg, whichever kind it is", () => {
+    // Both legs of a funded bill are on screen together, so exactly one of
+    // them may carry the amount.
+    assert.equal(entryDisplayImpact(row({ transfer_group_id: "g1" })), 0);
+    assert.equal(entryDisplayImpact(row({ transaction_type: "card_charge", debtor_name: "SPay", transfer_group_id: "g1" })), -70);
+    assert.equal(entryDisplayImpact(row({ transaction_type: "debt_repayment", debtor_name: "จูน", transfer_group_id: "g1" })), -70);
+  });
+
+  it("still shows cash coming back as cash coming back", () => {
+    assert.equal(entryDisplayImpact(row({ transaction_type: "debt_repayment", debtor_name: "จูน" })), 70);
+  });
+});
+
+describe("expandDraftForSave: a bill paid by someone who already owed the user", () => {
+  // The offset the user used to write by hand as two rows -- "จูนคืนเงิน 70"
+  // plus "ซื้อข้าว 70" -- which balanced the wallet but told the month it had
+  // earned 70 baht it never saw.
+  const debtors = [makeDebtor({ id: "d1", name: "จูน", kind: "lend" }), makeDebtor({ id: "d2", name: "SPay", kind: "own" })];
+  const lunch: Draft = {
+    id: "d1", title: "ข้าวเที่ยง", category: "อาหาร", amount: 70, type: "expense",
+    transaction_type: "personal_expense", wallet_impact: -70, debt_impact: 0, user_share: 70,
+    partner_share: 0, debtor_name: "", occurred_at: "2026-09-05T12:00:00.000Z",
+    wallet_id: "w1", note: null, funding_card_name: "จูน",
+  };
+
+  it("spends the money without moving a wallet, and takes it off what she owes", () => {
+    const [expense, funding] = expandDraftForSave(lunch, [], debtors);
+
+    assert.equal(expense.transaction_type, "personal_expense");
+    assert.equal(expense.user_share, 70);
+    assert.equal(expense.wallet_impact, 0);
+    assert.equal(expense.wallet_id, null);
+
+    assert.equal(funding.transaction_type, "debt_repayment");
+    assert.equal(funding.debtor_name, "จูน");
+    assert.equal(funding.debt_impact, -70);
+    assert.equal(funding.wallet_impact, 0);
+    assert.equal(funding.transfer_group_id, expense.transfer_group_id);
+  });
+
+  it("invents no income, which is the whole reason the pair exists", () => {
+    const rows = expandDraftForSave(lunch, [], debtors).map((row) => normalizeEntry(row));
+    assert.equal(totalWallet(rows, "income"), 0);
+    assert.equal(totalWallet(rows, "expense"), 0);
+    assert.equal(rows.reduce((sum, row) => sum + (categorySpendAmount(row) ?? 0), 0), 70);
+  });
+
+  it("moves her balance by the difference when the bill was shared", () => {
+    // 140 split down the middle and จูน paid: she is owed 70 less, not 140.
+    const shared = { ...lunch, amount: 140, transaction_type: "split_half" as const, debtor_name: "จูน", partner_share: 70, user_share: 70 };
+    const rows = expandDraftForSave(shared, [], debtors).map((row) => normalizeEntry(row));
+    const summary = buildDebtSummary(debtors, rows as Entry[], "lend", TYPES_OWED_TO_USER);
+    assert.deepEqual(summary, [{ name: "จูน", amount: -70 }]);
+  });
+
+  it("still charges the card when the funder is one, and still owes a stranger", () => {
+    assert.equal(expandDraftForSave({ ...lunch, funding_card_name: "SPay" }, [], debtors)[1].transaction_type, "card_charge");
+    assert.equal(expandDraftForSave({ ...lunch, funding_card_name: "พี่แอน" }, [], debtors)[1].transaction_type, "card_charge");
+    // No debtor list at all is how every caller behaved before there was a
+    // second direction, and it has to keep meaning "they are owed for it".
+    assert.equal(expandDraftForSave(lunch, [], [])[1].transaction_type, "card_charge");
+  });
+
+  it("says in the note why her balance dropped, unless the user wrote their own", () => {
+    assert.match(expandDraftForSave(lunch, [], debtors)[1].note ?? "", /หักจากยอดที่จูนติดเรา/);
+    assert.equal(expandDraftForSave({ ...lunch, note: "มื้อเย็น" }, [], debtors)[1].note, "มื้อเย็น");
   });
 });
 
@@ -1515,6 +1651,14 @@ describe("draftTotals", () => {
 
   it("leaves a plain draft exactly as it is", () => {
     assert.deepEqual(draftTotals([base], []), { wallet: -389, receivable: 0, payable: 0 });
+  });
+
+  it("reports a bill fronted by someone who owes the user as their balance falling", () => {
+    // Not 389 of new debt: จูน is owed 389 less, which is the same reading the
+    // row's own preview gives two lines above it.
+    const fronted = { ...base, funding_card_name: "จูน" };
+    const debtors = [makeDebtor({ name: "จูน", kind: "lend" })];
+    assert.deepEqual(draftTotals([fronted], [], debtors), { wallet: 0, receivable: -389, payable: 0 });
   });
 });
 

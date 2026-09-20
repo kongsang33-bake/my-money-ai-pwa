@@ -50,7 +50,7 @@ import {
   filterEntries,
   incompleteTransferDrafts,
   mismatchedSplitDrafts,
-  isCardFundedLeg,
+  isFundedLeg,
   matchDebtorName,
   mapTransactionRow,
   normalizeEntry,
@@ -1374,14 +1374,18 @@ export default function Home() {
             // model invented would quietly open a debt against a name nobody
             // recognises.
             // Who fronted this: a card the user has, or -- for "อ้อนออกให้
-            // ก่อน" -- a person they may never have owed before. An unknown
-            // name is kept rather than dropped, since the review row shows it
-            // as a new debt about to be created and is the place to correct
-            // it; dropping it silently put the money back on a wallet that
-            // never paid.
+            // ก่อน" -- a person, who may be one they already owe, one who
+            // already owes them (the bill comes off that balance instead, see
+            // fundingLegType), or a name they have never owed at all. An
+            // unknown name is kept rather than dropped, since the review row
+            // shows it as a new debt about to be created and is the place to
+            // correct it; dropping it silently put the money back on a wallet
+            // that never paid. Both books are matched against, because
+            // matching only the cards turned "จูนออกให้ก่อน" into a brand new
+            // debt of the user's while จูน's own balance sat there untouched.
             const proposedFunder = (item.paid_with_card ?? "").trim();
             const aiCard = CARD_FUNDABLE_TYPES.includes(item.transaction_type) && proposedFunder
-              ? matchDebtorName(debtors.filter((debtor) => debtor.kind === "own").map((debtor) => debtor.name), proposedFunder) ?? proposedFunder
+              ? matchDebtorName(debtors.map((debtor) => debtor.name), proposedFunder) ?? proposedFunder
               : null;
             const aiDestWalletId = item.transfer_to_wallet_id && wallets.some((wallet) => wallet.id === item.transfer_to_wallet_id) ? item.transfer_to_wallet_id : null;
             const rememberedCategory = categoryMemory.get(item.title.trim().toLowerCase());
@@ -1507,7 +1511,7 @@ export default function Home() {
     setBusy(true);
     setError("");
     const normalizedItems = items
-      .flatMap((item) => expandDraftForSave(item, wallets))
+      .flatMap((item) => expandDraftForSave(item, wallets, debtors))
       .map((item) => normalizeEntry(item));
 
     const payload = normalizedItems.map((normalized) => ({
@@ -1700,10 +1704,10 @@ export default function Home() {
       : [];
     const pairedEntry = groupedEntries.length > 0;
     const entriesToDelete = [entry, ...groupedEntries];
-    // Both kinds of paired row (a transfer's two legs, a card-funded split's
-    // charge and share) only balance as a pair, so they go together -- the
+    // Both kinds of paired row (a transfer's two legs, a funded bill's
+    // funding and share) only balance as a pair, so they go together -- the
     // wording is all that differs.
-    const pairLabel = pairedEntry && isCardFundedLeg(entry) ? "รายการที่จ่ายด้วยบัตร" : "รายการโอนเงิน";
+    const pairLabel = pairedEntry && isFundedLeg(entry) ? "รายการที่คนอื่นออกให้" : "รายการโอนเงิน";
     const confirmed = await requestConfirm({
       title: pairedEntry ? `ลบ${pairLabel}นี้?` : "ลบรายการนี้?",
       detail: pairedEntry
@@ -1768,7 +1772,7 @@ export default function Home() {
     if (!supabase || !user) return;
     setBusy(true);
     setError("");
-    const normalized = recurringExpenseEntries(item, billingDate, wallets, crypto.randomUUID());
+    const normalized = recurringExpenseEntries(item, billingDate, wallets, crypto.randomUUID(), debtors);
     const { data, error } = await supabase
       .from(TABLES.transactions)
       .insert(normalized.map((entry) => ({
@@ -2969,6 +2973,7 @@ export default function Home() {
                         key={draft.id}
                         draft={draft}
                         knownDebtors={debtors}
+                        receivable={receivableSummary}
                         wallets={wallets}
                         onChange={(next) => setDrafts((items) => items.map((item, i) => (i === index ? next : item)))}
                         onRemove={() => setDrafts((items) => items.filter((_, i) => i !== index))}
@@ -2977,7 +2982,7 @@ export default function Home() {
                     {draftMismatch && (
                       <StateCard tone="error" title="ยอดรวมไม่ตรงกับสลิป" detail={draftMismatch.detail} />
                     )}
-                    <DraftImpact items={drafts} wallets={wallets} />
+                    <DraftImpact items={drafts} wallets={wallets} knownDebtors={debtors} />
                     {!!unfinishedTransfers.length && (
                       <p className="pin-hint">มีรายการโอนเงินที่ยังไม่ได้เลือกกระเป๋าปลายทาง</p>
                     )}
@@ -3240,6 +3245,7 @@ export default function Home() {
             item={recurringSheetMode === "edit" ? editingRecurringExpense : null}
             wallets={wallets}
             debtors={debtors}
+            receivable={receivableSummary}
             busy={busy}
             error={error}
             onClose={recurringSheetDismiss.requestClose}
