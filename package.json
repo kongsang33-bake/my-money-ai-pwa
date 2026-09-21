@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:icons": "node scripts/build-icons.mjs",
     "start": "next start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "test": "node --experimental-strip-types --test lib/*.test.ts",
