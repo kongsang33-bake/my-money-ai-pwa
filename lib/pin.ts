@@ -176,8 +176,8 @@ export async function registerFaceId(user: User): Promise<string | null> {
   try {
     const credential = await navigator.credentials.create({
       publicKey: {
-        rp: { name: "Monii", id: window.location.hostname },
-        user: { id: userId, name: user.email ?? user.id, displayName: user.email ?? "Monii" },
+        rp: { name: "นับตังค์", id: window.location.hostname },
+        user: { id: userId, name: user.email ?? user.id, displayName: user.email ?? "นับตังค์" },
         challenge,
         pubKeyCredParams: [
           { type: "public-key", alg: -7 },

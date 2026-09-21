@@ -2,7 +2,7 @@
 // below deletes every cache that isn't this one, so a stale version never
 // lingers on a user's device past their next visit.
 const CACHE_VERSION = "v1";
-const CACHE_NAME = `monii-${CACHE_VERSION}`;
+const CACHE_NAME = `nubtang-${CACHE_VERSION}`;
 const SHELL_URL = "/";
 
 self.addEventListener("install", (event) => {

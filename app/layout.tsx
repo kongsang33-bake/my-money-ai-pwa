@@ -12,7 +12,7 @@ const ibmPlexSansThai = IBM_Plex_Sans_Thai({
 });
 
 export const metadata: Metadata = {
-  title: "Monii - บันทึกรายรับรายจ่ายด้วย AI",
+  title: "นับตังค์ - บันทึกรายรับรายจ่ายด้วย AI",
   description: "แอปบันทึกรายรับรายจ่ายที่ช่วยแยกรายการและจัดหมวดหมู่ด้วย AI",
   manifest: "/manifest.webmanifest",
   icons: {
@@ -54,7 +54,7 @@ export default function RootLayout({
               <img id="app-splash-logo" src="/icons/icon-512.png" alt="" width={112} height={112} decoding="sync" fetchPriority="high" />
             </div>
             <div id="app-splash-text-wrap">
-              <p id="app-splash-text">Monii</p>
+              <p id="app-splash-text">นับตังค์</p>
             </div>
           </div>
         </div>

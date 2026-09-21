@@ -5,7 +5,7 @@
 # guarantee instead of trusting it.
 set -e
 [ -d .next/static ] || { echo "no build found: run 'npm run build' first"; exit 1; }
-hits=$(grep -rl "__MONII_PREVIEW__\|preview-user\|เที่ยวญี่ปุ่น" .next/static 2>/dev/null || true)
+hits=$(grep -rl "__NUBTANG_PREVIEW__\|preview-user\|เที่ยวญี่ปุ่น" .next/static 2>/dev/null || true)
 if [ -n "$hits" ]; then
   echo "FAIL: preview fixture found in the production bundle:"
   echo "$hits"

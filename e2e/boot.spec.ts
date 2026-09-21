@@ -43,7 +43,7 @@ test.describe("boot", () => {
     // prone to, and one that used to leave the splash up forever because the
     // effect that hides it never ran.
     await page.addInitScript(() => {
-      (window as unknown as { __MONII_PREVIEW__: unknown }).__MONII_PREVIEW__ = {
+      (window as unknown as { __NUBTANG_PREVIEW__: unknown }).__NUBTANG_PREVIEW__ = {
         user: { id: "preview-user", email: "preview@example.com", user_metadata: { full_name: "พรีวิว" } },
         profile: { user_id: "preview-user", month_start_day: 1, pin_hash: null, pin_salt: null, net_worth_formula: "full", net_worth_hide_card: false },
         entries: [], wallets: [], debtors: [], recurringExpenses: [], budgets: {},

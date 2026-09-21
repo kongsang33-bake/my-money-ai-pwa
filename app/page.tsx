@@ -398,7 +398,7 @@ export default function Home() {
   }, [profile, monthStartDay]);
 
   // Accepts a pre-seeded state from the end-to-end suite, which injects it as
-  // window.__MONII_PREVIEW__ before the page scripts run (see e2e/fixture.ts).
+  // window.__NUBTANG_PREVIEW__ before the page scripts run (see e2e/fixture.ts).
   //
   // The fixture is never imported by application code -- it is built inside
   // the test and handed over as plain data -- so there is no module for a
@@ -419,7 +419,7 @@ export default function Home() {
   // hydration.
   useEffect(() => {
     if (process.env.NEXT_PUBLIC_ENABLE_PREVIEW !== "1" || typeof window === "undefined") return;
-    const seed = (window as unknown as { __MONII_PREVIEW__?: PreviewSeed }).__MONII_PREVIEW__;
+    const seed = (window as unknown as { __NUBTANG_PREVIEW__?: PreviewSeed }).__NUBTANG_PREVIEW__;
     if (!seed) return;
     /* eslint-disable react-hooks/set-state-in-effect */
     setUser(seed.user as unknown as User);

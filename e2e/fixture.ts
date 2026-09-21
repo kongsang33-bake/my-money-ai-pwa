@@ -9,7 +9,7 @@ import type { Draft, Entry, PreviewSeed } from "../lib/types.ts";
 // This is test-only on purpose: application code never imports this file, so
 // there is no module a bundler could carry into a production build. The app's
 // side of the arrangement is ~15 lines in app/page.tsx that read
-// window.__MONII_PREVIEW__ and are compiled away unless the build sets
+// window.__NUBTANG_PREVIEW__ and are compiled away unless the build sets
 // NEXT_PUBLIC_ENABLE_PREVIEW=1 (see next.config.ts, and
 // `npm run verify:preview-stripped`).
 //
@@ -198,7 +198,7 @@ export async function openSetup(page: Page, seed: PreviewSeed = buildEmptySeed()
 
 async function injectSeed(page: Page, seed: PreviewSeed) {
   await page.addInitScript((injected) => {
-    (window as unknown as { __MONII_PREVIEW__: unknown }).__MONII_PREVIEW__ = injected;
+    (window as unknown as { __NUBTANG_PREVIEW__: unknown }).__NUBTANG_PREVIEW__ = injected;
   }, seed as unknown as Record<string, unknown>);
   await page.goto("/");
 }

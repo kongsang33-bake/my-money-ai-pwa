@@ -6,7 +6,7 @@ Guidance for working on this codebase — a Thai personal-finance PWA
 
 ## Design system: Paper (light) / Quiet Dark (dark)
 
-Monii should feel like keeping a notebook, not like operating a dashboard.
+นับตังค์ (Nubtang) should feel like keeping a notebook, not like operating a dashboard.
 Light mode is **paper**: warm off-white grounds with the chroma taken almost
 to zero, a hairline edge and the faintest lift instead of coloured drop
 shadows, corners eased back from pill to sheet, and colour used as ink —
@@ -184,7 +184,7 @@ token value.
   not hand-roll it again.** `e2e/fixture.ts` builds a seeded account (~350
   entries over eight months, three wallets, two debtors, budgets and a
   goal, matching the real account's shape) and injects it as
-  `window.__MONII_PREVIEW__`. `app/page.tsx` reads that global in one
+  `window.__NUBTANG_PREVIEW__`. `app/page.tsx` reads that global in one
   guarded effect. Both halves only exist when a build sets
   `NEXT_PUBLIC_ENABLE_PREVIEW=1`; `next.config.ts` pins it to `"0"`
   otherwise so the branch folds to dead code, and
