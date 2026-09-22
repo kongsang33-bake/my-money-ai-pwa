@@ -48,7 +48,11 @@ export const GEMINI_EXTRACTION_TEMPERATURE = 0.1;
 // multiple of whichever of these a caller passes.
 export const GEMINI_TEXT_TIMEOUT_MS = 10000;
 export const GEMINI_IMAGE_TIMEOUT_MS = 25000;
-export const GEMINI_CHAT_TIMEOUT_MS = 12000;
+// The chat was 12s, which put the head of the chain on a ~5s leash (see
+// GEMINI_FIRST_MODEL_TIMEOUT_RATIO) and the whole question on 24s -- short
+// enough that one slow afternoon timed out every model on a plain "how much
+// did X bring in this month".
+export const GEMINI_CHAT_TIMEOUT_MS = 20000;
 
 // Free-text personal context (profiles.ai_context) the user writes for the
 // AI. Long enough for a paragraph of household/business vocabulary, short

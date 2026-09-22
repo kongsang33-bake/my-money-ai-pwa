@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     // Conversational answers run longer than a structured parse -- keep this
     // at the original timeout rather than the shorter default now used for
     // entry parsing, so a longer reply doesn't get cut off mid-generation.
-    const response = await generateGeminiContent(ai, { contents, config: { temperature: 0.2 } }, { timeoutMs: GEMINI_CHAT_TIMEOUT_MS });
+    const response = await generateGeminiContent(ai, { contents, config: { temperature: 0.2 } }, { timeoutMs: GEMINI_CHAT_TIMEOUT_MS, thinking: "low" });
     return Response.json({ answer: response.text?.trim() || "ยังไม่มีคำตอบ" });
   } catch (error) {
     return Response.json({ error: describeGeminiError(error, "ตอบคำถาม") }, { status: 502 });

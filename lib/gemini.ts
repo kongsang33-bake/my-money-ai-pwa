@@ -83,12 +83,22 @@ function isUnavailableModelError(error: unknown): boolean {
 // on. Asking for the least thinking the model allows is the difference between
 // an answer inside the timeout and a timeout.
 //
+// A chat answer is different: "how much did the laundry machine bring in this
+// month" means reading up to 120 transactions and adding some of them up, so it
+// asks for "low" rather than none. Left at the model's default instead, Gemini
+// 3.x thought for longer than the whole chat budget and every model in the
+// chain timed out on a plain question.
+//
 // How to ask differs by generation, and asking the wrong way is a hard 400:
 // thinking_budget is rejected from Gemini 3.5 onward (use thinking_level),
 // while models older than 2.5 have no thinking to configure at all.
-export function thinkingConfigForModel(model: string): ThinkingConfig | undefined {
-  if (/^gemini-3\./.test(model)) return { thinkingLevel: ThinkingLevel.MINIMAL };
-  if (/^gemini-2\.5/.test(model)) return { thinkingBudget: 0 };
+export type ThinkingEffort = "minimal" | "low";
+
+const LOW_THINKING_BUDGET_TOKENS = 1024;
+
+export function thinkingConfigForModel(model: string, effort: ThinkingEffort = "minimal"): ThinkingConfig | undefined {
+  if (/^gemini-3\./.test(model)) return { thinkingLevel: effort === "low" ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL };
+  if (/^gemini-2\.5/.test(model)) return { thinkingBudget: effort === "low" ? LOW_THINKING_BUDGET_TOKENS : 0 };
   return undefined;
 }
 
@@ -203,7 +213,7 @@ export class GeminiChainError extends Error {
 export async function generateGeminiContent(
   ai: GoogleGenAI,
   params: Omit<GenerateContentParameters, "model">,
-  options?: { timeoutMs?: number; budgetMs?: number; minimizeThinking?: boolean }
+  options?: { timeoutMs?: number; budgetMs?: number; thinking?: ThinkingEffort }
 ): Promise<GenerateContentResponse> {
   const attemptTimeoutMs = options?.timeoutMs ?? GEMINI_TEXT_TIMEOUT_MS;
   const budgetMs = options?.budgetMs ?? attemptTimeoutMs * GEMINI_BUDGET_MULTIPLIER;
@@ -218,7 +228,7 @@ export async function generateGeminiContent(
   for (const model of chain) {
     // Dropped for the rest of this model's attempts if the model turns out to
     // reject it (see isThinkingConfigRejection below).
-    let thinkingConfig = options?.minimizeThinking && !params.config?.thinkingConfig ? thinkingConfigForModel(model) : undefined;
+    let thinkingConfig = options?.thinking && !params.config?.thinkingConfig ? thinkingConfigForModel(model, options.thinking) : undefined;
 
     // Only the first candidate is on the short leash, and only when there is
     // something else to fall through to.

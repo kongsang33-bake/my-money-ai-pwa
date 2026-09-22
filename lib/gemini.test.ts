@@ -119,6 +119,11 @@ describe("thinkingConfigForModel", () => {
     assert.deepEqual(thinkingConfigForModel("gemini-3.6-flash"), { thinkingLevel: "MINIMAL" });
   });
 
+  it("asks for low rather than minimal thinking when the caller says so", () => {
+    assert.deepEqual(thinkingConfigForModel("gemini-3.6-flash", "low"), { thinkingLevel: "LOW" });
+    assert.deepEqual(thinkingConfigForModel("gemini-2.5-flash", "low"), { thinkingBudget: 1024 });
+  });
+
   it("uses the older budget field on 2.5, which rejects thinking_level", () => {
     assert.deepEqual(thinkingConfigForModel("gemini-2.5-flash"), { thinkingBudget: 0 });
   });
@@ -153,14 +158,14 @@ describe("generateGeminiContent thinking handling", () => {
 
   it("gives up when the request is bad for a reason other than the thinking config", async () => {
     const { ai, calls } = recordingAi(() => "reject-thinking");
-    await assert.rejects(generateGeminiContent(ai, { contents: [{ text: "กาแฟ 20" }] }, { timeoutMs: 500, minimizeThinking: true }));
+    await assert.rejects(generateGeminiContent(ai, { contents: [{ text: "กาแฟ 20" }] }, { timeoutMs: 500, thinking: "minimal" }));
     // One try with the config, one without -- then the 400 is taken at face value.
     assert.equal(calls.length, 2);
   });
 
   it("retries the same model without the thinking config when the model rejects it", async () => {
     const { ai, calls } = recordingAi((_model, thinking) => (thinking ? "reject-thinking" : "ok"));
-    await generateGeminiContent(ai, { contents: [{ text: "กาแฟ 20" }] }, { timeoutMs: 500, minimizeThinking: true });
+    await generateGeminiContent(ai, { contents: [{ text: "กาแฟ 20" }] }, { timeoutMs: 500, thinking: "minimal" });
     assert.equal(calls.length, 2, "should retry the same model, not fall through to the next one");
     assert.equal(calls[0].model, calls[1].model);
     assert.ok(calls[0].thinking, "first attempt carries the thinking config");
