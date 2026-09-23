@@ -212,6 +212,13 @@
   --fs-body-sm: 14px;
   --fs-caption: 13px;
   --fs-micro: 11px;
+  /* Not a step of the scale: the floor for text you type into. iOS Safari
+     zooms the whole page in when a field under 16px takes focus, and leaves
+     it zoomed -- the one thing that most makes the app feel like a web page
+     rather than an app. Every input, textarea and select uses this, and a
+     field that wants to look smaller has to find another way (a transparent
+     field under a styled label, as .date-shell does). */
+  --fs-input: max(16px, 1rem);
 
   --fw-regular: 400;
   --fw-medium: 500;
@@ -443,7 +450,7 @@ ul, ol {
 }
 
 input, textarea, select {
-  font-size: max(16px, 1rem); /* iOS zoom guard */
+  font-size: var(--fs-input);
 }
 
 .select-shell {
@@ -2703,11 +2710,13 @@ a:focus-visible {
   flex: 1;
   min-width: 0;
   height: 40px;
-  padding: 9px var(--s-3);
+  /* 8 + 24 + 8: one line at --fs-input's 16px, in the same 40px box the
+     15px text used to sit in. */
+  padding: 8px var(--s-3);
   border: none;
   background: transparent;
   color: var(--ink);
-  font-size: var(--fs-body);
+  font-size: var(--fs-input);
   line-height: 1.5;
   resize: none;
   overflow-y: auto;
@@ -3208,7 +3217,7 @@ a:focus-visible {
   background: var(--surface);
   border: 1px solid var(--line);
   text-align: right;
-  font-size: var(--fs-body);
+  font-size: var(--fs-input);
   font-weight: var(--fw-semibold);
   color: var(--ink);
 }
@@ -3561,7 +3570,10 @@ a:focus-visible {
   border-radius: var(--r-sm);
   background: var(--surface);
   color: var(--ink-2);
-  font-size: var(--fs-micro);
+  /* The field's own text is transparent (see .date-shell); what reads at
+     --fs-micro is .date-shell-text over it. The field keeps the input floor
+     so tapping it does not zoom the page. */
+  font-size: var(--fs-input);
   font-weight: var(--fw-semibold);
 }
 
