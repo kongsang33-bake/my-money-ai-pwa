@@ -15,7 +15,6 @@ export function WalletsView({
   wallets,
   entries,
   loading,
-  onBack,
   onAdd,
   onEdit,
   onDelete,
@@ -27,7 +26,6 @@ export function WalletsView({
   loading: boolean;
   /** Kept mounted behind another tab (see .is-parked in globals.css). */
   parked?: boolean;
-  onBack: () => void;
   onAdd: () => void;
   onEdit: (wallet: Wallet) => void;
   onDelete: (wallet: Wallet) => void;
@@ -69,8 +67,11 @@ export function WalletsView({
   return (
     <div ref={rootRef} className={`view debtor-view wallets-view${parked ? " is-parked" : ""}`} inert={parked}>
       {loading && <SkeletonList rows={3} />}
+      {/* No back chevron here: Wallets is a bottom-nav tab, a peer of Home
+          and History rather than a screen drilled into from one of them, so
+          the nav itself -- always on screen -- is how you leave it. A back
+          arrow that always lands on Home read as a sub-screen, not a tab. */}
       <div className="add-title">
-        <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
         <div>
           <p className="eyebrow">จัดการกองเงิน</p>
           <h2>กระเป๋าตังค์</h2>

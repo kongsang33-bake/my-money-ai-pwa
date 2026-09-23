@@ -96,7 +96,7 @@ import {
   TRANSACTION_COLUMNS,
   WALLET_COLUMNS,
 } from "@/lib/constants";
-import { ChevronLeft, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { WalletAvatarGlyph } from "@/components/shared";
 import { BottomNav } from "@/components/bottom-nav";
 import { ConfirmDialog, CountUpMoney, ElapsedSeconds, ErrorActions, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useStableHandler } from "@/components/primitives";
@@ -3012,8 +3012,10 @@ export default function Home() {
         {tab === "add" && (
           <div className="view add-view">
             {dataLoading && <SkeletonList rows={3} />}
+            {/* No back chevron: "เพิ่มรายการ" is the bottom nav's own +
+                tab, a peer of Home/History/Wallets rather than a screen
+                drilled into from one of them. */}
             <div className="add-title add-title-compact">
-              <button onClick={() => setTab("home")} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
               <div>
                 <p className="eyebrow">{addMode === "manual" ? "เพิ่มรายการ" : "AI Chat"}</p>
                 <h2>{addMode === "manual" ? "กรอกรายการด้วยตัวเอง" : busy ? "กำลังอ่านให้แบบตั้งใจสุด ๆ" : drafts.length ? "แยกข้อมูลให้แล้ว ลองตรวจอีกนิด" : "วันนี้มีรายการอะไรบ้าง?"}</h2>
@@ -3115,8 +3117,10 @@ export default function Home() {
         {historyKept && (
           <div className={`view history-view${tab === "history" ? "" : " is-parked"}`} inert={tab !== "history"}>
             {dataLoading && <SkeletonList rows={5} />}
+            {/* No back chevron: "รายการทั้งหมด" is the bottom nav's own
+                History tab, a peer of Home/Wallets rather than a screen
+                drilled into from one of them. */}
             <div className="add-title">
-              <button onClick={() => setTab("home")} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
               <div>
                 <h2>รายการทั้งหมด</h2>
               </div>
@@ -3185,7 +3189,6 @@ export default function Home() {
             wallets={displayWallets}
             entries={entries}
             loading={dataLoading}
-            onBack={() => setTab("home")}
             onAdd={openSheet(() => { setEditingWallet(null); setWalletSheetMode("create"); })}
             onEdit={openSheet((wallet: Wallet) => { setEditingWallet(wallet); setWalletSheetMode("edit"); })}
             onDelete={deleteWallet}
