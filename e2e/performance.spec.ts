@@ -1,12 +1,12 @@
 import { test, expect, navigate, waitForAnimations } from "./fixture.ts";
 import type { Page } from "@playwright/test";
 
-// Home and History are the two screens a thumb goes back and forth between,
-// and rebuilding either on every tap was the slowest thing the app did:
-// ~150ms to Home and 170-280ms to History on a mid-range phone, most of it
-// laying out their Thai text again. They are now kept mounted and parked
-// (content-visibility: hidden -- see .is-parked in globals.css), which keeps
-// their layout, and brought both down to ~45-50ms.
+// Home, History and Wallets are the screens a thumb goes back and forth
+// between, and rebuilding them on every tap was the slowest thing the app
+// did: ~150ms to Home, 170-280ms to History and ~60ms to Wallets on a
+// mid-range phone, most of it laying out their Thai text again. They are now
+// kept mounted and parked (content-visibility: hidden -- see .is-parked in
+// globals.css), which keeps their layout: ~45ms, ~45ms and ~30ms.
 //
 // Two guards, because they fail differently. The first is structural and
 // exact: the screen you come back to is the same DOM node you left, so a
@@ -18,6 +18,7 @@ import type { Page } from "@playwright/test";
 const PARKED_SCREENS = [
   { tab: "home", selector: ".phone > .view.home-view" },
   { tab: "history", selector: ".phone > .view.history-view" },
+  { tab: "wallets", selector: ".phone > .view.wallets-view" },
 ] as const;
 
 // Chromium's CDP throttle, to stand in for a mid-range Android phone; the
@@ -38,13 +39,14 @@ async function tapToNextFrame(page: Page, navIndex: number) {
 }
 
 test.describe("performance", () => {
-  test("keeps Home and History mounted while another tab is showing", async ({ app }) => {
+  test("keeps Home, History and Wallets mounted while another tab is showing", async ({ app }) => {
     await navigate(app, "history");
+    await navigate(app, "wallets");
     for (const { selector } of PARKED_SCREENS) {
       await app.locator(selector).evaluate((node) => { (node as HTMLElement & { __marker?: true }).__marker = true; });
     }
 
-    await navigate(app, "wallets");
+    await navigate(app, "add");
     for (const { selector } of PARKED_SCREENS) {
       await expect(app.locator(selector)).toHaveClass(/\bis-parked\b/);
     }
@@ -62,6 +64,7 @@ test.describe("performance", () => {
     // whole of Home below it.
     await navigate(app, "history");
     await navigate(app, "wallets");
+    await navigate(app, "add");
     await waitForAnimations(app);
     const heights = await app.evaluate(() => {
       const phone = document.querySelector(".phone") as HTMLElement;
@@ -72,25 +75,36 @@ test.describe("performance", () => {
       parked.forEach((node) => { node.style.display = ""; });
       return { parkedCount: parked.length, withParked, withoutParked };
     });
-    expect(heights.parkedCount).toBe(2);
+    expect(heights.parkedCount).toBe(3);
     expect(heights.withParked).toBe(heights.withoutParked);
   });
 
-  test("returns to Home and History within a frame budget on a throttled CPU", async ({ app }, info) => {
+  test("comes back to the wallet list, not a statement left open", async ({ app }) => {
+    // Unmounting used to close an open statement for free; parked, WalletsView
+    // has to close it itself.
+    await navigate(app, "wallets");
+    await app.locator(".debtor-page-list .debtor-main-button").first().click();
+    await expect(app.locator(".wallet-statement-row").first()).toBeVisible();
+    await navigate(app, "home");
+    await navigate(app, "wallets");
+    await expect(app.locator(".wallets-view .wallet-statement-row")).toHaveCount(0);
+  });
+
+  test("returns to Home, History and Wallets within a frame budget on a throttled CPU", async ({ app }, info) => {
     test.skip(info.project.name !== "mobile", "timed once, at the phone viewport it is about");
     const cdp = await app.context().newCDPSession(app);
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: CPU_THROTTLE });
 
-    // History's first visit is a real mount; only returns are held to the budget.
+    // A first visit is a real mount; only returns are held to the budget.
     await navigate(app, "history");
-    const samples: Record<"home" | "history", number[]> = { home: [], history: [] };
+    await navigate(app, "wallets");
+    const samples: Record<"home" | "history" | "wallets", number[]> = { home: [], history: [], wallets: [] };
     for (let round = 0; round < 3; round += 1) {
-      await navigate(app, "wallets");
-      samples.home.push(await tapToNextFrame(app, 0));
-      await app.waitForTimeout(400);
-      await navigate(app, "wallets");
-      samples.history.push(await tapToNextFrame(app, 1));
-      await app.waitForTimeout(400);
+      for (const [tab, index] of [["home", 0], ["history", 1], ["wallets", 3]] as const) {
+        await navigate(app, "add");
+        samples[tab].push(await tapToNextFrame(app, index));
+        await app.waitForTimeout(400);
+      }
     }
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
 

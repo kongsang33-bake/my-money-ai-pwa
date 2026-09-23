@@ -649,7 +649,7 @@ export const RecentActivityTimeline = memo(function RecentActivityTimeline({ ent
   );
 });
 
-export function QuickAddStrip({
+export const QuickAddStrip = memo(function QuickAddStrip({
   shortcuts,
   onSelect,
   onMore,
@@ -683,7 +683,7 @@ export function QuickAddStrip({
       </div>
     </section>
   );
-}
+});
 
 export function ManualEntryForm({
   wallets,

@@ -99,7 +99,7 @@ import {
 import { ChevronLeft, Moon, Sun } from "lucide-react";
 import { WalletAvatarGlyph } from "@/components/shared";
 import { BottomNav } from "@/components/bottom-nav";
-import { captureSheetOrigin, ConfirmDialog, CountUpMoney, ElapsedSeconds, ErrorActions, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss } from "@/components/primitives";
+import { captureSheetOrigin, ConfirmDialog, CountUpMoney, ElapsedSeconds, ErrorActions, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useStableHandler } from "@/components/primitives";
 import type { SheetOrigin } from "@/components/primitives";
 import { AiComposer, DraftImpact, DraftRow, EditSheet, EntryList, ManualEntryForm, QuickAddStrip, RecentActivityTimeline } from "@/components/add";
 import {
@@ -300,6 +300,10 @@ export default function Home() {
   // it in the same pass instead of one render late.
   const [historyKept, setHistoryKept] = useState(false);
   if (tab === "history" && !historyKept) setHistoryKept(true);
+  // Wallets is the nav's third tab and gets the same treatment, for the same
+  // reason and on the same terms.
+  const [walletsKept, setWalletsKept] = useState(false);
+  if (tab === "wallets" && !walletsKept) setWalletsKept(true);
   // A save in flight, apart from `busy` (which AI analysis also holds), so
   // the save button can say "saving" without claiming it during analysis.
   const [saving, setSaving] = useState(false);
@@ -2809,6 +2813,18 @@ export default function Home() {
   const investmentConfirmDismiss = useDismiss(!!investmentConfirmTarget, () => setInvestmentConfirmTarget(null));
   const investmentAiDismiss = useDismiss(investmentAiSheetOpen, () => setInvestmentAiSheetOpen(false));
   const moreDismiss = useDismiss(moreOpen, () => setMoreOpen(false));
+  // Stable handlers for Home's memo()'d cards. Home stays mounted behind
+  // every other tab now, so a new closure here re-rendered all of it on each
+  // toast, sheet and keystroke anywhere in the app.
+  const homeShortcuts = useMemo(() => quickShortcuts.slice(0, 4), [quickShortcuts]);
+  const addFromShortcut = useCallback((shortcut: QuickShortcut) => openAddTab("manual", shortcut), [openAddTab]);
+  const openAddTabDefault = useCallback(() => openAddTab(), [openAddTab]);
+  const openGoalSheet = useCallback(() => setGoalSheetOpen(true), []);
+  const openRecurringTab = useCallback(() => setTab("recurring"), []);
+  const openBudgetsTab = useCallback(() => setTab("budgets"), []);
+  const openCardDebts = useCallback(() => { setSelectedDebtor(null); setTab("debtors"); }, []);
+  const removeGoalHandler = useStableHandler(removeGoal);
+  const logRecurringNowHandler = useStableHandler(logRecurringNow);
   const goalSheetDismiss = useDismiss(goalSheetOpen, () => setGoalSheetOpen(false));
   const recapDismiss = useDismiss(recapOpen, () => setRecapOpen(false));
   const logoutDismiss = useDismiss<[boolean]>(logoutOpen, (confirmed) => { setLogoutOpen(false); if (confirmed) void supabase?.auth.signOut(); });
@@ -2944,13 +2960,13 @@ export default function Home() {
                   payableTotal={payableTotal}
                 />
               )}
-              <QuickAddStrip shortcuts={quickShortcuts.slice(0, 4)} onSelect={(shortcut) => openAddTab("manual", shortcut)} onMore={() => openAddTab()} />
-              {!!goals.length && <GoalCard goals={goals} onAdd={() => setGoalSheetOpen(true)} onDelete={removeGoal} />}
+              <QuickAddStrip shortcuts={homeShortcuts} onSelect={addFromShortcut} onMore={openAddTabDefault} />
+              {!!goals.length && <GoalCard goals={goals} onAdd={openGoalSheet} onDelete={removeGoalHandler} />}
               {(dueSoonRecurring.length > 0 || budgetGlance.totalBudget > 0) && (
                 <div className="home-focus-grid">
-                  {dueSoonRecurring.length > 0 && <DueSoonCard items={dueSoonRecurring} onManage={() => setTab("recurring")} onLogNow={logRecurringNow} />}
-                  {unpaidCards.length > 0 && <UnpaidCardsCard items={unpaidCards} onManage={() => { setSelectedDebtor(null); setTab("debtors"); }} />}
-                  {budgetGlance.totalBudget > 0 && <BudgetGlanceCard budgetGlance={budgetGlance} onManage={() => setTab("budgets")} />}
+                  {dueSoonRecurring.length > 0 && <DueSoonCard items={dueSoonRecurring} onManage={openRecurringTab} onLogNow={logRecurringNowHandler} />}
+                  {unpaidCards.length > 0 && <UnpaidCardsCard items={unpaidCards} onManage={openCardDebts} />}
+                  {budgetGlance.totalBudget > 0 && <BudgetGlanceCard budgetGlance={budgetGlance} onManage={openBudgetsTab} />}
                 </div>
               )}
               {hasEnoughForInsights && (
@@ -3152,8 +3168,9 @@ export default function Home() {
           />
         )}
 
-        {tab === "wallets" && (
+        {walletsKept && (
           <WalletsView
+            parked={tab !== "wallets"}
             wallets={displayWallets}
             entries={entries}
             loading={dataLoading}

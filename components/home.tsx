@@ -227,7 +227,7 @@ export const HomeInsightGrid = memo(function HomeInsightGrid({
  * about to leave, while this is money the bank may already have taken while
  * the app still shows it in the wallet.
  */
-export function UnpaidCardsCard({ items, onManage }: { items: UnpaidOwnDebt[]; onManage: () => void }) {
+export const UnpaidCardsCard = memo(function UnpaidCardsCard({ items, onManage }: { items: UnpaidOwnDebt[]; onManage: () => void }) {
   return (
     <section className="home-focus-card unpaid-cards-card">
       <div className="home-focus-head">
@@ -251,9 +251,9 @@ export function UnpaidCardsCard({ items, onManage }: { items: UnpaidOwnDebt[]; o
       </div>
     </section>
   );
-}
+});
 
-export function DueSoonCard({
+export const DueSoonCard = memo(function DueSoonCard({
   items,
   onManage,
   onLogNow,
@@ -299,9 +299,9 @@ export function DueSoonCard({
       )}
     </section>
   );
-}
+});
 
-export function BudgetGlanceCard({
+export const BudgetGlanceCard = memo(function BudgetGlanceCard({
   budgetGlance,
   onManage,
 }: {
@@ -339,7 +339,7 @@ export function BudgetGlanceCard({
       )}
     </section>
   );
-}
+});
 
 export function goalProgress(goal: MoneyGoal): number {
   return Math.min(100, Math.max(0, (goal.saved / goal.target) * 100));
@@ -391,7 +391,7 @@ export function GoalsView({
   );
 }
 
-export function GoalCard({ goals, onAdd, onDelete }: { goals: MoneyGoal[]; onAdd: () => void; onDelete: (goal: MoneyGoal) => void }) {
+export const GoalCard = memo(function GoalCard({ goals, onAdd, onDelete }: { goals: MoneyGoal[]; onAdd: () => void; onDelete: (goal: MoneyGoal) => void }) {
   return (
     <section className="goal-card">
       <div className="goal-card-head"><div><p className="eyebrow">เป้าหมายการเงิน</p><h2>{goals.length} เป้าหมาย</h2></div><button className="text-button" onClick={onAdd}>เพิ่มเป้าหมาย</button></div>
@@ -402,7 +402,7 @@ export function GoalCard({ goals, onAdd, onDelete }: { goals: MoneyGoal[]; onAdd
       </div>
     </section>
   );
-}
+});
 
 export function GoalEditSheet({ onClose, onCreate, closing }: { onClose: () => void; onCreate: (input: Omit<MoneyGoal, "id">) => void; closing?: boolean }) {
   const [name, setName] = useState("");
@@ -548,7 +548,7 @@ export const SpendingPersonalityCard = memo(function SpendingPersonalityCard({
  * that could do anything. This sits directly under the hero, and the steps
  * tick themselves off (buildSetupChecklist) rather than being dismissed.
  */
-export function HomeStartChecklist({
+export const HomeStartChecklist = memo(function HomeStartChecklist({
   steps,
   remaining,
   waitingForInsights,
@@ -596,7 +596,7 @@ export function HomeStartChecklist({
       )}
     </section>
   );
-}
+});
 
 /**
  * The one thing that makes the app look broken rather than empty: entries
@@ -606,7 +606,7 @@ export function HomeStartChecklist({
  * fixes it retroactively -- the ledger already falls back to the default
  * wallet for a null wallet_id -- so this says exactly that.
  */
-export function MissingWalletNotice({ entryCount, onCreateWallet }: { entryCount: number; onCreateWallet: () => void }) {
+export const MissingWalletNotice = memo(function MissingWalletNotice({ entryCount, onCreateWallet }: { entryCount: number; onCreateWallet: () => void }) {
   return (
     <section className="missing-wallet-notice">
       <div>
@@ -616,7 +616,7 @@ export function MissingWalletNotice({ entryCount, onCreateWallet }: { entryCount
       <button onClick={onCreateWallet}>สร้างกระเป๋า</button>
     </section>
   );
-}
+});
 
 export function SuccessPulse({ count, onAddMore, closing }: { count: number; onAddMore: () => void; closing?: boolean }) {
   return (

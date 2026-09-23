@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft } from "lucide-react";
 import { formatDateTime, formatMoney, formatShortDate, formatSignedMoney, localDateInput, moneySign, toFiniteNumber, toMoneyAmount, normalizeIntervalCount } from "@/lib/format";
 import { nextBillingInfo } from "@/lib/cycle";
@@ -20,10 +20,13 @@ export function WalletsView({
   onEdit,
   onDelete,
   onReconcile,
+  parked = false,
 }: {
   wallets: WalletDisplay[];
   entries: Entry[];
   loading: boolean;
+  /** Kept mounted behind another tab (see .is-parked in globals.css). */
+  parked?: boolean;
   onBack: () => void;
   onAdd: () => void;
   onEdit: (wallet: Wallet) => void;
@@ -37,7 +40,18 @@ export function WalletsView({
   const spendable = wallets.filter((wallet) => wallet.tag === "cash").reduce((sum, wallet) => sum + wallet.display_balance, 0);
   const setAside = total - spendable;
   const [openWalletId, setOpenWalletId] = useState<string | null>(null);
+  // Leaving the tab used to unmount this and so close whatever statement was
+  // open; parked, it would still be open on the way back. Closed here instead,
+  // during render, so the list is what the user comes back to.
+  if (parked && openWalletId) setOpenWalletId(null);
   const statementRef = useRef<HTMLElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  // Same for a wallet's kebab menu: a <details> keeps its own open state in
+  // the DOM, which a parked screen no longer throws away.
+  useEffect(() => {
+    if (!parked) return;
+    rootRef.current?.querySelectorAll("details[open]").forEach((menu) => menu.removeAttribute("open"));
+  }, [parked]);
   const entriesByWallet = useMemo(() => {
     const map = new Map<string, Entry[]>();
     for (const entry of entries) {
@@ -53,7 +67,7 @@ export function WalletsView({
   const selectedWalletEntries = selectedWallet ? (entriesByWallet.get(selectedWallet.id) ?? []).slice(0, 8) : [];
 
   return (
-    <div className="view debtor-view">
+    <div ref={rootRef} className={`view debtor-view wallets-view${parked ? " is-parked" : ""}`} inert={parked}>
       {loading && <SkeletonList rows={3} />}
       <div className="add-title">
         <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>

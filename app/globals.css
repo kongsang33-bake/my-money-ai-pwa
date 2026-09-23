@@ -598,8 +598,8 @@ a:focus-visible {
   animation: view-in var(--t-3) var(--e-out) backwards;
 }
 
-/* A tab kept mounted while another one is showing (Home, and History once
-   visited -- see the comment on .home-view in app/page.tsx). content-visibility: hidden rather than
+/* A tab kept mounted while another one is showing (Home, and History and
+   Wallets once visited -- see the comment on .home-view in app/page.tsx). content-visibility: hidden rather than
    display: none is the whole point: display: none throws the subtree's layout
    away and showing it again lays every line out from scratch, where a
    content-visibility-hidden subtree keeps its layout and comes back in a

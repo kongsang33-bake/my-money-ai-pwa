@@ -358,6 +358,24 @@ export function useDismiss<A extends unknown[] = []>(active: boolean, onExited: 
 }
 
 /**
+ * A function whose identity never changes but which always runs the latest
+ * version of `fn`. For handing an ordinary function declared in the page
+ * component (which is a new function every render, closing over that
+ * render's state) to a memo()'d child without defeating the memo, and
+ * without having to list every piece of state it reads as a useCallback
+ * dependency -- a list that is easy to get wrong in a way no one notices
+ * until a stale value writes the wrong money. Only for event handlers: the
+ * function it returns must not be called during render.
+ */
+export function useStableHandler<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
+  const latest = useRef(fn);
+  useLayoutEffect(() => {
+    latest.current = fn;
+  });
+  return useCallback((...args: A) => latest.current(...args), []);
+}
+
+/**
  * Every sheet/dialog should close on Escape. SheetFrame calls this for
  * every sheet it wraps; the few overlays with their own backdrop
  * (side menu, confirm dialogs) call it directly instead of duplicating
