@@ -4,6 +4,11 @@
 const CACHE_VERSION = "v1";
 const CACHE_NAME = `nubtang-${CACHE_VERSION}`;
 const SHELL_URL = "/";
+// How long a launch waits on the network for the page before it opens the
+// cached copy instead. Long enough that a normal connection always wins (so
+// a fresh deploy is picked up straight away), short enough that a bad one
+// is not what the user spends their first seconds looking at.
+const NAVIGATE_TIMEOUT_MS = 1500;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -35,14 +40,29 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) return;
 
   if (request.mode === "navigate") {
+    // Network first, but not network at any cost. On a slow mobile
+    // connection, waiting for the page itself kept the app on its splash for
+    // as long as the network cared to take, even with a perfectly good copy
+    // in the cache. Past NAVIGATE_TIMEOUT_MS the cached shell is served and
+    // the fetch carries on in the background to refresh it, so the next
+    // launch picks up whatever this one could not wait for. A navigation with
+    // nothing cached yet still waits for the network, since there is no
+    // alternative to offer.
+    const network = fetch(request).then((response) => {
+      if (response.ok) {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(SHELL_URL, copy));
+      }
+      return response;
+    });
+    event.waitUntil(network.catch(() => undefined));
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(SHELL_URL, copy));
-          return response;
-        })
-        .catch(() => caches.match(SHELL_URL).then((cached) => cached ?? Response.error())),
+      caches.match(SHELL_URL).then((cached) => {
+        const fallback = () => cached ?? Response.error();
+        if (!cached) return network.catch(fallback);
+        const timeout = new Promise((resolve) => setTimeout(() => resolve(cached), NAVIGATE_TIMEOUT_MS));
+        return Promise.race([network.catch(fallback), timeout]);
+      }),
     );
     return;
   }

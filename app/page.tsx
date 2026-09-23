@@ -70,6 +70,7 @@ import { buildAiExamples, buildCategoryMemory } from "@/lib/ai-memory";
 import { nameColor } from "@/lib/category";
 import { createPinSalt, defaultLockDelay, hashPin, isLockDelayKey, isSixDigitPin, lockDelayMs, pinBlocked, pinMaxAttempts, recordFailedPinAttempt, registerFaceId, timingSafeEqual, verifyFaceId, type LockDelayKey } from "@/lib/pin";
 import { authHeaders } from "@/lib/api";
+import { isConnectionFailure, isDuplicateRowError, rowIdsForSave, type SaveAttempt } from "@/lib/save";
 import {
   AI_CONTEXT_MAX_LENGTH,
   ENTRY_PAGE_MAX_REQUESTS,
@@ -88,6 +89,7 @@ import {
   PROFILE_COLUMNS,
   RECURRING_EXPENSE_COLUMNS,
   SEARCH_RESULT_LIMIT,
+  SAVE_TIMEOUT_MS,
   SPLASH_MIN_VISIBLE_MS,
   TABLES,
   THEME_STORAGE_KEY,
@@ -298,6 +300,11 @@ export default function Home() {
   // it in the same pass instead of one render late.
   const [historyKept, setHistoryKept] = useState(false);
   if (tab === "history" && !historyKept) setHistoryKept(true);
+  // A save in flight, apart from `busy` (which AI analysis also holds), so
+  // the save button can say "saving" without claiming it during analysis.
+  const [saving, setSaving] = useState(false);
+  const [saveFailure, setSaveFailure] = useState<{ title: string; detail: string } | null>(null);
+  const saveAttemptRef = useRef<SaveAttempt | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [debtors, setDebtors] = useState<Debtor[]>([]);
@@ -1512,29 +1519,69 @@ export default function Home() {
     // entry. The toast's "ย้อนคืน" is the way back instead, the same as
     // deleting or logging a recurring bill.
     setBusy(true);
+    setSaving(true);
     setError("");
+    setSaveFailure(null);
     const normalizedItems = items
       .flatMap((item) => expandDraftForSave(item, wallets, debtors))
       .map((item) => normalizeEntry(item));
 
-    const payload = normalizedItems.map((normalized) => ({
+    // Ids chosen here, and the same ones again if this batch is retried --
+    // see lib/save.ts for why that is what makes "try again" safe.
+    const attempt = rowIdsForSave(saveAttemptRef.current, JSON.stringify(items), normalizedItems.length);
+    saveAttemptRef.current = attempt;
+    const payload = normalizedItems.map((normalized, index) => ({
+      id: attempt.ids[index],
       user_id: user.id,
       ...buildTransactionCore(normalized, wallets),
       source_text: normalized.source_text,
       transfer_group_id: normalized.transfer_group_id,
     }));
 
-    const { data, error } = await supabase
+    const inserted = await supabase
       .from(TABLES.transactions)
       .insert(payload)
-      .select(TRANSACTION_COLUMNS);
+      .select(TRANSACTION_COLUMNS)
+      .abortSignal(AbortSignal.timeout(SAVE_TIMEOUT_MS));
+    let { data, status } = inserted;
+    let error: { message: string; code?: string } | null = inserted.error;
+
+    // An earlier try of this same batch did land; only its reply was lost.
+    // Read back what is there rather than calling the save a failure.
+    if (isDuplicateRowError(error)) {
+      const existing = await supabase
+        .from(TABLES.transactions)
+        .select(TRANSACTION_COLUMNS)
+        .in("id", attempt.ids)
+        .abortSignal(AbortSignal.timeout(SAVE_TIMEOUT_MS));
+      ({ data, status } = existing);
+      error = existing.error;
+      if (!error && (data ?? []).length !== attempt.ids.length) {
+        error = { message: "บันทึกไปได้ไม่ครบ ลองรีเฟรชแล้วตรวจประวัติอีกครั้ง" };
+      }
+    }
 
     if (error) {
-      setError(error.message);
+      // Nothing about this may read as saved: the drafts stay exactly where
+      // they are, the failure sits next to the save button rather than in
+      // the composer at the top of the screen, and a dropped connection is
+      // named as one instead of shown as a raw fetch error.
+      const failure = isConnectionFailure(error, navigator.onLine, status)
+        ? { title: "ยังไม่ได้บันทึก", detail: "การเชื่อมต่อขาดระหว่างส่ง รายการยังอยู่ครบ กดลองอีกครั้งได้เลย ไม่บันทึกซ้ำ" }
+        : { title: "บันทึกไม่สำเร็จ", detail: error.message };
+      if (addMode === "manual") setError(`${failure.title} · ${failure.detail}`);
+      else setSaveFailure(failure);
+      notify({
+        tone: "error",
+        title: failure.title,
+        detail: failure.detail,
+        action: { label: "ลองอีกครั้ง", onClick: () => { void saveEntries(items); } },
+      });
     } else {
+      saveAttemptRef.current = null;
       await createMissingDebtors(normalizedItems);
-      const inserted = (data ?? []).map(mapTransactionRow);
-      setEntries((current) => withEntries(current, inserted));
+      const saved = (data ?? []).map(mapTransactionRow);
+      setEntries((current) => withEntries(current, saved));
       setDrafts([]);
       setReceiptTotal(0);
       setComposerInitialText("");
@@ -1545,10 +1592,11 @@ export default function Home() {
         tone: "success",
         title: "บันทึกรายการแล้ว",
         detail: describeDraftSave(items),
-        action: { label: "ย้อนคืน", onClick: () => { void undoSavedEntries(inserted); } },
+        action: { label: "ย้อนคืน", onClick: () => { void undoSavedEntries(saved); } },
       });
     }
 
+    setSaving(false);
     setBusy(false);
   }
 
@@ -3006,12 +3054,15 @@ export default function Home() {
                     {!!unbalancedSplits.length && (
                       <p className="pin-hint">มีรายการที่ยอดรายคนรวมกันไม่เท่ากับยอดบิล — แก้ให้ตรงกันก่อนบันทึก</p>
                     )}
+                    {saveFailure && <StateCard tone="error" title={saveFailure.title} detail={saveFailure.detail} />}
                     <button
                       className="save"
                       onClick={() => saveEntries(drafts)}
                       disabled={busy || !isOnline || !!unfinishedTransfers.length || !!unbalancedSplits.length}
                     >
-                      บันทึก {drafts.length} รายการ
+                      {saving
+                        ? <span className="button-loading-row"><span className="loading-spinner mini on-ink" />กำลังบันทึก...</span>
+                        : saveFailure ? "ลองบันทึกอีกครั้ง" : `บันทึก ${drafts.length} รายการ`}
                     </button>
                     <p className="privacy">AI ช่วยอ่านและแยกข้อมูล แต่สูตรคำนวณกระเป๋า/ลูกหนี้ยังล็อกอยู่ในแอพ</p>
                   </section>

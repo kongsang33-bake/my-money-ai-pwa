@@ -223,3 +223,11 @@ export const INSIGHT_MIN_ENTRIES = 3;
 // (~5 lines). The textarea auto-grows in JS off scrollHeight, so the ceiling
 // has to be a number that side can read, not just a CSS max-height.
 export const ASK_COMPOSER_MAX_HEIGHT = 132;
+
+// How long a save may wait on the server before the app stops waiting and
+// tells the user it has not been saved. Without a limit a request on a dying
+// mobile connection can hang for minutes with the button just spinning. Safe
+// to give up on because a retry of the same batch reuses its row ids (see
+// lib/save.ts), so a save that did land after all is recognised rather than
+// written twice.
+export const SAVE_TIMEOUT_MS = 15_000;
