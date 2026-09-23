@@ -417,6 +417,9 @@ button {
   padding: 0;
   text-align: inherit;
   -webkit-tap-highlight-color: transparent;
+  /* No double-tap-to-zoom on a control: without this a browser may hold a
+     single tap back while it waits to see whether a second one follows. */
+  touch-action: manipulation;
   transition: transform var(--t-press) var(--e-out), background var(--t-2) var(--e-out), color var(--t-2) var(--e-out), border-color var(--t-2) var(--e-out), box-shadow var(--t-2) var(--e-out), opacity var(--t-2) var(--e-out);
 }
 
@@ -593,6 +596,26 @@ a:focus-visible {
      the element back to the normal cascade once done (same visual result
      here, since there's no other transform on .view). */
   animation: view-in var(--t-3) var(--e-out) backwards;
+}
+
+/* A tab kept mounted while another one is showing (Home, and History once
+   visited -- see the comment on .home-view in app/page.tsx). content-visibility: hidden rather than
+   display: none is the whole point: display: none throws the subtree's layout
+   away and showing it again lays every line out from scratch, where a
+   content-visibility-hidden subtree keeps its layout and comes back in a
+   couple of milliseconds. Taken out of flow at zero height so it adds
+   nothing to the scroll height of the tab in front of it, and its entrance
+   animation is dropped so that removing the class replays view-in, the
+   same arrival every other tab makes. */
+.phone > .view.is-parked {
+  content-visibility: hidden;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 0;
+  overflow: hidden;
+  animation: none;
 }
 
 /* The total, and the one thing worth saying about it: how much of it is
@@ -868,15 +891,15 @@ a:focus-visible {
     color: var(--hero-text);
   }
 
-  .phone.tab-home .view {
+  .phone .view.home-view {
     padding-top: 0;
   }
 
-  .phone.tab-home .wallet-grid.single-wallet {
+  .phone .home-view .wallet-grid.single-wallet {
     margin: 0 calc(-1 * var(--s-5)) var(--s-4);
   }
 
-  .phone.tab-home .wallet-grid.single-wallet .hero-wallet {
+  .phone .home-view .wallet-grid.single-wallet .hero-wallet {
     border-radius: 0 0 var(--r-2xl) var(--r-2xl);
   }
 }
@@ -4827,17 +4850,18 @@ button.entry-main {
   align-items: center;
   gap: var(--s-3);
   margin: var(--s-2) 0;
-  animation: card-in var(--t-4) var(--e-out) backwards;
+  animation: card-in var(--t-3) var(--e-out) backwards;
 }
 
-.budget-row:nth-child(1) { animation-delay: 150ms; }
-.budget-row:nth-child(2) { animation-delay: 195ms; }
-.budget-row:nth-child(3) { animation-delay: 240ms; }
-.budget-row:nth-child(4) { animation-delay: 285ms; }
-.budget-row:nth-child(5) { animation-delay: 330ms; }
-.budget-row:nth-child(6) { animation-delay: 375ms; }
-.budget-row:nth-child(7) { animation-delay: 420ms; }
-.budget-row:nth-child(8) { animation-delay: 465ms; }
+/* The same short ladder as the main card stagger (see "Stagger step" under
+   Motion): this one used to open with a 150ms pause and step 45ms per row,
+   so the eighth budget field was still arriving half a second after the
+   sheet opened -- long enough to tap the wrong one. */
+.budget-row:nth-child(1) { animation-delay: 0ms; }
+.budget-row:nth-child(2) { animation-delay: var(--t-stagger); }
+.budget-row:nth-child(3) { animation-delay: calc(var(--t-stagger) * 2); }
+.budget-row:nth-child(4) { animation-delay: calc(var(--t-stagger) * 3); }
+.budget-row:nth-child(n+5) { animation-delay: calc(var(--t-stagger) * 4); }
 
 /* Same specificity story as the row itself: `.edit-sheet label input` (0,1,2)
    was beating a bare `.budget-row input` (0,1,1), so the field stretched to
@@ -4861,13 +4885,13 @@ button.entry-main {
   padding: var(--s-3);
   display: grid;
   gap: 4px;
-  animation: card-in var(--t-4) var(--e-out) backwards;
+  animation: card-in var(--t-3) var(--e-out) backwards;
 }
 
-.report-summary-tiles > div:nth-child(1) { animation-delay: 150ms; }
-.report-summary-tiles > div:nth-child(2) { animation-delay: 210ms; }
-.report-summary-tiles > div:nth-child(3) { animation-delay: 270ms; }
-.report-summary-tiles > div:nth-child(4) { animation-delay: 330ms; }
+.report-summary-tiles > div:nth-child(1) { animation-delay: 0ms; }
+.report-summary-tiles > div:nth-child(2) { animation-delay: var(--t-stagger); }
+.report-summary-tiles > div:nth-child(3) { animation-delay: calc(var(--t-stagger) * 2); }
+.report-summary-tiles > div:nth-child(4) { animation-delay: calc(var(--t-stagger) * 3); }
 
 .report-summary-tiles span {
   font-size: var(--fs-micro);
@@ -6239,32 +6263,32 @@ button.entry-main {
     width: 100%;
   }
 
-  .phone.tab-home .view {
+  .phone .view.home-view {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--s-4);
     align-items: start;
   }
 
-  .phone.tab-home .wallet-grid.single-wallet,
-  .phone.tab-home .home-insight-wrap,
-  .phone.tab-home .wallet-grid:not(.single-wallet),
-  .phone.tab-home .start-checklist,
-  .phone.tab-home .missing-wallet-notice,
-  .phone.tab-home .error-actions,
-  .phone.tab-home .state-card,
-  .phone.tab-home .activity-timeline {
+  .phone .home-view .wallet-grid.single-wallet,
+  .phone .home-view .home-insight-wrap,
+  .phone .home-view .wallet-grid:not(.single-wallet),
+  .phone .home-view .start-checklist,
+  .phone .home-view .missing-wallet-notice,
+  .phone .home-view .error-actions,
+  .phone .home-view .state-card,
+  .phone .home-view .activity-timeline {
     grid-column: 1 / -1;
   }
 
-  .phone.tab-home .home-focus-grid {
+  .phone .home-view .home-focus-grid {
     grid-template-columns: 1fr;
   }
 
-  .phone.tab-home .quick-add-strip,
-  .phone.tab-home .goal-card,
-  .phone.tab-home .cashflow-trend-card,
-  .phone.tab-home .spending-personality-card {
+  .phone .home-view .quick-add-strip,
+  .phone .home-view .goal-card,
+  .phone .home-view .cashflow-trend-card,
+  .phone .home-view .spending-personality-card {
     grid-column: auto;
   }
 
@@ -6357,11 +6381,11 @@ button.entry-main {
 }
 
 @media (min-width: 900px) and (max-width: 1040px) {
-  .phone.tab-home .view, .history-view {
+  .phone .view.home-view, .history-view {
     grid-template-columns: 1fr;
   }
 
-  .phone.tab-home .home-focus-grid,
+  .phone .home-view .home-focus-grid,
   .history-view > .entry-list,
   .history-view > .add-title {
     grid-column: 1;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { ChevronDown, Search, SlidersHorizontal, Users, X } from "lucide-react";
 import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
 import { formatMoney, formatPercent, moneySign } from "@/lib/format";
@@ -11,7 +11,7 @@ import type { Entry, HistoryFilters } from "@/lib/types";
 import { CategoryIcon } from "@/components/shared";
 import { EmptyNote, Metric, MonthField } from "@/components/primitives";
 
-export function HistoryInsight({ entries }: { entries: Entry[] }) {
+export const HistoryInsight = memo(function HistoryInsight({ entries }: { entries: Entry[] }) {
   const { count, income, outflow, top } = summarizeDayEntries(entries);
 
   return (
@@ -30,7 +30,7 @@ export function HistoryInsight({ entries }: { entries: Entry[] }) {
       </div>
     </section>
   );
-}
+});
 
 export function HistoryFilterBar({
   filters,
@@ -150,7 +150,7 @@ export function HistoryFilterBar({
   );
 }
 
-export function MonthlyTrendChart({ trend }: { trend: { key: string; label: string; income: number; outflow: number; netWorth: number }[] }) {
+export const MonthlyTrendChart = memo(function MonthlyTrendChart({ trend }: { trend: { key: string; label: string; income: number; outflow: number; netWorth: number }[] }) {
   const max = Math.max(...trend.flatMap((item) => [item.income, item.outflow]), 1);
   const netWorthValues = trend.map((item) => item.netWorth);
   const netWorthMin = Math.min(...netWorthValues, 0);
@@ -196,9 +196,9 @@ export function MonthlyTrendChart({ trend }: { trend: { key: string; label: stri
       </div>
     </details>
   );
-}
+});
 
-export function IncomeBreakdown({ items }: { items: { category: string; amount: number }[] }) {
+export const IncomeBreakdown = memo(function IncomeBreakdown({ items }: { items: { category: string; amount: number }[] }) {
   if (!items.length) return null;
   const total = items.reduce((sum, item) => sum + item.amount, 0);
   return (
@@ -221,7 +221,7 @@ export function IncomeBreakdown({ items }: { items: { category: string; amount: 
       </div>
     </details>
   );
-}
+});
 
 export function MonthSummary({
   selectedMonth,

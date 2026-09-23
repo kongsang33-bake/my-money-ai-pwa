@@ -112,7 +112,7 @@ export function HeatmapLegend({ total, activeDays }: { total: number; activeDays
   );
 }
 
-export function HeroWalletCard({
+export const HeroWalletCard = memo(function HeroWalletCard({
   balance,
   insight,
   streak,
@@ -148,9 +148,9 @@ export function HeroWalletCard({
       </div>
     </div>
   );
-}
+});
 
-export function HomeInsightGrid({
+export const HomeInsightGrid = memo(function HomeInsightGrid({
   netWorth,
   netWorthDelta,
   netWorthFormula,
@@ -219,7 +219,7 @@ export function HomeInsightGrid({
       )}
     </section>
   );
-}
+});
 
 /**
  * The cards and instalments with nothing paid against them this cycle. Its
@@ -435,7 +435,7 @@ export function GoalEditSheet({ onClose, onCreate, closing }: { onClose: () => v
   );
 }
 
-export function CashFlowTrendCard({ summary }: { summary: CashFlowSummary }) {
+export const CashFlowTrendCard = memo(function CashFlowTrendCard({ summary }: { summary: CashFlowSummary }) {
   const { days, spend, income, avgDaily, baselineDaily, deltaPercent, tone } = summary;
   const isEmpty = !spend && !income;
   // Both series scale to the largest DAY OF SPENDING, so the plot reads as one
@@ -491,9 +491,9 @@ export function CashFlowTrendCard({ summary }: { summary: CashFlowSummary }) {
       )}
     </section>
   );
-}
+});
 
-export function SpendingPersonalityCard({
+export const SpendingPersonalityCard = memo(function SpendingPersonalityCard({
   topCategory,
   trend,
   monthlyOutflow,
@@ -535,7 +535,7 @@ export function SpendingPersonalityCard({
       )}
     </section>
   );
-}
+});
 
 /**
  * What a new account sees where a seasoned one sees its numbers: the four

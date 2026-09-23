@@ -1075,7 +1075,7 @@ export function describeDraftSave(drafts: Draft[]): string {
   // card, so the count the user agreed to and the count that lands in their
   // history would otherwise disagree.
   const split = rows > drafts.length ? ` (แยกเป็น ${rows} แถว)` : "";
-  return `กำลังจะบันทึก ${drafts.length} รายการ${split} รวม ${moneySign}${formatMoney(draftSaveTotal(drafts))}`;
+  return `${drafts.length} รายการ${split} รวม ${moneySign}${formatMoney(draftSaveTotal(drafts))}`;
 }
 
 export type ReceiptMismatch = { parsedTotal: number; receiptTotal: number; detail: string };

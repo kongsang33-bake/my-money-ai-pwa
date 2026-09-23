@@ -39,8 +39,10 @@ test.describe("reconcile", () => {
     await expect(card).toContainText("บัตรเครดิต");
 
     await card.locator("button", { hasText: "ดูหนี้" }).click();
-    await expect(app.locator(".view")).toContainText("จัดการหนี้");
-    await app.locator(".view button", { hasText: "หนี้ของฉัน" }).click();
+    // Home is still mounted behind this screen, parked, so ".view" alone
+    // would match both.
+    await expect(app.locator(".view:not(.is-parked)")).toContainText("จัดการหนี้");
+    await app.locator(".view:not(.is-parked) button", { hasText: "หนี้ของฉัน" }).click();
     await expect(app.locator(".debtor-page-list")).toContainText("บัตรเครดิต");
   });
 });

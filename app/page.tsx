@@ -291,6 +291,13 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(!supabase);
   const [tab, setTab] = useState<Tab>("home");
+  // History is parked like Home (see .home-view below) once it has been
+  // opened, not before: most sessions never visit it, and they should not
+  // pay for building it behind Home at boot. Set during render, the React
+  // way of deriving state from a previous render, so the first visit mounts
+  // it in the same pass instead of one render late.
+  const [historyKept, setHistoryKept] = useState(false);
+  if (tab === "history" && !historyKept) setHistoryKept(true);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [debtors, setDebtors] = useState<Debtor[]>([]);
@@ -1500,14 +1507,10 @@ export default function Home() {
   async function saveEntries(items: Draft[]) {
     if (!supabase || !user || !items.length) return;
 
-    const confirmed = await requestConfirm({
-      title: "ยืนยันการบันทึก",
-      detail: describeDraftSave(items),
-      confirmLabel: "บันทึกเลย",
-      tone: "default",
-    });
-    if (!confirmed) return;
-
+    // No confirm prompt: the drafts were already reviewed card by card on the
+    // Add screen, so a second "are you sure" was one more tap on every single
+    // entry. The toast's "ย้อนคืน" is the way back instead, the same as
+    // deleting or logging a recurring bill.
     setBusy(true);
     setError("");
     const normalizedItems = items
@@ -1538,7 +1541,12 @@ export default function Home() {
       setComposerResetKey((key) => key + 1);
       setTab("home");
       setSavePulse(normalizedItems.length);
-      notify({ tone: "success", title: "บันทึกรายการแล้ว", detail: `${normalizedItems.length} รายการถูกซิงค์เรียบร้อย` });
+      notify({
+        tone: "success",
+        title: "บันทึกรายการแล้ว",
+        detail: describeDraftSave(items),
+        action: { label: "ย้อนคืน", onClick: () => { void undoSavedEntries(inserted); } },
+      });
     }
 
     setBusy(false);
@@ -1663,7 +1671,7 @@ export default function Home() {
 
   // Mirrors updateEntry's plain-edit path in reverse, writing the pre-edit
   // field values straight back with no confirm prompt -- tapping "ย้อนคืน"
-  // on the just-shown toast IS the confirmation, same as undoLoggedRecurring.
+  // on the just-shown toast IS the confirmation, same as undoSavedEntries.
   // Only the plain-edit path offers this; convertingToTransfer creates a new
   // row via a different shape and is out of scope here.
   async function revertEntryEdit(original: Entry) {
@@ -1740,10 +1748,11 @@ export default function Home() {
     setBusy(false);
   }, [entries, requestConfirm, notify, restoreEntries]);
 
-  // Undo for one-tap recurring logging skips deleteEntry's confirm prompt on
-  // purpose -- tapping "ย้อนคืน" right after the toast appears IS the
-  // confirmation, the same way restoreEntries has no prompt of its own.
-  const undoLoggedRecurring = useCallback(async (logged: Entry[]) => {
+  // Undo for a save (from Add, one-tap recurring logging, a reconciliation)
+  // skips deleteEntry's confirm prompt on purpose -- tapping "ย้อนคืน" right
+  // after the toast appears IS the confirmation, the same way restoreEntries
+  // has no prompt of its own.
+  const undoSavedEntries = useCallback(async (logged: Entry[]) => {
     if (!supabase || !logged.length) return;
     // A bill charged to a card was written as two linked rows, and they only
     // balance as a pair -- taking back one would leave the card owing money
@@ -1793,7 +1802,7 @@ export default function Home() {
         tone: "success",
         title: "บันทึกรายจ่ายประจำแล้ว",
         detail: `${item.name} ${moneySign}${formatMoney(item.amount)}${item.funding_card_name?.trim() ? ` · ${item.funding_card_name.trim()}` : ""}`,
-        action: { label: "ย้อนคืน", onClick: () => { void undoLoggedRecurring(inserted); } },
+        action: { label: "ย้อนคืน", onClick: () => { void undoSavedEntries(inserted); } },
       });
     }
     setBusy(false);
@@ -1827,7 +1836,7 @@ export default function Home() {
       tone: "success",
       title: "ปรับยอดแล้ว",
       detail: `${wallet.name} ${moneySign}${formatMoney(toMoneyAmount(realBalance))}`,
-      action: { label: "ย้อนคืน", onClick: () => { void undoLoggedRecurring([inserted]); } },
+      action: { label: "ย้อนคืน", onClick: () => { void undoSavedEntries([inserted]); } },
     });
     return true;
   }
@@ -2841,81 +2850,89 @@ export default function Home() {
 
         {!isOnline && <StateCard tone="error" title="ออฟไลน์อยู่" detail="ข้อมูลอาจไม่อัปเดต และบันทึก/วิเคราะห์รายการใหม่ไม่ได้จนกว่าจะกลับมาออนไลน์" />}
 
-        {tab === "home" && (
-          <div className="view">
-            {dataLoading && <SkeletonDashboard />}
-            {savePulseDismiss.mounted && <SuccessPulse count={savePulse} onAddMore={openAddTab} closing={savePulseDismiss.closing} />}
-            {!dataLoading && (
-              <>
-                <section className="wallet-grid single-wallet">
-                  <HeroWalletCard balance={mainWallet} insight={walletInsight} streak={streak} />
-                </section>
-                {!wallets.length && !!entries.length && (
-                  <MissingWalletNotice entryCount={entries.length} onCreateWallet={openWalletCreateSheet} />
-                )}
-                {showStartChecklist && (
-                  <HomeStartChecklist
-                    steps={setupChecklist.steps}
-                    remaining={setupChecklist.remaining}
-                    waitingForInsights={!hasEnoughForInsights}
-                    onStep={goToSetupStep}
-                    onHide={hideStartChecklist}
-                  />
-                )}
-                {/* Every card below reads as analysis, and analysis of two
-                    entries is a row of confident zeros -- which is what an
-                    empty account used to open on. Held back until there is
-                    something to analyse; the checklist above says so. */}
-                {hasEnoughForInsights && (
-                  <HomeInsightGrid
-                    netWorth={netWorth}
-                    netWorthDelta={netWorthDelta}
-                    netWorthFormula={netWorthDisplay.formula}
-                    hideNetWorthCard={netWorthDisplay.hideCard}
-                    savingsRate={savingsRate}
-                    monthlyIncome={monthlyIncome}
-                    monthlyObligationTotal={monthlyObligationTotal}
-                    payableTotal={payableTotal}
-                  />
-                )}
-                <QuickAddStrip shortcuts={quickShortcuts.slice(0, 4)} onSelect={(shortcut) => openAddTab("manual", shortcut)} onMore={() => openAddTab()} />
-                {!!goals.length && <GoalCard goals={goals} onAdd={() => setGoalSheetOpen(true)} onDelete={removeGoal} />}
-                {(dueSoonRecurring.length > 0 || budgetGlance.totalBudget > 0) && (
-                  <div className="home-focus-grid">
-                    {dueSoonRecurring.length > 0 && <DueSoonCard items={dueSoonRecurring} onManage={() => setTab("recurring")} onLogNow={logRecurringNow} />}
-                    {unpaidCards.length > 0 && <UnpaidCardsCard items={unpaidCards} onManage={() => { setSelectedDebtor(null); setTab("debtors"); }} />}
-                    {budgetGlance.totalBudget > 0 && <BudgetGlanceCard budgetGlance={budgetGlance} onManage={() => setTab("budgets")} />}
-                  </div>
-                )}
-                {hasEnoughForInsights && (
-                  <>
-                    <CashFlowTrendCard summary={cashFlowSummary} />
-                    <SpendingPersonalityCard topCategory={discretionaryTopCategory} trend={discretionaryCategoryTrend} monthlyOutflow={monthlyOutflow} hasBillsOnly={!discretionaryTopCategory && monthlyOutflow > 0} />
-                  </>
-                )}
-              </>
-            )}
+        {/* Home stays mounted while another tab is showing, parked rather
+            than unmounted. It is where every back button lands, so it is the
+            screen rebuilt most often, and rebuilding it -- every card, and
+            laying out every line of Thai text again -- was the slowest thing
+            a tap did (~150ms on a mid-range phone). Parked, the browser keeps
+            its layout (content-visibility: hidden, see .is-parked), so coming
+            back costs a couple of milliseconds instead of a fresh mount.
+            Its layout rules key off .home-view, not .phone.tab-home, for
+            the same reason: the tab class changes while it is parked, and a
+            rule that stopped matching would throw that layout away. */}
+        <div className={`view home-view${tab === "home" ? "" : " is-parked"}`} inert={tab !== "home"}>
+          {dataLoading && <SkeletonDashboard />}
+          {savePulseDismiss.mounted && <SuccessPulse count={savePulse} onAddMore={openAddTab} closing={savePulseDismiss.closing} />}
+          {!dataLoading && (
+            <>
+              <section className="wallet-grid single-wallet">
+                <HeroWalletCard balance={mainWallet} insight={walletInsight} streak={streak} />
+              </section>
+              {!wallets.length && !!entries.length && (
+                <MissingWalletNotice entryCount={entries.length} onCreateWallet={openWalletCreateSheet} />
+              )}
+              {showStartChecklist && (
+                <HomeStartChecklist
+                  steps={setupChecklist.steps}
+                  remaining={setupChecklist.remaining}
+                  waitingForInsights={!hasEnoughForInsights}
+                  onStep={goToSetupStep}
+                  onHide={hideStartChecklist}
+                />
+              )}
+              {/* Every card below reads as analysis, and analysis of two
+                  entries is a row of confident zeros -- which is what an
+                  empty account used to open on. Held back until there is
+                  something to analyse; the checklist above says so. */}
+              {hasEnoughForInsights && (
+                <HomeInsightGrid
+                  netWorth={netWorth}
+                  netWorthDelta={netWorthDelta}
+                  netWorthFormula={netWorthDisplay.formula}
+                  hideNetWorthCard={netWorthDisplay.hideCard}
+                  savingsRate={savingsRate}
+                  monthlyIncome={monthlyIncome}
+                  monthlyObligationTotal={monthlyObligationTotal}
+                  payableTotal={payableTotal}
+                />
+              )}
+              <QuickAddStrip shortcuts={quickShortcuts.slice(0, 4)} onSelect={(shortcut) => openAddTab("manual", shortcut)} onMore={() => openAddTab()} />
+              {!!goals.length && <GoalCard goals={goals} onAdd={() => setGoalSheetOpen(true)} onDelete={removeGoal} />}
+              {(dueSoonRecurring.length > 0 || budgetGlance.totalBudget > 0) && (
+                <div className="home-focus-grid">
+                  {dueSoonRecurring.length > 0 && <DueSoonCard items={dueSoonRecurring} onManage={() => setTab("recurring")} onLogNow={logRecurringNow} />}
+                  {unpaidCards.length > 0 && <UnpaidCardsCard items={unpaidCards} onManage={() => { setSelectedDebtor(null); setTab("debtors"); }} />}
+                  {budgetGlance.totalBudget > 0 && <BudgetGlanceCard budgetGlance={budgetGlance} onManage={() => setTab("budgets")} />}
+                </div>
+              )}
+              {hasEnoughForInsights && (
+                <>
+                  <CashFlowTrendCard summary={cashFlowSummary} />
+                  <SpendingPersonalityCard topCategory={discretionaryTopCategory} trend={discretionaryCategoryTrend} monthlyOutflow={monthlyOutflow} hasBillsOnly={!discretionaryTopCategory && monthlyOutflow > 0} />
+                </>
+              )}
+            </>
+          )}
 
-            {!dataLoading && !!secondaryWallets.length && (
-              <div className="wallet-carousel">
-                {secondaryWallets.map((wallet) => (
-                  <button className={`wallet-carousel-card ${secondaryWalletTags.find((entry) => entry.tag === wallet.tag)?.className ?? ""}`} key={wallet.id} onClick={() => setTab("wallets")}>
-                    <i className="debtor-avatar sm" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>
-                      <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} size={16} />
-                    </i>
-                    <span>{wallet.name}</span>
-                    <strong><CountUpMoney value={wallet.display_balance} /></strong>
-                  </button>
-                ))}
-              </div>
-            )}
+          {!dataLoading && !!secondaryWallets.length && (
+            <div className="wallet-carousel">
+              {secondaryWallets.map((wallet) => (
+                <button className={`wallet-carousel-card ${secondaryWalletTags.find((entry) => entry.tag === wallet.tag)?.className ?? ""}`} key={wallet.id} onClick={() => setTab("wallets")}>
+                  <i className="debtor-avatar sm" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>
+                    <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} size={16} />
+                  </i>
+                  <span>{wallet.name}</span>
+                  <strong><CountUpMoney value={wallet.display_balance} /></strong>
+                </button>
+              ))}
+            </div>
+          )}
 
-            {!dataLoading && <RecentActivityTimeline entries={entries} onEdit={openEditSheet} />}
+          {!dataLoading && <RecentActivityTimeline entries={entries} onEdit={openEditSheet} />}
 
-            {error && <ErrorActions onRetry={retrySync} onDismiss={() => setError("")} />}
-            {error && <StateCard tone="error" title="มีบางอย่างไม่สำเร็จ" detail={error} />}
-          </div>
-        )}
+          {error && <ErrorActions onRetry={retrySync} onDismiss={() => setError("")} />}
+          {error && <StateCard tone="error" title="มีบางอย่างไม่สำเร็จ" detail={error} />}
+        </div>
 
         {tab === "add" && (
           <div className="view add-view">
@@ -3017,8 +3034,8 @@ export default function Home() {
           </div>
         )}
 
-        {tab === "history" && (
-          <div className="view history-view">
+        {historyKept && (
+          <div className={`view history-view${tab === "history" ? "" : " is-parked"}`} inert={tab !== "history"}>
             {dataLoading && <SkeletonList rows={5} />}
             <div className="add-title">
               <button onClick={() => setTab("home")} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>

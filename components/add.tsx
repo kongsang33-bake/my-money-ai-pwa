@@ -624,7 +624,7 @@ export const EntryList = memo(function EntryList({
   );
 });
 
-export function RecentActivityTimeline({ entries, onEdit }: { entries: Entry[]; onEdit: (entry: Entry) => void }) {
+export const RecentActivityTimeline = memo(function RecentActivityTimeline({ entries, onEdit }: { entries: Entry[]; onEdit: (entry: Entry) => void }) {
   const recent = entries.slice(0, 4);
   if (!recent.length) return null;
 
@@ -647,7 +647,7 @@ export function RecentActivityTimeline({ entries, onEdit }: { entries: Entry[]; 
       </div>
     </section>
   );
-}
+});
 
 export function QuickAddStrip({
   shortcuts,

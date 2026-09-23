@@ -10,20 +10,29 @@ import type { ConfirmDialogState, EmptyAction, Toast } from "@/lib/types";
 // components/home.tsx (its main caller, HeroWalletCard) specifically to
 // avoid a circular import: Metric below (also in this file) renders it too,
 // and home.tsx already imports several primitives from this file.
+//
+// It counts only when the figure changes while you are looking at it (a
+// save, an undo, a price update). Arriving on a screen shows the number as
+// it is: this used to count up from 0 on every mount, and since tabs unmount
+// when you leave them, every return to Home replayed a 420ms count on the
+// hero, each wallet card and the cash-flow card at once -- a React render
+// and a text relayout per frame per figure, which was most of what made
+// switching tabs feel slow on a phone.
 export const CountUpMoney = memo(function CountUpMoney({ value }: { value: number }) {
-  const [shown, setShown] = useState(0);
-  const fromRef = useRef(0);
+  const [shown, setShown] = useState(value);
+  const fromRef = useRef(value);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const from = fromRef.current;
+    const to = value;
+    if (from === to) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       const id = window.requestAnimationFrame(() => {
-        setShown(value);
-        fromRef.current = value;
+        setShown(to);
+        fromRef.current = to;
       });
       return () => window.cancelAnimationFrame(id);
     }
-    const from = fromRef.current;
-    const to = value;
     const duration = 420;
     let startTime: number | null = null;
     let frameId: number;
@@ -31,12 +40,12 @@ export const CountUpMoney = memo(function CountUpMoney({ value }: { value: numbe
       if (startTime === null) startTime = timestamp;
       const progress = Math.min(1, (timestamp - startTime) / duration);
       const eased = 1 - Math.pow(1 - progress, 3);
-      setShown(from + (to - from) * eased);
-      if (progress < 1) {
-        frameId = window.requestAnimationFrame(tick);
-      } else {
-        fromRef.current = to;
-      }
+      const next = progress < 1 ? from + (to - from) * eased : to;
+      // Kept current every frame, so a value that moves again mid-count
+      // carries on from where the number on screen actually is.
+      fromRef.current = next;
+      setShown(next);
+      if (progress < 1) frameId = window.requestAnimationFrame(tick);
     };
     frameId = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(frameId);

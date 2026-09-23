@@ -887,7 +887,7 @@ describe("draftSaveTotal / describeDraftSave", () => {
 
   it("leaves transfers out of the total", () => {
     // Moving 5,000 between your own wallets is not 5,000 of spending, and the
-    // confirmation is the number the user is agreeing to.
+    // saved toast is the number the user reads back.
     const drafts = [
       makeDraft({ amount: 100, transaction_type: "personal_expense" }),
       makeDraft({ amount: 5000, transaction_type: "transfer", wallet_id: "cash", transfer_to_wallet_id: "savings" }),
@@ -900,7 +900,7 @@ describe("draftSaveTotal / describeDraftSave", () => {
     assert.equal(draftSaveTotal([makeDraft({ amount: 45000, transaction_type: "income" })]), 45000);
   });
 
-  it("names the count and the total in the confirmation", () => {
+  it("names the count and the total in the saved toast", () => {
     const detail = describeDraftSave([makeDraft({ amount: 100 }), makeDraft({ amount: 250 })]);
     assert.ok(detail.includes("2 รายการ"), detail);
     assert.ok(detail.includes("350"), detail);
