@@ -4537,20 +4537,6 @@ button.entry-main {
   animation: sheet-in var(--t-3) var(--e-out) both;
 }
 
-/* A sheet opened from one specific control (the "อื่น ๆ" nav button) grows out
-   of that control instead of sliding up from the screen edge: the clip circle
-   expands from the button's own spot while the sheet scales up to full size.
-   --origin-x/--origin-y are written onto the element by SheetFrame's
-   useSheetOrigin from the tapped control's rect; the fallbacks below keep the
-   rule sane if it is ever used without one. */
-.edit-sheet.sheet-from-origin {
-  --origin-x: 50%;
-  --origin-y: 100%;
-  --origin-r: 150%;
-  transform-origin: var(--origin-x) var(--origin-y);
-  animation: sheet-origin-in var(--t-4) var(--e-in-out) both;
-}
-
 .sheet-backdrop > .edit-sheet::before {
   content: "";
   display: block;
@@ -6040,42 +6026,6 @@ button.entry-main {
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes sheet-origin-in {
-  from {
-    opacity: 0;
-    transform: scale(0.72);
-    clip-path: circle(26px at var(--origin-x) var(--origin-y));
-  }
-  35% { opacity: 1; }
-  to {
-    opacity: 1;
-    transform: scale(1);
-    clip-path: circle(var(--origin-r) at var(--origin-x) var(--origin-y));
-  }
-}
-
-@keyframes sheet-origin-out {
-  from {
-    opacity: 1;
-    transform: scale(1);
-    clip-path: circle(var(--origin-r) at var(--origin-x) var(--origin-y));
-  }
-  /* Holds full opacity most of the way down so the sheet is seen collapsing
-     into the button rather than just fading on the spot. */
-  60% { opacity: 0.92; }
-  to {
-    opacity: 0;
-    transform: scale(0.72);
-    clip-path: circle(26px at var(--origin-x) var(--origin-y));
-  }
-}
-
-@keyframes scrim-out-late {
-  from { opacity: 1; }
-  55% { opacity: 0.9; }
-  to { opacity: 0; }
-}
-
 
 @keyframes pop-in {
   from { opacity: 0; transform: scale(0.94) translateY(6px); }
@@ -6125,21 +6075,6 @@ button.entry-main {
 
 .edit-sheet.closing, .recap-card.closing {
   animation: sheet-out var(--t-3) var(--e-out) both;
-}
-
-/* Collapses back into the control it grew from -- shorter than the opening
-   run so the tap that closes it feels immediate, and inside useDismiss's
-   unmount delay. */
-.edit-sheet.sheet-from-origin.closing {
-  animation: sheet-origin-out var(--t-3) var(--e-in-out) both;
-}
-
-/* The scrim is the sheet's parent, so its own fade multiplies onto the sheet:
-   on the standard 160ms fade-out the collapse above is already down to ~15%
-   opacity a third of the way through, which is why it read as the sheet just
-   vanishing. Match the sheet's run and hold the scrim up for most of it. */
-.sheet-backdrop.from-origin.closing {
-  animation: scrim-out-late var(--t-3) var(--e-in-out) both;
 }
 
 
