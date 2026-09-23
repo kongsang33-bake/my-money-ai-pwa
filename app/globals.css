@@ -1022,6 +1022,22 @@ a:focus-visible {
   pointer-events: none;
 }
 
+/* The same tuck while the on-screen keyboard is up. The keyboard pushes the
+   visible page up, so a nav pinned to the bottom of the page ends up sitting
+   on top of the keyboard, between it and what is being typed -- the thing a
+   native app never does. Keyed off focus in a field that opens a keyboard
+   (not a date, month or select, which open a picker), and only on touch
+   screens: at a desk there is no keyboard to make room for, and the nav
+   should stay put while you type. Same transition as the sheet tuck, so it
+   slides away and back rather than blinking. */
+@media (hover: none) and (pointer: coarse) {
+  .phone:has(:is(textarea, input:not([type="date"], [type="month"], [type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="button"], [type="submit"])):focus) .bottom-nav {
+    --nav-shift: calc(100% + var(--s-5));
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
 .bottom-nav button {
   height: 100%;
   display: flex;
@@ -2552,6 +2568,27 @@ a:focus-visible {
   flex-direction: column;
   height: var(--screen-fill);
   padding-bottom: var(--s-3);
+}
+
+/* With the nav tucked away for the keyboard (see .bottom-nav), the chat
+   takes the room it leaves: the page grows by exactly the clearance .phone
+   stops reserving, so the two still add up to the screen and nothing
+   scrolls. The height eases in step with the nav's own slide, so the
+   composer glides down into the space instead of jumping. Phone widths only
+   -- the wide layout reserves its nav room differently and has no keyboard
+   to make room for. */
+@media (hover: none) and (pointer: coarse) and (max-width: 899px) {
+  .ask-ai-page {
+    transition: height var(--t-3) var(--e-out);
+  }
+
+  .phone.tab-ask:has(.ask-ai-input:focus) {
+    padding-bottom: 0;
+  }
+
+  .phone.tab-ask:has(.ask-ai-input:focus) .ask-ai-page {
+    height: calc(var(--screen-fill) + var(--nav-clearance));
+  }
 }
 
 .ask-ai-thread {
