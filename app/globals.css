@@ -1008,7 +1008,7 @@ a:focus-visible {
    it used to blink out and snap back on the frame the overlay's state
    flipped. Keying off the live backdrops rather than that state also brings
    it back the moment one is marked .closing, so it has slid back into place
-   underneath the more sheet by the time that finishes collapsing onto it. */
+   by the time the sheet finishes closing. */
 .phone:has(.sheet-backdrop:not(.closing), .dialog-backdrop:not(.closing)) .bottom-nav {
   --nav-shift: calc(100% + var(--s-5));
   opacity: 0;
@@ -1083,7 +1083,7 @@ a:focus-visible {
   left: calc(var(--nav-edge) + 3 * var(--nav-tab-col) + var(--nav-add-col));
 }
 
-/* No tab is selected on the screens reached from the side menu. */
+/* No tab is selected on the account screens reached from the topbar. */
 .bottom-nav .nav-indicator[data-visible="false"] {
   opacity: 0;
 }
@@ -5014,7 +5014,7 @@ button.entry-main {
 }
 
 /* -------------------------------------------------------------------------
-   More sheet (feature launcher)
+   More screen (feature launcher)
    ------------------------------------------------------------------------- */
 .more-grid {
   display: grid;
@@ -5034,16 +5034,14 @@ button.entry-main {
   animation: card-in var(--t-3) var(--e-out) backwards;
 }
 
-/* Tuned to land inside the sheet's own expand-from-the-button run (--t-4):
-   the tiles catch up row by row as the container finishes opening, rather
-   than trickling in well after it has settled. */
-.more-grid button:nth-child(1) { animation-delay: 90ms; }
-.more-grid button:nth-child(2) { animation-delay: 130ms; }
-.more-grid button:nth-child(3) { animation-delay: 170ms; }
-.more-grid button:nth-child(4) { animation-delay: 210ms; }
-.more-grid button:nth-child(5) { animation-delay: 250ms; }
-.more-grid button:nth-child(6) { animation-delay: 290ms; }
-.more-grid button:nth-child(7) { animation-delay: 330ms; }
+/* The same short ladder as every other screen's cards (see "Stagger step"
+   under Motion). The old delays were tuned to a sheet expanding from the nav
+   button, which this no longer is. */
+.more-grid button:nth-child(1) { animation-delay: 0ms; }
+.more-grid button:nth-child(2) { animation-delay: var(--t-stagger); }
+.more-grid button:nth-child(3) { animation-delay: calc(var(--t-stagger) * 2); }
+.more-grid button:nth-child(4) { animation-delay: calc(var(--t-stagger) * 3); }
+.more-grid button:nth-child(n+5) { animation-delay: calc(var(--t-stagger) * 4); }
 
 .more-grid button:hover {
   background: var(--surface-3);

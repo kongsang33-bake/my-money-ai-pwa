@@ -25,9 +25,9 @@ export function BottomNav({
   inert: boolean;
   onSelect: (key: "home" | "history" | "wallets") => void;
   onAdd: () => void;
-  onMore: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onMore: () => void;
 }) {
-  // The screens reached from the side menu select no tab. The pill fades out
+  // The account screens (reached from the topbar) select no tab. The pill fades out
   // where it stands rather than sliding somewhere arbitrary, so the last
   // selected tab has to outlive `active` going null -- adjusted during render
   // (React re-runs the component before painting) rather than in an effect,

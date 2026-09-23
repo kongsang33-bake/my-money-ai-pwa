@@ -6,6 +6,7 @@ import type { User } from "@supabase/supabase-js";
 import {
   ArrowUp,
   Check,
+  ChevronLeft,
   ChevronRight,
   Copy,
   Download,
@@ -28,8 +29,7 @@ import { buildReportCsv, downloadCsv } from "@/lib/csv";
 import { compressProfileImage } from "@/lib/image";
 import { nameInitial } from "@/lib/category";
 import type { AiChatMessage, AiFinanceContext, Entry, NetWorthDisplaySettings, Profile, ReportPeriod, Wallet } from "@/lib/types";
-import { MonthField, PageFrame, SheetFrame, StateCard, useEscapeToClose, useFocusTrap } from "@/components/primitives";
-import type { SheetOrigin } from "@/components/primitives";
+import { MonthField, PageFrame, StateCard, useEscapeToClose, useFocusTrap } from "@/components/primitives";
 
 export function cleanAiAnswer(value: string) {
   const withoutCodeMarkers = value
@@ -342,9 +342,13 @@ export function ReportSummaryTiles({ income, outflow, balance, count }: { income
  * tile also says what it is for in a line, because "จัดการหนี้" with a number
  * under it tells someone who has never used the app nothing about when they
  * would tap it.
+ *
+ * A screen, not a sheet: it was one, and a wrong tap on "อื่น ๆ" then had to
+ * be undone by reaching for a close button in the top corner, where every
+ * other tab in the nav is undone by tapping the next one.
  */
-export function MoreSheet({
-  onClose,
+export function MoreView({
+  onBack,
   onOpenDebtors,
   onOpenRecurring,
   onOpenGoals,
@@ -357,10 +361,8 @@ export function MoreSheet({
   recurringTotal,
   portfolioTotal,
   budgetTotal,
-  closing,
-  originPoint,
 }: {
-  onClose: () => void;
+  onBack: () => void;
   onOpenDebtors: () => void;
   onOpenRecurring: () => void;
   onOpenGoals: () => void;
@@ -373,18 +375,16 @@ export function MoreSheet({
   recurringTotal: number;
   portfolioTotal: number;
   budgetTotal: number;
-  closing?: boolean;
-  originPoint?: SheetOrigin | null;
 }) {
   const debtNet = receivableTotal - payableTotal;
   return (
-    <SheetFrame onClose={onClose} className="edit-sheet more-sheet" closing={closing} originPoint={originPoint}>
-      <div className="sheet-head">
+    <div className="view more-view">
+      <div className="add-title">
+        <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
         <div>
           <p className="eyebrow">เพิ่มเติม</p>
           <h2>ฟีเจอร์ทั้งหมด</h2>
         </div>
-        <button onClick={onClose} aria-label="ปิด">×</button>
       </div>
       <div className="more-grid">
         <button onClick={onOpenDebtors}>
@@ -430,7 +430,7 @@ export function MoreSheet({
           <small>ดาวน์โหลดเป็นไฟล์ CSV เปิดใน Excel ได้</small>
         </button>
       </div>
-    </SheetFrame>
+    </div>
   );
 }
 

@@ -99,8 +99,7 @@ import {
 import { ChevronLeft, Moon, Sun } from "lucide-react";
 import { WalletAvatarGlyph } from "@/components/shared";
 import { BottomNav } from "@/components/bottom-nav";
-import { captureSheetOrigin, ConfirmDialog, CountUpMoney, ElapsedSeconds, ErrorActions, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useStableHandler } from "@/components/primitives";
-import type { SheetOrigin } from "@/components/primitives";
+import { ConfirmDialog, CountUpMoney, ElapsedSeconds, ErrorActions, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useStableHandler } from "@/components/primitives";
 import { AiComposer, DraftImpact, DraftRow, EditSheet, EntryList, ManualEntryForm, QuickAddStrip, RecentActivityTimeline } from "@/components/add";
 import {
   BudgetGlanceCard,
@@ -138,7 +137,7 @@ import dynamic from "next/dynamic";
 // practice the skeleton is only ever seen on a cold, slow connection.
 const AskFinanceView = dynamic(() => import("@/components/sheets").then((m) => m.AskFinanceView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const ConfirmLogout = dynamic(() => import("@/components/sheets").then((m) => m.ConfirmLogout), { ssr: false });
-const MoreSheet = dynamic(() => import("@/components/sheets").then((m) => m.MoreSheet), { ssr: false });
+const MoreView = dynamic(() => import("@/components/sheets").then((m) => m.MoreView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const ProfileView = dynamic(() => import("@/components/sheets").then((m) => m.ProfileView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const ReportExportView = dynamic(() => import("@/components/sheets").then((m) => m.ReportExportView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 
@@ -170,7 +169,12 @@ const InvestmentAiSheet = dynamic(() => import("@/components/portfolio").then((m
 // its own, and gone the moment you tapped the scrim.
 type Tab =
   | "home" | "add" | "history" | "debtors" | "wallets" | "recurring" | "goals" | "portfolio"
-  | "budgets" | "ask" | "report" | "profile" | "security";
+  | "budgets" | "ask" | "report" | "profile" | "security" | "more";
+
+// The screens listed on "อื่น ๆ". While one is open the nav keeps "อื่น ๆ"
+// selected, because that is the section the user is in and the tab that
+// gets them back to the list.
+const MORE_SECTION_TABS: readonly Tab[] = ["debtors", "recurring", "goals", "portfolio", "budgets", "ask", "report"];
 
 const secondaryWalletTags: { tag: WalletTag; label: string; className: string }[] = [
   { tag: "savings", label: walletTagLabels.savings, className: "savings-wallet" },
@@ -304,6 +308,16 @@ export default function Home() {
   // reason and on the same terms.
   const [walletsKept, setWalletsKept] = useState(false);
   if (tab === "wallets" && !walletsKept) setWalletsKept(true);
+  // Where a screen under "อื่น ๆ" goes back to: the list, when that is where
+  // it was opened from, and Home when it was opened from one of Home's own
+  // cards (an unpaid card, a bill coming due). Tracked from the tab change
+  // itself, during render, so the screen already knows on its first frame.
+  const [lastTab, setLastTab] = useState<Tab>(tab);
+  const [moreSectionBack, setMoreSectionBack] = useState<Tab>("home");
+  if (tab !== lastTab) {
+    setLastTab(tab);
+    if (MORE_SECTION_TABS.includes(tab)) setMoreSectionBack(lastTab === "more" ? "more" : "home");
+  }
   // A save in flight, apart from `busy` (which AI analysis also holds), so
   // the save button can say "saving" without claiming it during analysis.
   const [saving, setSaving] = useState(false);
@@ -334,10 +348,8 @@ export default function Home() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [receiptTotal, setReceiptTotal] = useState(0);
   const [editing, setEditing] = useState<Entry | null>(null);
-  const [moreOpen, setMoreOpen] = useState(false);
   // Where the "อื่น ๆ" nav button sat when it was tapped, so the sheet can
   // expand out of it instead of just sliding up from the bottom edge.
-  const [moreOrigin, setMoreOrigin] = useState<SheetOrigin | null>(null);
   const [debtorSheetMode, setDebtorSheetMode] = useState<"create" | "edit" | null>(null);
   const [editingDebtor, setEditingDebtor] = useState<Debtor | null>(null);
   const [selectedDebtor, setSelectedDebtor] = useState<Debtor | null>(null);
@@ -893,7 +905,6 @@ export default function Home() {
   }, [ready]);
 
   const overlayOpen =
-    moreOpen ||
     !!editing ||
     !!debtorSheetMode ||
     !!walletSheetMode ||
@@ -2812,7 +2823,7 @@ export default function Home() {
   const investmentPriceDismiss = useDismiss(!!investmentPriceTarget, () => setInvestmentPriceTarget(null));
   const investmentConfirmDismiss = useDismiss(!!investmentConfirmTarget, () => setInvestmentConfirmTarget(null));
   const investmentAiDismiss = useDismiss(investmentAiSheetOpen, () => setInvestmentAiSheetOpen(false));
-  const moreDismiss = useDismiss(moreOpen, () => setMoreOpen(false));
+  const backFromMoreSection = useCallback(() => setTab(moreSectionBack), [moreSectionBack]);
   // Stable handlers for Home's memo()'d cards. Home stays mounted behind
   // every other tab now, so a new closure here re-rendered all of it on each
   // toast, sheet and keystroke anywhere in the app.
@@ -3159,7 +3170,7 @@ export default function Home() {
             activeKind={debtorKindTab}
             loading={dataLoading}
             onChangeActiveKind={setDebtorKindTab}
-            onBack={() => selectedDebtor ? setSelectedDebtor(null) : setTab("home")}
+            onBack={() => selectedDebtor ? setSelectedDebtor(null) : backFromMoreSection()}
             onAdd={openSheet(() => { setEditingDebtor(null); setDebtorSheetMode("create"); })}
             onSelect={(debtor) => setSelectedDebtor(debtor)}
             onEdit={openSheet((debtor: Debtor) => { setEditingDebtor(debtor); setDebtorSheetMode("edit"); })}
@@ -3187,7 +3198,7 @@ export default function Home() {
             items={recurringExpenses}
             wallets={wallets}
             loading={dataLoading}
-            onBack={() => setTab("home")}
+            onBack={backFromMoreSection}
             onAdd={openSheet(() => { setEditingRecurringExpense(null); setRecurringSheetMode("create"); })}
             onEdit={openSheet((item: RecurringExpense) => { setEditingRecurringExpense(item); setRecurringSheetMode("edit"); })}
             onDelete={deleteRecurringExpense}
@@ -3199,18 +3210,18 @@ export default function Home() {
           <GoalsView
             goals={goals}
             loading={dataLoading}
-            onBack={() => setTab("home")}
+            onBack={backFromMoreSection}
             onAdd={() => setGoalSheetOpen(true)}
             onDelete={removeGoal}
           />
         )}
 
         {tab === "budgets" && (
-          <BudgetsView budgets={budgets} onBack={() => setTab("home")} onSave={updateBudgets} />
+          <BudgetsView budgets={budgets} onBack={backFromMoreSection} onSave={updateBudgets} />
         )}
 
         {tab === "ask" && user && aiFinanceContext && (
-          <AskFinanceView context={aiFinanceContext} userId={user.id} aiContext={profile?.ai_context ?? ""} onBack={() => setTab("home")} />
+          <AskFinanceView context={aiFinanceContext} userId={user.id} aiContext={profile?.ai_context ?? ""} onBack={backFromMoreSection} />
         )}
 
         {tab === "report" && (
@@ -3221,7 +3232,7 @@ export default function Home() {
             payableSummary={payableSummary}
             selectedMonth={selectedMonth}
             monthStartDay={monthStartDay}
-            onBack={() => setTab("home")}
+            onBack={backFromMoreSection}
           />
         )}
 
@@ -3267,6 +3278,28 @@ export default function Home() {
           />
         )}
 
+        {/* A screen, like the tabs either side of it, not a sheet: a wrong
+            tap on "อื่น ๆ" is undone by tapping another tab, the way it is
+            everywhere else in the nav, rather than by reaching for a close
+            button in the far corner. */}
+        {tab === "more" && (
+          <MoreView
+            onBack={() => setTab("home")}
+            onOpenDebtors={() => { setSelectedDebtor(null); setTab("debtors"); }}
+            onOpenRecurring={() => setTab("recurring")}
+            onOpenGoals={() => setTab("goals")}
+            onOpenPortfolio={() => setTab("portfolio")}
+            onOpenBudgets={() => setTab("budgets")}
+            onOpenAsk={() => setTab("ask")}
+            onOpenReport={() => setTab("report")}
+            receivableTotal={receivableTotal}
+            payableTotal={payableTotal}
+            recurringTotal={recurringTotals(recurringExpenses).monthly}
+            portfolioTotal={portfolioTotalValue}
+            budgetTotal={Object.values(budgets).reduce((sum, amount) => sum + amount, 0)}
+          />
+        )}
+
         {tab === "portfolio" && (
           <PortfolioView
             holdings={portfolioHoldings}
@@ -3277,7 +3310,7 @@ export default function Home() {
             totalGainPercent={portfolioTotalGainPercent}
             pendingPurchases={pendingInvestmentPurchases}
             loading={dataLoading}
-            onBack={() => setTab("home")}
+            onBack={backFromMoreSection}
             onBuy={openSheet((target: Investment | null) => { setInvestmentBuyTarget(target); setInvestmentBuySheetOpen(true); })}
             onSell={openSheet((item: Investment) => setInvestmentSellTarget(item))}
             onUpdatePrice={openSheet((item: Investment) => setInvestmentPriceTarget(item))}
@@ -3396,25 +3429,6 @@ export default function Home() {
             closing={investmentAiDismiss.closing}
           />
         )}
-        {moreDismiss.mounted && (
-          <MoreSheet
-            onClose={moreDismiss.requestClose}
-            onOpenDebtors={() => { moreDismiss.requestClose(); setSelectedDebtor(null); setTab("debtors"); }}
-            onOpenRecurring={() => { moreDismiss.requestClose(); setTab("recurring"); }}
-            onOpenGoals={() => { moreDismiss.requestClose(); setTab("goals"); }}
-            onOpenPortfolio={() => { moreDismiss.requestClose(); setTab("portfolio"); }}
-            onOpenBudgets={() => { moreDismiss.requestClose(); setTab("budgets"); }}
-            onOpenAsk={() => { moreDismiss.requestClose(); setTab("ask"); }}
-            onOpenReport={() => { moreDismiss.requestClose(); setTab("report"); }}
-            receivableTotal={receivableTotal}
-            payableTotal={payableTotal}
-            recurringTotal={recurringTotals(recurringExpenses).monthly}
-            portfolioTotal={portfolioTotalValue}
-            budgetTotal={Object.values(budgets).reduce((sum, amount) => sum + amount, 0)}
-            closing={moreDismiss.closing}
-            originPoint={moreOrigin}
-          />
-        )}
         {goalSheetDismiss.mounted && (
           <GoalEditSheet onClose={goalSheetDismiss.requestClose} onCreate={createGoal} closing={goalSheetDismiss.closing} />
         )}
@@ -3443,11 +3457,11 @@ export default function Home() {
             `inert` is what keeps it out of reach of focus and screen readers
             meanwhile. */}
         <BottomNav
-          active={moreOpen ? "more" : tab === "home" || tab === "history" || tab === "wallets" ? tab : null}
+          active={tab === "more" || MORE_SECTION_TABS.includes(tab) ? "more" : tab === "home" || tab === "history" || tab === "wallets" ? tab : null}
           inert={overlayOpen}
           onSelect={setTab}
           onAdd={() => openAddTab()}
-          onMore={(event) => { setMoreOrigin(captureSheetOrigin(event.currentTarget)); setMoreOpen(true); }}
+          onMore={() => setTab("more")}
         />
       </section>
     </main>

@@ -62,7 +62,17 @@ test.describe("navigation", () => {
       return;
     }
     await navigate(app, "more");
-    await app.locator(".more-grid button", { hasText: label }).click();
+    const tile = app.locator(".more-grid button", { hasText: label });
+    // Now that this is a page rather than a sheet, the last tile can sit at
+    // the very end of .phone's scroll range. Playwright's click scrolls the
+    // target again on every attempt, and against .phone's
+    // scroll-behavior: smooth that re-starts a scroll each time, so the tile
+    // never reads as "stable" even though it is sitting still (measured: the
+    // same box for eight frames). Bring it into view and check it is there,
+    // then fire the tap itself.
+    await tile.evaluate((node) => node.scrollIntoView({ block: "center", behavior: "instant" }));
+    await expect(tile).toBeInViewport();
+    await tile.dispatchEvent("click");
   }
 
   for (const { label, heading, from } of MENU_SCREENS) {
@@ -77,10 +87,43 @@ test.describe("navigation", () => {
       expect(await app.evaluate(() => (document.querySelector(".phone") as HTMLElement).style.overflowY)).toBe("");
       await expect(app.locator(".bottom-nav")).not.toHaveAttribute("inert", /.*/);
 
-      await app.locator(".add-title > button:first-child").click();
-      await expect(app.locator(".hero-wallet-card, .wallet-grid")).toBeVisible();
+      // Back goes where the screen was opened from: the "อื่น ๆ" list for
+      // a money feature, Home for the account's own screens.
+      await app.locator(".view:not(.is-parked) .add-title > button:first-child").click();
+      if (from === "more") await expect(app.locator(".more-grid")).toBeVisible();
+      else await expect(app.locator(".hero-wallet-card, .wallet-grid").first()).toBeVisible();
     });
   }
+
+  // "อื่น ๆ" used to open a sheet over whatever tab was showing, so a wrong
+  // tap had to be undone with its close button up in the corner. It is a
+  // screen now, and leaving it is tapping another tab, like every other tab.
+  test("opens อื่น ๆ as a screen that another tab replaces", async ({ app }) => {
+    await navigate(app, "more");
+    await expect(app.locator(".more-view .add-title h2")).toHaveText("ฟีเจอร์ทั้งหมด");
+    await expect(app.locator(".sheet-backdrop")).toHaveCount(0);
+    await expect(app.locator(".bottom-nav")).not.toHaveAttribute("inert", /.*/);
+    await expect(app.locator(".bottom-nav > button").nth(4)).toHaveClass(/\bactive\b/);
+
+    await navigate(app, "history");
+    await expect(app.locator(".more-view")).toHaveCount(0);
+    await expect(app.locator(".bottom-nav > button").nth(1)).toHaveClass(/\bactive\b/);
+  });
+
+  test("keeps อื่น ๆ selected inside the screens it lists", async ({ app }) => {
+    await navigate(app, "more");
+    await app.locator(".more-grid button", { hasText: "รายจ่ายประจำ" }).click();
+    await expect(app.locator(".bottom-nav > button").nth(4)).toHaveClass(/\bactive\b/);
+  });
+
+  test("goes back to Home from a feature opened off a Home card", async ({ app }) => {
+    // The same screen opened from Home's own card belongs to Home's trail,
+    // not to a list the user never saw.
+    await app.locator(".home-view .due-soon-card button", { hasText: /^จัดการ$/ }).click();
+    await expect(app.locator(".add-title h2").first()).toBeVisible();
+    await app.locator(".view:not(.is-parked) .add-title > button:first-child").click();
+    await expect(app.locator(".phone > .view.home-view")).not.toHaveClass(/\bis-parked\b/);
+  });
 
   // The Ask-AI screen is a chat: composer pinned at the bottom, thread
   // scrolling above it, and the page itself not scrolling at all. Sending is
