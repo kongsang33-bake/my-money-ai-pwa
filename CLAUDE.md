@@ -51,8 +51,11 @@ items are is the rail's `size` prop (`.rail.is-*`), never the card's. The
 "สุขภาพการเงิน" stat tiles (`HomeInsightGrid`) are one quiet shape — colour
 lives in the figure and a thin `StatMeter` along the bottom, the same 3px bar
 the progress tiles carry, never in a full fill — and the "ภาพรวมเดือนนี้"
-cards share the rails' flat surface, the top-category one with its
-category's `.tile-art` across the top. The bottom nav is a full-width solid
+cards share the rails' flat surface: the 7-day pace, and `CyclePaceCard`
+(`buildCyclePace`) — this cycle so far against the last one over the *same
+number of days*, never against its whole total. It replaced a "top category"
+card that only repeated rank #1 of the categories rail; don't bring that
+back. The bottom nav is a full-width solid
 bar with a square emerald + level with the tabs below 900px, and floats as a
 bar on desktop. A tap on an entry (Home's "เพิ่งจด", a History row) opens
 **`EntryDetailSheet`** — the mock's title page: category art, type, name,
@@ -212,6 +215,10 @@ the product name -- leave them.
   it. Its ground (`--nav-bg`) is opaque on purpose: slightly translucent, a
   card scrolling underneath showed through as a stray box behind a tab. `.phone` also carries `scroll-padding-bottom: var(--nav-clearance)`,
   so focus and scroll-into-view stop above the nav rather than under it.
+  Under its tabs it leaves `--nav-lift`: the home indicator's inset, which
+  iOS only reports because layout.tsx sets `viewportFit: "cover"` (drop that
+  and the tabs sit flush on an iPhone's bottom edge again), never less
+  than `--s-3`.
 - **`.phone` is the real, edge-to-edge app root at every width — not a
   device mockup.** There is no rounded-card-with-drop-shadow "phone frame"
   centered on a differently-colored backdrop any more; that read as a

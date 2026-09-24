@@ -50,7 +50,7 @@ test.describe("first run", () => {
     // worth, no 7-day pace on an account with nothing in it.
     await expect(page.locator(".home-insight-card")).toHaveCount(0);
     await expect(page.locator(".cashflow-trend-card")).toHaveCount(0);
-    await expect(page.locator(".spending-personality-card")).toHaveCount(0);
+    await expect(page.locator(".cycle-pace-card")).toHaveCount(0);
 
     // The gate is not offered again once it has been waved off.
     await page.reload();

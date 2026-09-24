@@ -304,6 +304,70 @@ export function lastSevenDayCashFlow(entries: Entry[], anchorDate: Date): CashFl
   return { days, spend, income, avgDaily, baselineDaily, deltaPercent, tone };
 }
 
+export type CyclePace = {
+  /** Which day of the current cycle today is, 1-based. */
+  daysIn: number;
+  cycleDays: number;
+  /** Spent in the current cycle, from its first day through today. */
+  spentSoFar: number;
+  /** Spent in the previous cycle over its same first `daysIn` days. */
+  lastSamePoint: number;
+  /** The whole previous cycle, for scale. */
+  lastTotal: number;
+  deltaPercent: number;
+  tone: SpendPaceTone;
+};
+
+/**
+ * "Am I spending more or less than last month?" asked the only fair way: this
+ * cycle so far against the previous cycle over the same number of days, not
+ * against the previous cycle's whole total -- on the 10th, a month that ended
+ * at 30,000 says nothing about a 9,000 so far. Spending is what the 7-day card
+ * counts (wallet money out, of a type that counts as spending), so the two
+ * cards cannot disagree about what a baht spent is.
+ *
+ * `unknown` when the previous cycle has nothing in it (a new account), since
+ * "100% more than nothing" is not a finding.
+ */
+export function buildCyclePace(
+  entries: Entry[],
+  current: { start: Date; end: Date },
+  previous: { start: Date; end: Date },
+  now: Date,
+): CyclePace {
+  const cycleDays = Math.round((startOfDay(current.end) - startOfDay(current.start)) / MS_PER_DAY);
+  const daysIn = Math.min(cycleDays, Math.max(1, Math.round((startOfDay(now) - startOfDay(current.start)) / MS_PER_DAY) + 1));
+  // Calendar days, not a timestamp offset, so the cut-off is midnight even
+  // across a daylight-saving change.
+  const thisCutoff = new Date(current.start.getFullYear(), current.start.getMonth(), current.start.getDate() + daysIn);
+  const lastCutoffRaw = new Date(previous.start.getFullYear(), previous.start.getMonth(), previous.start.getDate() + daysIn);
+  const lastCutoff = lastCutoffRaw < previous.end ? lastCutoffRaw : previous.end;
+
+  let spentSoFar = 0;
+  let lastSamePoint = 0;
+  let lastTotal = 0;
+  for (const entry of entries) {
+    if (entry.wallet_impact >= 0 || !countsAsEarnedOrSpent(entry.transaction_type)) continue;
+    const at = new Date(entry.occurred_at);
+    const spend = Math.abs(entry.wallet_impact);
+    if (at >= current.start && at < thisCutoff) spentSoFar += spend;
+    else if (at >= previous.start && at < previous.end) {
+      lastTotal += spend;
+      if (at < lastCutoff) lastSamePoint += spend;
+    }
+  }
+
+  if (lastTotal <= 0 || lastSamePoint <= 0) {
+    return { daysIn, cycleDays, spentSoFar, lastSamePoint, lastTotal, deltaPercent: 0, tone: "unknown" };
+  }
+  const deltaPercent = Math.round(((spentSoFar - lastSamePoint) / lastSamePoint) * 100);
+  const tone: SpendPaceTone =
+    deltaPercent <= -SPEND_BASELINE_TOLERANCE_PERCENT ? "low"
+      : deltaPercent >= SPEND_BASELINE_TOLERANCE_PERCENT ? "high"
+        : "steady";
+  return { daysIn, cycleDays, spentSoFar, lastSamePoint, lastTotal, deltaPercent, tone };
+}
+
 /**
  * How much was spent on each calendar day, keyed the way the heatmap indexes
  * its cells (Date.toDateString()).

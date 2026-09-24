@@ -6,7 +6,7 @@ import { DETAIL_SIMILAR_LIMIT, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/l
 import { formatChatTime, formatDateTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, moneySign, toMoneyAmount } from "@/lib/format";
 import { entryDisplayImpact } from "@/lib/money";
 import { shiftMonthKey } from "@/lib/cycle";
-import { sameTitleSummary, similarEntries, spendingByDay, type CashFlowSummary, type SetupStep, type UnpaidOwnDebt } from "@/lib/insights";
+import { sameTitleSummary, similarEntries, spendingByDay, type CashFlowSummary, type CyclePace, type SetupStep, type UnpaidOwnDebt } from "@/lib/insights";
 import { transactionTypeLabels } from "@/lib/taxonomy";
 import { categoryColor, nameColor } from "@/lib/category";
 import type { Entry, MoneyGoal, NetWorthDebtFormula, RecurringExpense, Wallet } from "@/lib/types";
@@ -720,56 +720,49 @@ export const CashFlowTrendCard = memo(function CashFlowTrendCard({ summary }: { 
   );
 });
 
-export const SpendingPersonalityCard = memo(function SpendingPersonalityCard({
-  topCategory,
-  trend,
-  monthlyOutflow,
-  hasBillsOnly,
-}: {
-  topCategory: { category: string; amount: number } | null;
-  trend: { direction: "up" | "down" | "flat"; percent: number } | null;
-  monthlyOutflow: number;
-  hasBillsOnly: boolean;
-}) {
-  const hasSpend = !!topCategory && topCategory.amount > 0.005;
-  const percent = hasSpend && monthlyOutflow > 0 ? Math.round((topCategory!.amount / monthlyOutflow) * 100) : 0;
+/**
+ * This cycle so far against the last one over the same days (buildCyclePace):
+ * the month-sized version of the 7-day card beside it. It replaced a "top
+ * category" card that only repeated rank #1 of the categories rail above.
+ */
+export const CyclePaceCard = memo(function CyclePaceCard({ pace }: { pace: CyclePace }) {
+  const { daysIn, cycleDays, spentSoFar, lastSamePoint, lastTotal, deltaPercent, tone } = pace;
+  const scale = Math.max(lastTotal, spentSoFar, 1);
+  const width = (value: number) => `${Math.min(100, (value / scale) * 100)}%`;
 
-  // The category's own colour and icon as the card's art, the way the
-  // posters and tiles on the rails above it carry theirs -- this used to be a
-  // sentence in a box.
   return (
-    <section
-      className={`home-focus-card spending-personality-card${hasSpend ? " has-art" : ""}`}
-      style={hasSpend ? ({ "--hue": categoryColor(topCategory!.category) } as React.CSSProperties) : undefined}
-    >
-      {hasSpend ? (
+    <section className="home-focus-card cycle-pace-card">
+      <div className="home-focus-head">
+        <div>
+          <span>ใช้ไปแล้วรอบนี้ · วันที่ {daysIn} จาก {cycleDays}</span>
+          <strong><CountUpMoney value={spentSoFar} /></strong>
+        </div>
+      </div>
+      <p className="cashflow-pace">
+        <span className={`cashflow-verdict ${tone}`}>
+          {tone === "unknown" ? "ยังไม่มีรอบก่อนให้เทียบ"
+            : tone === "steady" ? "พอ ๆ กับรอบก่อนช่วงเดียวกัน"
+              : `${tone === "high" ? "มากกว่า" : "น้อยกว่า"}รอบก่อนช่วงเดียวกัน ${Math.abs(deltaPercent)}%`}
+        </span>
+      </p>
+      {tone !== "unknown" && (
         <>
-          <span className="tile-art" aria-hidden="true">
-            <span className="tile-glyph"><CategoryIcon category={topCategory!.category} size={40} /></span>
-          </span>
-          <div className="spending-body">
-            <span>จ่ายหนักสุดเดือนนี้ · ไม่รวมบิลประจำ</span>
-            <strong>{topCategory!.category}</strong>
-            <small>{moneySign}{formatMoney(topCategory!.amount)} · {percent}% ของรายจ่ายทั้งหมด</small>
-            {trend && trend.direction !== "flat" && (
-              <small className={`spending-trend ${trend.direction === "up" ? "expense" : "income"}`}>
-                {trend.direction === "up" ? "มากกว่า" : "น้อยกว่า"}ค่าเฉลี่ย 3 เดือนก่อน {trend.percent}%
-              </small>
-            )}
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="home-focus-head">
-            <div>
-              <span>จ่ายหนักสุดเดือนนี้</span>
-              <strong>ยังไม่มีข้อมูล</strong>
+          {/* Both bars on one scale -- the whole of last cycle -- so the gap
+              between them is the difference, and the track left over on the
+              last-cycle bar is what that cycle still went on to spend. */}
+          <div className="cycle-pace-bars">
+            <div className="cycle-pace-row now">
+              <small>รอบนี้</small>
+              <span className="cycle-pace-track"><i style={{ width: width(spentSoFar) }} /></span>
+              <b>{moneySign}{formatMoney(spentSoFar)}</b>
+            </div>
+            <div className="cycle-pace-row last">
+              <small>รอบก่อน</small>
+              <span className="cycle-pace-track"><i style={{ width: width(lastSamePoint) }} /></span>
+              <b>{moneySign}{formatMoney(lastSamePoint)}</b>
             </div>
           </div>
-          <div className="home-compact-empty">
-            <span aria-hidden="true">●</span>
-            <p>{hasBillsOnly ? "เดือนนี้มีแต่รายจ่ายประจำ ยังไม่มีรายจ่ายอื่นให้ดูเป็นนิสัย" : "เริ่มจดรายการเพื่อดูว่าคุณใช้จ่ายด้านไหนมากที่สุด"}</p>
-          </div>
+          <p className="cashflow-inflow">รอบก่อนทั้งรอบใช้ไป {moneySign}{formatMoney(lastTotal)}</p>
         </>
       )}
     </section>

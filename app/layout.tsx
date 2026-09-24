@@ -31,6 +31,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Lets the page run under the iPhone's home indicator so
+  // env(safe-area-inset-bottom) reports it -- without this it reads 0 and
+  // the bottom nav sat flush on the screen's edge (see --nav-lift).
+  viewportFit: "cover",
   themeColor: "#0a0b0c",
 };
 

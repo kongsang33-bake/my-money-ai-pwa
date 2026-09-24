@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildSetupChecklist, buildWalletInsight, lastSevenDayCashFlow, isRecurringLogged, buildUpcoming, describeDaysUntil, sameTitleSummary, similarEntries, spendingByDay, summarizeDayEntries, unpaidOwnDebts } from "./insights.ts";
+import { buildCyclePace, buildSetupChecklist, buildWalletInsight, lastSevenDayCashFlow, isRecurringLogged, buildUpcoming, describeDaysUntil, sameTitleSummary, similarEntries, spendingByDay, summarizeDayEntries, unpaidOwnDebts } from "./insights.ts";
 import type { Debtor, Entry, RecurringExpense } from "./types.ts";
 import type { TransactionType } from "./taxonomy.ts";
 import { MS_PER_DAY } from "./constants.ts";
@@ -396,5 +396,53 @@ describe("buildUpcoming", () => {
   it("does not list the cycle when the new one starts today", () => {
     const now = new Date(2026, 8, 25, 9, 0);
     assert.deepEqual(buildUpcoming({ ...base, recurring: [], cycleEnd: new Date(2026, 8, 25), now }), []);
+  });
+});
+
+describe("buildCyclePace", () => {
+  // A cycle starting on the 25th: Aug 25 - Sep 25, the one before Jul 25 - Aug 25.
+  const current = { start: new Date(2026, 7, 25), end: new Date(2026, 8, 25) };
+  const previous = { start: new Date(2026, 6, 25), end: new Date(2026, 7, 25) };
+  const at = (month: number, day: number, hour = 12) => new Date(2026, month, day, hour).toISOString();
+  const now = new Date(2026, 7, 29, 9); // day 5 of the cycle
+
+  it("compares this cycle so far with the same days of the last one, not its whole total", () => {
+    const pace = buildCyclePace([
+      makeEntry("a", 500, at(7, 25)),
+      makeEntry("b", 700, at(7, 29, 20)), // later today still counts
+      makeEntry("c", 1000, at(6, 26)),     // last cycle, day 2
+      makeEntry("d", 9000, at(7, 10)),     // last cycle, day 17 -- outside the same point
+    ], current, previous, now);
+    assert.equal(pace.daysIn, 5);
+    assert.equal(pace.cycleDays, 31);
+    assert.equal(pace.spentSoFar, 1200);
+    assert.equal(pace.lastSamePoint, 1000);
+    assert.equal(pace.lastTotal, 10000);
+    assert.equal(pace.deltaPercent, 20);
+    assert.equal(pace.tone, "high");
+  });
+
+  it("stops the same-point window at midnight after the matching day", () => {
+    const pace = buildCyclePace([makeEntry("x", 400, at(6, 29, 23)), makeEntry("y", 400, at(6, 30, 0))], current, previous, now);
+    assert.equal(pace.lastSamePoint, 400);
+    assert.equal(pace.lastTotal, 800);
+  });
+
+  it("leaves out money that was not spent: transfers and adjustments", () => {
+    const transfer = { ...makeEntry("t", 5000, at(7, 26)), transaction_type: "transfer" as const };
+    const adjust = { ...makeEntry("adj", 300, at(7, 26)), transaction_type: "balance_adjustment" as const };
+    const pace = buildCyclePace([transfer, adjust, makeEntry("real", 100, at(7, 26))], current, previous, now);
+    assert.equal(pace.spentSoFar, 100);
+  });
+
+  it("will not call it a trend when the last cycle has nothing to compare with", () => {
+    const pace = buildCyclePace([makeEntry("a", 500, at(7, 26))], current, previous, now);
+    assert.equal(pace.tone, "unknown");
+    assert.equal(pace.deltaPercent, 0);
+  });
+
+  it("calls a small difference steady", () => {
+    const pace = buildCyclePace([makeEntry("a", 1050, at(7, 26)), makeEntry("b", 1000, at(6, 26))], current, previous, now);
+    assert.equal(pace.tone, "steady");
   });
 });

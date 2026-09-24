@@ -66,7 +66,7 @@ import {
   unnamedDebtor,
   withEntries,
 } from "@/lib/money";
-import { buildSetupChecklist, buildUpcoming, buildWalletInsight, computeStreak, deriveQuickShortcuts, describeDaysUntil, isRecurringLogged, lastSevenDayCashFlow, unpaidOwnDebts, type SetupStep } from "@/lib/insights";
+import { buildCyclePace, buildSetupChecklist, buildUpcoming, buildWalletInsight, computeStreak, deriveQuickShortcuts, describeDaysUntil, isRecurringLogged, lastSevenDayCashFlow, unpaidOwnDebts, type SetupStep } from "@/lib/insights";
 import { buildAiExamples, buildCategoryMemory } from "@/lib/ai-memory";
 import { nameColor } from "@/lib/category";
 import { createPinSalt, defaultLockDelay, hashPin, isLockDelayKey, isSixDigitPin, lockDelayMs, pinBlocked, pinMaxAttempts, recordFailedPinAttempt, registerFaceId, timingSafeEqual, verifyFaceId, type LockDelayKey } from "@/lib/pin";
@@ -118,7 +118,7 @@ import {
   HomeInsightGrid,
   HomeStartChecklist,
   MissingWalletNotice,
-  SpendingPersonalityCard,
+  CyclePaceCard,
   SuccessPulse,
 } from "@/components/home";
 import { HistoryFilterBar, HistoryInsight, IncomeBreakdown, MonthSummary, MonthlyTrendChart } from "@/components/history";
@@ -1172,31 +1172,13 @@ export default function Home() {
     const missingBudgeted = sorted.filter((item) => !shownNames.has(item.category) && budgets[item.category] > 0);
     return [...shown, ...missingBudgeted];
   }, [monthlyCategorySpend, budgets]);
-  const discretionaryTopCategory = useMemo(
-    () => monthlyCategorySpend.find((item) => item.category !== "บิลประจำ") ?? null,
-    [monthlyCategorySpend],
-  );
-  const discretionaryCategoryTrend = useMemo(() => {
-    if (!discretionaryTopCategory) return null;
-    const category = discretionaryTopCategory.category;
-    const pastAmounts: number[] = [];
-    for (let offset = 1; offset <= 3; offset++) {
-      const { start, end } = cycleBounds(shiftMonthKey(selectedMonth, -offset), monthStartDay);
-      const amount = entriesInRange(entries, start, end).reduce((sum, entry) => {
-        if (entry.category !== category) return sum;
-        const spend = categorySpendAmount(entry);
-        return spend != null ? sum + spend : sum;
-      }, 0);
-      if (amount > 0) pastAmounts.push(amount);
-    }
-    if (!pastAmounts.length) return null;
-    const average = pastAmounts.reduce((sum, amount) => sum + amount, 0) / pastAmounts.length;
-    if (average <= 0) return null;
-    const ratio = discretionaryTopCategory.amount / average;
-    if (ratio >= 1.2) return { direction: "up" as const, percent: Math.round((ratio - 1) * 100) };
-    if (ratio <= 0.8) return { direction: "down" as const, percent: Math.round((1 - ratio) * 100) };
-    return { direction: "flat" as const, percent: 0 };
-  }, [discretionaryTopCategory, entries, selectedMonth, monthStartDay]);
+  // Always the cycle today falls in, whatever month History has selected:
+  // Home is about now.
+  const cyclePace = useMemo(() => {
+    const now = new Date();
+    const key = currentCycleMonthKey(monthStartDay, now);
+    return buildCyclePace(entries, cycleBounds(key, monthStartDay), cycleBounds(shiftMonthKey(key, -1), monthStartDay), now);
+  }, [entries, monthStartDay]);
   const monthlyLentOut = useMemo(
     () => monthlyEntries.reduce((sum, entry) => {
       if (!countsAsEarnedOrSpent(entry.transaction_type) || entry.wallet_impact >= 0) return sum;
@@ -3049,7 +3031,7 @@ export default function Home() {
               {hasEnoughForInsights && (
                 <Rail title="ภาพรวมเดือนนี้">
                   <CashFlowTrendCard summary={cashFlowSummary} />
-                  <SpendingPersonalityCard topCategory={discretionaryTopCategory} trend={discretionaryCategoryTrend} monthlyOutflow={monthlyOutflow} hasBillsOnly={!discretionaryTopCategory && monthlyOutflow > 0} />
+                  <CyclePaceCard pace={cyclePace} />
                 </Rail>
               )}
             </>

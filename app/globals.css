@@ -152,7 +152,7 @@
      floating nav; --topbar-block is the sticky topbar's own slice of the
      flow. Both are re-declared at the wide breakpoint, where the chrome is
      laid out differently. */
-  --nav-height: 68px;
+  --nav-height: 72px;
   /* The add button's fixed grid column, and how wide the active-tab pill
      is allowed to get once a tab column is wider than a label needs. Both
      are read by the nav's grid *and* by the pill's own arithmetic, which
@@ -161,7 +161,12 @@
   --nav-add-col: 80px;
   --nav-pill-max: 92px;
   --topbar-height: 58px;
-  --nav-clearance: calc(96px + env(safe-area-inset-bottom));
+  /* What the bar leaves under its tabs: the home indicator's inset where
+     there is one (layout.tsx sets viewport-fit=cover, without which iOS
+     reports it as 0 and the tabs sat on the screen's bottom edge), and never
+     less than a small lift where there isn't. */
+  --nav-lift: max(calc(env(safe-area-inset-bottom) + var(--s-1)), var(--s-3));
+  --nav-clearance: calc(96px + var(--nav-lift));
   /* The bar is flat and edge to edge now -- no floating margin around it --
      so its slice of the flow is its height plus the notch, nothing else. */
   --topbar-block: calc(var(--topbar-height) + env(safe-area-inset-top));
@@ -943,8 +948,8 @@ a:focus-visible {
   left: 0;
   right: 0;
   bottom: 0;
-  height: calc(var(--nav-height) + env(safe-area-inset-bottom));
-  padding-bottom: env(safe-area-inset-bottom);
+  height: calc(var(--nav-height) + var(--nav-lift));
+  padding-bottom: var(--nav-lift);
   border-radius: 0;
   /* The pill has to subtract this itself: an absolutely positioned child is
      laid out against the padding box, which *includes* the padding, so a
@@ -1036,7 +1041,7 @@ a:focus-visible {
 .bottom-nav .nav-indicator {
   position: absolute;
   top: var(--s-2);
-  bottom: calc(var(--s-2) + env(safe-area-inset-bottom));
+  bottom: calc(var(--s-2) + var(--nav-lift));
   --nav-tab-col: calc((100% - 2 * var(--nav-pad) - var(--nav-add-col)) / 4);
   --nav-pill-w: min(var(--nav-tab-col) - var(--s-2), var(--nav-pill-max));
   --nav-edge: calc(var(--nav-pad) + (var(--nav-tab-col) - var(--nav-pill-w)) / 2);
@@ -2193,39 +2198,48 @@ button.poster:active {
   font-weight: var(--fw-semibold);
 }
 
-/* The top category card: its category's art across the top (the same
-   .tile-art a progress tile uses), the words under it. Padding moves inside
-   so the art can run to the card's edges. */
-.spending-personality-card.has-art {
-  padding: 0;
+/* This cycle against the last one over the same days: two bars on one
+   scale (the whole of last cycle), label left and figure right of each. */
+.cycle-pace-bars {
+  display: grid;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+
+.cycle-pace-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.cycle-pace-row small {
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+}
+
+.cycle-pace-row b {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  text-align: right;
+}
+
+.cycle-pace-track {
+  display: block;
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--surface-3);
   overflow: hidden;
 }
 
-.spending-body {
-  display: grid;
-  gap: 2px;
-  padding: var(--s-3) var(--s-4) var(--s-4);
+.cycle-pace-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
 }
 
-.spending-body > span {
-  color: var(--ink-3);
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-semibold);
-}
-
-.spending-body strong {
-  font-size: var(--fs-h1);
-  font-weight: var(--fw-bold);
-  letter-spacing: var(--ls-tight);
-}
-
-.spending-body small {
-  color: var(--ink-2);
-  font-size: var(--fs-caption);
-}
-
-.spending-body .spending-trend.income { color: var(--income); }
-.spending-body .spending-trend.expense { color: var(--expense); }
+.cycle-pace-row.now .cycle-pace-track i { background: var(--primary); }
+.cycle-pace-row.last .cycle-pace-track i { background: var(--ink-4); }
 
 .home-focus-head {
   display: flex;
@@ -5768,7 +5782,7 @@ button.entry-main {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(var(--nav-height) + var(--s-7) + env(safe-area-inset-bottom));
+  bottom: calc(var(--nav-height) + var(--s-7) + var(--nav-lift));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -7076,6 +7090,10 @@ button.entry-main {
     width: min(560px, calc(100vw - 128px));
     height: var(--nav-height);
     padding-bottom: 0;
+    /* Floating clear of the screen's edge, so nothing to lift over -- and the
+       active-tab pill subtracts this, so it has to say zero, not just be
+       padded as zero. */
+    --nav-lift: 0px;
     /* Floating again on a desk -- a bar pinned across a 1440px window's
        bottom edge is a long way from where anything else on the page is. */
     border: var(--card-border);
