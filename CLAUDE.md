@@ -6,6 +6,17 @@ Guidance for working on this codebase — a Thai personal-finance PWA
 
 ## Design system: Paper (light) / Quiet Dark (dark)
 
+> **A third direction is agreed and not yet built: "Cinema".** A
+> Netflix-shaped app — one billboard per screen, then horizontal rails of
+> poster/tile cards, a title-detail sheet, an "กำลังจะมา" timeline tab —
+> dark only (light mode and the theme toggle are to be removed), emerald
+> `--brand` used as ink only, a white primary button, and income/expense
+> moved off green to sky/coral so money meaning never collides with the
+> brand. `docs/netflix-reference.html` renders it and carries the proposed
+> `:root` tokens and the list of rules below that change with it. Until
+> phase 1 lands, everything in this section still describes the live app;
+> when it lands, rewrite this section rather than appending to it.
+
 นับตังค์ (Nubtang) should feel like keeping a notebook, not like operating a dashboard.
 Light mode is **paper**: warm off-white grounds with the chroma taken almost
 to zero, a hairline edge and the faintest lift instead of coloured drop

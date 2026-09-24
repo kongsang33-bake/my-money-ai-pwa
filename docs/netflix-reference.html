@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>นับตังค์: Cinema Direction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  /* ==========================================================================
+     Direction 3 — "Cinema". A Netflix-shaped app: one billboard, then rails.
+     Dark only; the brand hue is emerald. Every value a component uses is a
+     token below, named the way app/globals.css will name it in phase 1, so
+     this block is the proposal for the new :root, not just mock styling.
+     ========================================================================== */
+  :root {
+    /* grounds — near-black, a hair cool so emerald reads clean on it */
+    --bg: #0a0b0c;
+    --surface: #141618;
+    --surface-2: #1c1f22;
+    --surface-3: #262a2e;
+    --line: #2a2e33;
+
+    --ink: #f1f3f2;
+    --ink-2: #b8bdbb;
+    --ink-3: #8b918e;
+    --ink-4: #5f6562;
+
+    /* brand — emerald/jade. Marks, progress, active state, the logo, the
+       "ใหม่"/"ใกล้ถึง" ribbons. NOT the primary button (that is white, as on
+       Netflix) and NOT income. */
+    --brand: #1fc58e;
+    --brand-strong: #3fdca6;
+    --brand-deep: #0b6b4c;
+    --brand-ink: #03140d;       /* text on a full --brand fill */
+    --brand-glow: rgba(31, 197, 142, 0.22);
+
+    /* call to action — Netflix's white "Play" + grey "More info" */
+    --cta: #f1f3f2;
+    --cta-text: #0a0b0c;
+    --cta-2: rgba(110, 118, 115, 0.42);
+    --cta-2-text: #f1f3f2;
+
+    /* money meaning — moved OFF green so it never collides with the brand */
+    --income: #72bdf7;          /* sky */
+    --expense: #ff8e7e;         /* coral */
+    --danger: #ff6b6b;
+
+    /* the eight category slots, carried over from quiet dark */
+    --cat-travel: #7ec8d8;
+    --cat-food: #d9896b;
+    --cat-bills: #76ccae;
+    --cat-home: #d8be7b;
+    --cat-entertainment: #d289b4;
+    --cat-goods: #958bd4;
+    --cat-health: #d57c89;
+    --cat-other: #7a7887;
+
+    /* shape — Netflix corners are small */
+    --r-xs: 3px; --r-sm: 5px; --r-md: 8px; --r-lg: 12px; --r-full: 999px;
+
+    /* rails */
+    --rail-gap: 8px;
+    --gutter: 16px;
+    --poster-w: 112px;          /* 2:3 */
+    --tile-w: 172px;            /* 16:9 */
+    --wide-w: 264px;
+
+    /* billboard */
+    --hero-fade: linear-gradient(180deg, rgba(10,11,12,0) 45%, var(--bg) 100%);
+    --nav-bg: rgba(10, 11, 12, 0.94);
+
+    --fs-display: 44px; --fs-value: 28px; --fs-h1: 26px; --fs-h2: 19px; --fs-h3: 16px;
+    --fs-body: 15px; --fs-body-sm: 14px; --fs-caption: 12.5px; --fs-micro: 11px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "IBM Plex Sans Thai", sans-serif; -webkit-font-smoothing: antialiased; }
+  body { padding: 48px clamp(16px, 4vw, 56px) 96px; }
+  button { font: inherit; color: inherit; }
+  svg { display: block; }
+
+  /* ---------------- stage (presentation only) ---------------- */
+  .stage-head, .stage-block { max-width: 760px; margin: 0 auto 48px; }
+  .eyebrow { font-size: var(--fs-micro); font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--brand); margin: 0 0 10px; }
+  .stage-head h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.25; margin: 0 0 14px; text-wrap: balance; }
+  .stage-head p, .stage-block p, .stage-block li { font-size: var(--fs-body); line-height: 1.75; color: var(--ink-2); }
+  .stage-head b, .stage-block b { color: var(--ink); font-weight: 600; }
+  .stage-block h2 { font-size: var(--fs-h2); margin: 0 0 12px; }
+  .stage-block ul { padding-left: 20px; margin: 0; }
+  .stage-block code { font-size: 13px; background: var(--surface-2); padding: 1px 6px; border-radius: var(--r-xs); color: var(--ink); }
+
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .sw { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
+  .sw i { display: block; height: 52px; }
+  .sw span { display: block; padding: 8px 10px; font-size: var(--fs-caption); color: var(--ink-2); line-height: 1.45; }
+  .sw span b { display: block; font-size: 13px; }
+
+  .rack { display: flex; flex-wrap: wrap; justify-content: center; gap: 56px 40px; margin: 0 auto 64px; max-width: 1400px; }
+  .col { width: min(390px, 100%); }
+  .col-head { margin-bottom: 14px; }
+  .col-head h3 { font-size: var(--fs-h3); margin: 0 0 6px; }
+  .col-head p { margin: 0; font-size: var(--fs-caption); line-height: 1.65; color: var(--ink-3); }
+  .frame { border: 1px solid var(--line); border-radius: 22px; overflow: hidden; background: var(--bg); position: relative; }
+  .frame-screen { height: 800px; overflow-y: auto; scrollbar-width: none; position: relative; }
+  .frame-screen::-webkit-scrollbar { display: none; }
+
+  /* ---------------- app: shared ---------------- */
+  .screen { position: relative; min-height: 100%; display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
+  .ic { width: 20px; height: 20px; flex-shrink: 0; }
+
+  /* topbar — transparent over the billboard, solid once scrolled */
+  .topbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between;
+    padding: 14px var(--gutter) 8px; transition: background .25s; }
+  .topbar.solid { background: var(--nav-bg); backdrop-filter: blur(12px); }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-mark { width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--r-sm);
+    background: var(--brand); color: var(--brand-ink); font-weight: 700; font-size: 18px; line-height: 1; }
+  .logo b { font-size: var(--fs-h3); letter-spacing: -.01em; }
+  .top-actions { display: flex; gap: 6px; }
+  .icon-btn { width: 36px; height: 36px; display: grid; place-items: center; border: 0; background: none; border-radius: var(--r-sm); }
+  .avatar { width: 30px; height: 30px; border-radius: var(--r-sm); background: var(--cat-goods); color: var(--bg);
+    display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+
+  .chips { display: flex; gap: 8px; padding: 2px var(--gutter) 12px; overflow-x: auto; scrollbar-width: none; }
+  .chip { flex: 0 0 auto; min-height: 32px; padding: 5px 14px; border-radius: var(--r-full); border: 1px solid rgba(241,243,242,.35);
+    background: transparent; font-size: var(--fs-body-sm); font-weight: 500; }
+  .chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+  /* ambient tint behind the top of Home: the billboard's colour bleeding
+     into the page, as Netflix mobile tints to its poster */
+  .ambient { position: absolute; inset: 0 0 auto 0; height: 560px; pointer-events: none;
+    background: radial-gradient(120% 70% at 50% 0%, var(--brand-deep) 0%, rgba(11,107,76,.35) 40%, transparent 75%); }
+
+  /* billboard */
+  .billboard { position: relative; margin: 4px var(--gutter) 22px; border-radius: var(--r-lg); overflow: hidden;
+    background: linear-gradient(160deg, #0f4d38 0%, #0d2a21 55%, var(--surface) 100%);
+    border: 1px solid rgba(255,255,255,.08); aspect-ratio: 4 / 5; display: flex; flex-direction: column; justify-content: flex-end; }
+  .billboard-art { position: absolute; inset: 0; }
+  .billboard-art svg { width: 100%; height: 100%; }
+  .billboard::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, rgba(10,11,12,.88) 100%); }
+  .billboard-body { position: relative; z-index: 1; padding: 20px 18px 18px; text-align: center; }
+  .bb-kicker { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-micro); font-weight: 600; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--brand-strong); margin-bottom: 6px; }
+  .bb-kicker i { width: 14px; height: 14px; border-radius: 2px; background: var(--brand); color: var(--brand-ink);
+    font-style: normal; font-size: 10px; display: grid; place-items: center; }
+  .bb-amount { display: block; font-size: var(--fs-display); font-weight: 700; letter-spacing: -.02em; line-height: 1.05; }
+  .bb-amount small { font-size: .5em; font-weight: 600; color: var(--ink-2); margin-right: 4px; }
+  .bb-tags { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 10px; margin: 10px 0 16px; font-size: var(--fs-caption); color: var(--ink-2); }
+  .bb-tags span + span::before { content: "•"; margin-right: 10px; color: var(--ink-4); }
+  .bb-tags b { color: var(--ink); font-weight: 600; }
+  .bb-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .btn { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0;
+    border-radius: var(--r-sm); font-size: var(--fs-body); font-weight: 600; padding: 0 16px; }
+  .btn .ic { width: 20px; height: 20px; }
+  .btn-cta { background: var(--cta); color: var(--cta-text); }
+  .btn-2 { background: var(--cta-2); color: var(--cta-2-text); backdrop-filter: blur(6px); }
+
+  /* rails */
+  .rail { margin-bottom: 22px; }
+  .rail-head { display: flex; align-items: baseline; justify-content: space-between; padding: 0 var(--gutter); margin-bottom: 8px; }
+  .rail-head h2 { font-size: var(--fs-h3); font-weight: 600; margin: 0; }
+  .rail-head a { font-size: var(--fs-caption); color: var(--ink-3); text-decoration: none; display: inline-flex; align-items: center; gap: 2px; min-height: 24px; }
+  .rail-head a .ic { width: 14px; height: 14px; }
+  .rail-track { display: flex; gap: var(--rail-gap); overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 var(--gutter);
+    padding: 0 var(--gutter); scrollbar-width: none; }
+  .rail-track::-webkit-scrollbar { display: none; }
+  .rail-track > * { scroll-snap-align: start; flex-shrink: 0; }
+
+  /* poster (2:3) — category art without imagery: a tinted gradient, a big
+     faint glyph, the title set on the art like a film poster */
+  .poster { position: relative; width: var(--poster-w); aspect-ratio: 2 / 3; border-radius: var(--r-sm); overflow: hidden;
+    background: linear-gradient(165deg, color-mix(in oklab, var(--c) 58%, var(--bg)) 0%, color-mix(in oklab, var(--c) 16%, var(--bg)) 70%);
+    border: 0; padding: 0; text-align: left; color: var(--ink); }
+  .poster .glyph { position: absolute; right: -14px; top: 18px; width: 92px; height: 92px; color: var(--c); opacity: .38; }
+  .poster .glyph svg { width: 100%; height: 100%; stroke-width: 1.4; }
+  .poster .p-body { position: absolute; inset: auto 0 0 0; padding: 26px 9px 9px; background: linear-gradient(180deg, transparent, rgba(10,11,12,.9)); }
+  .poster .p-title { display: block; font-size: var(--fs-body-sm); font-weight: 600; line-height: 1.3; }
+  .poster .p-sub { display: block; font-size: var(--fs-micro); color: var(--ink-2); margin-top: 2px; }
+  .poster .p-amt { display: block; font-size: var(--fs-body-sm); font-weight: 700; margin-top: 4px; }
+  .ribbon { position: absolute; top: 0; left: 50%; transform: translateX(-50%); padding: 2px 8px 3px; border-radius: 0 0 var(--r-xs) var(--r-xs);
+    background: var(--brand); color: var(--brand-ink); font-size: var(--fs-micro); font-weight: 700; white-space: nowrap; }
+  .ribbon.warn { background: var(--expense); color: var(--bg); }
+  .corner { position: absolute; top: 7px; left: 7px; width: 18px; height: 18px; border-radius: 2px; background: var(--brand); color: var(--brand-ink);
+    font-weight: 700; font-size: 11px; display: grid; place-items: center; }
+
+  /* quick-add square */
+  .quick { width: 84px; aspect-ratio: 1; border-radius: var(--r-sm); background: var(--surface-2); border: 0; padding: 10px 8px;
+    display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; color: var(--ink); }
+  .quick .ic { color: var(--c); width: 22px; height: 22px; }
+  .quick b { font-size: var(--fs-caption); font-weight: 600; line-height: 1.2; }
+  .quick small { font-size: var(--fs-micro); color: var(--ink-3); }
+  .quick.add { background: transparent; border: 1px dashed var(--ink-4); align-items: center; justify-content: center; gap: 6px; color: var(--ink-2); }
+
+  /* top 10 */
+  .rank { display: flex; align-items: flex-end; }
+  .rank-num { font-size: 104px; font-weight: 700; line-height: .78; letter-spacing: -.08em; color: var(--bg);
+    -webkit-text-stroke: 2px var(--ink-4); margin-right: -12px; position: relative; z-index: 0; }
+  .rank .poster { z-index: 1; width: 96px; }
+
+  /* continue — 16:9 tile with a progress bar */
+  .tile { width: var(--tile-w); border-radius: var(--r-sm); overflow: hidden; background: var(--surface); border: 0; padding: 0; text-align: left; color: var(--ink); }
+  .tile-art { position: relative; aspect-ratio: 16 / 9; background: linear-gradient(150deg, color-mix(in oklab, var(--c) 50%, var(--bg)), color-mix(in oklab, var(--c) 12%, var(--bg))); }
+  .tile-art .glyph { position: absolute; right: 10px; top: 10px; width: 44px; height: 44px; color: var(--c); opacity: .6; }
+  .tile-art .glyph svg { width: 100%; height: 100%; stroke-width: 1.5; }
+  .tile-art .t-label { position: absolute; left: 10px; bottom: 10px; font-size: var(--fs-body-sm); font-weight: 600; }
+  .bar { height: 3px; background: var(--surface-3); }
+  .bar i { display: block; height: 100%; background: var(--brand); }
+  .bar.hot i { background: var(--expense); }
+  .tile-meta { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px 10px; font-size: var(--fs-caption); color: var(--ink-2); }
+  .tile-meta b { color: var(--ink); font-weight: 600; }
+
+  /* wallet — landscape card */
+  .wallet { width: 156px; padding: 12px; border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--line); color: var(--ink); text-align: left; }
+  .wallet .w-top { display: flex; align-items: center; gap: 8px; font-size: var(--fs-caption); color: var(--ink-2); margin-bottom: 14px; }
+  .wallet .w-dot { width: 26px; height: 26px; border-radius: var(--r-xs); display: grid; place-items: center; background: color-mix(in oklab, var(--c) 30%, var(--bg)); color: var(--c); }
+  .wallet .w-dot .ic { width: 15px; height: 15px; }
+  .wallet strong { font-size: var(--fs-h3); font-weight: 700; }
+
+  /* recent — "เพิ่งจด" row: small landscape with amount */
+  .recent { width: 148px; border: 0; padding: 0; background: none; text-align: left; color: var(--ink); }
+  .recent .tile-art { border-radius: var(--r-sm); overflow: hidden; }
+  .recent .r-body { padding: 6px 2px 0; }
+  .recent b { display: block; font-size: var(--fs-body-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .recent small { display: flex; justify-content: space-between; font-size: var(--fs-caption); color: var(--ink-3); margin-top: 1px; }
+  .neg { color: var(--expense); } .pos { color: var(--income); }
+
+  /* wide insight card */
+  .wide { width: var(--wide-w); padding: 14px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--line); }
+  .wide .w-label { font-size: var(--fs-caption); color: var(--ink-3); }
+  .wide .w-value { display: block; font-size: var(--fs-value); font-weight: 700; margin: 2px 0 10px; letter-spacing: -.01em; }
+  .bars { display: flex; align-items: flex-end; gap: 6px; height: 64px; }
+  .bars div { flex: 1; display: flex; gap: 2px; align-items: flex-end; height: 100%; }
+  .bars i { flex: 1; border-radius: 2px 2px 0 0; }
+  .bars .in { background: var(--income); } .bars .out { background: var(--expense); }
+  .legend { display: flex; gap: 12px; margin-top: 8px; font-size: var(--fs-micro); color: var(--ink-3); }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+
+  /* bottom nav */
+  .nav { position: sticky; bottom: 0; z-index: 6; display: grid; grid-template-columns: repeat(5, 1fr); align-items: center;
+    background: var(--nav-bg); backdrop-filter: blur(14px); border-top: 1px solid var(--line); padding: 6px 4px 18px; margin-top: auto; }
+  .nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: var(--fs-micro); color: var(--ink-3); background: none; border: 0; min-height: 44px; justify-content: center; }
+  .nav-item.on { color: var(--ink); }
+  .nav-item.on .ic { stroke-width: 2.4; }
+  .nav-add { justify-self: center; width: 46px; height: 46px; border-radius: var(--r-md); background: var(--brand); color: var(--brand-ink); border: 0; display: grid; place-items: center; }
+  .nav-add .ic { width: 24px; height: 24px; stroke-width: 2.4; }
+
+  /* ---------------- detail sheet ---------------- */
+  .dim { position: absolute; inset: 0; background: rgba(0,0,0,.7); z-index: 7; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 56px; z-index: 8; background: var(--surface); border-radius: var(--r-lg) var(--r-lg) 0 0; overflow-y: auto; scrollbar-width: none; }
+  .sheet-hero { position: relative; aspect-ratio: 16 / 10; background: linear-gradient(160deg, color-mix(in oklab, var(--c) 62%, var(--bg)), color-mix(in oklab, var(--c) 14%, var(--bg))); }
+  .sheet-hero .glyph { position: absolute; right: 22px; top: 22px; width: 120px; height: 120px; color: var(--c); opacity: .45; }
+  .sheet-hero .glyph svg { width: 100%; height: 100%; stroke-width: 1.2; }
+  .sheet-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 40%, var(--surface) 100%); }
+  .sheet-close { position: absolute; top: 12px; right: 12px; z-index: 2; width: 36px; height: 36px; border-radius: var(--r-full); background: rgba(10,11,12,.7); border: 0; display: grid; place-items: center; }
+  .sheet-body { padding: 0 var(--gutter) 28px; margin-top: -40px; position: relative; z-index: 1; }
+  .sheet-body h2 { font-size: var(--fs-h1); margin: 0 0 4px; line-height: 1.2; }
+  .sheet-amt { font-size: var(--fs-value); font-weight: 700; margin: 4px 0 8px; display: block; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: var(--fs-caption); color: var(--ink-2); margin-bottom: 16px; }
+  .meta-row .pill { padding: 1px 7px; border: 1px solid var(--ink-4); border-radius: var(--r-xs); color: var(--ink-2); }
+  .sheet-actions { display: grid; gap: 8px; margin-bottom: 18px; }
+  .sheet-actions .btn { width: 100%; }
+  .btn-danger { background: transparent; color: var(--danger); border: 1px solid color-mix(in oklab, var(--danger) 45%, transparent); }
+  .note { font-size: var(--fs-body-sm); color: var(--ink-2); line-height: 1.6; margin: 0 0 18px; }
+  .note b { color: var(--ink); }
+  .tabs { display: flex; gap: 20px; border-top: 1px solid var(--line); margin: 0 calc(-1 * var(--gutter)) 14px; padding: 0 var(--gutter); }
+  .tabs span { padding: 12px 0 10px; font-size: var(--fs-body-sm); font-weight: 600; color: var(--ink-3); border-top: 3px solid transparent; margin-top: -1px; }
+  .tabs span.on { color: var(--ink); border-top-color: var(--brand); }
+  .similar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .similar .poster { width: auto; }
+
+  /* ---------------- upcoming (New & Hot) ---------------- */
+  .page-title { padding: 14px var(--gutter) 6px; display: flex; justify-content: space-between; align-items: center; }
+  .page-title h1 { font-size: var(--fs-h1); margin: 0; }
+  .up-chip { display: inline-flex; align-items: center; gap: 6px; }
+  .up-chip .ic { width: 16px; height: 16px; }
+  .up { display: grid; grid-template-columns: 48px 1fr; gap: 10px; padding: 0 var(--gutter) 0 8px; margin-bottom: 26px; }
+  .up-date { text-align: center; padding-top: 2px; }
+  .up-date small { display: block; font-size: var(--fs-micro); color: var(--ink-3); letter-spacing: .06em; }
+  .up-date b { display: block; font-size: var(--fs-h1); line-height: 1.1; }
+  .up-card .tile-art { border-radius: var(--r-sm); aspect-ratio: 16/8; }
+  .up-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin: 10px 0 4px; }
+  .up-row h3 { font-size: var(--fs-h3); margin: 0; }
+  .up-row .mini { display: flex; gap: 14px; }
+  .mini button { display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: 0; font-size: var(--fs-micro); color: var(--ink-2); min-width: 44px; }
+  .up-card p { margin: 0; font-size: var(--fs-body-sm); color: var(--ink-2); line-height: 1.55; }
+  .up-card p b { color: var(--ink); }
+  .kicker { font-size: var(--fs-micro); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--brand); margin-top: 6px; display: block; }
+  .kicker.warn { color: var(--expense); }
+
+  /* ---------------- mine (My Netflix) ---------------- */
+  .me { text-align: center; padding: 10px var(--gutter) 22px; }
+  .me .avatar { width: 72px; height: 72px; font-size: 30px; margin: 0 auto 10px; border-radius: var(--r-md); }
+  .me h2 { font-size: var(--fs-h2); margin: 0; display: inline-flex; align-items: center; gap: 2px; }
+  .me p { margin: 4px 0 0; font-size: var(--fs-caption); color: var(--ink-3); }
+  .feat { width: 120px; aspect-ratio: 1; border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--line); padding: 12px;
+    display: flex; flex-direction: column; justify-content: space-between; text-align: left; color: var(--ink); }
+  .feat .ic { color: var(--brand); width: 24px; height: 24px; }
+  .feat b { font-size: var(--fs-body-sm); font-weight: 600; }
+  .feat small { display: block; font-size: var(--fs-micro); color: var(--ink-3); margin-top: 2px; }
+  .list { margin: 0 var(--gutter) 22px; }
+  .list-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: var(--fs-body); }
+  .list-row .l-ic { width: 36px; height: 36px; border-radius: var(--r-full); display: grid; place-items: center; background: var(--surface-2); color: var(--ink-2); }
+  .list-row .l-ic.alert { background: var(--brand); color: var(--brand-ink); }
+  .list-row .l-txt { flex: 1; }
+  .list-row small { display: block; color: var(--ink-3); font-size: var(--fs-caption); }
+  .list-row > .ic { color: var(--ink-4); }
+
+  /* ---------------- PIN gate ---------------- */
+  .gate { min-height: 800px; display: flex; flex-direction: column; align-items: center; padding: 18px var(--gutter) 28px; }
+  .gate .logo { align-self: flex-start; }
+  .gate h1 { font-size: var(--fs-h2); font-weight: 500; margin: 64px 0 22px; }
+  .gate .avatar { width: 104px; height: 104px; font-size: 44px; border-radius: var(--r-md); outline: 3px solid var(--ink); outline-offset: 3px; }
+  .gate .who { margin: 14px 0 34px; font-size: var(--fs-h3); font-weight: 600; }
+  .dots { display: flex; gap: 16px; margin-bottom: 36px; }
+  .dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ink-3); }
+  .dots i.on { background: var(--brand); border-color: var(--brand); }
+  .pad { display: grid; grid-template-columns: repeat(3, 76px); gap: 12px 26px; }
+  .pad button { height: 60px; border: 0; background: none; font-size: 26px; font-weight: 500; border-radius: var(--r-full); display: grid; place-items: center; }
+  .gate .forgot { margin-top: auto; font-size: var(--fs-body-sm); color: var(--ink-3); background: none; border: 0; min-height: 44px; }
+
+  /* ---------------- desktop ---------------- */
+  .wide-frame { max-width: 1240px; margin: 0 auto 64px; }
+  .wide-frame .frame-screen { height: 720px; }
+  .d-screen { position: relative; min-height: 100%; padding-bottom: 40px; }
+  .d-top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 28px; padding: 16px 48px;
+    background: linear-gradient(180deg, rgba(10,11,12,.85), transparent); }
+  .d-top nav { display: flex; gap: 20px; font-size: var(--fs-body-sm); color: var(--ink-2); }
+  .d-top nav b { color: var(--ink); font-weight: 600; }
+  .d-top .top-actions { margin-left: auto; align-items: center; gap: 12px; }
+  .d-bill { position: relative; height: 470px; margin-top: -68px; overflow: hidden;
+    background: linear-gradient(110deg, var(--bg) 0%, #0c2c21 40%, #0f5a40 100%); }
+  .d-bill .billboard-art { left: 30%; -webkit-mask-image: linear-gradient(90deg, transparent, #000 35%); mask-image: linear-gradient(90deg, transparent, #000 35%); }
+  .d-bill::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, var(--bg) 0%, rgba(10,11,12,.6) 38%, transparent 70%), var(--hero-fade); }
+  .d-bill-body { position: absolute; z-index: 1; left: 48px; bottom: 76px; max-width: 460px; }
+  .d-bill-body .bb-amount { font-size: 64px; }
+  .d-bill-body .bb-tags { justify-content: flex-start; }
+  .d-bill-body .bb-actions { display: flex; }
+  .d-bill-body p { font-size: var(--fs-body); color: var(--ink-2); line-height: 1.6; margin: 0 0 18px; }
+  .d-screen .rail { position: relative; margin-bottom: 30px; }
+  .d-screen .rail-head, .d-screen .rail-track { padding: 0 48px; }
+  .d-screen .rail-track { overflow: hidden; scroll-snap-type: none; }
+  .d-screen .rails { margin-top: -54px; position: relative; z-index: 2; }
+  .d-screen .poster { width: 150px; }
+  .d-screen .tile { width: 250px; }
+  .arrow { position: absolute; right: 0; bottom: 0; top: 30px; width: 44px; border: 0; background: linear-gradient(90deg, transparent, rgba(10,11,12,.9) 45%);
+    display: grid; place-items: center; color: var(--ink); z-index: 2; }
+  .arrow .ic { width: 28px; height: 28px; }
+
+  .decisions { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-md); padding: 18px 20px; }
+  .decisions li { margin-bottom: 8px; }
+  .tag-open { display: inline-block; font-size: var(--fs-micro); font-weight: 700; padding: 1px 7px; border-radius: var(--r-xs); background: var(--brand); color: var(--brand-ink); margin-right: 6px; vertical-align: 2px; }
+</style>
+</head>
+<body>
+
+<header class="stage-head">
+  <p class="eyebrow">ทิศทางที่ 3 · ระยะที่ 0</p>
+  <h1>Cinema: หน้าเดียวมีป้ายโฆษณาใหญ่หนึ่งอัน แล้วตามด้วยแถวที่เลื่อนได้</h1>
+  <p>แอปจะคล้าย Netflix ที่ <b>โครงหน้า</b> ไม่ใช่แค่สี ด้านบนมี billboard หนึ่งอันที่บอกว่าตอนนี้เงินเป็นอย่างไร
+  ด้านล่างเป็น rails แถวละเรื่อง แต่ละแถวเลื่อนไปทางขวาได้ กดการ์ดใบไหนก็เปิดหน้ารายละเอียดขึ้นมาทับ แบบเดียวกับหน้าหนังใน Netflix</p>
+  <p>แอปจะมี <b>โหมดมืดอย่างเดียว</b> สีแบรนด์คือ <b style="color:var(--brand)">เขียวมรกต</b> ใช้เป็น “หมึก” ได้แก่ โลโก้ แถบ progress สถานะที่เลือกอยู่ ป้าย “ใกล้ถึง” และปุ่ม + ตรงกลาง
+  ปุ่มหลักใช้ <b>สีขาว</b> แบบปุ่ม Play ของ Netflix ส่วนรายรับย้ายไปเป็น <b style="color:var(--income)">ฟ้า</b> และรายจ่ายเป็น <b style="color:var(--expense)">ปะการัง</b>
+  เพื่อไม่ให้สีเงินชนกับสีแบรนด์</p>
+</header>
+
+<section class="stage-block">
+  <h2>Tokens ที่เสนอ (จะกลายเป็น <code>:root</code> ในระยะที่ 1)</h2>
+  <div class="swatches" id="swatches"></div>
+</section>
+
+<div class="rack">
+  <div class="col">
+    <div class="col-head">
+      <h3>1 · หน้าหลัก</h3>
+      <p>billboard อยู่บนสุด ต่อด้วย chips สำหรับกรอง แล้วเป็น rails ลองเลื่อนดูในกรอบ: topbar จะทึบขึ้นเมื่อเลื่อนผ่าน billboard การ์ดที่มีอยู่ตอนนี้ย้ายเข้าไปอยู่ใน rails ทั้งหมด ไม่มีการ์ดใหญ่วางซ้อนกันลงมาแล้ว</p>
+    </div>
+    <div class="frame"><div class="frame-screen" id="home-scroll"><div class="screen" id="home"></div></div></div>
+  </div>
+
+  <div class="col">
+    <div class="col-head">
+      <h3>2 · หน้ารายละเอียดรายการ</h3>
+      <p>เป็นหน้าแบบ “title detail” ของ Netflix มีหัวใหญ่ตามสีหมวด ชื่อ ยอดเงิน ข้อมูลเมตา และปุ่มแก้ไข ด้านล่างมีแท็บ “รายการคล้ายกัน” จากร้านหรือหมวดเดียวกัน ปุ่มแก้ไขเปิด edit sheet ตัวเดิม</p>
+    </div>
+    <div class="frame"><div class="frame-screen"><div class="screen" id="detail"></div></div></div>
+  </div>
+
+  <div class="col">
+    <div class="col-head">
+      <h3>3 · กำลังจะมา</h3>
+      <p>ตรงกับ “New &amp; Hot” ของ Netflix เป็นไทม์ไลน์ของบิลประจำ หนี้ที่ถึงกำหนด และงบที่ใกล้เต็ม มีวันที่อยู่ซ้าย ในแถบนำทางจะมาแทนแท็บ “กระเป๋า” (ยังไม่ได้ตัดสินใจ ดูท้ายหน้า)</p>
+    </div>
+    <div class="frame"><div class="frame-screen"><div class="screen" id="upcoming"></div></div></div>
+  </div>
+
+  <div class="col">
+    <div class="col-head">
+      <h3>4 · ของฉัน</h3>
+      <p>ตรงกับ “My Netflix” รวม “อื่น ๆ” กับบัญชีไว้ด้วยกัน โปรไฟล์อยู่บน ตามด้วย rail ของฟีเจอร์ แล้วเป็นรายการตั้งค่า ปุ่มสลับธีมบน topbar หายไป เพราะเหลือธีมเดียว</p>
+    </div>
+    <div class="frame"><div class="frame-screen"><div class="screen" id="mine"></div></div></div>
+  </div>
+
+  <div class="col">
+    <div class="col-head">
+      <h3>5 · ปลดล็อกด้วย PIN</h3>
+      <p>ใช้แบบหน้า “ใครกำลังดูอยู่” ของ Netflix มีอวาตาร์ใหญ่หนึ่งอัน ใต้ลงมาเป็นจุด PIN กับแป้นตัวเลข ไม่มีภาพประกอบหรือเอฟเฟกต์อื่น</p>
+    </div>
+    <div class="frame"><div class="frame-screen"><div id="gate"></div></div></div>
+  </div>
+</div>
+
+<section class="stage-block" style="max-width:1240px">
+  <h2>6 · เดสก์ท็อป (ตั้งแต่ 900px ขึ้นไป)</h2>
+  <p>หน้าจอกว้างจะเปลี่ยนเป็นแบบ Netflix บนเว็บ billboard เต็มความกว้าง ข้อความชิดซ้าย เมนูย้ายขึ้นไปอยู่บน topbar เป็นลิงก์ข้อความ ไม่มี bottom nav แล้ว และ rails มีปุ่มลูกศรเลื่อน
+  ข้อนี้เปลี่ยนกฎเดิมที่จำกัดความกว้าง <code>.phone</code> ไว้เพื่อให้อ่านง่าย ช่วงความกว้าง 600–899px ยังใช้แบบมือถือที่ขยายขนาด poster ขึ้น</p>
+</section>
+<div class="wide-frame"><div class="frame"><div class="frame-screen" id="desk-scroll"><div class="d-screen" id="desk"></div></div></div></div>
+
+<section class="stage-block">
+  <h2>สิ่งที่เปลี่ยนใน CLAUDE.md เมื่อยืนยันทิศทางนี้</h2>
+  <ul>
+    <li><b>ตัดโหมดสว่างทิ้ง</b> เหลือ token ชุดเดียวใน <code>:root</code> ลบ <code>[data-theme]</code> ปุ่มสลับธีม และ <code>theme.spec</code> ส่วน a11y audit จะวัดแค่ธีมเดียว และต้องเริ่ม contrast baseline ใหม่</li>
+    <li><b>ยกเลิกกฎ “มีสีเต็มก้อนเดียวคือ hero สีปะการัง”</b> แทนด้วยกฎ “มี billboard เดียวต่อหน้า และสีแบรนด์ใช้เป็นหมึกเท่านั้น ห้ามเป็นพื้นการ์ด” ยกเว้นปุ่ม + โลโก้ และ ribbon</li>
+    <li><b>ระดับพื้นผิวเปลี่ยน</b> จาก tint/bold/bare เป็น billboard / poster / tile / bare ทุกอย่างบน Home ต้องอยู่ใน rail ส่วนหน้ารายการ (History) ยังเป็นรายการแนวตั้ง เพราะข้อมูลเงินต้องสแกนดูตามลำดับ</li>
+    <li><b>สีเงิน</b>: <code>--income</code> เป็นฟ้า <code>--expense</code> เป็นปะการัง และห้ามใช้เขียวแทนความหมาย “ได้เงิน”</li>
+    <li><b>radius</b> ลดลงเหลือ 3–12px และปุ่มหลักเป็นสีขาว</li>
+    <li>ยังห้ามมาสคอต อีโมจิ และสีที่เขียนเป็นค่าตายตัวเหมือนเดิม แสงที่ลงสีจาก billboard ไปที่พื้นหลัง (<code>.ambient</code>) เป็นการไล่สีแบบนิ่ง ไม่ใช่เอฟเฟกต์ glow หรือ pulse</li>
+  </ul>
+</section>
+
+<section class="stage-block decisions">
+  <h2>ยังต้องตัดสินใจ</h2>
+  <ul>
+    <li><span class="tag-open">เปิด</span><b>แท็บที่ 4</b>: ใน mock ใช้ “กำลังจะมา” แทน “กระเป๋า” และย้ายกระเป๋าไปเป็น rail บน Home กับอยู่ใน “ของฉัน” ถ้าอยากเก็บแท็บกระเป๋าไว้ “กำลังจะมา” จะไปเป็น rail แทน</li>
+    <li><span class="tag-open">เปิด</span><b>รายรับเป็นสีฟ้า</b>: เป็นผลตามมาจากการเลือกสีเขียวมรกตเป็นแบรนด์ อีกทางคือใช้ขาวพร้อมเครื่องหมาย + สำหรับรายรับ</li>
+    <li><span class="tag-open">เปิด</span><b>layout เดสก์ท็อป</b>: เปลี่ยนเป็นเต็มจอแบบ Netflix เว็บตาม mock ข้อ 6 หรือยังคงจำกัดความกว้างไว้</li>
+  </ul>
+</section>
+
+<script>
+  const ICONS = {
+    utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+    coffee: '<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><path d="M6 2v2M10 2v2M14 2v2"/>',
+    bus: '<path d="M8 6v6M15 6v6M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><path d="M9 18h5"/><circle cx="16" cy="18" r="2"/>',
+    zap: '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>',
+    home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
+    film: '<rect x="2" y="2" width="20" height="20" rx="2.2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/>',
+    bag: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
+    heart: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/>',
+    plane: '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
+    wallet: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+    plus: '<path d="M5 12h14M12 5v14"/>',
+    info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+    x: '<path d="M18 6 6 18M6 6l12 12"/>',
+    pencil: '<path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/>',
+    trash: '<path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+    bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+    receipt: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 17.5v-11"/>',
+    pie: '<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>',
+    trend: '<path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/>',
+    chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M16 13H8M16 17H8M10 9H8"/>',
+    right: '<path d="m9 18 6-6-6-6"/>',
+    down: '<path d="m6 9 6 6 6-6"/>',
+    search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+    list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+    calendar: '<path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4M8 2v4M3 10h5"/><path d="M17.5 17.5 16 16.3V14"/><circle cx="16" cy="16" r="6"/>',
+    user: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+    card: '<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/>',
+    target: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+    lock: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+    back: '<path d="M10 5a2 2 0 0 0-1.34.52l-6.43 5.86a.8.8 0 0 0 0 1.24l6.43 5.86A2 2 0 0 0 10 19h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/><path d="m12 9 6 6M18 9l-6 6"/>',
+    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>',
+  };
+  const svg = (k, sw = 2) => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
+  const baht = (n, sign = false) => (sign ? (n < 0 ? "−" : "+") : "") + "฿" + Math.abs(n).toLocaleString("en-US");
+  const CAT = {
+    food: ["--cat-food", "utensils", "อาหาร"], travel: ["--cat-travel", "bus", "เดินทาง"], bills: ["--cat-bills", "zap", "บิล"],
+    home: ["--cat-home", "home", "บ้าน"], fun: ["--cat-entertainment", "film", "บันเทิง"], goods: ["--cat-goods", "bag", "ของใช้"],
+    health: ["--cat-health", "heart", "สุขภาพ"], other: ["--cat-other", "receipt", "อื่น ๆ"], coffee: ["--cat-food", "coffee", "อาหาร"], trip: ["--cat-travel", "plane", "เดินทาง"],
+  };
+  const c = (cat) => `--c: var(${CAT[cat][0]})`;
+
+  const poster = (cat, title, sub, amt, extra = "") =>
+    `<button class="poster" style="${c(cat)}">${extra}<span class="glyph">${svg(CAT[cat][1])}</span>
+      <span class="p-body"><span class="p-title">${title}</span>${sub ? `<span class="p-sub">${sub}</span>` : ""}${amt != null ? `<span class="p-amt">${amt}</span>` : ""}</span></button>`;
+  const rail = (title, inner, link = "ดูทั้งหมด") =>
+    `<section class="rail"><div class="rail-head"><h2>${title}</h2>${link ? `<a href="#">${link}${svg("right")}</a>` : ""}</div><div class="rail-track">${inner}</div></section>`;
+  const nav = (on) => {
+    const it = (k, ic, label) => `<button class="nav-item ${on === k ? "on" : ""}">${svg(ic, on === k ? 2.4 : 2)}${label}</button>`;
+    return `<nav class="nav">${it("home", "home", "หน้าหลัก")}${it("hist", "list", "รายการ")}<button class="nav-add" aria-label="จดรายการ">${svg("plus")}</button>${it("up", "calendar", "กำลังจะมา")}${it("me", "user", "ของฉัน")}</nav>`;
+  };
+  const topbar = (solid = false) => `<header class="topbar ${solid ? "solid" : ""}"><div class="logo"><span class="logo-mark">น</span><b>นับตังค์</b></div>
+    <div class="top-actions"><button class="icon-btn" aria-label="ค้นหา">${svg("search")}</button><button class="icon-btn" aria-label="บัญชี"><span class="avatar">ม</span></button></div></header>`;
+
+  // billboard art: the month's balance drawn as the "key art"
+  const curve = (w = 360, h = 450, left = 0) => {
+    const pts = [.55,.58,.5,.62,.6,.66,.57,.7,.68,.64,.72,.69,.76,.73,.8,.78,.74,.83,.8,.86];
+    const step = w / (pts.length - 1);
+    const line = pts.map((p, i) => `${i ? "L" : "M"}${(i * step).toFixed(1)} ${(h * (1.02 - p) + 40).toFixed(1)}`).join(" ");
+    return `<div class="billboard-art"><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+      <defs><linearGradient id="g${left}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--brand)" stop-opacity=".45"/><stop offset="1" stop-color="var(--brand)" stop-opacity="0"/></linearGradient></defs>
+      ${[0.25, 0.45, 0.65].map((y) => `<line x1="0" x2="${w}" y1="${h * y}" y2="${h * y}" stroke="var(--ink)" stroke-opacity=".06"/>`).join("")}
+      <path d="${line} L${w} ${h} L0 ${h} Z" fill="url(#g${left})"/><path d="${line}" fill="none" stroke="var(--brand-strong)" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg></div>`;
+  };
+
+  /* ------------------------------ swatches ------------------------------ */
+  const sw = [
+    ["--bg", "พื้น", "เกือบดำ"], ["--surface", "surface", "การ์ด tile/wide"], ["--surface-2", "surface-2", "quick add"],
+    ["--ink", "ink", "ข้อความหลัก · ปุ่ม CTA"], ["--ink-3", "ink-3", "ข้อความรอง"],
+    ["--brand", "brand", "เขียวมรกต · หมึก"], ["--brand-deep", "brand-deep", "แสงพื้นหลัง billboard"],
+    ["--income", "income", "รายรับ · ฟ้า"], ["--expense", "expense", "รายจ่าย · ปะการัง"], ["--danger", "danger", "ลบ · ผิดพลาด"],
+  ];
+  document.getElementById("swatches").innerHTML = sw.map(([v, n, d]) => `<div class="sw"><i style="background:var(${v})"></i><span><b>${n}</b>${d}</span></div>`).join("");
+
+  /* -------------------------------- home -------------------------------- */
+  const top10 = [["food", "อาหาร", 6420], ["bills", "บิล", 4890], ["travel", "เดินทาง", 2310], ["goods", "ของใช้", 1980], ["fun", "บันเทิง", 1450], ["health", "สุขภาพ", 890]];
+  document.getElementById("home").innerHTML = `
+    <div class="ambient"></div>
+    ${topbar()}
+    <div class="chips" style="position:relative"><button class="chip on">ทั้งหมด</button><button class="chip">รายจ่าย</button><button class="chip">รายรับ</button><button class="chip">หนี้</button><button class="chip up-chip">ก.ย. ${svg("down")}</button></div>
+    <section class="billboard">${curve()}
+      <div class="billboard-body">
+        <span class="bb-kicker"><i>น</i>กระเป๋าหลัก · ก.ย.</span>
+        <strong class="bb-amount"><small>฿</small>42,380</strong>
+        <div class="bb-tags"><span>ใช้ไป <b>61%</b> ของรายรับ</span><span>อีก 7 วันเงินเดือนออก</span><span>จดติดกัน 12 วัน</span></div>
+        <div class="bb-actions"><button class="btn btn-cta">${svg("plus", 2.6)}จดรายการ</button><button class="btn btn-2">${svg("info")}รายละเอียด</button></div>
+      </div>
+    </section>
+    ${rail("จดเร็ว", [["coffee", "กาแฟ", 65], ["food", "ข้าวกลางวัน", 80], ["travel", "BTS", 47], ["goods", "7-Eleven", 120], ["fun", "Netflix", 419]]
+      .map(([k, t, a]) => `<button class="quick" style="${c(k)}">${svg(CAT[k][1])}<span><b>${t}</b><br><small>${baht(a)}</small></span></button>`).join("") +
+      `<button class="quick add">${svg("plus")}<small>เพิ่ม</small></button>`, "")}
+    ${rail("ใกล้ครบกำหนด",
+      poster("bills", "ค่าไฟ", "ทุกวันที่ 26", baht(1240), '<span class="ribbon">อีก 2 วัน</span>') +
+      poster("home", "ค่าเช่าห้อง", "ทุกวันที่ 1", baht(8500), '<span class="ribbon">อีก 7 วัน</span>') +
+      poster("other", "บัตร KTC", "ยอดค้าง", baht(3870), '<span class="ribbon warn">เลยกำหนด</span>') +
+      poster("fun", "Spotify", "ทุกวันที่ 3", baht(129)))}
+    ${rail("10 อันดับที่จ่ายมากสุดเดือนนี้", top10.map(([k, t, a], i) => `<div class="rank"><span class="rank-num">${i + 1}</span>${poster(k, t, "", baht(a))}</div>`).join(""))}
+    ${rail("กำลังไปได้ดี", [["trip", "เที่ยวญี่ปุ่น", "เป้าหมาย", 45, "฿27,000 / 60,000"], ["food", "งบอาหาร", "งบเดือนนี้", 72, "เหลือ ฿2,480"], ["goods", "งบของใช้", "งบเดือนนี้", 94, "เหลือ ฿120"]]
+      .map(([k, t, s, p, m]) => `<button class="tile" style="${c(k)}"><div class="tile-art"><span class="glyph">${svg(CAT[k][1])}</span><span class="t-label">${t}</span></div>
+        <div class="bar ${p > 90 ? "hot" : ""}"><i style="width:${p}%"></i></div><div class="tile-meta"><span>${s}</span><b>${m}</b></div></button>`).join(""))}
+    ${rail("กระเป๋าของคุณ", [["bills", "wallet", "กระเป๋าหลัก", 42380], ["trip", "card", "ออมทรัพย์", 128500], ["home", "wallet", "เงินสด", 1860]]
+      .map(([k, ic, t, a]) => `<button class="wallet" style="${c(k)}"><div class="w-top"><span class="w-dot">${svg(ic)}</span>${t}</div><strong>${baht(a)}</strong></button>`).join(""))}
+    ${rail("เพิ่งจด", [["food", "ข้าวมันไก่ ป้าจู", "12:40", -60], ["travel", "Grab กลับบ้าน", "เมื่อวาน", -148], ["other", "เงินเดือน", "25 ส.ค.", 38000], ["goods", "Lotus's", "เมื่อวาน", -642]]
+      .map(([k, t, d, a]) => `<button class="recent" style="${c(k)}"><div class="tile-art"><span class="glyph">${svg(CAT[k][1])}</span></div><div class="r-body"><b>${t}</b><small><span>${d}</span><span class="${a < 0 ? "neg" : "pos"}">${baht(a, true)}</span></small></div></button>`).join(""))}
+    ${rail("ภาพรวมเดือนนี้", `
+      <div class="wide"><span class="w-label">เงินเข้า–ออก 6 เดือน</span><strong class="w-value">+฿8,420</strong>
+        <div class="bars">${[[70, 62], [72, 80], [70, 58], [74, 66], [70, 71], [76, 48]].map(([i, o]) => `<div><i class="in" style="height:${i}%"></i><i class="out" style="height:${o}%"></i></div>`).join("")}</div>
+        <div class="legend"><span><i style="background:var(--income)"></i>เข้า</span><span><i style="background:var(--expense)"></i>ออก</span></div></div>
+      <div class="wide"><span class="w-label">ความมั่งคั่งสุทธิ</span><strong class="w-value">฿168,870</strong>
+        <div class="tile-meta" style="padding:0"><span>จากเดือนก่อน</span><b class="pos">+฿4,210</b></div></div>`, "")}
+    ${nav("home")}`;
+  const hs = document.getElementById("home-scroll");
+  hs.addEventListener("scroll", () => hs.querySelector(".topbar").classList.toggle("solid", hs.scrollTop > 280));
+
+  /* ------------------------------- detail ------------------------------- */
+  document.getElementById("detail").innerHTML = `
+    ${topbar(true)}
+    <div class="dim"></div>
+    <div class="sheet" style="${c("food")}">
+      <div class="sheet-hero"><span class="glyph">${svg("utensils")}</span><button class="sheet-close" aria-label="ปิด">${svg("x")}</button></div>
+      <div class="sheet-body">
+        <span class="bb-kicker"><i>น</i>รายจ่าย</span>
+        <h2>ข้าวมันไก่ ป้าจู</h2>
+        <strong class="sheet-amt neg">−฿60</strong>
+        <div class="meta-row"><span>วันนี้ 12:40</span><span class="pill">อาหาร</span><span>กระเป๋าหลัก</span><span>จดด้วย AI</span></div>
+        <div class="sheet-actions"><button class="btn btn-cta">${svg("pencil")}แก้ไข</button><button class="btn btn-danger">${svg("trash")}ลบรายการนี้</button></div>
+        <p class="note">ร้านนี้เดือนนี้ <b>6 ครั้ง · ฿360</b> คิดเป็น 5.6% ของงบอาหาร</p>
+        <div class="tabs"><span class="on">รายการคล้ายกัน</span><span>ร้านนี้ทั้งหมด</span></div>
+        <div class="similar">
+          ${poster("food", "ข้าวมันไก่ ป้าจู", "18 ก.ย.", "−฿60")}${poster("food", "ข้าวมันไก่ ป้าจู", "11 ก.ย.", "−฿70")}${poster("coffee", "กาแฟหน้าออฟฟิศ", "วันนี้", "−฿65")}
+          ${poster("food", "ก๋วยเตี๋ยวเรือ", "เมื่อวาน", "−฿55")}${poster("food", "ข้าวมันไก่ ป้าจู", "4 ก.ย.", "−฿60")}${poster("food", "ส้มตำ", "2 ก.ย.", "−฿90")}
+        </div>
+      </div>
+    </div>`;
+
+  /* ------------------------------ upcoming ------------------------------ */
+  const up = [
+    ["ก.ย.", 26, "bills", "ค่าไฟ", "อีก 2 วัน", "", "บิลประจำทุกเดือน ตัดจาก <b>กระเป๋าหลัก</b> · ครั้งก่อน ฿1,185", 1240],
+    ["ต.ค.", 1, "home", "ค่าเช่าห้อง", "อีก 7 วัน", "", "โอนให้เจ้าของห้องทุกวันที่ 1 · ยอดเท่าเดิม 6 เดือนติด", 8500],
+    ["ต.ค.", 2, "other", "บัตร KTC", "เลยกำหนด 3 วัน", "warn", "ยอดค้างชำระ <b>฿3,870</b> จากค่าอาหารที่ “อ้อนออกให้ก่อน” และช้อปปิ้ง", 3870],
+    ["ต.ค.", 5, "fun", "จูนคืนเงิน", "ลูกหนี้", "", "จูนยังค้าง <b>฿700</b> จากค่าหมูกระทะ 14 ก.ย. นัดคืนวันที่ 5", 700],
+    ["ต.ค.", 9, "goods", "งบของใช้ใกล้หมด", "เหลือ ฿120", "warn", "ตามอัตราที่ใช้อยู่ งบจะหมดราววันที่ 28 ก่อนรอบใหม่", null],
+  ];
+  document.getElementById("upcoming").innerHTML = `
+    <div class="page-title"><h1>กำลังจะมา</h1><div class="top-actions"><button class="icon-btn" aria-label="ค้นหา">${svg("search")}</button></div></div>
+    <div class="chips"><button class="chip on up-chip">${svg("zap")}บิล</button><button class="chip up-chip">${svg("users")}หนี้</button><button class="chip up-chip">${svg("pie")}งบ</button></div>
+    ${up.map(([m, d, k, t, kick, tone, p, a]) => `
+      <article class="up" style="${c(k)}"><div class="up-date"><small>${m}</small><b>${d}</b></div>
+        <div class="up-card"><div class="tile-art"><span class="glyph">${svg(CAT[k][1])}</span><span class="t-label">${t}</span></div>
+          <div class="up-row"><div><span class="kicker ${tone}">${kick}</span><h3>${a != null ? baht(a) : t}</h3></div>
+            <div class="mini"><button>${svg("check")}จ่ายแล้ว</button><button>${svg("bell")}เตือน</button></div></div>
+          <p>${p}</p></div></article>`).join("")}
+    ${nav("up")}`;
+
+  /* -------------------------------- mine -------------------------------- */
+  document.getElementById("mine").innerHTML = `
+    <div class="page-title"><h1>ของฉัน</h1><div class="top-actions"><button class="icon-btn" aria-label="ค้นหา">${svg("search")}</button></div></div>
+    <div class="me"><span class="avatar">ม</span><h2>มิ้นท์${svg("down")}</h2><p>รอบเดือนเริ่มวันที่ 25 · ใช้งาน 8 เดือน</p></div>
+    <div class="list"><div class="list-row"><span class="l-ic alert">${svg("bell")}</span><span class="l-txt">แจ้งเตือน<small>ค่าไฟครบกำหนดอีก 2 วัน</small></span>${svg("right")}</div></div>
+    ${rail("เครื่องมือเงิน", [["users", "หนี้และลูกหนี้", "2 คนค้างอยู่"], ["pie", "งบประมาณ", "4 หมวด"], ["repeat", "บิลประจำ", "6 รายการ"], ["trend", "พอร์ตลงทุน", "+3.2%"], ["chat", "ถาม AI", "ถามเรื่องเงิน"], ["file", "รายงาน", "PDF · CSV"]]
+      .map(([ic, t, s]) => `<button class="feat">${svg(ic)}<span><b>${t}</b><small>${s}</small></span></button>`).join(""), "")}
+    ${rail("กระเป๋า", [["bills", "wallet", "กระเป๋าหลัก", 42380], ["trip", "card", "ออมทรัพย์", 128500], ["home", "wallet", "เงินสด", 1860]]
+      .map(([k, ic, t, a]) => `<button class="wallet" style="${c(k)}"><div class="w-top"><span class="w-dot">${svg(ic)}</span>${t}</div><strong>${baht(a)}</strong></button>`).join(""), "จัดการ")}
+    <div class="list">
+      ${[["user", "บัญชีและโปรไฟล์"], ["target", "เป้าหมาย"], ["lock", "PIN และความปลอดภัย"], ["download", "ส่งออกข้อมูล"]]
+        .map(([ic, t]) => `<div class="list-row"><span class="l-ic">${svg(ic)}</span><span class="l-txt">${t}</span>${svg("right")}</div>`).join("")}
+    </div>
+    ${nav("me")}`;
+
+  /* -------------------------------- gate -------------------------------- */
+  document.getElementById("gate").innerHTML = `
+    <div class="gate"><div class="logo"><span class="logo-mark">น</span><b>นับตังค์</b></div>
+      <h1>ยินดีต้อนรับกลับ</h1><span class="avatar">ม</span><div class="who">มิ้นท์</div>
+      <div class="dots"><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></div>
+      <div class="pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<button>${n}</button>`).join("")}<span></span><button>0</button><button aria-label="ลบ">${svg("back")}</button></div>
+      <button class="forgot">ลืม PIN? เข้าสู่ระบบใหม่</button></div>`;
+
+  /* ------------------------------- desktop ------------------------------ */
+  document.getElementById("desk").innerHTML = `
+    <header class="d-top"><div class="logo"><span class="logo-mark">น</span><b>นับตังค์</b></div>
+      <nav><b>หน้าหลัก</b><span>รายการ</span><span>กำลังจะมา</span><span>ของฉัน</span></nav>
+      <div class="top-actions"><button class="btn btn-cta" style="min-height:34px">${svg("plus", 2.6)}จดรายการ</button><button class="icon-btn" aria-label="ค้นหา">${svg("search")}</button><span class="avatar">ม</span></div></header>
+    <section class="d-bill">${curve(900, 470, 1)}
+      <div class="d-bill-body"><span class="bb-kicker"><i>น</i>กระเป๋าหลัก · ก.ย.</span>
+        <strong class="bb-amount"><small>฿</small>42,380</strong>
+        <div class="bb-tags"><span>ใช้ไป <b>61%</b> ของรายรับ</span><span>อีก 7 วันเงินเดือนออก</span><span>จดติดกัน 12 วัน</span></div>
+        <p>เดือนนี้จ่ายน้อยกว่าเดือนก่อน ฿1,960 ส่วนใหญ่มาจากค่าเดินทาง ถ้าคุมอาหารได้อีกสัปดาห์ จะเก็บได้เกินเป้า</p>
+        <div class="bb-actions"><button class="btn btn-cta">${svg("plus", 2.6)}จดรายการ</button><button class="btn btn-2">${svg("info")}รายละเอียด</button></div></div>
+    </section>
+    <div class="rails">
+      <section class="rail"><div class="rail-head"><h2>ใกล้ครบกำหนด</h2></div><div class="rail-track">
+        ${poster("bills", "ค่าไฟ", "ทุกวันที่ 26", baht(1240), '<span class="ribbon">อีก 2 วัน</span>')}${poster("home", "ค่าเช่าห้อง", "ทุกวันที่ 1", baht(8500), '<span class="ribbon">อีก 7 วัน</span>')}
+        ${poster("other", "บัตร KTC", "ยอดค้าง", baht(3870), '<span class="ribbon warn">เลยกำหนด</span>')}${poster("fun", "Spotify", "ทุกวันที่ 3", baht(129))}${poster("health", "ประกันสุขภาพ", "ทุก 3 เดือน", baht(2750))}
+        ${poster("fun", "Netflix", "ทุกวันที่ 12", baht(419))}${poster("bills", "ค่าน้ำ", "ทุกวันที่ 15", baht(180))}${poster("goods", "iCloud", "ทุกวันที่ 20", baht(35))}
+      </div><button class="arrow" aria-label="ถัดไป">${svg("right")}</button></section>
+      <section class="rail"><div class="rail-head"><h2>10 อันดับที่จ่ายมากสุดเดือนนี้</h2></div><div class="rail-track">
+        ${top10.map(([k, t, a], i) => `<div class="rank"><span class="rank-num">${i + 1}</span>${poster(k, t, "", baht(a))}</div>`).join("")}
+      </div><button class="arrow" aria-label="ถัดไป">${svg("right")}</button></section>
+    </div>`;
+</script>
+</body>
+</html>
