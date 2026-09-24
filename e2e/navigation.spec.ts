@@ -215,17 +215,17 @@ test.describe("navigation", () => {
   // the OS renders "September 2026", the app wants "กันยายน 2569".
   test("shows History's month pickers in Thai", async ({ app }) => {
     await navigate(app, "history");
-    await expect(app.locator(".summary-head .date-shell-text")).toHaveText(/2569$/);
     await expect(app.locator(".heatmap-month-controls .date-shell-text")).toHaveText(/2569$/);
   });
 
   test("moves between months in History", async ({ app }) => {
     await navigate(app, "history");
     const label = app.locator(".heatmap-panel").getByRole("combobox").or(app.locator(".heatmap-panel select")).first();
-    const before = await app.locator(".summary-panel").innerText();
+    const month = app.locator(".heatmap-month-controls .date-shell-text");
+    const before = await month.innerText();
     await app.locator(".heatmap-panel button").first().click();
     await app.waitForTimeout(500);
-    await expect(app.locator(".summary-panel")).not.toHaveText(before);
+    await expect(month).not.toHaveText(before);
     await expect(label.or(app.locator(".heatmap-panel"))).toBeVisible();
   });
 

@@ -97,6 +97,12 @@ each wallet a tile in its own `--hue` with its share of the total as a meter
 900px up the app is the whole window: Home's billboard runs edge to edge
 under the topbar and fades into the page at the bottom, and every other
 screen keeps a centred 1180px column with the topbar lined up to it.
+History ("รายการ") is list-first: a bare search field (no card around it)
+with one row of type chips under it (`QUICK_TYPES` in components/history.tsx,
+the same `filters.type` the filter panel sets), then the calendar -- which
+carries the month switcher -- that day's entries, and the trend/income charts
+last. It used to open on a "ภาพรวมเดือนนี้" card of month totals; those are
+Home's job, and that card is gone along with `MonthSummary` and `Metric`.
 
 **The brand is NUBTHUNG and its mark is the green "N"** --
 `public/icons/logo-mark.png` (transparent, for the app's own ground) and the

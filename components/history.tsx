@@ -1,15 +1,14 @@
 "use client";
 
 import { memo, useEffect, useRef, useState } from "react";
-import { ChevronDown, Search, SlidersHorizontal, Users, X } from "lucide-react";
+import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
-import { formatMoney, formatPercent, moneySign } from "@/lib/format";
+import { formatMoney, moneySign } from "@/lib/format";
 import { summarizeDayEntries } from "@/lib/insights";
 import { transactionTypeLabels, type TransactionType } from "@/lib/taxonomy";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { Entry, HistoryFilters } from "@/lib/types";
 import { CategoryIcon } from "@/components/shared";
-import { EmptyNote, Metric, MonthField } from "@/components/primitives";
 
 export const HistoryInsight = memo(function HistoryInsight({ entries }: { entries: Entry[] }) {
   const { count, income, outflow, top } = summarizeDayEntries(entries);
@@ -31,6 +30,14 @@ export const HistoryInsight = memo(function HistoryInsight({ entries }: { entrie
     </section>
   );
 });
+
+const QUICK_TYPES: { type: TransactionType; label: string }[] = [
+  { type: "personal_expense", label: "จ่ายเอง" },
+  { type: "income", label: "รายรับ" },
+  { type: "split_half", label: "หารร่วม" },
+  { type: "lend", label: "ออกให้ก่อน" },
+  { type: "transfer", label: "โอน" },
+];
 
 export function HistoryFilterBar({
   filters,
@@ -65,22 +72,28 @@ export function HistoryFilterBar({
     setQueryDraft("");
     update({ query: "" });
   };
+  // A type with its own chip in the row under the field is shown there, not
+  // repeated as a removable chip; any other type (picked in the panel) is.
+  const quickType = QUICK_TYPES.some((item) => item.type === filters.type);
   const activeFilters = [
     filters.category && { key: "category" as const, label: `หมวด ${filters.category}` },
-    filters.type !== "all" && { key: "type" as const, label: transactionTypeLabels[filters.type as TransactionType] },
+    filters.type !== "all" && !quickType && { key: "type" as const, label: transactionTypeLabels[filters.type as TransactionType] },
     filters.minAmount && { key: "minAmount" as const, label: `ตั้งแต่ ${moneySign}${filters.minAmount}` },
     filters.maxAmount && { key: "maxAmount" as const, label: `ไม่เกิน ${moneySign}${filters.maxAmount}` },
   ].filter(Boolean) as { key: keyof HistoryFilters; label: string }[];
   const removeFilter = (key: keyof HistoryFilters) => update({ [key]: key === "type" ? "all" : "" } as Partial<HistoryFilters>);
 
   return (
-    <section className="history-search-panel">
+    <section className="history-search" aria-label="ค้นหารายการ">
       <div className="history-search-row">
         <span className="history-search-icon" aria-hidden="true"><Search size={16} strokeWidth={2.25} /></span>
         <input
           value={queryDraft}
           onChange={(event) => handleQueryChange(event.target.value)}
-          placeholder="ค้นหาชื่อ หมวด ลูกหนี้ หรือหมายเหตุ"
+          type="search"
+          enterKeyHint="search"
+          aria-label="ค้นหารายการ"
+          placeholder="ค้นหาชื่อ หมวด คน หรือหมายเหตุ"
         />
         {queryDraft && (
           <button className="history-search-clear" aria-label="ล้างคำค้นหา" onClick={clearQuery}>
@@ -96,6 +109,22 @@ export function HistoryFilterBar({
           <SlidersHorizontal size={16} strokeWidth={2.25} />
           {activeFilters.length > 0 && <span className="filter-count-badge">{activeFilters.length}</span>}
         </button>
+      </div>
+
+      {/* The kinds people actually filter by, one tap each -- the same
+          filters.type the panel's select sets, so the two never disagree. */}
+      <div className="history-type-chips" role="group" aria-label="ชนิดรายการ">
+        <button className={filters.type === "all" ? "active" : ""} aria-pressed={filters.type === "all"} onClick={() => update({ type: "all" })}>ทั้งหมด</button>
+        {QUICK_TYPES.map((item) => (
+          <button
+            key={item.type}
+            className={filters.type === item.type ? "active" : ""}
+            aria-pressed={filters.type === item.type}
+            onClick={() => update({ type: filters.type === item.type ? "all" : item.type })}
+          >
+            {item.label}
+          </button>
+        ))}
       </div>
 
       {activeFilters.length > 0 && (
@@ -222,91 +251,3 @@ export const IncomeBreakdown = memo(function IncomeBreakdown({ items }: { items:
     </details>
   );
 });
-
-export function MonthSummary({
-  selectedMonth,
-  setSelectedMonth,
-  income,
-  outflow,
-  debtChange,
-  balance,
-  categories: categoryItems,
-  lentOut,
-  monthStartDay,
-  budgets,
-}: {
-  selectedMonth: string;
-  setSelectedMonth: (value: string) => void;
-  income: number;
-  outflow: number;
-  debtChange: number;
-  balance: number;
-  categories: { category: string; amount: number }[];
-  lentOut: number;
-  monthStartDay: number;
-  budgets: Record<string, number>;
-}) {
-  return (
-    <section className="summary-panel">
-      <div className="summary-head">
-        <div>
-          <h2>ภาพรวมเดือนนี้</h2>
-          <small className="cycle-note">รอบเริ่มวันที่ {monthStartDay} ของเดือน</small>
-        </div>
-        <MonthField value={selectedMonth} onChange={setSelectedMonth} />
-      </div>
-      <div className="summary-grid">
-        <Metric label="เงินเข้า" value={income} tone="income" />
-        <Metric label="เงินออก" value={outflow} tone="expense" />
-        <Metric label="สุทธิ" value={balance} tone={balance >= 0 ? "income" : "expense"} />
-        <Metric
-          label={debtChange > 0 ? "ยอดลูกหนี้เพิ่มขึ้น" : debtChange < 0 ? "ยอดลูกหนี้ลดลง" : "ยอดลูกหนี้คงเดิม"}
-          value={debtChange}
-          tone={debtChange > 0 ? "expense" : debtChange < 0 ? "income" : undefined}
-          showPositiveSign
-        />
-      </div>
-      <div className="category-bars">
-        <div className="category-bars-head">
-          <span>ค่าใช้จ่ายตามหมวด</span>
-          <small>นับเฉพาะส่วนที่คุณจ่ายจริง</small>
-        </div>
-        {categoryItems.length ? (
-          categoryItems.map((item) => {
-            const budget = budgets[item.category];
-            const hasBudget = !!budget && budget > 0;
-            const overBudget = hasBudget && item.amount > budget;
-            const color = overBudget ? "var(--danger)" : categoryColor(item.category);
-            const percent = hasBudget ? (item.amount / budget) * 100 : outflow > 0 ? (item.amount / outflow) * 100 : 0;
-            return (
-              <div className="category-bar" key={item.category}>
-                <div>
-                  <span className="cat-dot" style={{ background: categoryTint(item.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(item.category) }}><CategoryIcon category={item.category} /></span>
-                  <b>{item.category}</b>
-                  {overBudget && <span className="over-budget-chip">เกินงบ</span>}
-                  <small>{hasBudget ? `${moneySign}${formatMoney(item.amount)} / ${moneySign}${formatMoney(budget)}` : formatPercent(percent)}</small>
-                  {!hasBudget && <strong>{moneySign}{formatMoney(item.amount)}</strong>}
-                </div>
-                <i style={{ width: `${Math.max(4, Math.min(100, percent))}%`, background: color }} />
-              </div>
-            );
-          })
-        ) : (
-          <EmptyNote glyph="▣">ยังไม่มีรายจ่ายในเดือนนี้ · พอมีรายการแล้ว ตรงนี้จะแยกให้เห็นว่าเงินไปหมดกับหมวดไหน</EmptyNote>
-        )}
-        {lentOut > 0 && (
-          <div className="category-bar category-bar-lent">
-            <div>
-              <span className="cat-dot cat-dot-neutral"><Users size={14} strokeWidth={2.25} aria-hidden="true" /></span>
-              <b>ให้คนอื่นยืม/หารก่อน</b>
-              <small>{outflow > 0 ? formatPercent((lentOut / outflow) * 100) : "0%"}</small>
-              <strong>{moneySign}{formatMoney(lentOut)}</strong>
-            </div>
-            <i style={{ width: `${Math.max(4, Math.min(100, outflow > 0 ? (lentOut / outflow) * 100 : 0))}%` }} />
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-

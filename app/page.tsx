@@ -43,7 +43,6 @@ import {
   buildWalletLedger,
   spendByCategory,
   calculateImpacts,
-  categorySpendAmount,
   defaultWalletId,
   describeDraftSave,
   describeWalletDeletion,
@@ -121,7 +120,7 @@ import {
   CyclePaceCard,
   SuccessPulse,
 } from "@/components/home";
-import { HistoryFilterBar, HistoryInsight, IncomeBreakdown, MonthSummary, MonthlyTrendChart } from "@/components/history";
+import { HistoryFilterBar, HistoryInsight, IncomeBreakdown, MonthlyTrendChart } from "@/components/history";
 import { Auth, PinGate, SecurityView } from "@/components/auth";
 import type { WalletInput, RecurringExpenseInput } from "@/components/wallets-recurring";
 import type { DebtorInput } from "@/components/debtors";
@@ -1104,13 +1103,6 @@ export default function Home() {
   );
   const monthlyIncome = useMemo(() => totalWallet(monthlyEntries, "income"), [monthlyEntries]);
   const monthlyOutflow = useMemo(() => Math.abs(totalWallet(monthlyEntries, "expense")), [monthlyEntries]);
-  const monthlyDebtChange = useMemo(
-    () =>
-      monthlyEntries
-        .filter((entry) => TYPES_OWED_TO_USER.includes(entry.transaction_type))
-        .reduce((sum, entry) => sum + entry.debt_impact, 0),
-    [monthlyEntries],
-  );
   const monthlyBalance = monthlyIncome - monthlyOutflow;
   const receivableTotal = receivableSummary.reduce((sum, item) => sum + item.amount, 0);
   const payableTotal = payableSummary.reduce((sum, item) => sum + item.amount, 0);
@@ -1179,13 +1171,6 @@ export default function Home() {
     const key = currentCycleMonthKey(monthStartDay, now);
     return buildCyclePace(entries, cycleBounds(key, monthStartDay), cycleBounds(shiftMonthKey(key, -1), monthStartDay), now);
   }, [entries, monthStartDay]);
-  const monthlyLentOut = useMemo(
-    () => monthlyEntries.reduce((sum, entry) => {
-      if (!countsAsEarnedOrSpent(entry.transaction_type) || entry.wallet_impact >= 0) return sum;
-      return sum + (Math.abs(entry.wallet_impact) - (categorySpendAmount(entry) ?? 0));
-    }, 0),
-    [monthlyEntries],
-  );
   const incomeSummary = useMemo(() => {
     const map = new Map<string, number>();
     for (const entry of monthlyEntries) {
@@ -3199,23 +3184,15 @@ export default function Home() {
               </>
             ) : (
               <>
-                <MonthSummary
-                  selectedMonth={selectedMonth}
-                  setSelectedMonth={selectHistoryMonth}
-                  income={monthlyIncome}
-                  outflow={monthlyOutflow}
-                  debtChange={monthlyDebtChange}
-                  balance={monthlyBalance}
-                  categories={categorySummary}
-                  lentOut={monthlyLentOut}
-                  monthStartDay={monthStartDay}
-                  budgets={budgets}
-                />
-                <MonthlyTrendChart trend={monthlyTrend} />
-                <IncomeBreakdown items={incomeSummary} />
+                {/* The list first: History is where an entry is found, and the
+                    month's totals are Home's job (its billboard, the 7-day and
+                    cycle-pace cards). The calendar picks the day and carries
+                    the month switcher; the charts come after the entries. */}
                 <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedMonth={selectedMonth} onChangeMonth={selectHistoryMonth} selectedDay={selectedDay} defaultDay={defaultHistoryDay} onSelectDay={setSelectedDay} />
                 {activeDay && <HistoryInsight entries={dayEntries} />}
                 <EntryList entries={dayEntries} onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+                <MonthlyTrendChart trend={monthlyTrend} />
+                <IncomeBreakdown items={incomeSummary} />
               </>
             )}
           </div>

@@ -7,9 +7,9 @@ import { formatDateInputValue, formatMonthInputValue, formatMoney, moneySign } f
 import type { ConfirmDialogState, EmptyAction, Toast } from "@/lib/types";
 
 // A generic animated-count-up money display -- lives here rather than in
-// components/home.tsx (its main caller, HeroWalletCard) specifically to
-// avoid a circular import: Metric below (also in this file) renders it too,
-// and home.tsx already imports several primitives from this file.
+// components/home.tsx (its main caller, HeroWalletCard) because many
+// screens render it, and home.tsx already imports several primitives from
+// this file.
 //
 // It counts only when the figure changes while you are looking at it (a
 // save, an undo, a price update). Arriving on a screen shows the number as
@@ -555,15 +555,6 @@ export function ErrorActions({ onRetry, onDismiss }: { onRetry: () => void; onDi
     <div className="error-actions">
       <button onClick={onRetry}>ลองซิงค์อีกครั้ง</button>
       <button onClick={onDismiss}>ปิดข้อความ</button>
-    </div>
-  );
-}
-
-export function Metric({ label, value, tone, showPositiveSign = false }: { label: string; value: number; tone?: "income" | "expense"; showPositiveSign?: boolean }) {
-  return (
-    <div className={`metric ${tone}`}>
-      <span>{label}</span>
-      <b>{value < 0 ? "−" : showPositiveSign && value > 0 ? "+" : ""}<CountUpMoney value={Math.abs(value)} /></b>
     </div>
   );
 }
