@@ -26,6 +26,7 @@ import {
   splitDebtorNames,
   splitPinMismatch,
   splitSharesBetween,
+  spendByCategory,
   matchDebtorName,
   filterEntries,
   netWorthAsOf,
@@ -341,6 +342,22 @@ describe("buildBalanceHistory", () => {
 
   it("returns nothing for no days", () => {
     assert.deepEqual(buildBalanceHistory([], [], "cash", 0, now), []);
+  });
+});
+
+describe("spendByCategory", () => {
+  it("adds each category's own share, biggest first, and leaves out what was not spending", () => {
+    const entries = [
+      makeEntry({ id: "1", category: "อาหาร", transaction_type: "personal_expense", wallet_impact: -100, user_share: 100 }),
+      makeEntry({ id: "2", category: "เดินทาง", transaction_type: "personal_expense", wallet_impact: -300, user_share: 300 }),
+      makeEntry({ id: "3", category: "อาหาร", transaction_type: "personal_expense", wallet_impact: -250, user_share: 250 }),
+      // Income is not spending, and neither is a wallet top-up.
+      makeEntry({ id: "4", category: "รายได้", transaction_type: "income", wallet_impact: 5000, user_share: 5000 }),
+    ];
+    assert.deepEqual(spendByCategory(entries), [
+      { category: "อาหาร", amount: 350 },
+      { category: "เดินทาง", amount: 300 },
+    ]);
   });
 });
 

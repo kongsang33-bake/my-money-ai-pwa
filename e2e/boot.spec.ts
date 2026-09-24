@@ -11,18 +11,19 @@ test.describe("boot", () => {
   });
 
   test("shows every Home section the fixture has data for", async ({ app }) => {
-    for (const section of [".hero-wallet", ".home-insight-card", ".goal-card", ".due-soon-card", ".activity-timeline"]) {
+    for (const section of [".hero-wallet", ".home-insight-card", ".goal-tile", ".budget-tile", ".due-soon-poster", ".unpaid-poster", ".rank .poster", ".recent-tile"]) {
       await expect(app.locator(section).first()).toBeVisible();
     }
   });
 
-  test("keeps a paused bill out of the due-soon card", async ({ app }) => {
+  test("keeps a paused bill out of the due-soon rail", async ({ app }) => {
     // Pausing exists so a cancelled subscription can keep its history without
     // still being counted -- so the row staying on the list and the row
     // staying out of the reminders are the same feature, and only the second
     // half is invisible until it breaks. ฟิตเนส is paused and due sooner than
-    // either live bill, so it would sit at the top of this card if it leaked.
-    const card = app.locator(".due-soon-card");
+    // either live bill, so it would be the first poster in this rail if it
+    // leaked.
+    const card = app.locator(".due-soon-rail");
     await expect(card).toContainText("Netflix");
     await expect(card).not.toContainText("ฟิตเนส");
   });

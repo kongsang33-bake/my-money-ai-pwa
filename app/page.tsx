@@ -41,6 +41,7 @@ import {
   CARD_FUNDABLE_TYPES,
   buildBalanceHistory,
   buildWalletLedger,
+  spendByCategory,
   calculateImpacts,
   categorySpendAmount,
   defaultWalletId,
@@ -99,22 +100,22 @@ import {
 import { WalletAvatarGlyph } from "@/components/shared";
 import { BottomNav } from "@/components/bottom-nav";
 import { ConfirmDialog, CountUpMoney, ElapsedSeconds, ErrorActions, Rail, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useStableHandler } from "@/components/primitives";
-import { AiComposer, DraftImpact, DraftRow, EditSheet, EntryList, ManualEntryForm, QuickAddStrip, RecentActivityTimeline } from "@/components/add";
+import { AiComposer, DraftImpact, DraftRow, EditSheet, EntryList, ManualEntryForm, QuickAddStrip } from "@/components/add";
 import {
-  BudgetGlanceCard,
   CalendarHeatmap,
   CashFlowTrendCard,
-  DueSoonCard,
-  GoalCard,
   GoalEditSheet,
   GoalsView,
+  DueSoonRail,
+  GoalsBudgetsRail,
   HeroWalletCard,
+  RecentRail,
+  TopCategoriesRail,
   HomeInsightGrid,
   HomeStartChecklist,
   MissingWalletNotice,
   SpendingPersonalityCard,
   SuccessPulse,
-  UnpaidCardsCard,
 } from "@/components/home";
 import { HistoryFilterBar, HistoryInsight, IncomeBreakdown, MonthSummary, MonthlyTrendChart } from "@/components/history";
 import { Auth, PinGate, SecurityView } from "@/components/auth";
@@ -1133,33 +1134,21 @@ export default function Home() {
 
   const categoryMemory = useMemo(() => buildCategoryMemory(entries), [entries]);
 
+  const monthlyCategorySpend = useMemo(() => spendByCategory(monthlyEntries), [monthlyEntries]);
   const categorySummary = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const entry of monthlyEntries) {
-      const spendAmount = categorySpendAmount(entry);
-      if (spendAmount == null) continue;
-      map.set(entry.category, (map.get(entry.category) ?? 0) + spendAmount);
-    }
-    for (const category of Object.keys(budgets)) {
-      if (!map.has(category)) map.set(category, 0);
-    }
-    const sorted = [...map.entries()].map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount);
+    const unspentBudgeted = Object.keys(budgets)
+      .filter((category) => !monthlyCategorySpend.some((item) => item.category === category))
+      .map((category) => ({ category, amount: 0 }));
+    const sorted = [...monthlyCategorySpend, ...unspentBudgeted];
     const shown = sorted.slice(0, 4);
     const shownNames = new Set(shown.map((item) => item.category));
     const missingBudgeted = sorted.filter((item) => !shownNames.has(item.category) && budgets[item.category] > 0);
     return [...shown, ...missingBudgeted];
-  }, [monthlyEntries, budgets]);
-  const discretionaryTopCategory = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const entry of monthlyEntries) {
-      if (entry.category === "บิลประจำ") continue;
-      const spendAmount = categorySpendAmount(entry);
-      if (spendAmount == null) continue;
-      map.set(entry.category, (map.get(entry.category) ?? 0) + spendAmount);
-    }
-    const sorted = [...map.entries()].map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount);
-    return sorted[0] ?? null;
-  }, [monthlyEntries]);
+  }, [monthlyCategorySpend, budgets]);
+  const discretionaryTopCategory = useMemo(
+    () => monthlyCategorySpend.find((item) => item.category !== "บิลประจำ") ?? null,
+    [monthlyCategorySpend],
+  );
   const discretionaryCategoryTrend = useMemo(() => {
     if (!discretionaryTopCategory) return null;
     const category = discretionaryTopCategory.category;
@@ -2822,8 +2811,16 @@ export default function Home() {
   const openGoalSheet = useCallback(() => setGoalSheetOpen(true), []);
   const openRecurringTab = useCallback(() => setTab("recurring"), []);
   const openBudgetsTab = useCallback(() => setTab("budgets"), []);
+  const openGoalsTab = useCallback(() => setTab("goals"), []);
+  const openHistoryTab = useCallback(() => setTab("history"), []);
+  // A category's poster on Home's top-categories rail opens History already
+  // filtered to it -- the same filter the bar at the top of History sets,
+  // so it is cleared the same way.
+  const openHistoryForCategory = useCallback((category: string) => {
+    setHistoryFilters({ query: "", category, type: "all", minAmount: "", maxAmount: "" });
+    setTab("history");
+  }, []);
   const openCardDebts = useCallback(() => { setSelectedDebtor(null); setTab("debtors"); }, []);
-  const removeGoalHandler = useStableHandler(removeGoal);
   const logRecurringNowHandler = useStableHandler(logRecurringNow);
   const goalSheetDismiss = useDismiss(goalSheetOpen, () => setGoalSheetOpen(false));
   const recapDismiss = useDismiss(recapOpen, () => setRecapOpen(false));
@@ -2945,21 +2942,22 @@ export default function Home() {
                   onHide={hideStartChecklist}
                 />
               )}
-              {/* Everything below here is a rail: a named row of fixed-width
-                  cards that scrolls on its own, rather than a stack of
-                  full-width blocks or a CSS grid -- see the "Rails" section
-                  of globals.css and the Rail component in primitives.tsx.
-                  Each card component (QuickAddStrip, DueSoonCard, …) is
-                  untouched; only its wrapper changed. */}
+              {/* Everything below here is a rail: a named row of cards that
+                  scrolls on its own, rather than a stack of full-width blocks
+                  or a CSS grid -- see the "Rails" section of globals.css and
+                  the Rail component in primitives.tsx. Bills, goals, budgets,
+                  categories and recent entries are posters and tiles built
+                  for a rail (components/home.tsx); the stat and cash-flow
+                  cards are still the older wide cards at a rail width. */}
               <QuickAddStrip shortcuts={homeShortcuts} onSelect={addFromShortcut} onMore={openAddTabDefault} />
               {(dueSoonRecurring.length > 0 || unpaidCards.length > 0) && (
-                // No rail-level action here: DueSoonCard/UnpaidCardsCard each
-                // already carry their own "จัดการ"/"ดูหนี้" button, and a
-                // second one on the rail head would just repeat it.
-                <Rail title="ใกล้ถึงกำหนด">
-                  {dueSoonRecurring.length > 0 && <DueSoonCard items={dueSoonRecurring} onManage={openRecurringTab} onLogNow={logRecurringNowHandler} />}
-                  {unpaidCards.length > 0 && <UnpaidCardsCard items={unpaidCards} onManage={openCardDebts} />}
-                </Rail>
+                <DueSoonRail
+                  items={dueSoonRecurring}
+                  unpaid={unpaidCards}
+                  onManage={openRecurringTab}
+                  onLogNow={logRecurringNowHandler}
+                  onOpenDebts={openCardDebts}
+                />
               )}
               {/* Every card in this rail reads as analysis, and analysis of
                   two entries is a row of confident zeros -- which is what an
@@ -2968,7 +2966,7 @@ export default function Home() {
                   to be a tall bento block straight under the hero, which
                   took most of the first screen; as a rail it is one row. */}
               {hasEnoughForInsights && (
-                <Rail title="สุขภาพการเงิน" compact>
+                <Rail title="สุขภาพการเงิน" size="compact">
                   <HomeInsightGrid
                     netWorth={netWorth}
                     netWorthDelta={netWorthDelta}
@@ -2982,11 +2980,15 @@ export default function Home() {
                 </Rail>
               )}
               {(!!goals.length || budgetGlance.totalBudget > 0) && (
-                <Rail title="เป้าหมายและงบ">
-                  {!!goals.length && <GoalCard goals={goals} onAdd={openGoalSheet} onDelete={removeGoalHandler} />}
-                  {budgetGlance.totalBudget > 0 && <BudgetGlanceCard budgetGlance={budgetGlance} onManage={openBudgetsTab} />}
-                </Rail>
+                <GoalsBudgetsRail
+                  goals={goals}
+                  budgetGlance={budgetGlance}
+                  onOpenGoals={openGoalsTab}
+                  onOpenBudgets={openBudgetsTab}
+                  onAddGoal={openGoalSheet}
+                />
               )}
+              {hasEnoughForInsights && <TopCategoriesRail items={monthlyCategorySpend} onSelect={openHistoryForCategory} />}
               {hasEnoughForInsights && (
                 <Rail title="ภาพรวมเดือนนี้">
                   <CashFlowTrendCard summary={cashFlowSummary} />
@@ -3017,7 +3019,7 @@ export default function Home() {
             </section>
           )}
 
-          {!dataLoading && <RecentActivityTimeline entries={entries} onEdit={openEditSheet} />}
+          {!dataLoading && <RecentRail entries={entries} onEdit={openEditSheet} onSeeAll={openHistoryTab} />}
 
           {error && <ErrorActions onRetry={retrySync} onDismiss={() => setError("")} />}
           {error && <StateCard tone="error" title="มีบางอย่างไม่สำเร็จ" detail={error} />}

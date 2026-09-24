@@ -624,31 +624,6 @@ export const EntryList = memo(function EntryList({
   );
 });
 
-export const RecentActivityTimeline = memo(function RecentActivityTimeline({ entries, onEdit }: { entries: Entry[]; onEdit: (entry: Entry) => void }) {
-  const recent = entries.slice(0, 4);
-  if (!recent.length) return null;
-
-  return (
-    <section className="activity-timeline">
-      <p className="activity-timeline-title">รายการล่าสุด</p>
-      <div className="activity-timeline-list">
-        {recent.map((entry) => (
-          <button className="activity-timeline-row" key={entry.id} onClick={() => onEdit(entry)}>
-            <i className="cat-dot" style={{ background: categoryTint(entry.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(entry.category) }}><CategoryIcon category={entry.category} size={14} /></i>
-            <span className="activity-timeline-info">
-              <b>{entry.title}</b>
-              <small>{entry.category} · {formatDateTime(entry.occurred_at)}</small>
-            </span>
-            <span className={`activity-timeline-amount ${entryDisplayImpact(entry) >= 0 ? "income" : "expense"}`}>
-              {formatSignedMoney(entryDisplayImpact(entry))}
-            </span>
-          </button>
-        ))}
-      </div>
-    </section>
-  );
-});
-
 export const QuickAddStrip = memo(function QuickAddStrip({
   shortcuts,
   onSelect,

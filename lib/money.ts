@@ -511,6 +511,26 @@ export function categorySpendAmount(entry: Entry): number | null {
 }
 
 /**
+ * What the user spent in each category across `entries`, biggest first --
+ * the per-row rule is categorySpendAmount's, so every ranking in the app
+ * (History's category breakdown, the "top category" insight, Home's top-10
+ * rail) counts a split, a funded leg or a card charge the same way. Only
+ * categories with spending are returned; a caller that wants zero rows for
+ * budgeted categories adds them itself.
+ */
+export function spendByCategory(entries: Entry[]): { category: string; amount: number }[] {
+  const totals = new Map<string, number>();
+  for (const entry of entries) {
+    const amount = categorySpendAmount(entry);
+    if (amount == null) continue;
+    totals.set(entry.category, (totals.get(entry.category) ?? 0) + amount);
+  }
+  return [...totals.entries()]
+    .map(([category, amount]) => ({ category, amount }))
+    .sort((a, b) => b.amount - a.amount);
+}
+
+/**
  * What one row shows as its amount in the history and on the timeline -- which
  * is not always what it did to a wallet.
  *

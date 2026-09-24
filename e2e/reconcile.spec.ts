@@ -34,11 +34,17 @@ test.describe("reconcile", () => {
 
   test("nudges about a card with nothing paid against it this cycle", async ({ app }) => {
     // The seed's own-kind debtor has a balance and no debt_payment in it.
-    const card = app.locator(".unpaid-cards-card");
-    await expect(card).toContainText("ยังไม่ได้จ่ายรอบนี้");
+    // One poster per unpaid debt; the poster itself is the way into them.
+    const card = app.locator(".unpaid-poster");
+    await expect(card).toContainText("ยังไม่จ่ายรอบนี้");
     await expect(card).toContainText("บัตรเครดิต");
 
-    await card.locator("button", { hasText: "ดูหนี้" }).click();
+    // Bring it clear of the pinned nav first, as a thumb would. On the 700px
+    // layout this rail ends the first screen, and Playwright's own "scroll if
+    // needed" does nothing for a poster that is partly on screen -- so it
+    // tapped the nav lying over the poster's centre instead.
+    await card.evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
+    await card.click();
     // Home is still mounted behind this screen, parked, so ".view" alone
     // would match both.
     await expect(app.locator(".view:not(.is-parked)")).toContainText("จัดการหนี้");

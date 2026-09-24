@@ -21,7 +21,7 @@ test.describe("navigation", () => {
     // The lock has to target .phone: the document itself never scrolls here,
     // so the old <body> position:fixed lock was a no-op and the page went on
     // scrolling under the sheet.
-    await app.locator(".activity-timeline-list button, .entry-tappable").first().click();
+    await app.locator(".recent-tile, .entry-tappable").first().click();
     await expect(app.locator(".sheet-backdrop > .edit-sheet")).toBeVisible();
     expect(await app.evaluate(() => (document.querySelector(".phone") as HTMLElement).style.overflowY)).toBe("hidden");
 
@@ -119,10 +119,21 @@ test.describe("navigation", () => {
   test("goes back to Home from a feature opened off a Home card", async ({ app }) => {
     // The same screen opened from Home's own card belongs to Home's trail,
     // not to a list the user never saw.
-    await app.locator(".home-view .due-soon-card button", { hasText: /^จัดการ$/ }).click();
+    await app.locator(".home-view .due-soon-rail .rail-head button", { hasText: /^จัดการ$/ }).click();
     await expect(app.locator(".add-title h2").first()).toBeVisible();
     await app.locator(".view:not(.is-parked) .add-title > button:first-child").click();
     await expect(app.locator(".phone > .view.home-view")).not.toHaveClass(/\bis-parked\b/);
+  });
+
+  test("opens History filtered to a category from Home's top-categories rail", async ({ app }) => {
+    // The rail ranks this cycle's categories; a poster is a shortcut to that
+    // category's entries, landing on the same filter the History bar sets --
+    // shown as a removable chip, so it is undone the usual way.
+    const poster = app.locator(".home-view .top-categories-rail .rank .poster").first();
+    const category = (await poster.locator(".poster-title").textContent())!.trim();
+    await poster.click();
+    await expect(app.locator(".bottom-nav > button").nth(1)).toHaveClass(/\bactive\b/);
+    await expect(app.locator(".history-filter-chips .filter-chip", { hasText: `หมวด ${category}` })).toBeVisible();
   });
 
   // The Ask-AI screen is a chat: composer pinned at the bottom, thread

@@ -221,6 +221,12 @@ export const INSIGHT_MIN_ENTRIES = 3;
 // flattening into noise on a phone-width box.
 export const BILLBOARD_HISTORY_DAYS = 30;
 
+// How many cards Home's "เพิ่งจด" and top-categories rails show before the
+// rail's own "ดูทั้งหมด" takes over. A rail scrolls, so these are about how
+// far anyone swipes, not about what fits on screen.
+export const RECENT_RAIL_LIMIT = 8;
+export const TOP_CATEGORY_LIMIT = 10;
+
 
 // Tallest the Ask-AI composer grows before it starts scrolling internally
 // (~5 lines). The textarea auto-grows in JS off scrollHeight, so the ceiling

@@ -9,11 +9,9 @@ Guidance for working on this codebase — a Thai personal-finance PWA
 นับตังค์ (Nubtang) is a Netflix-shaped app now: one billboard per screen
 (`HeroWalletCard`, class `.hero-wallet` -- its own tier, deliberately not
 a `.wallet-card`) carrying its own two actions, then horizontal rails of fixed-width
-cards underneath — a section that used to be a full-width stacked card or
-a CSS grid becomes a rail by wrapping it in the `Rail` component
-(`components/primitives.tsx`) and letting `.rail-track > *` in
-`globals.css` give every item inside it a fixed width, never by rewriting
-the card's own component. There is **one theme, dark only** — no
+cards underneath — a section becomes a rail by wrapping its items in the `Rail` component
+(`components/primitives.tsx`), whose `size` decides how wide every item in
+it is — a card never sizes itself for the rail it sits in. There is **one theme, dark only** — no
 `[data-theme]`, no toggle, no `prefers-color-scheme` branching. Grounds
 are near-black; the emerald `--accent` is ink, never a fill, spent on the
 logo mark, the nav's FAB, ribbons and progress — never a button. The
@@ -39,10 +37,19 @@ kicker, amount, tags and two actions over a fade at the bottom, landscape
 with the words on the left from 900px up), whose art is the spending
 balance's real last 30 days (`buildBalanceHistory`, which walks back from
 the ledger's own figure so it cannot end on a different number); and every
-Home section below it as a rail. The rails still hold the *old* card
-components at a fixed width, which is the main thing that still looks
-unlike the mock. Not yet built: poster/tile cards with their own art to
-replace those, the title-detail sheet,
+Home section below it as a rail. The rails' items are built for a rail now
+(components/home.tsx): **posters** (2:3, `Poster`) for bills due and unpaid
+cards (`DueSoonRail`) and for the ranked categories with the mock's outlined
+numerals (`TopCategoriesRail`, ranked by `spendByCategory`, tapping one
+opens History filtered to it); **progress tiles** (16:9 with a bar,
+`ProgressTile`) for goals and budgets (`GoalsBudgetsRail`); and small
+landscape cards for "เพิ่งจด" (`RecentRail`). A rail item's "art" is its own
+colour handed in as `--hue` — a `--cat-*` slot, or a colour the user picked
+— mixed into the ground, with its lucide icon large and faint; there are no
+pictures, so never reach for an image or an emoji to fill that slot. How wide
+items are is the rail's `size` prop (`.rail.is-*`), never the card's. Still
+the older wide cards at a rail width: the three "สุขภาพการเงิน" stat tiles
+and the two "ภาพรวมเดือนนี้" cards. Not yet built: the title-detail sheet,
 the "กำลังจะมา" timeline tab, restyling More/Wallets/the PIN gate, and a
 genuinely full-bleed desktop billboard (`.phone` still clamps to a
 max-width card at the wide breakpoints, per the rule below about not
@@ -76,10 +83,11 @@ still-mocked pieces are meant to look like before building any of them.
   **bold** (`.surface-bold` utility, or a component's own bold variant like
   `.home-insight-card.savings-rate` / `.due-soon-card`), and **bare** (no
   box at all — `.activity-timeline`, `.quick-add-strip` — content separated
-  by the page's own gutter and whitespace, not a border). `.due-soon-card`
-  and friends point at `--income-fill`/`--expense-fill`/`--accent-fill`
-  rather than a hand-picked saturated color, so a future re-tuning of what
-  "bold" means only touches those three tokens. When adding a new section,
+  by the page's own gutter and whitespace, not a border). A bold card
+  points at `--income-fill`/`--expense-fill`/`--accent-fill` rather than a
+  hand-picked saturated color, so a future re-tuning of what "bold" means
+  only touches those three tokens. Rail posters and tiles are a fourth
+  thing, not a tier: their ground is their own `--hue`. When adding a new section,
   decide its tier (or whether it's a rail item instead) deliberately;
   don't default to copying the nearest existing card.
 - **Font**: IBM Plex Sans Thai, loaded via `next/font/google` in
@@ -152,6 +160,12 @@ still-mocked pieces are meant to look like before building any of them.
   overlay layer. Don't reintroduce a drawer to hold a setting — a new one
   belongs on the account screen, or in "อื่น ๆ" if it is about money rather
   than about the account.
+- **The bottom nav is pinned to the viewport below 900px, at every width.**
+  It is rendered inside `.phone`, which is the scroll container, so with
+  `position: absolute` it scrolls away with the content — which it did from
+  481px to 899px until the Home rails put a poster where a test tried to tap
+  it. `.phone` also carries `scroll-padding-bottom: var(--nav-clearance)`,
+  so focus and scroll-into-view stop above the nav rather than under it.
 - **`.phone` is the real, edge-to-edge app root at every width — not a
   device mockup.** There is no rounded-card-with-drop-shadow "phone frame"
   centered on a differently-colored backdrop any more; that read as a

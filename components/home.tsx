@@ -1,15 +1,16 @@
 "use client";
 
 import { memo, useId, useMemo, useState } from "react";
-import { ChevronLeft, Info, Plus, TrendingDown, TrendingUp, Users, Wallet as WalletIcon } from "lucide-react";
-import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
-import { formatMoney, formatPercent, formatShortDate, formatSignedMoney, moneySign, toMoneyAmount } from "@/lib/format";
+import { Check, ChevronLeft, CreditCard, Info, Plus, Target, TrendingDown, TrendingUp, Users, Wallet as WalletIcon } from "lucide-react";
+import { CATEGORY_DOT_TINT_ALPHA, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
+import { formatChatTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, moneySign, toMoneyAmount } from "@/lib/format";
+import { entryDisplayImpact } from "@/lib/money";
 import { shiftMonthKey } from "@/lib/cycle";
 import { spendingByDay, type CashFlowSummary, type SetupStep, type UnpaidOwnDebt } from "@/lib/insights";
 import { categoryColor, categoryTint, nameColor } from "@/lib/category";
 import type { Entry, MoneyGoal, NetWorthDebtFormula, RecurringExpense } from "@/lib/types";
-import { CategoryIcon, WalletAvatarGlyph } from "@/components/shared";
-import { CountUpMoney, DateField, EmptyNote, InfoHint, MonthField, SheetFrame, SkeletonList, decimalInputPattern } from "@/components/primitives";
+import { CategoryIcon, RecurringAvatarGlyph } from "@/components/shared";
+import { CountUpMoney, DateField, EmptyNote, InfoHint, MonthField, Rail, SheetFrame, SkeletonList, decimalInputPattern } from "@/components/primitives";
 
 export const CalendarHeatmap = memo(function CalendarHeatmap({
   start,
@@ -289,122 +290,277 @@ export const HomeInsightGrid = memo(function HomeInsightGrid({
 });
 
 /**
- * The cards and instalments with nothing paid against them this cycle. Its
- * own card rather than a line inside DueSoonCard: a recurring bill is money
- * about to leave, while this is money the bank may already have taken while
- * the app still shows it in the wallet.
+ * A 2:3 poster, the rail item docs/netflix-reference.html builds most rails
+ * from. There are no pictures in a money app, so the "key art" is the item's
+ * own colour (a --cat-* slot, or the colour the user picked for a bill) as a
+ * gradient, with its icon large and faint in the corner, and the words set
+ * over a fade at the bottom the way a film title sits on its poster.
+ *
+ * A poster with `onClick` is one button. One without it is a plain box, which
+ * is what lets `children` hold a button of its own (a bill's "บันทึกเลย")
+ * without nesting one button inside another.
  */
-export const UnpaidCardsCard = memo(function UnpaidCardsCard({ items, onManage }: { items: UnpaidOwnDebt[]; onManage: () => void }) {
-  return (
-    <section className="home-focus-card unpaid-cards-card">
-      <div className="home-focus-head">
-        <div>
-          <span>ยังไม่ได้จ่ายรอบนี้</span>
-          <strong>{items.length} ก้อน</strong>
-        </div>
-        <button onClick={onManage}>ดูหนี้</button>
-      </div>
-      <div className="due-soon-list">
-        {items.slice(0, 3).map((item) => (
-          <div key={item.name}>
-            <i className="cat-dot" style={{ background: nameColor(item.name) }} />
-            <span>{item.name}</span>
-            <small>{item.minimum > 0 ? `ขั้นต่ำ ${moneySign}${formatMoney(item.minimum)}` : "ยังไม่มีรายการจ่ายในรอบนี้"}</small>
-            <div className="due-soon-action">
-              <b>{moneySign}{formatMoney(item.balance)}</b>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
+function Poster({
+  hue,
+  glyph,
+  title,
+  sub,
+  amount,
+  ribbon,
+  onClick,
+  className = "",
+  children,
+}: {
+  hue: string;
+  glyph: React.ReactNode;
+  title: string;
+  sub?: string;
+  amount?: string;
+  ribbon?: { text: string; tone?: "warn" };
+  onClick?: () => void;
+  className?: string;
+  children?: React.ReactNode;
+}) {
+  const content = (
+    <>
+      {ribbon && <span className={`poster-ribbon${ribbon.tone === "warn" ? " warn" : ""}`}>{ribbon.text}</span>}
+      <span className="poster-glyph" aria-hidden="true">{glyph}</span>
+      <span className="poster-body">
+        <span className="poster-title">{title}</span>
+        {sub && <span className="poster-sub">{sub}</span>}
+        {amount && <span className="poster-amount">{amount}</span>}
+        {children}
+      </span>
+    </>
   );
-});
+  const style = { "--hue": hue } as React.CSSProperties;
+  return onClick
+    ? <button className={`poster ${className}`} style={style} onClick={onClick}>{content}</button>
+    : <div className={`poster ${className}`} style={style}>{content}</div>;
+}
 
-export const DueSoonCard = memo(function DueSoonCard({
+/**
+ * A 16:9 tile with a progress bar under its art -- the mock's "continue
+ * watching" row, used for anything with a way still to go: a goal, a budget.
+ * The percentage is in the words as well as the bar, since the bar alone is a
+ * colour and a length.
+ */
+function ProgressTile({
+  hue,
+  glyph,
+  title,
+  percent,
+  over = false,
+  meta,
+  value,
+  onClick,
+  className = "",
+}: {
+  hue: string;
+  glyph: React.ReactNode;
+  title: string;
+  percent: number;
+  over?: boolean;
+  meta: string;
+  value: string;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button className={`tile ${className}`} style={{ "--hue": hue } as React.CSSProperties} onClick={onClick}>
+      <span className="tile-art">
+        <span className="tile-glyph" aria-hidden="true">{glyph}</span>
+        <span className="tile-title">{title}</span>
+      </span>
+      <span className={`tile-bar${over ? " over" : ""}`} aria-hidden="true">
+        <i style={{ width: `${Math.max(2, Math.min(100, percent))}%` }} />
+      </span>
+      <span className="tile-meta">
+        <span>{meta} · {Math.round(percent)}%</span>
+        <b>{value}</b>
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Bills due in the next few days, then the cards and instalments with nothing
+ * paid against them this cycle -- one poster each, with a ribbon saying how
+ * soon. The unpaid ones stay distinct (a coral ribbon) because they are not
+ * money about to leave: a card charge never moved the wallet, so this is money
+ * the bank may already have taken while the app still shows it as there.
+ */
+export const DueSoonRail = memo(function DueSoonRail({
   items,
+  unpaid,
   onManage,
   onLogNow,
+  onOpenDebts,
 }: {
   items: { item: RecurringExpense; billingDate: Date; daysUntil: number; isLogged: boolean }[];
+  unpaid: UnpaidOwnDebt[];
   onManage: () => void;
   onLogNow: (item: RecurringExpense, billingDate: Date) => void;
+  onOpenDebts: () => void;
 }) {
-  const total = items.reduce((sum, { item }) => sum + item.amount, 0);
   return (
-    <section className="home-focus-card due-soon-card">
-      <div className="home-focus-head">
-        <div>
-          <span>ใกล้ถึงกำหนด</span>
-          <strong>{items.length ? `${items.length} รายการ` : "ยังไม่มี"}</strong>
-        </div>
-        <button onClick={onManage}>จัดการ</button>
-      </div>
-      {items.length ? (
-        <div className="due-soon-list">
-          {items.slice(0, 3).map(({ item, billingDate, daysUntil, isLogged }) => (
-            <div key={item.id}>
-              <i className="cat-dot" style={{ background: item.icon_color ?? nameColor(item.name), color: "var(--text-on-color)" }}><WalletAvatarGlyph iconKey={item.icon} fallbackName={item.name} size={14} /></i>
-              <span>{item.name}</span>
-              <small>{daysUntil === 0 ? "วันนี้" : `อีก ${daysUntil} วัน`} · {billingDate.getDate()}/{billingDate.getMonth() + 1}</small>
-              <div className="due-soon-action">
-                <b>{moneySign}{formatMoney(item.amount)}</b>
-                {isLogged ? (
-                  <span className="due-soon-logged">บันทึกแล้ว</span>
-                ) : (
-                  <button className="due-soon-log-btn" onClick={() => onLogNow(item, billingDate)}>บันทึกเลย</button>
-                )}
-              </div>
-            </div>
-          ))}
-          <p>รวม <CountUpMoney value={total} /></p>
-        </div>
-      ) : (
-        <div className="home-compact-empty">
-          <span aria-hidden="true">↻</span>
-          <p>ยังไม่มีรายจ่ายประจำที่ใกล้ถึงกำหนด</p>
-        </div>
-      )}
-    </section>
+    <Rail title="ใกล้ถึงกำหนด" action="จัดการ" onAction={onManage} size="poster" className="due-soon-rail">
+      {items.map(({ item, billingDate, daysUntil, isLogged }) => (
+        <Poster
+          key={item.id}
+          className="due-soon-poster"
+          hue={item.icon_color ?? nameColor(item.name)}
+          glyph={<RecurringAvatarGlyph iconKey={item.icon} fallbackName={item.name} size={64} />}
+          title={item.name}
+          sub={`${billingDate.getDate()}/${billingDate.getMonth() + 1}`}
+          amount={`${moneySign}${formatMoney(item.amount)}`}
+          ribbon={{ text: daysUntil === 0 ? "วันนี้" : `อีก ${daysUntil} วัน` }}
+        >
+          {isLogged ? (
+            <span className="poster-done"><Check size={14} strokeWidth={2.5} aria-hidden="true" />บันทึกแล้ว</span>
+          ) : (
+            <button className="poster-action" onClick={() => onLogNow(item, billingDate)}>บันทึกเลย</button>
+          )}
+        </Poster>
+      ))}
+      {unpaid.map((debt) => (
+        <Poster
+          key={debt.name}
+          className="unpaid-poster"
+          hue={nameColor(debt.name)}
+          glyph={<CreditCard size={64} strokeWidth={2.25} />}
+          title={debt.name}
+          sub={debt.minimum > 0 ? `ขั้นต่ำ ${moneySign}${formatMoney(debt.minimum)}` : "ยังไม่มีรายการจ่าย"}
+          amount={`${moneySign}${formatMoney(debt.balance)}`}
+          ribbon={{ text: "ยังไม่จ่ายรอบนี้", tone: "warn" }}
+          onClick={onOpenDebts}
+        />
+      ))}
+    </Rail>
   );
 });
 
-export const BudgetGlanceCard = memo(function BudgetGlanceCard({
+/** Goals and this cycle's budgets, one progress tile each. */
+export const GoalsBudgetsRail = memo(function GoalsBudgetsRail({
+  goals,
   budgetGlance,
-  onManage,
+  onOpenGoals,
+  onOpenBudgets,
+  onAddGoal,
 }: {
-  budgetGlance: { items: { category: string; budget: number; spent: number; percent: number }[]; totalBudget: number; totalSpent: number };
-  onManage: () => void;
+  goals: MoneyGoal[];
+  budgetGlance: { items: { category: string; budget: number; spent: number; percent: number }[] };
+  onOpenGoals: () => void;
+  onOpenBudgets: () => void;
+  onAddGoal: () => void;
 }) {
-  const percent = budgetGlance.totalBudget > 0 ? (budgetGlance.totalSpent / budgetGlance.totalBudget) * 100 : 0;
   return (
-    <section className="home-focus-card budget-glance-card">
-      <div className="home-focus-head">
-        <div>
-          <span>งบประมาณ</span>
-          <strong>{budgetGlance.totalBudget ? `${Math.round(percent)}%` : "ยังไม่ตั้ง"}</strong>
+    <Rail title="เป้าหมายและงบ" action="เพิ่มเป้าหมาย" onAction={onAddGoal} size="tile" className="goals-budgets-rail">
+      {goals.map((goal) => (
+        <ProgressTile
+          key={goal.id}
+          className="goal-tile"
+          hue="var(--accent)"
+          glyph={<Target size={40} strokeWidth={2} />}
+          title={goal.name}
+          percent={goalProgress(goal)}
+          meta="เป้าหมาย"
+          value={`${moneySign}${formatMoney(goal.saved)} / ${formatMoney(goal.target)}`}
+          onClick={onOpenGoals}
+        />
+      ))}
+      {budgetGlance.items.map((item) => {
+        const left = item.budget - item.spent;
+        return (
+          <ProgressTile
+            key={item.category}
+            className="budget-tile"
+            hue={categoryColor(item.category)}
+            glyph={<CategoryIcon category={item.category} size={40} />}
+            title={`งบ${item.category}`}
+            percent={item.percent}
+            over={item.percent > 100}
+            meta="งบรอบนี้"
+            value={left >= 0 ? `เหลือ ${moneySign}${formatMoney(left)}` : `เกิน ${moneySign}${formatMoney(-left)}`}
+            onClick={onOpenBudgets}
+          />
+        );
+      })}
+    </Rail>
+  );
+});
+
+/**
+ * Where the money went this cycle, as the mock's "Top 10" row: a big outlined
+ * rank numeral behind each category's poster. The ranking is spendByCategory's
+ * (lib/money.ts), the same one History's breakdown uses. Tapping a category
+ * opens History already filtered to it.
+ */
+export const TopCategoriesRail = memo(function TopCategoriesRail({
+  items,
+  onSelect,
+}: {
+  items: { category: string; amount: number }[];
+  onSelect: (category: string) => void;
+}) {
+  if (!items.length) return null;
+  return (
+    <Rail title="หมวดที่จ่ายมากสุดรอบนี้" size="rank" className="top-categories-rail">
+      {items.slice(0, TOP_CATEGORY_LIMIT).map((item, index) => (
+        <div className="rank" key={item.category}>
+          {/* The numeral is drawn, not read: its order in the row already
+              says the rank, and the poster carries the name and amount. */}
+          <span className="rank-number" aria-hidden="true">{index + 1}</span>
+          <Poster
+            hue={categoryColor(item.category)}
+            glyph={<CategoryIcon category={item.category} size={64} />}
+            title={item.category}
+            amount={`${moneySign}${formatMoney(item.amount)}`}
+            onClick={() => onSelect(item.category)}
+          />
         </div>
-        <button onClick={onManage}>{budgetGlance.totalBudget ? "ปรับงบ" : "ตั้งงบ"}</button>
-      </div>
-      {budgetGlance.items.length ? (
-        <div className="budget-glance-list">
-          {budgetGlance.items.map((item) => (
-            <div key={item.category}>
-              <span>
-                <i className="cat-dot" style={{ background: categoryTint(item.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(item.category) }}><CategoryIcon category={item.category} /></i>
-                {item.category}
-              </span>
-              <b>{moneySign}{formatMoney(item.spent)} / {moneySign}{formatMoney(item.budget)}</b>
-              <em><small style={{ width: `${Math.max(4, Math.min(100, item.percent))}%`, background: item.percent > 100 ? "var(--danger)" : categoryColor(item.category) }} /></em>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="home-compact-empty">
-          <span aria-hidden="true">▣</span>
-          <p>ตั้งงบต่อหมวดเพื่อดูภาพรวมในหน้าแรก</p>
-        </div>
-      )}
-    </section>
+      ))}
+    </Rail>
+  );
+});
+
+/**
+ * The last few entries as small landscape cards -- the mock's "เพิ่งจด" row.
+ * Home's preview only: History itself stays a vertical list, because a
+ * statement is read top to bottom. The amount is entryDisplayImpact's, the
+ * same figure History and the timeline print for a row.
+ */
+export const RecentRail = memo(function RecentRail({
+  entries,
+  onEdit,
+  onSeeAll,
+}: {
+  entries: Entry[];
+  onEdit: (entry: Entry) => void;
+  onSeeAll: () => void;
+}) {
+  const recent = entries.slice(0, RECENT_RAIL_LIMIT);
+  if (!recent.length) return null;
+  return (
+    <Rail title="เพิ่งจด" action="ดูทั้งหมด" onAction={onSeeAll} size="small" className="recent-rail">
+      {recent.map((entry) => {
+        const impact = entryDisplayImpact(entry);
+        return (
+          <button className="recent-tile" key={entry.id} style={{ "--hue": categoryColor(entry.category) } as React.CSSProperties} onClick={() => onEdit(entry)}>
+            <span className="tile-art">
+              <span className="tile-glyph" aria-hidden="true"><CategoryIcon category={entry.category} size={40} /></span>
+            </span>
+            <span className="recent-body">
+              <b>{entry.title}</b>
+              <small>
+                <span>{formatChatTime(entry.occurred_at)}</span>
+                <span className={impact >= 0 ? "income" : "expense"}>{formatSignedMoney(impact)}</span>
+              </small>
+            </span>
+          </button>
+        );
+      })}
+    </Rail>
   );
 });
 
@@ -457,19 +613,6 @@ export function GoalsView({
     </div>
   );
 }
-
-export const GoalCard = memo(function GoalCard({ goals, onAdd, onDelete }: { goals: MoneyGoal[]; onAdd: () => void; onDelete: (goal: MoneyGoal) => void }) {
-  return (
-    <section className="goal-card">
-      <div className="goal-card-head"><div><p className="eyebrow">เป้าหมายการเงิน</p><h2>{goals.length} เป้าหมาย</h2></div><button className="text-button" onClick={onAdd}>เพิ่มเป้าหมาย</button></div>
-      <div className="goal-list">
-        {goals.slice(0, 3).map((goal) => (
-          <GoalItem key={goal.id} goal={goal} onDelete={onDelete} />
-        ))}
-      </div>
-    </section>
-  );
-});
 
 export function GoalEditSheet({ onClose, onCreate, closing }: { onClose: () => void; onCreate: (input: Omit<MoneyGoal, "id">) => void; closing?: boolean }) {
   const [name, setName] = useState("");

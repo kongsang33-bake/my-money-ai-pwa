@@ -108,18 +108,26 @@ export function Rail({
   title,
   action,
   onAction,
-  compact = false,
+  size = "wide",
+  className,
   children,
 }: {
   title: string;
   action?: string;
   onAction?: () => void;
-  /** Narrower items, for short stat tiles that would sit half-empty at the default width. */
-  compact?: boolean;
+  /**
+   * How wide each item is -- set once per rail in globals.css (.rail.is-*),
+   * never per card: "wide" for data-dense cards, "compact" for short stat
+   * tiles, "poster" for 2:3 posters, "tile" for 16:9 progress tiles, "small"
+   * for a 16:9 card with a line or two under it, "rank" for a numeral plus a
+   * poster.
+   */
+  size?: "wide" | "compact" | "poster" | "tile" | "small" | "rank";
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className={`rail${compact ? " is-compact" : ""}`}>
+    <section className={`rail is-${size}${className ? ` ${className}` : ""}`}>
       <div className="rail-head">
         <h2>{title}</h2>
         {action && onAction && <button onClick={onAction}>{action}</button>}

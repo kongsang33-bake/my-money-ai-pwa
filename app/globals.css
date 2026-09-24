@@ -199,6 +199,9 @@
   --fs-body-sm: 14px;
   --fs-caption: 13px;
   --fs-micro: 11px;
+  /* Not a reading size: the outlined numeral behind a poster on Home's
+     top-categories rail, drawn as a graphic the way the mock's Top 10 is. */
+  --fs-rank: 96px;
   /* Not a step of the scale: the floor for text you type into. iOS Safari
      zooms the whole page in when a field under 16px takes focus, and leaves
      it zoomed -- the one thing that most makes the app feel like a web page
@@ -454,6 +457,11 @@ a:focus-visible {
   scroll-behavior: smooth;
   padding-bottom: var(--nav-clearance);
   scroll-padding-top: 82px;
+  /* Anything scrolled into view -- a focused control, a card tapped from
+     the keyboard -- stops above the floating nav rather than under it. The
+     rails put tappable posters at the very bottom of the first screen, where
+     a minimal scroll left them sitting behind the nav (WCAG 2.4.11). */
+  scroll-padding-bottom: var(--nav-clearance);
 }
 
 .view {
@@ -1107,8 +1115,9 @@ a:focus-visible {
    former card content), bold (.surface-bold utility — a full saturated
    fill, applied per component where a tile should read as a solid block:
    the hero, and the bento tiles built in the Home rebuild), and bare
-   (.activity-timeline below — no box at all, separated by the page's own
-   gutter and whitespace instead of a border). Tint's border/shadow come
+   (.quick-add-strip and the rails' own posters and tiles — no box around
+   the group, separated by the page's own gutter and whitespace instead of a
+   border). Tint's border/shadow come
    from --card-border/--card-shadow, both Cinema's "hairline border, no
    shadow" now that there is only one theme.
    ------------------------------------------------------------------------- */
@@ -1140,14 +1149,6 @@ a:focus-visible {
 /* Bare tier — no box. RecentActivityTimeline reads as a plain sectioned
    list against the page background; its rows already carry their own
    tappable affordance, so the outer card added a box with nothing to do. */
-.activity-timeline {
-  background: none;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  padding: 0;
-  margin-bottom: var(--s-4);
-}
 
 /* Bold tier utility — a full saturated fill. The fill itself is set per
    use site via --tile-fill/--tile-fill-text (falls back to --primary), so
@@ -1351,9 +1352,18 @@ a:focus-visible {
   margin-bottom: var(--s-1);
 }
 
-.wallet-card strong, .wallet-carousel-card strong {
+.wallet-card strong {
   font-size: var(--fs-h1);
   font-weight: var(--fw-bold);
+}
+
+/* A step down from the wallet list's own figure: at a rail card's 160px a
+   six-digit balance at --fs-h1 broke across two lines. */
+.wallet-carousel-card strong {
+  display: block;
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
 }
 
 .savings-wallet strong { color: var(--cat-home); }
@@ -1758,43 +1768,303 @@ a:focus-visible {
   margin-bottom: 0;
 }
 
+/* Each rail sets its items' width once, by size (the Rail component's
+   `size` prop) -- a card never sizes itself for the rail it is in. */
 .rail.is-compact .rail-track > * {
   width: min(62vw, 228px);
 }
 
-/* Due-soon gets the bold fill of this pair, budget-glance stays the quiet
-   tint — the two "at a glance" tiles no longer read as one repeated shape. */
-.due-soon-card {
-  background: var(--accent-fill);
+.rail.is-poster .rail-track > * {
+  width: min(36vw, 136px);
+}
+
+.rail.is-tile .rail-track > * {
+  width: min(58vw, 216px);
+}
+
+.rail.is-small .rail-track > * {
+  width: min(42vw, 164px);
+}
+
+.rail.is-rank .rail-track > * {
+  width: auto;
+}
+
+.rail.is-poster .rail-track,
+.rail.is-rank .rail-track {
+  gap: var(--s-2);
+}
+
+/* -------------------------------------------------------------------------
+   Posters (2:3) -- see Poster in components/home.tsx. The "art" is the
+   item's own colour, handed in as --hue (a --cat-* slot, or a colour the user
+   picked for a bill), mixed down into the page's ground, with its icon large
+   and faint in the corner and the words over a fade at the bottom.
+   ------------------------------------------------------------------------- */
+.poster {
+  position: relative;
+  display: block;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  border-radius: var(--r-sm);
+  background: linear-gradient(165deg, color-mix(in oklab, var(--hue) 58%, var(--bg)) 0%, color-mix(in oklab, var(--hue) 16%, var(--bg)) 70%);
+  color: var(--ink);
+  text-align: left;
+  transition: transform var(--t-press) var(--e-out);
+}
+
+button.poster:active {
+  transform: scale(0.97);
+}
+
+.poster-glyph {
+  position: absolute;
+  top: var(--s-5);
+  right: calc(-1 * var(--s-3));
+  width: 68%;
+  aspect-ratio: 1;
+  color: var(--hue);
+  opacity: 0.42;
+}
+
+.poster-glyph svg {
+  width: 100%;
+  height: 100%;
+}
+
+.poster-body {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: grid;
+  gap: 2px;
+  padding: var(--s-7) var(--s-2) var(--s-2);
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bg) 92%, transparent) 45%);
+}
+
+.poster-title {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.poster-sub {
+  font-size: var(--fs-micro);
+  color: var(--ink-2);
+}
+
+.poster-amount {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-bold);
+}
+
+/* The "อีก 2 วัน" tab hanging from the poster's top edge. Brand ink by
+   default; coral for something already overdue in spirit (a card with
+   nothing paid this cycle). */
+.poster-ribbon {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  padding: 2px var(--s-2) 3px;
+  border-radius: 0 0 var(--r-xs) var(--r-xs);
+  background: var(--accent);
   color: var(--accent-contrast);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
 }
 
-.due-soon-card .home-focus-head span,
-.due-soon-card .home-focus-head strong,
-.due-soon-card .due-soon-list span,
-.due-soon-card .due-soon-list small,
-.due-soon-card .due-soon-list p,
-.due-soon-card .home-compact-empty p {
-  color: var(--accent-contrast);
+.poster-ribbon.warn {
+  background: var(--expense);
+  color: var(--expense-contrast);
 }
 
-.due-soon-card .home-focus-head button {
-  color: var(--accent-contrast);
-  opacity: 0.75;
+.poster-action {
+  justify-self: start;
+  min-height: 28px;
+  margin-top: var(--s-1);
+  padding: 0 var(--s-3);
+  border-radius: var(--r-xs);
+  background: var(--primary);
+  color: var(--primary-text);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
 }
 
-.due-soon-card .due-soon-list small,
-.due-soon-card .due-soon-list p,
-.due-soon-card .home-compact-empty span {
-  opacity: 0.72;
+.poster-done {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: 28px;
+  margin-top: var(--s-1);
+  color: var(--accent-strong);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
 }
 
-/* Stays on the quiet tint tier rather than taking the due-soon card's bold
-   fill: two full-strength tiles stacked on Home and neither is a highlight
-   any more. Only the balance takes a colour, because that is the number the
-   bank is about to want. */
-.unpaid-cards-card .due-soon-action b {
-  color: var(--expense);
+/* The top-categories row: a big outlined numeral with the poster tucked over
+   its right edge, as the mock's Top 10 row draws it. The numeral is a
+   drawing, not a reading size -- hence its own token rather than a step of
+   the type scale -- and it is stroked, not filled, in --ink-3. */
+.rank {
+  display: flex;
+  align-items: flex-end;
+}
+
+.rank-number {
+  position: relative;
+  z-index: 0;
+  margin-right: calc(-1 * var(--s-4));
+  color: transparent;
+  -webkit-text-stroke: 2px var(--ink-3);
+  font-size: var(--fs-rank);
+  font-weight: var(--fw-bold);
+  line-height: 0.8;
+  letter-spacing: var(--ls-tight);
+  user-select: none;
+}
+
+.rank .poster {
+  z-index: 1;
+  width: min(30vw, 116px);
+}
+
+/* -------------------------------------------------------------------------
+   Tiles (16:9) -- ProgressTile and RecentRail in components/home.tsx. Same
+   --hue art as a poster, landscape, with the words under it instead of on it.
+   ------------------------------------------------------------------------- */
+.tile, .recent-tile {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  color: var(--ink);
+  transition: transform var(--t-press) var(--e-out);
+}
+
+.tile:active, .recent-tile:active {
+  transform: scale(0.98);
+}
+
+.tile {
+  overflow: hidden;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.tile-art {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  background: linear-gradient(150deg, color-mix(in oklab, var(--hue) 50%, var(--bg)), color-mix(in oklab, var(--hue) 12%, var(--bg)));
+}
+
+.recent-tile .tile-art {
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+
+.tile-glyph {
+  position: absolute;
+  top: var(--s-3);
+  right: var(--s-3);
+  width: 40px;
+  height: 40px;
+  color: var(--hue);
+  opacity: 0.7;
+}
+
+.tile-glyph svg {
+  width: 100%;
+  height: 100%;
+}
+
+.tile-title {
+  position: absolute;
+  left: var(--s-3);
+  right: var(--s-3);
+  bottom: var(--s-2);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tile-bar {
+  display: block;
+  height: 3px;
+  background: var(--surface-3);
+}
+
+.tile-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.tile-bar.over i {
+  background: var(--expense);
+}
+
+/* Label over value rather than side by side: a Thai label and a money
+   figure do not both fit one line of a 216px tile, and whichever gave way
+   first was the number. */
+.tile-meta {
+  display: grid;
+  gap: 2px;
+  padding: var(--s-2) var(--s-3) var(--s-3);
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+}
+
+.tile-meta b {
+  color: var(--ink);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-body {
+  display: grid;
+  gap: 2px;
+  padding: var(--s-2) var(--s-1) 0;
+  min-width: 0;
+}
+
+.recent-body b {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-body small {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-2);
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+}
+
+/* The amount never gives way; an older entry's longer date does. */
+.recent-body small span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-body small span:last-child {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-weight: var(--fw-semibold);
 }
 
 .spending-personality-note {
@@ -1829,97 +2099,6 @@ a:focus-visible {
   white-space: nowrap;
 }
 
-.due-soon-list, .budget-glance-list {
-  display: grid;
-  gap: var(--s-3);
-}
-
-.due-soon-list > div {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 2px var(--s-3);
-  align-items: center;
-}
-
-.due-soon-list > div > i {
-  grid-row: 1 / span 2;
-}
-
-.due-soon-list span, .budget-glance-list span {
-  font-size: var(--fs-body);
-  font-weight: var(--fw-semibold);
-}
-
-.due-soon-list small {
-  color: var(--ink-3);
-  font-size: var(--fs-caption);
-}
-
-.due-soon-list > div > .due-soon-action {
-  grid-row: 1 / span 2;
-  grid-column: 3;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--s-1);
-}
-
-.due-soon-list b {
-  font-size: var(--fs-body);
-}
-
-.due-soon-log-btn {
-  padding: 4px 10px;
-  border-radius: var(--r-full);
-  background: var(--accent-contrast);
-  color: var(--accent);
-  font-size: var(--fs-micro);
-  font-weight: var(--fw-semibold);
-  white-space: nowrap;
-}
-
-.due-soon-logged {
-  font-size: var(--fs-micro);
-  color: var(--accent-contrast);
-  opacity: 0.72;
-}
-
-.due-soon-list p {
-  color: var(--ink-3);
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-semibold);
-}
-
-.budget-glance-list > div {
-  display: grid;
-  gap: var(--s-2);
-}
-
-.budget-glance-list span {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-}
-
-.budget-glance-list b {
-  color: var(--ink-3);
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-bold);
-}
-
-.budget-glance-list em {
-  display: block;
-  height: 6px;
-  border-radius: var(--r-full);
-  background: var(--surface-3);
-  overflow: hidden;
-}
-
-.budget-glance-list em small {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-}
 
 /* Home's start checklist — the tint-tier card a new account gets under the
    hero, in place of the analysis cards it has no data for yet. */
@@ -2091,66 +2270,17 @@ a:focus-visible {
 /* -------------------------------------------------------------------------
    Recent-activity timeline
    ------------------------------------------------------------------------- */
-.activity-timeline-title {
-  font-size: var(--fs-body);
-  font-weight: var(--fw-semibold);
-  color: var(--ink-3);
-  margin-bottom: var(--s-3);
-}
 
-.activity-timeline-list {
-  display: grid;
-  gap: 2px;
-}
 
-.activity-timeline-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: var(--s-3);
-  padding: var(--s-2) 0;
-  width: 100%;
-  transition: opacity var(--t-1) var(--e-out);
-}
-
-.activity-timeline-row:active {
-  opacity: 0.6;
-}
-
-.activity-timeline-info {
-  display: grid;
-  text-align: left;
-  min-width: 0;
-}
-
-.activity-timeline-info b {
-  font-size: var(--fs-body-sm);
-  font-weight: var(--fw-bold);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.activity-timeline-info small {
-  font-size: var(--fs-caption);
-  color: var(--ink-3);
-}
-
-.activity-timeline-amount {
-  font-weight: var(--fw-bold);
-  font-size: var(--fs-body-sm);
-  white-space: nowrap;
-}
-
-/* -------------------------------------------------------------------------
-   Amount coloring (shared: entry rows, metrics, recap, report tiles, timeline)
-   ------------------------------------------------------------------------- */
-.income, .activity-timeline-amount.income, .entry strong.income,
+                                                                            
+                                                                               
+                                                                               
+.income, .entry strong.income,
 .recap-balance.income, .report-summary-tiles > .income {
   color: var(--income);
 }
 
-.expense, .activity-timeline-amount.expense, .entry strong.expense,
+.expense, .entry strong.expense,
 .recap-balance.expense, .report-summary-tiles > .expense {
   color: var(--expense);
 }
@@ -2357,18 +2487,7 @@ a:focus-visible {
 .quick-add-chip b { max-width: 100px; font-size: var(--fs-caption); }
 .quick-add-chip small { color: var(--ink-3); font-size: var(--fs-micro); margin-top: 2px; }
 
-.goal-card {
-  padding: var(--s-6);
-  border: var(--card-border);
-  border-radius: var(--r-lg);
-  background: var(--surface-2);
-  box-shadow: var(--card-shadow);
-  margin-bottom: var(--s-4);
-}
 
-.goal-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); }
-.goal-card h2 { margin: 2px 0 0; font-size: var(--fs-h3); }
-.goal-card p:not(.eyebrow) { margin: var(--s-2) 0 0; color: var(--ink-3); font-size: var(--fs-caption); }
 /* Same 24x24 floor as .text-button -- this one is a bare "×" glyph, so
    without it the target is the size of the character. */
 .icon-button {
@@ -2378,7 +2497,6 @@ a:focus-visible {
   min-height: 24px;
 }
 
-.goal-card .icon-button { color: var(--ink-3); font-size: var(--fs-h2); line-height: 1; }
 .goal-list { display: grid; gap: var(--s-3); margin-top: var(--s-3); }
 .goal-item { padding-top: var(--s-3); border-top: 1px solid var(--line-soft); }
 .goal-item-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
@@ -2386,7 +2504,7 @@ a:focus-visible {
 .goal-item-head .icon-button { font-size: var(--fs-h3); }
 .goal-card-values { display: flex; align-items: baseline; gap: var(--s-2); margin-top: var(--s-4); }
 .goal-card-values strong { font-size: var(--fs-value); letter-spacing: -0.035em; }
-.goal-card-values span, .goal-card > small { color: var(--ink-3); font-size: var(--fs-micro); }
+.goal-card-values span { color: var(--ink-3); font-size: var(--fs-micro); }
 .goal-progress { height: 7px; margin: var(--s-3) 0 5px; border-radius: var(--r-full); background: var(--surface-3); overflow: hidden; }
 .goal-progress i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width var(--t-3) var(--e-out); }
 
@@ -6111,10 +6229,13 @@ button.entry-main {
    Responsive
    ========================================================================= */
 
-/* Small phones: .phone is edge-to-edge at every width now, so the nav can
-   pin to the actual viewport instead of drifting to the bottom of the
-   scrollable content when a view (e.g. History) is taller than one screen. */
-@media (max-width: 480px) {
+/* Everything below the desktop layout: pin the nav to the viewport. It lives
+   inside .phone, which is the scroll container, so as `position: absolute`
+   it scrolled away with the content -- which is what it did from 481px to
+   899px until the Home rails put a tappable poster at the bottom of the first
+   screen and a test tried to reach it. Only phones up to 480px had been
+   pinned. The 600-899px block below centres it over .phone's column. */
+@media (max-width: 899px) {
   .bottom-nav {
     position: fixed;
     left: var(--s-4);
@@ -6128,6 +6249,15 @@ button.entry-main {
   .phone {
     max-width: 560px;
     min-height: 720px;
+  }
+
+  /* .phone is a centred 560px column here, so the pinned nav centres with
+     it rather than spanning the whole window. */
+  .bottom-nav {
+    left: 50%;
+    right: auto;
+    width: calc(560px - 2 * var(--s-4));
+    --nav-center: -50%;
   }
 
   .summary-grid, .report-summary-tiles, .debtor-page-list {
@@ -6151,6 +6281,13 @@ button.entry-main {
   .topbar {
     padding-inline: var(--s-7);
   }
+
+  .rail.is-wide .rail-track > * { width: 340px; }
+  .rail.is-compact .rail-track > * { width: 260px; }
+  .rail.is-poster .rail-track > * { width: 156px; }
+  .rail.is-tile .rail-track > * { width: 260px; }
+  .rail.is-small .rail-track > * { width: 200px; }
+  .rank .poster { width: 136px; }
 
   /* Landscape billboard, the way Netflix's web one reads: words on the left
      over the page's own ground, the art lit on the right and fading into
