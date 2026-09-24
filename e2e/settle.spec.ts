@@ -22,8 +22,7 @@ test.describe("settling up", () => {
     await expect(funding).toHaveValue("card:อ้อน");
 
     // No wallet is paying, so the wallet picker steps aside.
-    await page.locator(".draft-details-toggle").click();
-    await expect(page.locator(".draft-grid-secondary select")).toHaveCount(0);
+    await expect(page.locator(".draft-meta-chip[data-field='wallet']")).toHaveCount(0);
   });
 
   test("does not count a funded expense as money leaving a wallet", async ({ page }) => {

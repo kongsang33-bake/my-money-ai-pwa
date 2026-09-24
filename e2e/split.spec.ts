@@ -9,10 +9,15 @@ import { test, expect, navigate, openApp, openDraft, seedDraft, buildSeed } from
 // nothing -- the two-row expansion a funded split saves as is covered by
 // unit tests on expandDraftForSave instead.
 test.describe("split review", () => {
-  const openWithDraft = async (page: Parameters<typeof openApp>[0], draft = seedDraft()) => {
+  // The review folds an even split's amount field behind "ไม่ได้หารเท่ากัน?"
+  // (SplitShareField's foldEvenShare). Most of these specs are about that
+  // field, so they unfold it first; the one about the fold itself does not.
+  const openWithDraft = async (page: Parameters<typeof openApp>[0], draft = seedDraft(), { unfold = true } = {}) => {
     await openApp(page, { ...buildSeed(), drafts: [draft] });
     await navigate(page, "add");
     await openDraft(page);
+    const uneven = page.locator(".draft-split-uneven");
+    if (unfold && await uneven.count()) await uneven.click();
   };
 
   test("splits the bill evenly until told otherwise", async ({ page }) => {
@@ -22,6 +27,16 @@ test.describe("split review", () => {
     await expect(share).toHaveValue("81.5");
     await expect(page.locator(".draft-split-people-count")).toHaveValue("2");
     await expect(page.locator(".draft-effects")).toContainText("81.5");
+  });
+
+  test("says an even split in one line, and asks for the amount only when it isn't", async ({ page }) => {
+    await openWithDraft(page, seedDraft(), { unfold: false });
+
+    await expect(page.locator(".draft-split-share .amount-input")).toHaveCount(0);
+    await expect(page.locator(".draft-split-summary")).toContainText("คนละ 81.5 · จูนคืน 81.5 · ส่วนของคุณ 81.5");
+
+    await page.locator(".draft-split-uneven").click();
+    await expect(page.locator(".draft-split-share .amount-input")).toHaveValue("81.5");
   });
 
   test("moves the debt when the share changes, without changing the bill", async ({ page }) => {
@@ -188,8 +203,7 @@ test.describe("split review", () => {
     await expect(result).toContainText("163");
     await expect(result).toContainText("81.5");
     // ...and the wallet picker steps aside, since no wallet is paying.
-    await page.locator(".draft-details-toggle").click();
-    await expect(page.locator(".draft-grid-secondary select")).toHaveCount(0);
+    await expect(page.locator(".draft-meta-chip[data-field='wallet']")).toHaveCount(0);
   });
 
   test("offers someone who already owes the user, and takes the bill off what they owe", async ({ page }) => {

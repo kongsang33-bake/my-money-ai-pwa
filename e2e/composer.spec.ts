@@ -59,7 +59,7 @@ test.describe("AI composer", () => {
   test("shows the draft's date in Thai and keeps it in step with the input", async ({ app }) => {
     await app.locator(".ai-suggestions .quick-chip").first().click();
     await openDraft(app);
-    await app.locator(".draft-details-toggle").first().click();
+    await app.locator(".draft-meta-chip[data-field='date']").first().click();
 
     const shell = app.locator(".draft .date-shell").first();
     await expect(shell.locator(".date-shell-text")).toBeVisible();

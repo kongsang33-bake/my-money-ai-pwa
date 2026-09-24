@@ -211,6 +211,18 @@ the product name -- leave them.
   never stacks two identical segmented controls, and the AI composer sends
   from inside its own box (`.composer-send`). The coloured left stripe on
   rows (`.card-accent`) is gone; a row's colour lives in its avatar.
+- **The AI review reads first and opens second.** Each parsed draft
+  (`DraftRow`) starts as a summary card: title, amount, every value the AI
+  guessed as one line of facts, and what the save does in words ("จ่ายจาก
+  บัญชีหลัก ฿15 · จูน ติดคุณเพิ่ม ฿7.5"). Opening it shows the editor. Those
+  words come from `reviewDraft` (lib/draft-review.ts), which reads
+  `expandDraftForSave`'s rows, so never compute a preview figure in the
+  component. Only a draft that `draftAttention` flags starts open, and one
+  that blocks the save can't be folded. The batch total and save button sit
+  in `.review-savebar`, sticky above the nav. Date, wallet and note are
+  `.draft-meta-chip`s that show their value. Don't bring back a toggle that
+  hides values behind a label naming them, and don't bring back a form-first
+  review.
 - **Native `<select>` elements get a `.select-shell` wrapper.** Wrap
   `<select>` in `<div className="select-shell">…</select><ChevronDown
   className="select-shell-chevron" aria-hidden="true" /></div>` — the CSS

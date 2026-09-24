@@ -3529,23 +3529,6 @@ button.poster:active {
   grid-column: 1 / -1;
 }
 
-/* Reads as bold label text otherwise -- the chevron is what says "this is a
-   control that opens something", and rotating it says which way it is now. */
-.draft-details-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: var(--s-3);
-}
-
-.draft-details-toggle svg {
-  transition: transform var(--t-2) var(--e-out);
-}
-
-.draft-details-toggle.is-open svg {
-  transform: rotate(180deg);
-}
-
 .draft-grid-secondary {
   padding-top: var(--s-3);
   border-top: 1px dashed var(--line-soft);
@@ -3580,10 +3563,63 @@ button.poster:active {
 }
 
 .draft-split-summary {
-  display: block;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px var(--s-3);
   margin-top: 4px;
-  font-size: var(--fs-micro);
+  font-size: var(--fs-caption);
   color: var(--ink-3);
+}
+
+.draft-split-summary small {
+  font-size: inherit;
+}
+
+.draft-split-uneven {
+  margin-inline: 0;
+  padding-inline: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* The date, wallet and note of a draft, each a flat tile carrying its current
+   value that opens its own field -- so a value is never out of sight behind
+   a toggle that only names what it hides. */
+.draft-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+}
+
+.draft-meta-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 36px;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+}
+
+.draft-meta-chip b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+}
+
+.draft-meta-chip.is-open {
+  border-color: var(--ink);
 }
 
 /* Today's app figure, sitting above the field where the real one goes -- the

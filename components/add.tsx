@@ -6,7 +6,7 @@ import { reviewDraft } from "@/lib/draft-review";
 import { CATEGORY_DOT_TINT_ALPHA, ENTRY_SWIPE_ACTIONS_WIDTH, ENTRY_SWIPE_SLOP, MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE } from "@/lib/constants";
 import { compressSlipImage } from "@/lib/image";
 import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
-import { todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
+import { dayLabel, todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
 import { CARD_FUNDABLE_TYPES, SHARED_EXPENSE_TYPES, defaultWalletId, draftTotals, draftSplitPins, entryDisplayImpact, isFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, retypedTo, splitDebtorNames, splitPinMismatch, splitSharesBetween, unnamedDebtor } from "@/lib/money";
 import { DEBT_TYPES, TYPES_USER_OWES, isFormOnlyDerivedType, transactionKind, transactionTypeLabels, transactionTypeOptions, type TransactionType } from "@/lib/taxonomy";
 import { summarizeDayEntries } from "@/lib/insights";
@@ -173,6 +173,8 @@ export function AiComposer({
   );
 }
 
+type DraftDetailField = "date" | "wallet" | "note";
+
 export function DraftRow({ draft, knownDebtors, receivable = [], wallets, onChange, onRemove }: { draft: Draft; knownDebtors: Debtor[]; receivable?: { name: string; amount: number }[]; wallets: Wallet[]; onChange: (draft: Draft) => void; onRemove: () => void }) {
   const update = (patch: Partial<Draft>) => onChange(normalizeEntry({ ...draft, ...patch }, false));
   const isDebtType = DEBT_TYPES.includes(draft.transaction_type);
@@ -197,14 +199,23 @@ export function DraftRow({ draft, knownDebtors, receivable = [], wallets, onChan
   const blocked = review.attention.some((reason) => reason.blocking);
   const [expanded, setExpanded] = useState(review.attention.length > 0);
   const open = expanded || blocked;
-  const [detailsOpen, setDetailsOpen] = useState(transferInvalid);
-  const showDetails = detailsOpen || transferInvalid;
+  // Date, wallet and note are chips that carry their current value, each
+  // opening its own field -- they used to sit together behind one
+  // "แก้ไขวันที่ / กระเป๋า / หมายเหตุ" toggle that hid what they held.
+  const [openFields, setOpenFields] = useState<DraftDetailField[]>([]);
+  const toggleField = (field: DraftDetailField) =>
+    setOpenFields((current) => (current.includes(field) ? current.filter((item) => item !== field) : [...current, field]));
   // A split or a lend can come off a credit card instead of a wallet. Cards
   // live in the debtors table (kind "own"), not in wallets, which is why the
   // wallet dropdown alone could not express "dinner split with จูน, paid on
   // SPay" -- the one thing this row could not say before.
   const canPayWithCard = CARD_FUNDABLE_TYPES.includes(draft.transaction_type);
   const fundingCard = canPayWithCard ? draft.funding_card_name?.trim() || "" : "";
+  const showFunding = canPayWithCard && (!!knownDebtors.length || !!fundingCard);
+  // "จ่ายด้วย" already lists every wallet, so a second wallet picker is only
+  // offered where that one is not.
+  const showWallet = !isTransfer && !fundingCard && !showFunding && !!wallets.length && draft.transaction_type !== "card_charge";
+  const walletName = wallets.find((wallet) => wallet.id === (draft.wallet_id || defaultWalletId(wallets)))?.name ?? "";
   const isSplit = draft.transaction_type === "split_half";
   // Several names in the one debtor field means one debt each, worked out at
   // save (expandDraftForSave). The headcount and the share are then the list's
@@ -390,6 +401,7 @@ export function DraftRow({ draft, knownDebtors, receivable = [], wallets, onChan
           )}
           {isSplit && !perPerson && (
             <SplitShareField
+              foldEvenShare
               amount={draft.amount}
               partnerShare={draft.partner_share}
               userShare={draft.user_share}
@@ -397,7 +409,7 @@ export function DraftRow({ draft, knownDebtors, receivable = [], wallets, onChan
               onChange={(partner_share) => update({ partner_share })}
             />
           )}
-          {canPayWithCard && (!!knownDebtors.length || !!fundingCard) && (
+          {showFunding && (
             <FundingSelect
               className="draft-funding"
               walletId={draft.wallet_id ?? null}
@@ -408,38 +420,46 @@ export function DraftRow({ draft, knownDebtors, receivable = [], wallets, onChan
               onChange={update}
             />
           )}
-          <button
-            type="button"
-            className={`text-button draft-details-toggle${showDetails ? " is-open" : ""}`}
-            aria-expanded={showDetails}
-            onClick={() => setDetailsOpen((current) => !current)}
-          >
-            {`${showDetails ? "ซ่อน" : "แก้ไข"}วันที่ / ${isTransfer || fundingCard ? "" : "กระเป๋า / "}หมายเหตุ`}
-            <ChevronDown size={14} strokeWidth={2.5} aria-hidden="true" />
-          </button>
-          {showDetails && (
+          <div className="draft-meta" role="group" aria-label="รายละเอียดอื่น">
+            <button type="button" className={`draft-meta-chip${openFields.includes("date") ? " is-open" : ""}`} data-field="date" aria-expanded={openFields.includes("date")} onClick={() => toggleField("date")}>
+              วันที่<b>{dayLabel(draft.occurred_at)}</b>
+            </button>
+            {showWallet && (
+              <button type="button" className={`draft-meta-chip${openFields.includes("wallet") ? " is-open" : ""}`} data-field="wallet" aria-expanded={openFields.includes("wallet")} onClick={() => toggleField("wallet")}>
+                กระเป๋า<b>{walletName}</b>
+              </button>
+            )}
+            <button type="button" className={`draft-meta-chip${openFields.includes("note") ? " is-open" : ""}`} data-field="note" aria-expanded={openFields.includes("note")} onClick={() => toggleField("note")}>
+              หมายเหตุ<b>{draft.note?.trim() || "เพิ่ม"}</b>
+            </button>
+          </div>
+          {!!openFields.length && (
             <div className="draft-grid draft-grid-secondary">
-              <label>
-                วันที่
-                <DateField value={toDateInput(draft.occurred_at)} onChange={(next) => update({ occurred_at: withDateKeepingTime(next, draft.occurred_at) })} />
-              </label>
-              {!isTransfer && !fundingCard && !!wallets.length && draft.transaction_type !== "card_charge" && (
+              {openFields.includes("date") && (
+                <label>
+                  วันที่
+                  <DateField value={toDateInput(draft.occurred_at)} onChange={(next) => update({ occurred_at: withDateKeepingTime(next, draft.occurred_at) })} />
+                </label>
+              )}
+              {showWallet && openFields.includes("wallet") && (
                 <label>
                   กระเป๋า
                   <div className="select-shell">
                     <select value={draft.wallet_id || defaultWalletId(wallets) || ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
-                    {wallets.map((wallet) => (
-                      <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
-                    ))}
-                  </select>
+                      {wallets.map((wallet) => (
+                        <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
+                      ))}
+                    </select>
                     <ChevronDown className="select-shell-chevron" aria-hidden="true" />
                   </div>
                 </label>
               )}
-              <label className="draft-field-full">
-                หมายเหตุ
-                <input value={draft.note ?? ""} onChange={(event) => update({ note: event.target.value })} />
-              </label>
+              {openFields.includes("note") && (
+                <label className="draft-field-full">
+                  หมายเหตุ
+                  <input value={draft.note ?? ""} onChange={(event) => update({ note: event.target.value })} />
+                </label>
+              )}
             </div>
           )}
           {!blocked && (
@@ -470,12 +490,21 @@ export function SplitShareField({
   partnerShare,
   userShare,
   debtorName,
+  foldEvenShare = false,
   onChange,
 }: {
   amount: number;
   partnerShare: number;
   userShare: number;
   debtorName: string;
+  /**
+   * Keep the amount field behind "ไม่ได้หารเท่ากัน?" while the split is even.
+   * An even split is fully said by the headcount and the line under it, and
+   * the review step (DraftRow) showed the same share four ways at once --
+   * stepper, field, summary line and the effects -- so it asks for the
+   * amount only when it differs. The edit sheet keeps both in view.
+   */
+  foldEvenShare?: boolean;
   onChange: (share: number) => void;
 }) {
   const people = peopleFromPartnerShare(amount, partnerShare);
@@ -487,6 +516,8 @@ export function SplitShareField({
   // stepper. This parks the half-typed digits until they become a count worth
   // committing; the steppers and blur hand the field back to the real value.
   const [typing, setTyping] = useState<string | null>(null);
+  const [unevenOpen, setUnevenOpen] = useState(false);
+  const showShareField = !foldEvenShare || unevenOpen || !people;
 
   return (
     <div className="draft-split-share">
@@ -529,13 +560,22 @@ export function SplitShareField({
           </button>
         </span>
       </div>
-      <label>
-        {name}คืนเท่าไร
-        <AmountInput value={partnerShare} onChange={onChange} />
-      </label>
-      <small className="draft-split-summary">
-        {people ? `คนละ ${formatMoney(amount / people)} · ` : ""}ส่วนของคุณ {formatMoney(userShare)}
-      </small>
+      {showShareField && (
+        <label>
+          {name}คืนเท่าไร
+          <AmountInput value={partnerShare} onChange={onChange} />
+        </label>
+      )}
+      <p className="draft-split-summary">
+        <small>
+          {people ? `คนละ ${formatMoney(amount / people)} · ` : ""}{showShareField ? "" : `${name}คืน ${formatMoney(partnerShare)} · `}ส่วนของคุณ {formatMoney(userShare)}
+        </small>
+        {!showShareField && (
+          <button type="button" className="text-button draft-split-uneven" onClick={() => setUnevenOpen(true)}>
+            ไม่ได้หารเท่ากัน?
+          </button>
+        )}
+      </p>
     </div>
   );
 }

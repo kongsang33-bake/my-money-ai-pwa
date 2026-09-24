@@ -61,4 +61,25 @@ test.describe("AI review", () => {
     await expect(bar.locator("button.save")).toBeEnabled();
     await expect(bar).not.toContainText("ต้องแก้อีก");
   });
+
+  test("shows each detail's value on its own chip, and opens only that field", async ({ page }) => {
+    // No debtors, so there is no "จ่ายด้วย" picker and the wallet gets a chip
+    // of its own -- where there is one, it already lists every wallet.
+    await openApp(page, { ...buildSeed(), debtors: [], drafts: [plain] });
+    await navigate(page, "add");
+    await page.locator(".draft-summary").click();
+
+    const chips = page.locator(".draft-meta-chip");
+    await expect(chips.filter({ hasText: "วันที่" })).toContainText("วันนี้");
+    await expect(chips.filter({ hasText: "กระเป๋า" })).toContainText("บัญชีหลัก");
+    await expect(chips.filter({ hasText: "หมายเหตุ" })).toContainText("เพิ่ม");
+    await expect(page.locator(".draft-grid-secondary")).toHaveCount(0);
+
+    await chips.filter({ hasText: "หมายเหตุ" }).click();
+    await page.locator(".draft-grid-secondary input").fill("กับที่บ้าน");
+    await expect(chips.filter({ hasText: "หมายเหตุ" })).toContainText("กับที่บ้าน");
+    // Only the field that was asked for opened.
+    await expect(page.locator(".draft-grid-secondary select")).toHaveCount(0);
+    await expect(page.locator(".draft-grid-secondary .date-shell")).toHaveCount(0);
+  });
 });
