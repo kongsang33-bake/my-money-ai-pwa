@@ -4,32 +4,10 @@ import { memo, useEffect, useRef, useState } from "react";
 import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
 import { formatMoney, moneySign } from "@/lib/format";
-import { summarizeDayEntries } from "@/lib/insights";
 import { transactionTypeLabels, type TransactionType } from "@/lib/taxonomy";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
-import type { Entry, HistoryFilters } from "@/lib/types";
+import type { HistoryFilters } from "@/lib/types";
 import { CategoryIcon } from "@/components/shared";
-
-export const HistoryInsight = memo(function HistoryInsight({ entries }: { entries: Entry[] }) {
-  const { count, income, outflow, top } = summarizeDayEntries(entries);
-
-  return (
-    <section className="history-insight">
-      <div>
-        <span>มุมมองวันที่เลือก</span>
-        <b>{count} รายการ</b>
-      </div>
-      <div>
-        <span>เงินเข้า/ออก</span>
-        <b>{moneySign}{formatMoney(income)} / {moneySign}{formatMoney(outflow)}</b>
-      </div>
-      <div>
-        <span>รายการสูงสุด</span>
-        <b>{top ? `${top.title} ${moneySign}${formatMoney(Math.abs(top.wallet_impact))}` : "ยังไม่มีรายจ่าย"}</b>
-      </div>
-    </section>
-  );
-});
 
 const QUICK_TYPES: { type: TransactionType; label: string }[] = [
   { type: "personal_expense", label: "จ่ายเอง" },

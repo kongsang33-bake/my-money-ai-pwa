@@ -1,13 +1,14 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
-import { ArrowDown, ArrowLeftRight, ArrowUp, ChevronDown, ImagePlus, Lightbulb, Minus, Plus, X } from "lucide-react";
-import { CATEGORY_DOT_TINT_ALPHA, MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE } from "@/lib/constants";
+import { memo, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowLeftRight, ArrowUp, ChevronDown, ImagePlus, Lightbulb, Minus, Pencil, Plus, Trash2, X } from "lucide-react";
+import { CATEGORY_DOT_TINT_ALPHA, ENTRY_SWIPE_ACTIONS_WIDTH, ENTRY_SWIPE_SLOP, MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE } from "@/lib/constants";
 import { compressSlipImage } from "@/lib/image";
 import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
 import { todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
 import { CARD_FUNDABLE_TYPES, SHARED_EXPENSE_TYPES, defaultWalletId, draftTotals, draftSplitPins, entryDisplayImpact, fundingLegType, isFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, retypedTo, splitDebtorNames, splitPinMismatch, splitSharesBetween, unnamedDebtor } from "@/lib/money";
 import { DEBT_TYPES, TYPES_USER_OWES, isFormOnlyDerivedType, transactionKind, transactionTypeLabels, transactionTypeOptions, type TransactionType } from "@/lib/taxonomy";
+import { summarizeDayEntries } from "@/lib/insights";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
 import { CategoryIcon, CategoryPicker, FundingSelect } from "@/components/shared";
@@ -566,6 +567,8 @@ export const EntryList = memo(function EntryList({
   onDelete,
   emptyAction,
   amountField = "wallet",
+  selectedDay,
+  dayTotals = false,
 }: {
   entries: Entry[];
   /** What a tap on the row does -- the detail sheet, where one exists. Falls back to onEdit. */
@@ -574,55 +577,190 @@ export const EntryList = memo(function EntryList({
   onDelete?: (entry: Entry) => void;
   emptyAction?: EmptyAction;
   amountField?: "wallet" | "debt";
+  /** A Date.toDateString() whose group is marked, and scrolled to by the caller via data-day. */
+  selectedDay?: string;
+  /** Each day's money in and out beside its date -- the list reads as a statement. */
+  dayTotals?: boolean;
 }) {
   const groups = useMemo(() => groupEntriesByDay(entries), [entries]);
+  // One row open at a time, the way iOS Mail does it: opening another, or
+  // tapping the open one, closes it.
+  const [openId, setOpenId] = useState<string | null>(null);
 
   if (!entries.length) return <EmptyNote glyph="▪" action={emptyAction}>ยังไม่มีรายการในช่วงนี้</EmptyNote>;
 
   return (
     <div className="entry-list">
-      {groups.map((group) => (
-        <div className="entry-group" key={group.label}>
-          <p className="entry-day">{group.label}</p>
-          {group.items.map((entry) => {
-            const impact = amountField === "debt" ? entry.debt_impact : entryDisplayImpact(entry);
-            const entryContent = (
-              <>
-                <span className="entry-icon" style={{ background: categoryTint(entry.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(entry.category) }}><CategoryIcon category={entry.category} size={18} /></span>
-                <div>
-                  <b>{entry.title}</b>
-                  <small>
-                    {transactionTypeLabels[entry.transaction_type]} · {entry.category} · {formatDateTime(entry.occurred_at)}
-                    {entry.debt_impact !== 0 ? ` · ${entry.debtor_name}` : ""}
-                  </small>
-                  {entry.note && <small className="entry-note" title={entry.note}>{entry.note}</small>}
-                </div>
-                <strong className={impact >= 0 ? "income" : "expense"}>{formatSignedMoney(impact)}</strong>
-              </>
-            );
-            return (
-            <article className="entry" key={entry.id}>
-              {onOpen ?? onEdit ? (
-                <button type="button" className="entry-main entry-tappable" onClick={() => (onOpen ?? onEdit)!(entry)}>
-                  {entryContent}
-                </button>
-              ) : (
-                <div className="entry-main">{entryContent}</div>
+      {groups.map((group) => {
+        const totals = dayTotals ? summarizeDayEntries(group.items) : null;
+        return (
+          <div className={`entry-group${group.key === selectedDay ? " is-selected" : ""}`} key={group.key} data-day={group.key}>
+            <p className="entry-day">
+              <span>{group.label}</span>
+              {totals && (totals.income > 0 || totals.outflow > 0) && (
+                <span className="entry-day-totals">
+                  {totals.income > 0 && <b className="income">+{moneySign}{formatMoney(totals.income)}</b>}
+                  {totals.outflow > 0 && <b className="expense">−{moneySign}{formatMoney(totals.outflow)}</b>}
+                </span>
               )}
-              {(onEdit || onDelete) && (
-                <menu>
-                  {onEdit && <button onClick={() => onEdit(entry)} title="แก้ไข">แก้</button>}
-                  {onDelete && <button onClick={() => onDelete(entry)} title="ลบ">ลบ</button>}
-                </menu>
-              )}
-            </article>
-            );
-          })}
-        </div>
-      ))}
+            </p>
+            {group.items.map((entry) => {
+              const impact = amountField === "debt" ? entry.debt_impact : entryDisplayImpact(entry);
+              const content = (
+                <>
+                  <span className="entry-icon" style={{ background: categoryTint(entry.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(entry.category) }}><CategoryIcon category={entry.category} size={18} /></span>
+                  <div>
+                    <b>{entry.title}</b>
+                    <small>
+                      {transactionTypeLabels[entry.transaction_type]} · {entry.category} · {formatDateTime(entry.occurred_at)}
+                      {entry.debt_impact !== 0 ? ` · ${entry.debtor_name}` : ""}
+                    </small>
+                    {entry.note && <small className="entry-note" title={entry.note}>{entry.note}</small>}
+                  </div>
+                  <strong className={impact >= 0 ? "income" : "expense"}>{formatSignedMoney(impact)}</strong>
+                </>
+              );
+              const tap = onOpen ?? onEdit;
+              if (!onEdit && !onDelete) {
+                return (
+                  <article className="entry" key={entry.id}>
+                    {tap
+                      ? <button type="button" className="entry-main entry-tappable" onClick={() => tap(entry)}>{content}</button>
+                      : <div className="entry-main">{content}</div>}
+                  </article>
+                );
+              }
+              return (
+                <SwipeEntry
+                  key={entry.id}
+                  open={openId === entry.id}
+                  onOpenChange={(open) => setOpenId(open ? entry.id : null)}
+                  onTap={tap ? () => tap(entry) : undefined}
+                  onEdit={onEdit ? () => { setOpenId(null); onEdit(entry); } : undefined}
+                  onDelete={onDelete ? () => { setOpenId(null); onDelete(entry); } : undefined}
+                >
+                  {content}
+                </SwipeEntry>
+              );
+            })}
+          </div>
+        );
+      })}
     </div>
   );
 });
+
+/**
+ * A row that a finger slides left to uncover แก้ไข and ลบ behind it. Only a
+ * touch drives the slide: a mouse (fine pointer) gets the same two buttons
+ * sitting at the row's end instead (see .swipe-row in globals.css), and a
+ * keyboard reaching either button opens the row so the focused button is
+ * never hidden under it. The slide itself is written straight to a CSS
+ * variable during the drag, so a move does not re-render the list.
+ */
+function SwipeEntry({
+  open,
+  onOpenChange,
+  onTap,
+  onEdit,
+  onDelete,
+  children,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onTap?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  children: React.ReactNode;
+}) {
+  const rowRef = useRef<HTMLElement | null>(null);
+  const drag = useRef<{ id: number; x: number; y: number; base: number; mode: "pending" | "swipe" | "scroll"; offset: number } | null>(null);
+  const swallowClick = useRef(false);
+  const width = ENTRY_SWIPE_ACTIONS_WIDTH;
+
+  const setOffset = (px: number | null) => {
+    const row = rowRef.current;
+    if (!row) return;
+    if (px == null) row.style.removeProperty("--swipe-x");
+    else row.style.setProperty("--swipe-x", `${px}px`);
+  };
+
+  const onPointerDown = (event: React.PointerEvent) => {
+    if (event.pointerType === "mouse") return;
+    // A browser may send no click at all after a swipe; a fresh touch means
+    // any click still owed to the last one is not coming.
+    swallowClick.current = false;
+    drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, base: open ? -width : 0, mode: "pending", offset: open ? -width : 0 };
+  };
+  const onPointerMove = (event: React.PointerEvent) => {
+    const state = drag.current;
+    if (!state || state.id !== event.pointerId) return;
+    const dx = event.clientX - state.x;
+    const dy = event.clientY - state.y;
+    if (state.mode === "pending") {
+      if (Math.abs(dy) > ENTRY_SWIPE_SLOP && Math.abs(dy) > Math.abs(dx)) { state.mode = "scroll"; return; }
+      if (Math.abs(dx) <= ENTRY_SWIPE_SLOP) return;
+      state.mode = "swipe";
+      rowRef.current?.classList.add("is-dragging");
+      try { (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId); } catch { /* synthetic pointer */ }
+    }
+    if (state.mode !== "swipe") return;
+    state.offset = Math.min(0, Math.max(-width, state.base + dx));
+    setOffset(state.offset);
+  };
+  const onPointerEnd = (event: React.PointerEvent) => {
+    const state = drag.current;
+    if (!state || state.id !== event.pointerId) return;
+    drag.current = null;
+    if (state.mode !== "swipe") return;
+    rowRef.current?.classList.remove("is-dragging");
+    setOffset(null);
+    swallowClick.current = true;
+    onOpenChange(state.offset < -width / 2);
+  };
+
+  return (
+    <article
+      ref={rowRef}
+      className={`entry swipe-row${open ? " is-open" : ""}`}
+      style={{ "--swipe-actions-w": `${width}px` } as React.CSSProperties}
+    >
+      <div className="swipe-actions" onFocus={() => onOpenChange(true)}>
+        {onEdit && (
+          <button type="button" className="swipe-edit" onClick={onEdit} aria-label="แก้ไขรายการ">
+            <Pencil size={18} strokeWidth={2.25} aria-hidden="true" />
+            <span>แก้ไข</span>
+          </button>
+        )}
+        {onDelete && (
+          <button type="button" className="swipe-delete" onClick={onDelete} aria-label="ลบรายการ">
+            <Trash2 size={18} strokeWidth={2.25} aria-hidden="true" />
+            <span>ลบ</span>
+          </button>
+        )}
+      </div>
+      <div
+        className="swipe-content"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+      >
+        <button
+          type="button"
+          className="entry-main entry-tappable"
+          onClick={() => {
+            if (swallowClick.current) { swallowClick.current = false; return; }
+            if (open) { onOpenChange(false); return; }
+            onTap?.();
+          }}
+        >
+          {children}
+        </button>
+      </div>
+    </article>
+  );
+}
 
 export const QuickAddStrip = memo(function QuickAddStrip({
   shortcuts,

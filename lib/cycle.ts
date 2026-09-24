@@ -60,7 +60,7 @@ export function groupEntriesByDay(entries: Entry[]) {
   }
   return [...byDay.entries()]
     .sort(([a], [b]) => b - a)
-    .map(([, items]) => ({ label: dayLabel(items[0].occurred_at), items }));
+    .map(([day, items]) => ({ key: new Date(day).toDateString(), label: dayLabel(items[0].occurred_at), items }));
 }
 
 export function daysRemainingInCycle(end: Date) {

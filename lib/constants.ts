@@ -255,3 +255,10 @@ export const ASK_COMPOSER_MAX_HEIGHT = 132;
 // lib/save.ts), so a save that did land after all is recognised rather than
 // written twice.
 export const SAVE_TIMEOUT_MS = 15_000;
+
+// A History row swiped left uncovers แก้ไข and ลบ behind it: this is how far
+// it slides (the two buttons' combined width, which the CSS reads from the
+// same number through --swipe-actions-w), and how far a finger must travel
+// before the row decides the gesture is a swipe rather than a scroll or a tap.
+export const ENTRY_SWIPE_ACTIONS_WIDTH = 152;
+export const ENTRY_SWIPE_SLOP = 8;

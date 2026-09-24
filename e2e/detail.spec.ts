@@ -33,14 +33,45 @@ test.describe("entry detail", () => {
     expect(await sheet.evaluate((element) => element.scrollTop)).toBe(0);
   });
 
-  test("opens from a History row, while the row's own แก้ still goes straight to editing", async ({ app }) => {
+  test("opens from a History row, while the row's own แก้ไข still goes straight to editing", async ({ app }) => {
     await navigate(app, "history");
     await app.locator(".view:not(.is-parked) .entry-tappable").first().click();
     await expect(app.locator(".sheet-backdrop > .entry-detail-sheet")).toBeVisible();
     await app.keyboard.press("Escape");
     await expect(app.locator(".sheet-backdrop > .entry-detail-sheet")).toHaveCount(0);
 
-    await app.locator(".view:not(.is-parked) .entry menu button", { hasText: "แก้" }).first().click();
+    // Reached the way a keyboard reaches it, which works on every pointer:
+    // on touch it sits behind the row until focus (or a swipe) opens it, on
+    // a mouse it is at the row's end.
+    const edit = app.locator(".view:not(.is-parked) .swipe-edit").first();
+    await edit.focus();
+    await expect(app.locator(".view:not(.is-parked) .swipe-row").first()).toHaveClass(/\bis-open\b/);
+    await edit.press("Enter");
     await expect(app.locator(".sheet-backdrop > .edit-sheet")).toBeVisible();
+  });
+
+  test("swipes a History row left to uncover แก้ไข and ลบ, and a tap closes it again", async ({ app }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "only a touch device swipes; a mouse gets the buttons at the row's end");
+    await navigate(app, "history");
+    const row = app.locator(".view:not(.is-parked) .swipe-row").first();
+    const content = row.locator(".swipe-content");
+    const box = (await content.boundingBox())!;
+    const y = box.y + box.height / 2;
+    await content.evaluate((element, { startX, endX, y }) => {
+      const fire = (type: string, x: number) => element.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 7, pointerType: "touch", clientX: x, clientY: y, isPrimary: true }));
+      fire("pointerdown", startX);
+      for (let x = startX; x >= endX; x -= 20) fire("pointermove", x);
+      fire("pointerup", endX);
+    }, { startX: box.x + box.width - 20, endX: box.x + box.width - 200, y });
+    await expect(row).toHaveClass(/\bis-open\b/);
+    await expect(row.locator(".swipe-edit")).toBeInViewport();
+    await expect(row.locator(".swipe-delete")).toBeInViewport();
+
+    // The click that ends a swipe is swallowed; the next tap closes the row
+    // rather than opening the detail sheet.
+    await row.locator(".entry-tappable").click();
+    if (await row.evaluate((element) => element.classList.contains("is-open"))) await row.locator(".entry-tappable").click();
+    await expect(row).not.toHaveClass(/\bis-open\b/);
+    await expect(app.locator(".sheet-backdrop > .entry-detail-sheet")).toHaveCount(0);
   });
 });

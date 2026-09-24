@@ -64,7 +64,10 @@ amount, date/category/wallet, then "แก้ไข" and "ลบ", then "รา�
 same event) and how often the title recurs (`sameTitleSummary`). It edits
 and deletes nothing itself: "แก้ไข" hands the row to `EditSheet` and "ลบ" to
 `deleteEntry`, so there is still one edit path and one delete path. History's
-own "แก้"/"ลบ" buttons stay as the fast path. The nav's fourth slot is
+fast path is the row itself (`SwipeEntry`, components/add.tsx): on touch it
+slides left to uncover "แก้ไข" and "ลบ" (`ENTRY_SWIPE_ACTIONS_WIDTH`), on a
+mouse the same two sit at the row's end as icons, and a keyboard focusing
+either opens the row -- so nothing is reachable only by gesture. The nav's fourth slot is
 **"กำลังจะมา"** (`UpcomingView`, components/upcoming.tsx): a timeline, date
 down the left, of what `buildUpcoming` finds in the next
 `UPCOMING_WINDOW_DAYS` counted **from today, not from the cycle** — so on the
@@ -97,12 +100,18 @@ each wallet a tile in its own `--hue` with its share of the total as a meter
 900px up the app is the whole window: Home's billboard runs edge to edge
 under the topbar and fades into the page at the bottom, and every other
 screen keeps a centred 1180px column with the topbar lined up to it.
-History ("รายการ") is list-first: a bare search field (no card around it)
-with one row of type chips under it (`QUICK_TYPES` in components/history.tsx,
-the same `filters.type` the filter panel sets), then the calendar -- which
-carries the month switcher -- that day's entries, and the trend/income charts
-last. It used to open on a "ภาพรวมเดือนนี้" card of month totals; those are
-Home's job, and that card is gone along with `MonthSummary` and `Metric`.
+History ("รายการ") is list-first: a bare search field (no card around it),
+held under the topbar while the month scrolls, with one row of type chips
+under it (`QUICK_TYPES` in components/history.tsx, the same `filters.type`
+the filter panel sets); then the calendar, which carries the month switcher;
+then the whole month as one statement, newest day first, each day's money
+in/out beside its date. A tap on a calendar day scrolls the list to that
+day (`selectHistoryDay`, which finds the group by `data-day`) rather than
+hiding every other day. It used to open on a "ภาพรวมเดือนนี้" card of month
+totals; those are Home's job, and that card is gone along with `MonthSummary`,
+`Metric` and the one-day `HistoryInsight`. The six-month trend and the income
+sources moved into "สรุปเดือนนี้" (`RecapSheet`), which is a dark sheet like
+the rest now, not the white card with an emerald button it used to be.
 
 **The brand is NUBTHUNG and its mark is the green "N"** --
 `public/icons/logo-mark.png` (transparent, for the app's own ground) and the

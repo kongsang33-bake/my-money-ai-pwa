@@ -1297,7 +1297,7 @@ a:focus-visible {
    ------------------------------------------------------------------------- */
 .wallet-card, .entry-list, .heatmap-panel, .debtor-detail-card,
 .debtor-page-item, .draft, .state-card, .empty-note, .report-preview,
-.history-insight, .debtor-statement,
+.debtor-statement,
 .success-pulse, .report-summary-tiles > div, .auth-card, .recap-card,
 .confirm-dialog, .skeleton-card, .skeleton-list > span,
 .skeleton-panel, .ai-input-wrap, .quick-chip,
@@ -1311,7 +1311,7 @@ a:focus-visible {
 }
 
 .wallet-card, .entry-list, .heatmap-panel, .debtor-detail-card,
-.state-card, .empty-note, .report-preview, .history-insight,
+.state-card, .empty-note, .report-preview,
 .debtor-statement, .success-pulse, .auth-card,
 .recap-card, .ai-input-wrap,
 .start-checklist, .missing-wallet-notice, .monthly-trend-panel,
@@ -3778,20 +3778,13 @@ button.poster:active {
   color: var(--ink);
 }
 
-.history-insight {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--s-3);
-  text-align: center;
-}
-
-.history-insight span, .debtor-statement span {
+.debtor-statement span {
   display: block;
   font-size: var(--fs-micro);
   color: var(--ink-3);
 }
 
-.history-insight b, .debtor-statement b {
+.debtor-statement b {
   display: block;
   font-size: var(--fs-body);
   font-weight: var(--fw-bold);
@@ -3804,6 +3797,18 @@ button.poster:active {
   display: grid;
   gap: var(--s-3);
   margin-bottom: var(--s-5);
+}
+
+/* Held under the topbar while the month scrolls by, so a search is always
+   one tap away. The ground is the page's own, running a little past the
+   chips so rows slide under an edge rather than a line. */
+.history-view .history-search {
+  position: sticky;
+  top: var(--topbar-block);
+  z-index: calc(var(--z-nav) - 2);
+  margin-inline: calc(-1 * var(--s-5));
+  padding: var(--s-2) var(--s-5) var(--s-3);
+  background: var(--bg);
 }
 
 /* Bare tier on purpose (CLAUDE.md surface tiers) -- this is a one-line
@@ -4298,6 +4303,10 @@ button.poster:active {
 
 .entry-group {
   padding: var(--s-4) var(--s-5) 0;
+  /* History jumps here from its calendar (selectHistoryDay); stop below the
+     sticky search as well as the topbar. The topbar's share is already
+     .phone's scroll-padding-top, which a scroll-margin adds to. */
+  scroll-margin-top: 96px;
 }
 
 .entry-group:first-child {
@@ -4305,12 +4314,36 @@ button.poster:active {
 }
 
 .entry-day {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
   font-size: var(--fs-micro);
   letter-spacing: 0.08em;
   font-weight: var(--fw-semibold);
   color: var(--ink-3);
   margin-bottom: var(--s-2);
 }
+
+/* The day picked on the calendar: its date in ink, so the jump lands on
+   something that says "here". */
+.entry-group.is-selected .entry-day > span:first-child {
+  color: var(--ink);
+}
+
+.entry-day-totals {
+  display: inline-flex;
+  gap: var(--s-2);
+  letter-spacing: 0;
+}
+
+.entry-day-totals b {
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+}
+
+.entry-day-totals .income { color: var(--income); }
+.entry-day-totals .expense { color: var(--expense); }
 
 .entry {
   display: flex;
@@ -4373,26 +4406,116 @@ button.entry-main {
   white-space: nowrap;
 }
 
-.entry menu {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  margin: 0;
+/* A row a finger slides left to uncover แก้ไข and ลบ (SwipeEntry in
+   components/add.tsx). The content covers the actions on the list's own
+   ground; --swipe-x is written during a drag, and .is-open sets it to the
+   actions' full width once let go. */
+.entry.swipe-row {
+  position: relative;
+  display: block;
+  padding: 0;
+  overflow: hidden;
 }
 
-.entry menu button {
+.swipe-row.is-open {
+  --swipe-x: calc(-1 * var(--swipe-actions-w));
+}
+
+.swipe-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  padding: var(--s-3) 0;
+  background: var(--surface-2);
+  transform: translateX(var(--swipe-x, 0px));
+  transition: transform var(--t-2) var(--e-out);
+  /* The browser keeps vertical scrolling; horizontal moves come to us. */
+  touch-action: pan-y;
+}
+
+.swipe-row.is-dragging .swipe-content {
+  transition: none;
+}
+
+.swipe-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  width: var(--swipe-actions-w);
+}
+
+.swipe-actions button {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
-  padding: 4px 6px;
-  border-radius: var(--r-full);
-  background: var(--surface-2);
-  color: var(--ink-2);
 }
 
-.entry menu button:first-child { color: var(--ink-3); }
+.swipe-edit {
+  background: var(--surface-3);
+  color: var(--ink);
+}
 
-.entry menu button:last-child {
+.swipe-delete {
+  background: var(--danger-soft);
   color: var(--danger);
+}
+
+/* A mouse cannot swipe: on a fine pointer the two actions sit at the row's
+   end as quiet icon buttons instead, and nothing slides. */
+@media (hover: hover) and (pointer: fine) {
+  .entry.swipe-row {
+    display: flex;
+    align-items: center;
+    gap: var(--s-1);
+  }
+
+  .swipe-content {
+    flex: 1;
+    min-width: 0;
+    background: none;
+    transform: none;
+  }
+
+  .swipe-actions {
+    position: static;
+    order: 2;
+    width: auto;
+    gap: 2px;
+  }
+
+  .swipe-actions button {
+    width: 32px;
+    height: 32px;
+    flex: none;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--ink-3);
+  }
+
+  .swipe-actions button:hover {
+    background: var(--surface-3);
+    color: var(--ink);
+  }
+
+  .swipe-actions .swipe-delete:hover {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+
+  .swipe-actions button span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* -------------------------------------------------------------------------
@@ -5347,33 +5470,50 @@ input[type="checkbox"], input[type="radio"] {
   margin: 0;
 }
 
+/* A sheet like every other one: it used to be a white card with an emerald
+   button, the one screen still wearing the old light direction -- and the
+   month's charts, moved in here, would have sat dark-on-white. */
 .recap-card {
   width: 100%;
-  background: var(--primary);
-  color: var(--primary-text);
+  max-height: min(86vh, 760px);
+  overflow-y: auto;
+  background: var(--surface);
+  color: var(--ink);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   padding: var(--s-7) var(--s-5) var(--s-6);
   position: relative;
   animation: sheet-in var(--t-3) var(--e-out) both;
 }
 
-.recap-close {
+.recap-card .sheet-close {
   position: absolute;
   top: var(--s-4);
   right: var(--s-4);
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--r-full);
-  background: var(--overlay-on-primary);
-  color: var(--primary-text);
-  font-size: var(--fs-h3);
+  background: var(--surface-3);
+  color: var(--ink);
   display: grid;
   place-items: center;
 }
 
+/* The month's charts, moved here from History: under the share button, as
+   the "and here is how it got there" half of the recap. */
+.recap-charts {
+  display: grid;
+  gap: var(--s-3);
+  margin-top: var(--s-6);
+  text-align: left;
+}
+
+.recap-charts > * {
+  margin-bottom: 0;
+}
+
 .recap-month {
   font-size: var(--fs-body);
-  opacity: 0.72;
+  color: var(--ink-3);
 }
 
 .recap-balance {
@@ -5400,7 +5540,7 @@ input[type="checkbox"], input[type="radio"] {
 
 .recap-grid span {
   font-size: var(--fs-caption);
-  opacity: 0.68;
+  color: var(--ink-3);
 }
 
 .recap-grid b {
@@ -5414,14 +5554,15 @@ input[type="checkbox"], input[type="radio"] {
   gap: var(--s-3);
   padding: var(--s-3);
   border-radius: var(--r-md);
-  background: var(--overlay-on-primary-soft);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
   margin-bottom: var(--s-3);
 }
 
 .recap-top-category small {
   display: block;
   font-size: var(--fs-micro);
-  opacity: 0.68;
+  color: var(--ink-3);
 }
 
 .recap-top-category b {
@@ -5432,16 +5573,17 @@ input[type="checkbox"], input[type="radio"] {
 
 .recap-streak, .recap-line {
   font-size: var(--fs-body);
-  opacity: 0.8;
+  color: var(--ink-2);
   margin-bottom: var(--s-2);
 }
 
 .recap-share {
   width: 100%;
+  min-height: 52px;
   padding: 14px;
-  border-radius: var(--r-lg);
-  background: var(--accent);
-  color: var(--ink-inverse);
+  border-radius: var(--r-sm);
+  background: var(--primary);
+  color: var(--primary-text);
   font-weight: var(--fw-semibold);
   margin-top: var(--s-3);
 }
@@ -7084,6 +7226,11 @@ input[type="checkbox"], input[type="radio"] {
 
   /* Spans the rows the left column stacks into, so a tall list never
      stretches the search row and opens a gap above the calendar. */
+  /* The list scrolls itself here, with nothing sticky over it. */
+  .history-view > .entry-list .entry-group {
+    scroll-margin-top: 0;
+  }
+
   .history-view > .entry-list {
     grid-column: 2;
     grid-row: 2 / span 8;

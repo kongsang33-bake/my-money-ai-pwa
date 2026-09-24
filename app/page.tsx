@@ -120,7 +120,7 @@ import {
   CyclePaceCard,
   SuccessPulse,
 } from "@/components/home";
-import { HistoryFilterBar, HistoryInsight, IncomeBreakdown, MonthlyTrendChart } from "@/components/history";
+import { HistoryFilterBar } from "@/components/history";
 import { Auth, PinGate, SecurityView } from "@/components/auth";
 import type { WalletInput, RecurringExpenseInput } from "@/components/wallets-recurring";
 import type { DebtorInput } from "@/components/debtors";
@@ -1083,11 +1083,24 @@ export default function Home() {
     setSelectedMonth(value);
     setSelectedDay(defaultDayForCycle(value, monthStartDay));
   }, [monthStartDay]);
+  // A day tapped on History's calendar scrolls the month's list to that
+  // day's group (EntryList marks each with data-day). A day with nothing on it
+  // lands on the nearest earlier day that has something, since the list runs
+  // newest first and that is where the day would have been.
+  const selectHistoryDay = useCallback((day: string) => {
+    setSelectedDay(day);
+    requestAnimationFrame(() => {
+      const groups = [...document.querySelectorAll<HTMLElement>(".history-view .entry-group[data-day]")];
+      const target = new Date(day).getTime();
+      const group = groups.find((node) => node.dataset.day === day)
+        ?? groups.find((node) => new Date(node.dataset.day!).getTime() <= target);
+      group?.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+  }, []);
   const monthlyEntries = useMemo(
     () => entriesInRange(entries, cycleRange.start, cycleRange.end),
     [entries, cycleRange],
   );
-  const filteredMonthlyEntries = useMemo(() => filterEntries(monthlyEntries, historyFilters), [monthlyEntries, historyFilters]);
   // Any active filter switches History from "this cycle's calendar" into a
   // flat search-results mode that runs across every entry ever recorded,
   // not just the selected month -- see the tab === "history" JSX below.
@@ -1145,11 +1158,6 @@ export default function Home() {
     ];
     return [...fromHistory, ...defaults].slice(0, 4);
   }, [quickShortcuts]);
-  const activeDay = selectedDay;
-  const dayEntries = useMemo(
-    () => activeDay ? filteredMonthlyEntries.filter((entry) => new Date(entry.occurred_at).toDateString() === activeDay) : filteredMonthlyEntries,
-    [activeDay, filteredMonthlyEntries],
-  );
 
   const categoryMemory = useMemo(() => buildCategoryMemory(entries), [entries]);
 
@@ -3184,15 +3192,13 @@ export default function Home() {
               </>
             ) : (
               <>
-                {/* The list first: History is where an entry is found, and the
-                    month's totals are Home's job (its billboard, the 7-day and
-                    cycle-pace cards). The calendar picks the day and carries
-                    the month switcher; the charts come after the entries. */}
-                <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedMonth={selectedMonth} onChangeMonth={selectHistoryMonth} selectedDay={selectedDay} defaultDay={defaultHistoryDay} onSelectDay={setSelectedDay} />
-                {activeDay && <HistoryInsight entries={dayEntries} />}
-                <EntryList entries={dayEntries} onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
-                <MonthlyTrendChart trend={monthlyTrend} />
-                <IncomeBreakdown items={incomeSummary} />
+                {/* History is where an entry is found: the calendar (which
+                    carries the month switcher) and then the whole month as one
+                    statement, newest day first, each day with its own totals.
+                    A tap on a day jumps the list to it rather than hiding the
+                    rest; the month's charts live in "สรุปเดือนนี้". */}
+                <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedMonth={selectedMonth} onChangeMonth={selectHistoryMonth} selectedDay={selectedDay} defaultDay={defaultHistoryDay} onSelectDay={selectHistoryDay} />
+                <EntryList entries={monthlyEntries} selectedDay={selectedDay} dayTotals onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
               </>
             )}
           </div>
@@ -3519,6 +3525,8 @@ export default function Home() {
             balance={monthlyBalance}
             topCategory={categorySummary[0] ?? null}
             streak={streak}
+            trend={monthlyTrend}
+            incomeSources={incomeSummary}
             onClose={recapDismiss.requestClose}
             closing={recapDismiss.closing}
           />

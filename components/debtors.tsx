@@ -10,6 +10,7 @@ import type { Debtor, DebtorKind, Entry } from "@/lib/types";
 import { CategoryIcon, IconColorPicker, WalletAvatarGlyph } from "@/components/shared";
 import { CountUpMoney, EmptyNote, PageFrame, SheetFrame, SkeletonList, StateCard, decimalInputPattern, SheetClose } from "@/components/primitives";
 import { EntryList } from "@/components/add";
+import { IncomeBreakdown, MonthlyTrendChart } from "@/components/history";
 
 /**
  * What a balance says out loud, including when it has gone past zero.
@@ -381,6 +382,8 @@ export function RecapSheet({
   balance,
   topCategory,
   streak,
+  trend,
+  incomeSources,
   onClose,
   closing,
 }: {
@@ -390,6 +393,9 @@ export function RecapSheet({
   balance: number;
   topCategory: { category: string; amount: number } | null;
   streak: number;
+  /** The six-month trend and where this month's income came from -- moved here from History, which is for finding entries. */
+  trend: { key: string; label: string; income: number; outflow: number; netWorth: number }[];
+  incomeSources: { category: string; amount: number }[];
   onClose: () => void;
   closing?: boolean;
 }) {
@@ -427,7 +433,7 @@ export function RecapSheet({
 
   return (
     <SheetFrame onClose={onClose} className="recap-card" closing={closing}>
-        <button className="recap-close" onClick={onClose}>×</button>
+        <SheetClose onClick={onClose} />
         <p className="recap-month">{monthLabel}</p>
         <strong className={`recap-balance ${balance >= 0 ? "income" : "expense"}`}>{formatSignedMoney(balance)}</strong>
         <div className="recap-grid">
@@ -453,6 +459,10 @@ export function RecapSheet({
         <p className="recap-line">{closingLine}</p>
         {shareMessage && <p className="recap-line">{shareMessage}</p>}
         <button className="recap-share" onClick={share}>แชร์สรุปเดือนนี้</button>
+        <div className="recap-charts">
+          <MonthlyTrendChart trend={trend} />
+          <IncomeBreakdown items={incomeSources} />
+        </div>
     </SheetFrame>
   );
 }
