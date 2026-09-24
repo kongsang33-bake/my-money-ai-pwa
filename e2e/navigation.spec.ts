@@ -178,6 +178,9 @@ test.describe("navigation", () => {
     // pushed off it by a page that grows.
     expect(box.overflow, "chat screen should not scroll the page").toBeLessThanOrEqual(1);
     expect(box.composerBottom).toBeLessThanOrEqual(box.navTop);
+    // ...and sits on it, not floating a hand's width above it (which is what
+    // a height computed from 100dvh did on an iPhone).
+    expect(box.navTop - box.composerBottom, "composer should sit just above the nav").toBeLessThanOrEqual(32);
 
     // Send stays disabled until there is something to send.
     const send = app.locator(".ask-ai-send");

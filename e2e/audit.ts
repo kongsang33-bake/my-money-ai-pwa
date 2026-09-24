@@ -24,6 +24,10 @@ export type ScreenAudit = {
   contrast: Finding[];
   tapSize: Finding[];
   overflow: Finding[];
+  /** Two of a screen's own sections stacked with no room between them, at
+   *  least one of them a box -- the wallet statement sat flush under the
+   *  wallet tiles, and nothing but a user's eye caught it. */
+  crowded: Finding[];
   /** Text nodes whose background could not be resolved (a gradient or image
    *  behind them), so contrast was not judged. Reported as coverage, not as a
    *  failure -- a silently shrinking number here would hide regressions. */
@@ -160,6 +164,7 @@ export async function auditScreen(page: Page, screen: string): Promise<ScreenAud
     const contrast: Found[] = [];
     const tapSize: Found[] = [];
     const overflow: Found[] = [];
+    const crowded: Found[] = [];
     let skipped = 0;
     let checked = 0;
 
@@ -257,6 +262,34 @@ export async function auditScreen(page: Page, screen: string): Promise<ScreenAud
       });
     }
 
-    return { contrast, tapSize, overflow, skipped, checked };
+    // --- sections that touch ---
+    // Only a screen's direct children (and a sheet's): the parts inside one
+    // card are meant to butt up against each other, and rows in a list are
+    // separated by their own hairlines.
+    const isBoxed = (element: Element) => {
+      const style = getComputedStyle(element);
+      const background = parse(style.backgroundColor);
+      return (background !== null && background.a > 0) || parseFloat(style.borderTopWidth) > 0 || parseFloat(style.borderBottomWidth) > 0;
+    };
+    for (const root of document.querySelectorAll(".phone > .view:not(.is-parked), .sheet-backdrop > *")) {
+      const children = [...root.children].filter((child) => {
+        const style = getComputedStyle(child);
+        const rect = child.getBoundingClientRect();
+        return rect.height > 0 && rect.width > 0 && style.position !== "absolute" && style.position !== "fixed" && style.visibility !== "hidden";
+      });
+      for (let index = 1; index < children.length; index++) {
+        const above = children[index - 1];
+        const below = children[index];
+        if (!isBoxed(above) && !isBoxed(below)) continue;
+        const a = above.getBoundingClientRect();
+        const b = below.getBoundingClientRect();
+        const sideBySide = Math.min(a.right, b.right) - Math.max(a.left, b.left) < 40;
+        const gap = b.top - a.bottom;
+        if (sideBySide || gap < -1 || gap >= 6) continue;
+        crowded.push({ screen, what: `${describe(above)} / ${describe(below)}`, detail: `${gap.toFixed(0)}px between them` });
+      }
+    }
+
+    return { contrast, tapSize, overflow, crowded, skipped, checked };
   }, { screen });
 }

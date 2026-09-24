@@ -177,7 +177,6 @@
      so its slice of the flow is its height plus the notch, nothing else. */
   --topbar-block: calc(var(--topbar-height) + env(safe-area-inset-top));
   /* Height a .view takes to fill exactly what is left between them. */
-  --screen-fill: calc(100dvh - var(--nav-clearance) - var(--topbar-block) - var(--s-1) - var(--s-3));
 
   --s-0: 2px;
   --s-1: 4px;
@@ -602,6 +601,7 @@ a:focus-visible {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
   gap: var(--s-3);
+  margin-bottom: var(--s-5);
 }
 
 .wallet-tile {
@@ -679,7 +679,9 @@ a:focus-visible {
   font-weight: var(--fw-bold);
 }
 
-.wallet-tile-share {
+/* Scoped past .stat-meter's own margin-top: auto, which otherwise wins and
+   leaves the bar 2px under the amount. */
+.wallet-tile-main .wallet-tile-share {
   position: relative;
   margin-top: var(--s-2);
 }
@@ -924,8 +926,9 @@ a:focus-visible {
   gap: 6px;
   align-self: flex-start;
   height: 36px;
+  margin-bottom: var(--s-4);
   padding: 0 var(--s-4);
-  border-radius: var(--r-full);
+  border-radius: var(--r-sm);
   border: 1px solid var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--surface));
   color: var(--ink);
@@ -2712,6 +2715,7 @@ button.poster:active {
 }
 
 .section-title > button {
+  min-height: 32px;
   color: var(--ink-2);
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
@@ -2760,12 +2764,24 @@ button.poster:active {
 
 /* Ask AI is a chat screen, not a form: the page itself does not scroll, the
    thread does, and the composer holds the bottom edge the way a messaging
-   app's does. That is why it needs an exact height rather than a min-height
-   -- a page that can grow would push the composer off the bottom. */
-.ask-ai-page {
+   app's does. The page is a flex child that takes whatever .phone has left
+   between the topbar and the nav -- it used to be a height worked out from
+   100dvh minus the topbar, the nav and the safe areas, and on an iPhone
+   (where those insets are real) the sum came out short and left the
+   composer floating a hand's width above the nav. */
+.phone.tab-ask {
   display: flex;
   flex-direction: column;
-  height: var(--screen-fill);
+  overflow-y: hidden;
+  padding-bottom: calc(var(--nav-height) + var(--nav-lift));
+  transition: padding-bottom var(--t-3) var(--e-out);
+}
+
+.phone > .view.ask-ai-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   padding-bottom: var(--s-3);
 }
 
@@ -2777,16 +2793,8 @@ button.poster:active {
    -- the wide layout reserves its nav room differently and has no keyboard
    to make room for. */
 @media (hover: none) and (pointer: coarse) and (max-width: 899px) {
-  .ask-ai-page {
-    transition: height var(--t-3) var(--e-out);
-  }
-
   .phone.tab-ask:has(.ask-ai-input:focus) {
     padding-bottom: 0;
-  }
-
-  .phone.tab-ask:has(.ask-ai-input:focus) .ask-ai-page {
-    height: calc(var(--screen-fill) + var(--nav-clearance));
   }
 }
 
@@ -7191,11 +7199,12 @@ input[type="checkbox"], input[type="radio"] {
     padding: 0 var(--s-7) calc(var(--s-8) + 80px);
   }
 
-  :root {
-    --screen-fill: calc(100dvh - var(--nav-height) - var(--s-7) - var(--s-3) - var(--topbar-block));
+  /* The nav floats --s-7 off the bottom here, so that is the room left. */
+  .phone.tab-ask {
+    padding-bottom: calc(var(--nav-height) + var(--s-7) + var(--s-3));
   }
 
-  .ask-ai-page {
+  .phone > .view.ask-ai-page {
     padding-bottom: var(--s-3);
   }
 

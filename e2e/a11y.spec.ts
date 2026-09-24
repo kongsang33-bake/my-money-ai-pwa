@@ -95,12 +95,16 @@ test("meets contrast, target size and overflow limits", async ({ page }) => {
     await navigate(page, tab);
     audits.push(await auditScreen(page, tab));
   }
+  // A wallet's statement opens under the tiles; it sat flush against them.
+  await page.locator(".wallet-tile-main").first().click();
+  await page.waitForTimeout(400);
+  audits.push(await auditScreen(page, "wallets-statement"));
 
   await navigate(page, "more");
   await page.waitForTimeout(500);
   audits.push(await auditScreen(page, "more"));
 
-  const all = <K extends "contrast" | "tapSize" | "overflow">(key: K) => audits.flatMap((audit) => audit[key]);
+  const all = <K extends "contrast" | "tapSize" | "overflow" | "crowded">(key: K) => audits.flatMap((audit) => audit[key]);
   const checked = audits.reduce((sum, audit) => sum + audit.checked, 0);
 
   // Proof the walk actually looked at something: a selector change that
@@ -109,6 +113,7 @@ test("meets contrast, target size and overflow limits", async ({ page }) => {
 
   expect.soft(all("overflow"), report("content clipped sideways", all("overflow"))).toEqual([]);
   expect.soft(all("tapSize"), report("tap targets under 24x24 (WCAG 2.5.8)", all("tapSize"))).toEqual([]);
+  expect.soft(all("crowded"), report("sections touching with no room between", all("crowded"))).toEqual([]);
 
   const contrast = all("contrast");
   if (process.env.E2E_WRITE_CONTRAST_BASELINE === "1") {

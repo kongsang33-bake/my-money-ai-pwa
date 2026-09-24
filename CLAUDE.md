@@ -249,6 +249,11 @@ the product name -- leave them.
   `viewportFit: "cover"` (drop that and the tabs sit flush on an iPhone's
   bottom edge again), never less than `--s-2`. The full inset plus a margin
   was tried and read as too high next to other apps on an iPhone 17.
+  Ask AI is the one screen that must fill exactly what is left, and it does
+  it with layout (`.phone.tab-ask` is a flex column, the page is `flex: 1`),
+  not with a height worked out from `100dvh` minus the chrome -- that sum
+  ignored the real safe-area insets and left the composer floating above
+  the nav on an iPhone.
 - **`.phone` is the real, edge-to-edge app root at every width — not a
   device mockup.** There is no rounded-card-with-drop-shadow "phone frame"
   centered on a differently-colored backdrop any more; that read as a
@@ -327,9 +332,12 @@ token value.
   each now that there is one theme -- see git history before the Cinema
   pass for the two-theme version), for three things a screenshot only
   catches if you happen to look: WCAG 1.4.3 contrast, WCAG 2.5.8 target size
-  (24×24), and content wider than `.phone` — which is invisible by
+  (24×24), content wider than `.phone` — which is invisible by
   construction, since `.phone` sets `overflow-x: hidden` and simply clips
-  it. Target size and overflow are held at zero. Contrast is ratcheted
+  it — and "crowded": two of a screen's (or a sheet's) direct children
+  stacked with under 6px between them while at least one is a box, which is
+  how a wallet statement shipped flush against the tiles above it. Target
+  size, overflow and crowded are held at zero. Contrast is ratcheted
   against `e2e/contrast-baseline.json`: it was reset to `{}` and regenerated
   against the Cinema palette (6 pairs, down from 23 against the old paper/
   quiet-dark palette -- not yet zero, so still read the comment at the top
