@@ -253,7 +253,12 @@ the product name -- leave them.
   it with layout (`.phone.tab-ask` is a flex column, the page is `flex: 1`),
   not with a height worked out from `100dvh` minus the chrome -- that sum
   ignored the real safe-area insets and left the composer floating above
-  the nav on an iPhone.
+  the nav on an iPhone. `.phone` (and `.shell`) are sized to `--vvh`, the
+  visual viewport's height, set from `window.visualViewport` in
+  app/page.tsx: iOS does not shrink the page for the keyboard, it pans the
+  document, and left panned after the keyboard closed. Anything that makes
+  the document taller than `--vvh` (a `min-height` on `.phone`, say) gives
+  iOS something to pan again.
 - **`.phone` is the real, edge-to-edge app root at every width — not a
   device mockup.** There is no rounded-card-with-drop-shadow "phone frame"
   centered on a differently-colored backdrop any more; that read as a

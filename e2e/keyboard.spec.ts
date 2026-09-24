@@ -53,6 +53,24 @@ test.describe("keyboard", () => {
     expect((await composer.boundingBox())!.y + (await composer.boundingBox())!.height).toBeCloseTo(before.composerBottom, 0);
   });
 
+  test("keeps Ask AI's composer on the keyboard's edge as the visible area shrinks", async ({ app }, info) => {
+    test.skip(info.project.name !== "mobile", "only a touch screen has an on-screen keyboard");
+    // iOS does not resize the page for the keyboard; it shrinks the visual
+    // viewport, which the app follows through --vvh. A smaller window is the
+    // same event from the page's point of view.
+    await openAsk(app);
+    const full = app.viewportSize()!;
+    await app.locator(".ask-ai-input").focus();
+    const visible = 480;
+    await app.setViewportSize({ width: full.width, height: visible });
+    await settle(app);
+    const box = (await app.locator(".ask-ai-composer").boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(visible);
+    expect(visible - (box.y + box.height), "the composer should sit on the keyboard, not float above it").toBeLessThanOrEqual(32);
+    expect(await app.evaluate(() => window.scrollY)).toBe(0);
+    await app.setViewportSize(full);
+  });
+
   test("tucks the nav for any field that opens a keyboard, not for a date picker", async ({ app }, info) => {
     test.skip(info.project.name !== "mobile", "only a touch screen has an on-screen keyboard");
     await navigate(app, "add");

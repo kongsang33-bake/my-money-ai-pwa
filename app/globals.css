@@ -451,8 +451,10 @@ a:focus-visible {
    mockup. .phone is now the real, edge-to-edge scroll root everywhere; the
    only thing that still changes with width is a max-width clamp so text
    doesn't stretch unreadably wide on desktop. */
+/* The visible height too (see .phone): a shell taller than what the keyboard
+   leaves is a document iOS can pan. */
 .shell {
-  min-height: 100vh;
+  min-height: var(--vvh, 100dvh);
   background: var(--bg);
 }
 
@@ -460,8 +462,10 @@ a:focus-visible {
   width: 100%;
   max-width: 100%;
   margin: 0 auto;
-  height: 100dvh;
-  min-height: 100dvh;
+  /* --vvh: the visible height, less the on-screen keyboard (set in
+     app/page.tsx from window.visualViewport); 100dvh until it is known. */
+  height: var(--vvh, 100dvh);
+  min-height: var(--vvh, 100dvh);
   background: var(--bg);
   position: relative;
   border-radius: 0;
@@ -7072,7 +7076,6 @@ input[type="checkbox"], input[type="radio"] {
 @media (min-width: 600px) and (max-width: 899px) {
   .phone {
     max-width: 560px;
-    min-height: 720px;
   }
 
   /* The detail sheet rises over the same 560px column the page sits in. */

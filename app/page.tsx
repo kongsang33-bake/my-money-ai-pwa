@@ -915,6 +915,35 @@ export default function Home() {
     };
   }, [overlayOpen]);
 
+  // The app is sized to what is actually visible, not to the window. iOS
+  // does not shrink the page for the on-screen keyboard: it pans the whole
+  // document up to show the focused field, which left Ask AI's composer
+  // floating half a screen above the keyboard -- and, when the keyboard
+  // closed, often left the page panned, the topbar gone and a gap under the
+  // composer that had to be scrolled away by hand. --vvh is the visual
+  // viewport's height (the room above the keyboard), .phone takes it, so the
+  // focused field is already on screen and there is nothing to pan; any pan
+  // iOS makes anyway is put back. A pinch-zoom also changes the visual
+  // viewport, and is left alone.
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const root = document.documentElement;
+    const update = () => {
+      if (Math.abs(viewport.scale - 1) > 0.01) return;
+      root.style.setProperty("--vvh", `${Math.round(viewport.height)}px`);
+      if (window.scrollY !== 0 || viewport.offsetTop > 0) window.scrollTo(0, 0);
+    };
+    update();
+    viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
+    return () => {
+      viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
+      root.style.removeProperty("--vvh");
+    };
+  }, []);
+
   // The scroll container, plus one thing that has to watch it scroll: Home's
   // topbar floats clear over the billboard until content passes under it,
   // then .topbar-scrim fades in behind it. A DOM attribute flipped directly
