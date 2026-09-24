@@ -187,7 +187,7 @@ export const HeroWalletCard = memo(function HeroWalletCard({
             label's own styling does (letter-spacing, the brand colour) leaks
             into the popover's text. */}
         <div className="billboard-kicker">
-          <i className="brand-mark" aria-hidden="true">น</i>
+          <i className="brand-mark" aria-hidden="true" />
           <span>เงินพร้อมใช้สุทธิ</span>
           <InfoHint label="เงินพร้อมใช้สุทธิ">
             ยอดรวมของกระเป๋าประเภท &ldquo;เงินใช้จ่าย&rdquo; ตามที่จดไว้ ไม่รวมเงินที่กันไว้ในกระเป๋าออม และไม่รวมหนี้
@@ -914,7 +914,7 @@ export function EntryDetailSheet({
       </button>
       <div className="detail-body">
         <div className="billboard-kicker">
-          <i className="brand-mark" aria-hidden="true">น</i>
+          <i className="brand-mark" aria-hidden="true" />
           <span>{transactionTypeLabels[entry.transaction_type]}</span>
         </div>
         <h2>{entry.title}</h2>

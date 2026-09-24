@@ -2945,8 +2945,8 @@ export default function Home() {
             the account, as they were when this was a greeting. */}
         <header className="topbar">
           <div className="topbar-brand">
-            <i className="brand-mark" aria-hidden="true">น</i>
-            <b>นับตังค์</b>
+            <i className="brand-mark" aria-hidden="true" />
+            <b className="brand-name">NUBTHUNG</b>
           </div>
           <button className="home-identity" onClick={() => setTab("profile")} aria-label="บัญชีและการตั้งค่า">
             <b>{displayName}</b>

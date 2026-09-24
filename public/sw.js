@@ -1,7 +1,7 @@
 // Bump this on every deploy that should invalidate old caches -- `activate`
 // below deletes every cache that isn't this one, so a stale version never
 // lingers on a user's device past their next visit.
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const CACHE_NAME = `nubtang-${CACHE_VERSION}`;
 const SHELL_URL = "/";
 // How long a launch waits on the network for the page before it opens the

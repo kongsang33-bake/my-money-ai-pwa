@@ -135,8 +135,8 @@ export function PinGate({
     <main className="shell pin-shell">
       <section className="phone pin-screen">
         <header className="pin-brand">
-          <i className="brand-mark" aria-hidden="true">น</i>
-          <b>นับตังค์</b>
+          <i className="brand-mark" aria-hidden="true" />
+          <b className="brand-name">NUBTHUNG</b>
         </header>
         <div className={`pin-content ${shake ? "shake" : ""}`}>
           <div className="pin-identity">
