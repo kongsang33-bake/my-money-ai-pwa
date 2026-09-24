@@ -39,6 +39,7 @@ import {
   balanceAdjustmentEntry,
   buildTransactionCore,
   CARD_FUNDABLE_TYPES,
+  buildBalanceHistory,
   buildWalletLedger,
   calculateImpacts,
   categorySpendAmount,
@@ -72,12 +73,12 @@ import { authHeaders } from "@/lib/api";
 import { isConnectionFailure, isDuplicateRowError, rowIdsForSave, type SaveAttempt } from "@/lib/save";
 import {
   AI_CONTEXT_MAX_LENGTH,
+  BILLBOARD_HISTORY_DAYS,
+  BUDGET_COLUMNS,
+  DEBTOR_COLUMNS,
   ENTRY_PAGE_MAX_REQUESTS,
   ENTRY_PAGE_SIZE,
   INSIGHT_MIN_ENTRIES,
-  RESTORE_ID_BATCH_SIZE,
-  BUDGET_COLUMNS,
-  DEBTOR_COLUMNS,
   INVESTMENT_COLUMNS,
   INVESTMENT_PRICE_COLUMNS,
   LOCAL_DATA_MIGRATED_KEY_PREFIX,
@@ -87,8 +88,9 @@ import {
   MONTH_START_DAY_MIN,
   PROFILE_COLUMNS,
   RECURRING_EXPENSE_COLUMNS,
-  SEARCH_RESULT_LIMIT,
+  RESTORE_ID_BATCH_SIZE,
   SAVE_TIMEOUT_MS,
+  SEARCH_RESULT_LIMIT,
   SPLASH_MIN_VISIBLE_MS,
   TABLES,
   TRANSACTION_COLUMNS,
@@ -896,6 +898,25 @@ export default function Home() {
     };
   }, [overlayOpen]);
 
+  // The scroll container, plus one thing that has to watch it scroll: Home's
+  // topbar floats clear over the billboard until content passes under it,
+  // then .topbar-scrim fades in behind it. A DOM attribute flipped directly
+  // rather than React state -- a scroll handler that set state would re-render
+  // the whole app on every frame of every scroll. A callback ref (with React
+  // 19's cleanup) rather than an effect, because the shell that owns .phone
+  // mounts only after auth and the PIN gate resolve.
+  const attachScrollRoot = useCallback((node: HTMLElement | null) => {
+    scrollRootRef.current = node;
+    if (!node) return;
+    const update = () => node.toggleAttribute("data-scrolled", node.scrollTop > 8);
+    update();
+    node.addEventListener("scroll", update, { passive: true });
+    return () => {
+      node.removeEventListener("scroll", update);
+      if (scrollRootRef.current === node) scrollRootRef.current = null;
+    };
+  }, []);
+
   // Every tab shares that one scroll container, so without this a user who
   // scrolls to the bottom of History and taps Home lands halfway down Home.
   // Instant, not smooth: the tab's own view-in animation is the transition,
@@ -941,6 +962,13 @@ export default function Home() {
   const mainWallet = useMemo(
     () => walletTotals.cash,
     [walletTotals.cash],
+  );
+  // The billboard's art. Nothing to draw before there is a wallet: every
+  // point would be zero, and a flat line reads as "no change" rather than
+  // "not set up yet".
+  const mainWalletHistory = useMemo(
+    () => (wallets.length ? buildBalanceHistory(wallets, entries, "cash", BILLBOARD_HISTORY_DAYS) : []),
+    [wallets, entries],
   );
   const secondaryWallets = useMemo(() => displayWallets.filter((wallet) => wallet.tag !== "cash"), [displayWallets]);
   const portfolioHoldings = useMemo(() => buildPortfolioHoldings(investments, investmentPrices), [investments, investmentPrices]);
@@ -2848,31 +2876,31 @@ export default function Home() {
 
   return (
     <main className="shell">
-      <section className={`phone tab-${tab}`} ref={scrollRootRef}>
+      <section className={`phone tab-${tab}`} ref={attachScrollRoot}>
         {/* The topbar is a floating pill, so the page scrolls through the gap
             above and beside it -- a hero balance sliding past the header used
             to be readable over the top of it. This is the ground that gap
             needs; it cannot go on .topbar itself without painting over the
             pill's own frosted background. */}
         <div className="topbar-scrim" aria-hidden="true" />
+        {/* Flat, like a Netflix top bar: the app's mark on the left, you on
+            the right. It carries no ground of its own -- .topbar-scrim does,
+            and on Home only once something has scrolled under it (see
+            attachScrollRoot), so at the top of Home it floats clear over the
+            billboard's glow. Your own name and face are still the way into
+            the account, as they were when this was a greeting. */}
         <header className="topbar">
-          {/* The greeting IS the way into the account -- tapping your own name
-              and face is where anyone looks for "my settings", and it saved a
-              whole drawer whose only job was to hold two links to here. */}
+          <div className="topbar-brand">
+            <i className="brand-mark" aria-hidden="true">น</i>
+            <b>นับตังค์</b>
+          </div>
           <button className="home-identity" onClick={() => setTab("profile")} aria-label="บัญชีและการตั้งค่า">
+            <b>{displayName}</b>
             <span className={`home-profile-icon ${displayIconImage ? "has-image" : ""}`}>
-              {displayIconImage && <NextImage className="profile-image" src={displayIconImage} alt="" width={42} height={42} unoptimized />}
+              {displayIconImage && <NextImage className="profile-image" src={displayIconImage} alt="" width={34} height={34} unoptimized />}
               {!displayIconImage && displayIcon}
             </span>
-            <span>
-              <span className="eyebrow">สวัสดี</span>
-              <b>{displayName}</b>
-            </span>
           </button>
-          {/* The theme toggle that used to live here is gone along with light
-              mode -- Cinema is dark only. The topbar's one remaining job is
-              the way into the account; phase 2 gives it the logo/search
-              layout docs/netflix-reference.html mocks. */}
         </header>
 
         {!isOnline && <StateCard tone="error" title="ออฟไลน์อยู่" detail="ข้อมูลอาจไม่อัปเดต และบันทึก/วิเคราะห์รายการใหม่ไม่ได้จนกว่าจะกลับมาออนไลน์" />}
@@ -2898,6 +2926,7 @@ export default function Home() {
               <section className="wallet-grid single-wallet">
                 <HeroWalletCard
                   balance={mainWallet}
+                  history={mainWalletHistory}
                   insight={walletInsight}
                   streak={streak}
                   onAddEntry={openAddTabDefault}
@@ -2916,32 +2945,13 @@ export default function Home() {
                   onHide={hideStartChecklist}
                 />
               )}
-              {/* Every card below reads as analysis, and analysis of two
-                  entries is a row of confident zeros -- which is what an
-                  empty account used to open on. Held back until there is
-                  something to analyse; the checklist above says so. */}
-              {hasEnoughForInsights && (
-                <HomeInsightGrid
-                  netWorth={netWorth}
-                  netWorthDelta={netWorthDelta}
-                  netWorthFormula={netWorthDisplay.formula}
-                  hideNetWorthCard={netWorthDisplay.hideCard}
-                  savingsRate={savingsRate}
-                  monthlyIncome={monthlyIncome}
-                  monthlyObligationTotal={monthlyObligationTotal}
-                  payableTotal={payableTotal}
-                />
-              )}
               {/* Everything below here is a rail: a named row of fixed-width
                   cards that scrolls on its own, rather than a stack of
                   full-width blocks or a CSS grid -- see the "Rails" section
                   of globals.css and the Rail component in primitives.tsx.
                   Each card component (QuickAddStrip, DueSoonCard, …) is
                   untouched; only its wrapper changed. */}
-              <section className="rail">
-                <div className="rail-head"><h2>จดเร็ว</h2></div>
-                <QuickAddStrip shortcuts={homeShortcuts} onSelect={addFromShortcut} onMore={openAddTabDefault} />
-              </section>
+              <QuickAddStrip shortcuts={homeShortcuts} onSelect={addFromShortcut} onMore={openAddTabDefault} />
               {(dueSoonRecurring.length > 0 || unpaidCards.length > 0) && (
                 // No rail-level action here: DueSoonCard/UnpaidCardsCard each
                 // already carry their own "จัดการ"/"ดูหนี้" button, and a
@@ -2949,6 +2959,26 @@ export default function Home() {
                 <Rail title="ใกล้ถึงกำหนด">
                   {dueSoonRecurring.length > 0 && <DueSoonCard items={dueSoonRecurring} onManage={openRecurringTab} onLogNow={logRecurringNowHandler} />}
                   {unpaidCards.length > 0 && <UnpaidCardsCard items={unpaidCards} onManage={openCardDebts} />}
+                </Rail>
+              )}
+              {/* Every card in this rail reads as analysis, and analysis of
+                  two entries is a row of confident zeros -- which is what an
+                  empty account used to open on. Held back until there is
+                  something to analyse; the checklist above says so. It used
+                  to be a tall bento block straight under the hero, which
+                  took most of the first screen; as a rail it is one row. */}
+              {hasEnoughForInsights && (
+                <Rail title="สุขภาพการเงิน" compact>
+                  <HomeInsightGrid
+                    netWorth={netWorth}
+                    netWorthDelta={netWorthDelta}
+                    netWorthFormula={netWorthDisplay.formula}
+                    hideNetWorthCard={netWorthDisplay.hideCard}
+                    savingsRate={savingsRate}
+                    monthlyIncome={monthlyIncome}
+                    monthlyObligationTotal={monthlyObligationTotal}
+                    payableTotal={payableTotal}
+                  />
                 </Rail>
               )}
               {(!!goals.length || budgetGlance.totalBudget > 0) && (

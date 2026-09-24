@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
+import { memo, useId, useMemo, useState } from "react";
 import { ChevronLeft, Info, Plus, TrendingDown, TrendingUp, Users, Wallet as WalletIcon } from "lucide-react";
 import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
 import { formatMoney, formatPercent, formatShortDate, formatSignedMoney, moneySign, toMoneyAmount } from "@/lib/format";
@@ -112,57 +112,104 @@ export function HeatmapLegend({ total, activeDays }: { total: number; activeDays
   );
 }
 
+/**
+ * The balance's own recent past, drawn as the billboard's "key art" -- the
+ * slot a Netflix billboard fills with a still from the show. It is the real
+ * figure (buildBalanceHistory ends on the same number printed over it), not a
+ * decorative squiggle, and it is labelled as such in the corner. Stretched to
+ * the billboard's box with preserveAspectRatio="none"; vector-effect keeps the
+ * line one weight however the box is shaped.
+ */
+function BalanceArt({ points }: { points: number[] }) {
+  const gradientId = useId();
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const span = max - min;
+  // The line lives in the top half; the bottom half is where the kicker,
+  // the amount and the buttons sit, over the fade, and a line running
+  // through the numeral would fight it for legibility.
+  const y = (value: number) => (span === 0 ? 30 : 46 - ((value - min) / span) * 36);
+  const x = (index: number) => (index / (points.length - 1)) * 100;
+  const line = points.map((value, index) => `${index ? "L" : "M"}${x(index).toFixed(2)} ${y(value).toFixed(2)}`).join(" ");
+  return (
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" style={{ stopColor: "var(--accent)", stopOpacity: 0.42 }} />
+          <stop offset="1" style={{ stopColor: "var(--accent)", stopOpacity: 0 }} />
+        </linearGradient>
+      </defs>
+      {[25, 45, 65].map((gridY) => (
+        <line key={gridY} className="billboard-grid" x1="0" x2="100" y1={gridY} y2={gridY} />
+      ))}
+      <path d={`${line} L100 100 L0 100 Z`} fill={`url(#${gradientId})`} />
+      <path className="billboard-line" d={line} />
+    </svg>
+  );
+}
+
+/**
+ * Home's billboard: the one full-bleed moment on the screen, the job the coral
+ * hero used to do. Laid out the way docs/netflix-reference.html's .billboard
+ * is -- art filling the box, then a kicker, the amount, a line of tags and the
+ * two actions sitting over a fade at the bottom -- rather than as a card with
+ * a label in one corner and a chip in the other.
+ */
 export const HeroWalletCard = memo(function HeroWalletCard({
   balance,
+  history,
   insight,
   streak,
   onAddEntry,
   onViewDetails,
 }: {
   balance: number;
+  history: number[];
   insight: { tone: string; label: string; text: string; perDay: number };
   streak: number;
   onAddEntry: () => void;
   onViewDetails: () => void;
 }) {
   return (
-    <div className={`wallet-card primary-wallet hero-wallet hero-${insight.tone}`}>
-      <div className="hero-wallet-top">
-        {/* The hint is a sibling of the label, not a child: the label carries
-            an opacity, and opacity makes a group whose alpha every descendant
-            inherits and none can undo -- which washed the popover out. Same
-            reason for the insight tiles below. */}
-        <div className="insight-label">
+    <div className={`hero-wallet hero-${insight.tone}`}>
+      <div className="billboard-art" aria-hidden="true">
+        {history.length > 1 && (
+          <>
+            <BalanceArt points={history} />
+            <span className="billboard-caption">{history.length} วันล่าสุด</span>
+          </>
+        )}
+      </div>
+      <div className="billboard-body">
+        {/* The hint is a sibling of the label, not inside it, so nothing the
+            label's own styling does (letter-spacing, the brand colour) leaks
+            into the popover's text. */}
+        <div className="billboard-kicker">
+          <i className="brand-mark" aria-hidden="true">น</i>
           <span>เงินพร้อมใช้สุทธิ</span>
           <InfoHint label="เงินพร้อมใช้สุทธิ">
             ยอดรวมของกระเป๋าประเภท &ldquo;เงินใช้จ่าย&rdquo; ตามที่จดไว้ ไม่รวมเงินที่กันไว้ในกระเป๋าออม และไม่รวมหนี้
           </InfoHint>
         </div>
-        <em>{insight.label}</em>
-      </div>
-      {streak >= 2 && (
-        <small className={`streak-badge ${streak >= 7 ? "strong" : ""}`}>● {streak} วันติดต่อกัน</small>
-      )}
-      <strong className="hero-amount">
-        {balance < 0 ? "−" : ""}
-        <CountUpMoney value={Math.abs(balance)} />
-      </strong>
-      <div className="hero-wallet-foot">
-        <small>{insight.text}</small>
-      </div>
-      {/* The billboard's own two actions, the way a Netflix billboard carries
-          Play/More info rather than making the whole card one big tap
-          target -- see docs/netflix-reference.html. "จดรายการ" is the
-          white --primary CTA (the Cinema direction's one non-brand loud
-          fill); "รายละเอียด" reuses --overlay-on-primary the way the topbar
-          buttons already do when they sit on this same --hero-bg. */}
-      <div className="billboard-actions">
-        <button className="billboard-cta" onClick={onAddEntry}>
-          <Plus size={18} strokeWidth={2.5} aria-hidden="true" />จดรายการ
-        </button>
-        <button className="billboard-cta-2" onClick={onViewDetails}>
-          <Info size={18} strokeWidth={2.25} aria-hidden="true" />รายละเอียด
-        </button>
+        <strong className="hero-amount">
+          {balance < 0 ? "−" : ""}
+          <CountUpMoney value={Math.abs(balance)} />
+        </strong>
+        <ul className="billboard-tags">
+          <li className="billboard-status">{insight.label}</li>
+          <li>{insight.text}</li>
+          {streak >= 2 && <li>จดติดกัน {streak} วัน</li>}
+        </ul>
+        {/* Play / More info: the white --primary CTA, and a quieter second
+            button, instead of the whole billboard being one tap target. */}
+        <div className="billboard-actions">
+          <button className="billboard-cta" onClick={onAddEntry}>
+            <Plus size={20} strokeWidth={2.5} aria-hidden="true" />จดรายการ
+          </button>
+          <button className="billboard-cta-2" onClick={onViewDetails}>
+            <Info size={20} strokeWidth={2.25} aria-hidden="true" />รายละเอียด
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -191,8 +238,10 @@ export const HomeInsightGrid = memo(function HomeInsightGrid({
   const dsrPercent = monthlyIncome > 0 ? Math.round((monthlyObligationTotal / monthlyIncome) * 100) : null;
   const netWorthTone = netWorthDelta > 0 ? "income" : netWorthDelta < 0 ? "expense" : "";
 
+  // A fragment, not a wrapper: these three are items of the "สุขภาพการเงิน"
+  // rail on Home, so the rail's own track has to be their direct parent.
   return (
-    <section className={`home-insight-wrap ${hideNetWorthCard ? "two-up" : ""}`} aria-label="ภาพรวมทรัพย์สิน">
+    <>
       <div className={`home-insight-card savings-rate ${savingsPositive ? "income" : "expense"}`}>
         <div className="insight-label">
           <span>
@@ -235,7 +284,7 @@ export const HomeInsightGrid = memo(function HomeInsightGrid({
           </small>
         </div>
       )}
-    </section>
+    </>
   );
 });
 

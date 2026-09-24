@@ -7,6 +7,7 @@ import {
   totalWallet,
   buildDebtSummary,
   buildPortfolioTrend,
+  buildBalanceHistory,
   buildWalletLedger,
   calculateImpacts,
   describeDraftSave,
@@ -300,6 +301,46 @@ describe("buildWalletLedger", () => {
     const entries = [makeEntry({ id: "1", wallet_id: undefined, wallet_impact: -50 })];
     const ledger = buildWalletLedger(wallets, entries);
     assert.equal(ledger.totals.cash, 950);
+  });
+});
+
+describe("buildBalanceHistory", () => {
+  const now = new Date(2026, 8, 24, 15, 0);
+  const at = (day: number, hour = 12) => new Date(2026, 8, day, hour, 0).toISOString();
+
+  it("ends on the ledger's own balance and walks back one day at a time", () => {
+    const wallets = [makeWallet({ id: "cash", tag: "cash", balance: 1000 })];
+    const entries = [
+      makeEntry({ id: "1", wallet_id: "cash", wallet_impact: -100, occurred_at: at(22) }),
+      makeEntry({ id: "2", wallet_id: "cash", wallet_impact: 500, occurred_at: at(23) }),
+      makeEntry({ id: "3", wallet_id: "cash", wallet_impact: -50, occurred_at: at(24, 9) }),
+    ];
+    const history = buildBalanceHistory(wallets, entries, "cash", 4, now);
+    assert.deepEqual(history, [1000, 900, 1400, 1350]);
+    assert.equal(history.at(-1), buildWalletLedger(wallets, entries).totals.cash);
+  });
+
+  it("counts only wallets with the tag, assigned the way the ledger assigns them", () => {
+    const wallets = [
+      makeWallet({ id: "cash", tag: "cash", balance: 1000, is_default: true }),
+      makeWallet({ id: "savings", tag: "savings", balance: 5000, is_default: false }),
+    ];
+    const entries = [
+      makeEntry({ id: "1", wallet_id: "savings", wallet_impact: -999, occurred_at: at(24) }),
+      // No wallet_id: the ledger puts it in the default wallet, so must this.
+      makeEntry({ id: "2", wallet_id: undefined, wallet_impact: -200, occurred_at: at(24) }),
+    ];
+    assert.deepEqual(buildBalanceHistory(wallets, entries, "cash", 2, now), [1000, 800]);
+  });
+
+  it("keeps a future-dated row in today's figure and out of every past day", () => {
+    const wallets = [makeWallet({ id: "cash", tag: "cash", balance: 1000 })];
+    const entries = [makeEntry({ id: "1", wallet_id: "cash", wallet_impact: -300, occurred_at: at(28) })];
+    assert.deepEqual(buildBalanceHistory(wallets, entries, "cash", 2, now), [1000, 700]);
+  });
+
+  it("returns nothing for no days", () => {
+    assert.deepEqual(buildBalanceHistory([], [], "cash", 0, now), []);
   });
 });
 

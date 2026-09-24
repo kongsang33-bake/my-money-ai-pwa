@@ -61,17 +61,25 @@
   --primary: #f1f3f2;
   --primary-hover: #ffffff;
   --primary-text: #0a0b0c;
+  /* The quieter button beside a --primary one (Netflix's grey "More info"):
+     translucent, so it sits on the billboard's art as well as on a plain
+     surface. */
+  --cta-secondary: rgba(110, 118, 115, 0.42);
+  --cta-secondary-text: #f1f3f2;
 
   /* the one full-bleed "hero"/billboard identity fill -- phase 2 turns this
      into a per-card gradient keyed off the wallet/category color the way
      docs/netflix-reference.html's .billboard does; until then it stays a
      flat deep-emerald panel close to the old dark hero's near-black one */
-  --hero-bg: #0f2c22;
+  --hero-bg: #0d2a21;
+  /* The billboard's lit corner, and the ambient glow Home spills from it up
+     behind the topbar -- the way Netflix tints the top of the page to match
+     whatever is on its billboard. */
+  --hero-glow: #0f5a40;
   --hero-text: #f1f3f2;
   --hero-amount: #f1f3f2;
-  --hero-border: 1px solid var(--line);
+  --hero-border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
   --hero-shadow: none;
-  --hero-amount-glow: 0 0 24px rgba(31, 197, 142, 0.16);
 
   /* text on a saturated semantic-color fill (danger red, a random avatar
      chip color, …) that doesn't itself flip with theme */
@@ -150,7 +158,9 @@
   --nav-pill-max: 92px;
   --topbar-height: 58px;
   --nav-clearance: calc(96px + env(safe-area-inset-bottom));
-  --topbar-block: calc(var(--topbar-height) + max(var(--s-2), env(safe-area-inset-top)) + var(--s-3));
+  /* The bar is flat and edge to edge now -- no floating margin around it --
+     so its slice of the flow is its height plus the notch, nothing else. */
+  --topbar-block: calc(var(--topbar-height) + env(safe-area-inset-top));
   /* Height a .view takes to fill exactly what is left between them. */
   --screen-fill: calc(100dvh - var(--nav-clearance) - var(--topbar-block) - var(--s-1) - var(--s-3));
 
@@ -516,85 +526,101 @@ a:focus-visible {
   font-weight: var(--fw-semibold);
 }
 
+/* The topbar's ground. Pulled back up by its own height so it occupies no
+   space of its own: it is what the topbar floats on, not a row above it.
+   Solid rather than frosted -- backdrop-filter re-composites everything
+   scrolling under a sticky bar on every frame, which was the single largest
+   scroll cost on a phone. On Home it stays invisible until something has
+   scrolled under the bar (data-scrolled, set by attachScrollRoot in
+   app/page.tsx), so the top of Home is one continuous glow. */
 .topbar-scrim {
   position: sticky;
   top: 0;
   z-index: calc(var(--z-nav) - 1);
   height: var(--topbar-block);
-  /* Pulled back up by its own height so it occupies no space of its own:
-     it is the ground the topbar floats on, not a row above it. */
   margin-bottom: calc(-1 * var(--topbar-block));
   background: linear-gradient(to bottom, var(--bg) 72%, transparent);
   pointer-events: none;
+  transition: opacity var(--t-3) var(--e-out);
+}
+
+.phone.tab-home:not([data-scrolled]) .topbar-scrim {
+  opacity: 0;
 }
 
 .topbar {
   position: sticky;
-  top: max(var(--s-2), env(safe-area-inset-top));
+  top: 0;
   z-index: var(--z-nav);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--s-3);
+  min-height: var(--topbar-block);
+  margin: 0;
+  padding: env(safe-area-inset-top) var(--s-5) 0;
+}
+
+/* The app's mark: an emerald tile with the first letter, the one place
+   besides the FAB where the brand hue is a fill. Reused as the billboard's
+   kicker bullet. */
+.brand-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-style: normal;
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
   gap: var(--s-2);
-  min-height: var(--topbar-height);
-  margin: max(var(--s-2), env(safe-area-inset-top)) var(--s-3) var(--s-3);
-  padding: var(--s-2) var(--s-3);
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  backdrop-filter: blur(20px) saturate(1.08);
-  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
-  border-radius: var(--r-lg);
-  box-shadow: var(--sh-1);
+  min-width: 0;
 }
 
-/* backdrop-filter is a per-frame recomposite of everything moving underneath
-   the filtered box: cheap on a desktop GPU, and the single largest scroll
-   cost on a phone -- the topbar is sticky, so every scrolled pixel on
-   History/Wallets/Debtors re-filters the bar. Coarse pointers get a
-   near-opaque fill instead. At 58px tall over a dense app the frost was
-   reading as "slightly translucent" anyway, so this is close to a no-op
-   visually and removes the work entirely. Home's own topbar below 900px is
-   already a solid --hero-bg fill (see the .phone.tab-home block below), and
-   its higher specificity keeps it that way regardless of source order. */
-@media (hover: none), (pointer: coarse) {
-  .topbar {
-    background: color-mix(in srgb, var(--surface) 96%, transparent);
-    backdrop-filter: none;
-  }
+.topbar-brand b {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-bold);
+  letter-spacing: -0.01em;
 }
 
-/* The account button: the avatar and greeting, tappable as one. Padding
-   rather than a visible fill -- it should read as the identity it always
-   was, not as a control bolted into the topbar. */
+/* The account button: your name, then your face, tappable as one -- the way
+   Netflix puts the profile at the top right. Padding rather than a visible
+   fill, so it reads as the identity it is rather than a control. */
 .home-identity {
   display: flex;
   align-items: center;
   gap: var(--s-2);
   min-width: 0;
-  padding: var(--s-1) var(--s-2);
-  margin-inline-start: calc(var(--s-2) * -1);
-  border-radius: var(--r-full);
+  max-width: 55%;
+  padding: var(--s-1);
+  padding-inline-start: var(--s-3);
+  margin-inline-end: calc(var(--s-1) * -1);
+  border-radius: var(--r-md);
   background: transparent;
-  text-align: left;
   transition: transform var(--t-press) var(--e-out), background var(--t-2) var(--e-out);
 }
 
 .home-identity:hover, .home-identity:focus-visible {
-  background: var(--surface-2);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
 }
 
 .home-identity:active {
   transform: scale(0.98);
 }
 
-.home-identity > span:last-child {
-  display: grid;
-  min-width: 0;
-}
-
 .home-profile-icon {
   width: 34px;
   height: 34px;
-  border-radius: var(--r-full);
+  border-radius: var(--r-sm);
   background: var(--accent-soft);
   color: var(--accent-strong);
   display: grid;
@@ -662,67 +688,14 @@ a:focus-visible {
 }
 
 .home-identity b {
-  font-size: var(--fs-body);
-  font-weight: var(--fw-bold);
+  min-width: 0;
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-2);
   line-height: 1.1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.topbar .eyebrow {
-  font-size: var(--fs-micro);
-  line-height: 1.1;
-}
-
-/* Below the desktop 2-column dashboard breakpoint, Home's topbar sits
-   directly on top of the hero balance card and shares its exact fill
-   color, so the two read as one continuous full-bleed zone rather than a
-   floating pill above a separate card. See .wallet-grid.single-wallet /
-   .hero-wallet for the other half of the seam. At the desktop breakpoint
-   the hero is just one tile in a grid instead of a full-width strip, so
-   the topbar goes back to its normal floating treatment there. */
-@media (max-width: 899px) {
-  .phone.tab-home .topbar {
-    top: 0;
-    margin: 0;
-    padding: max(var(--s-3), env(safe-area-inset-top)) var(--s-5) var(--s-4);
-    background: var(--hero-bg);
-    backdrop-filter: none;
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  .phone.tab-home .topbar .eyebrow,
-  .phone.tab-home .home-identity b {
-    color: var(--hero-text);
-  }
-
-  /* The topbar shares the hero's fill on Home, so the identity button has
-     to invert with it. */
-  .phone.tab-home .home-identity:hover,
-  .phone.tab-home .home-identity:focus-visible {
-    background: var(--overlay-on-primary);
-    color: var(--hero-text);
-  }
-
-  .phone.tab-home .home-profile-icon {
-    background: var(--overlay-on-primary);
-    color: var(--hero-text);
-  }
-
-  .phone .view.home-view {
-    padding-top: 0;
-  }
-
-  .phone .home-view .wallet-grid.single-wallet {
-    margin: 0 calc(-1 * var(--s-5)) var(--s-4);
-  }
-
-  .phone .home-view .wallet-grid.single-wallet .hero-wallet {
-    border-radius: 0 0 var(--r-2xl) var(--r-2xl);
-  }
 }
 
 .add-title {
@@ -1387,113 +1360,162 @@ a:focus-visible {
 .petty-wallet strong { color: var(--cat-goods); }
 .other-wallet strong { color: var(--ink-2); }
 
+/* -------------------------------------------------------------------------
+   Billboard -- Home's one full-bleed moment (HeroWalletCard). Built the way
+   docs/netflix-reference.html's .billboard is: art fills the box, and a
+   kicker, the amount, a line of tags and two actions sit centred over a fade
+   at the bottom. The art is the balance's own last 30 days, not decoration.
+   Its own tier: deliberately not a .wallet-card, so none of the tint-tier
+   card rules reach it.
+   ------------------------------------------------------------------------- */
 .hero-wallet {
-  background: var(--hero-bg);
-  color: var(--hero-text);
-  border: var(--hero-border);
-  border-radius: var(--r-2xl);
-  padding: var(--s-7) var(--s-5) var(--s-6);
-  box-shadow: var(--hero-shadow);
   position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: clamp(420px, 118vw, 520px);
+  border-radius: var(--r-lg);
+  border: var(--hero-border);
+  background: linear-gradient(160deg, var(--hero-glow) 0%, var(--hero-bg) 55%, var(--surface) 100%);
+  color: var(--hero-text);
+  box-shadow: var(--hero-shadow);
+}
+
+/* The art gets its own clipped layer so the billboard itself does not have
+   to clip: the kicker's InfoHint opens a popover that must be free to hang
+   outside the box. */
+.billboard-art {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
   overflow: hidden;
 }
 
-.hero-wallet::after {
+.billboard-art svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.billboard-art::after {
   content: "";
   position: absolute;
-  width: 180px;
-  height: 180px;
-  border-radius: var(--r-full);
-  right: -72px;
-  top: -104px;
-  background: color-mix(in srgb, var(--accent) 58%, transparent);
-  opacity: 0.18;
-  pointer-events: none;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 32%, color-mix(in srgb, var(--bg) 90%, transparent) 100%);
 }
 
-/* z-index 2, above .hero-amount and .hero-wallet-foot, which both sit at 1.
-   This row carries the balance label's InfoHint, and position+z-index here
-   make a stacking context its popover cannot escape however high its own
-   z-index goes -- so at 1 it tied with the amount, and the amount, coming
-   later in the DOM, painted the numeral straight over the explanation. Same
-   trap as the kebab-menu note further up this file. */
-.hero-wallet-top {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s-4);
-  position: relative;
-  z-index: 2;
+.billboard-grid {
+  stroke: var(--ink);
+  stroke-opacity: 0.06;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
 
-/* Scoped through .insight-label rather than matching any span inside: this
-   rule and .info-hint > span are the same specificity (one class, one
-   element), so whichever sits later in the file wins -- and this one does.
-   That painted the hint's popover in the hero's white at 0.68 opacity,
-   i.e. white on its own white panel, invisible. */
-.hero-wallet-top > .insight-label > span {
-  color: var(--hero-text);
-  opacity: 0.68;
-  font-size: var(--fs-body);
+.billboard-line {
+  fill: none;
+  stroke: var(--accent-strong);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.billboard-caption {
+  position: absolute;
+  top: var(--s-4);
+  right: var(--s-4);
+  font-size: var(--fs-micro);
   font-weight: var(--fw-semibold);
-  margin: 0;
+  color: var(--ink-2);
 }
 
-.hero-wallet-top em {
-  font-style: normal;
+.billboard-body {
+  padding: var(--s-5);
+  text-align: center;
+}
+
+.billboard-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.billboard-kicker .brand-mark {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-xs);
+  font-size: var(--fs-micro);
+}
+
+.billboard-kicker > span {
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
-  padding: 4px 10px;
-  border-radius: var(--r-full);
-  background: var(--overlay-on-primary);
+  letter-spacing: var(--ls-wide);
+  color: var(--accent-strong);
 }
 
-.hero-danger .hero-wallet-top em { background: var(--danger); color: var(--text-on-color); }
-.hero-warn .hero-wallet-top em { background: var(--accent); color: var(--ink); }
-.hero-good .hero-wallet-top em, .hero-calm .hero-wallet-top em { background: var(--overlay-on-primary-strong); }
+.billboard-kicker .info-hint {
+  margin-left: 0;
+  color: var(--ink-2);
+}
+
+/* Centred text would otherwise centre the popover's paragraph too. */
+.billboard-body .info-hint > span {
+  text-align: left;
+}
 
 .hero-amount {
   display: block;
+  margin-top: var(--s-2);
   color: var(--hero-amount);
-  text-shadow: var(--hero-amount-glow);
   font-size: var(--fs-display);
   font-weight: var(--fw-bold);
-  margin: var(--s-3) 0 var(--s-2);
-  letter-spacing: -0.045em;
-  line-height: 1;
-  position: relative;
-  z-index: 1;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
 }
 
-.hero-wallet-foot {
+.billboard-tags {
   display: flex;
-  align-items: center;
-  gap: var(--s-3);
   flex-wrap: wrap;
-  position: relative;
-  z-index: 1;
+  justify-content: center;
+  gap: var(--s-1) var(--s-3);
+  margin: var(--s-3) 0 var(--s-5);
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
 }
 
-.hero-wallet-foot small {
-  opacity: 0.72;
-  font-size: var(--fs-body);
+.billboard-tags li + li::before {
+  content: "•";
+  margin-right: var(--s-3);
+  color: var(--ink-3);
+}
+
+.billboard-status {
+  color: var(--ink);
+  font-weight: var(--fw-semibold);
+}
+
+.hero-danger .billboard-status {
+  color: var(--danger);
 }
 
 .billboard-actions {
-  display: flex;
-  gap: var(--s-3);
-  margin-top: var(--s-5);
-  position: relative;
-  z-index: 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
 }
 
 .billboard-cta, .billboard-cta-2 {
-  flex: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--s-2);
   min-height: 44px;
+  padding: 0 var(--s-5);
   border-radius: var(--r-sm);
   font-size: var(--fs-body);
   font-weight: var(--fw-semibold);
@@ -1509,41 +1531,44 @@ a:focus-visible {
   color: var(--primary-text);
 }
 
+.billboard-cta:hover {
+  background: var(--primary-hover);
+}
+
 .billboard-cta-2 {
-  background: var(--overlay-on-primary);
-  color: var(--hero-text);
+  background: var(--cta-secondary);
+  color: var(--cta-secondary-text);
 }
 
-.streak-badge {
-  display: inline-block;
-  margin-top: var(--s-2);
-  font-size: var(--fs-body);
-  font-weight: var(--fw-semibold);
-  padding: 4px 10px;
-  border-radius: var(--r-full);
-  background: var(--overlay-on-primary);
-  opacity: 1 !important;
+/* The kicker sits right of centre, so a popover growing rightwards from its
+   icon would run off a phone's edge; below the desktop layout it grows
+   leftwards instead. */
+@media (max-width: 899px) {
+  .billboard-kicker .info-hint > span {
+    left: auto;
+    right: 0;
+  }
 }
 
-.streak-badge.strong {
-  background: var(--overlay-on-primary-strong);
-  border: 1px solid var(--overlay-on-primary-border);
+/* Home's page ground picks up the billboard's glow at the top, and the
+   topbar floats over it -- one lit zone instead of a bar above a card.
+   `local` so the glow scrolls away with the billboard rather than staying
+   pinned behind everything. */
+.phone.tab-home {
+  background:
+    radial-gradient(ellipse 120% 540px at 50% 0, color-mix(in srgb, var(--hero-glow) 55%, transparent), transparent 80%) no-repeat local,
+    var(--bg);
 }
 
-/* Asymmetric bento: the savings-rate tile is the tall, bold-filled anchor
-   (see .home-insight-card.savings-rate below); obligation and net-worth
-   stack as quieter tint tiles beside it. Was a swipeable equal-size
-   carousel — a static grid reads all three metrics at a glance instead. */
-.home-insight-wrap {
-  display: grid;
-  grid-template-columns: 1.3fr 1fr;
-  grid-template-rows: auto auto;
-  gap: var(--s-3);
-  margin-bottom: var(--s-4);
-}
-
-.home-insight-wrap.two-up {
-  grid-template-rows: auto;
+/* From the tablet width up .phone is clamped narrower than the window, so the
+   glow has to have faded out before .phone's own edge -- otherwise it stops in
+   a hard vertical line against the page behind. */
+@media (min-width: 600px) {
+  .phone.tab-home {
+    background:
+      radial-gradient(ellipse 48% 480px at 50% 0, color-mix(in srgb, var(--hero-glow) 50%, transparent), transparent 85%) no-repeat local,
+      var(--bg);
+  }
 }
 
 .home-insight-card {
@@ -1552,29 +1577,9 @@ a:focus-visible {
 }
 
 .home-insight-card.savings-rate {
-  grid-column: 1;
-  grid-row: 1 / 3;
   display: flex;
   flex-direction: column;
   justify-content: center;
-}
-
-.two-up .home-insight-card.savings-rate {
-  grid-row: 1;
-}
-
-.home-insight-card.obligation {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.home-insight-card.net-worth {
-  grid-column: 2;
-  grid-row: 2;
-}
-
-.two-up .home-insight-card.obligation {
-  grid-row: 1;
 }
 
 .home-insight-icon {
@@ -1751,6 +1756,10 @@ a:focus-visible {
   scroll-snap-align: start;
   width: min(82vw, 300px);
   margin-bottom: 0;
+}
+
+.rail.is-compact .rail-track > * {
+  width: min(62vw, 228px);
 }
 
 /* Due-soon gets the bold fill of this pair, budget-glance stays the quiet
@@ -2302,19 +2311,6 @@ a:focus-visible {
   border-radius: 0;
   background: none;
   margin-bottom: var(--s-4);
-}
-
-.quick-add-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-3);
-  margin-bottom: var(--s-3);
-}
-
-.quick-add-head h2 {
-  margin: 2px 0 0;
-  font-size: var(--fs-h3);
 }
 
 /* A quiet text link that is still a real tap target: WCAG 2.5.8 wants 24x24,
@@ -6153,21 +6149,53 @@ button.entry-main {
   }
 
   .topbar {
-    top: var(--s-3);
-    margin: var(--s-3) var(--s-7) var(--s-4);
-    padding: var(--s-2) var(--s-3);
+    padding-inline: var(--s-7);
   }
 
-  .phone.tab-home .topbar {
-    margin-bottom: var(--s-3);
+  /* Landscape billboard, the way Netflix's web one reads: words on the left
+     over the page's own ground, the art lit on the right and fading into
+     it -- so the billboard's edge disappears into the page rather than
+     showing as a box inside .phone's clamped width. */
+  .hero-wallet {
+    min-height: 420px;
+    justify-content: center;
+    background: linear-gradient(100deg, var(--bg) 0%, var(--hero-bg) 42%, var(--hero-glow) 100%);
   }
+
+  .billboard-art {
+    left: 32%;
+    -webkit-mask-image: linear-gradient(90deg, transparent, black 30%);
+    mask-image: linear-gradient(90deg, transparent, black 30%);
+  }
+
+  .billboard-art::after {
+    background: linear-gradient(180deg, transparent 60%, color-mix(in srgb, var(--bg) 70%, transparent) 100%);
+  }
+
+  .billboard-body {
+    max-width: 540px;
+    padding: var(--s-8) var(--s-7);
+    text-align: left;
+  }
+
+  .billboard-tags {
+    justify-content: flex-start;
+  }
+
+  .billboard-actions {
+    display: flex;
+  }
+
+  .billboard-cta, .billboard-cta-2 {
+    padding: 0 var(--s-6);
+  }
+
 
   .view {
     padding: 0 var(--s-7) calc(var(--s-8) + 80px);
   }
 
   :root {
-    --topbar-block: calc(var(--topbar-height) + var(--s-3) + var(--s-4));
     --screen-fill: calc(100dvh - var(--nav-height) - var(--s-7) - var(--s-3) - var(--topbar-block));
   }
 

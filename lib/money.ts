@@ -735,6 +735,17 @@ export function transferWalletTag(entry: Entry, wallets: Wallet[]): Exclude<Wall
   return null;
 }
 
+/**
+ * Which wallet an entry's wallet_impact lands in. buildWalletLedger and
+ * buildBalanceHistory must agree on this exactly -- a history that assigned
+ * rows differently would end on a figure other than the balance shown right
+ * above it -- so it lives in one place.
+ */
+function ledgerWalletId(entry: Entry, wallets: Wallet[], fallbackWalletId: string | null) {
+  const transferTag = transferWalletTag(entry, wallets);
+  return entry.wallet_id ?? (transferTag ? wallets.find((wallet) => wallet.tag === transferTag)?.id : fallbackWalletId);
+}
+
 export function buildWalletLedger(wallets: Wallet[], entries: Entry[]) {
   const totals: Record<WalletTag, number> = { cash: 0, savings: 0, other: 0, petty: 0 };
   const walletDeltas = new Map<string, number>();
@@ -746,8 +757,7 @@ export function buildWalletLedger(wallets: Wallet[], entries: Entry[]) {
   }
 
   for (const entry of entries) {
-    const transferTag = transferWalletTag(entry, wallets);
-    const walletId = entry.wallet_id ?? (transferTag ? wallets.find((wallet) => wallet.tag === transferTag)?.id : fallbackWalletId);
+    const walletId = ledgerWalletId(entry, wallets, fallbackWalletId);
     if (walletId) walletDeltas.set(walletId, (walletDeltas.get(walletId) ?? 0) + entry.wallet_impact);
   }
 
@@ -764,6 +774,43 @@ export function buildWalletLedger(wallets: Wallet[], entries: Entry[]) {
   for (const wallet of displayWallets) nextTotals[wallet.tag] += wallet.display_balance;
 
   return { totals: nextTotals, wallets: displayWallets };
+}
+
+/**
+ * The combined balance of every wallet with this tag at the end of each of the
+ * last `days` days, oldest first -- so the last point is today's balance, the
+ * same figure buildWalletLedger reports. Walked backwards from that figure by
+ * undoing each later row's wallet_impact, rather than forwards from opening
+ * balances, so a history can never disagree with the number printed above it.
+ * An entry dated in the future counts against no past day and is already in
+ * today's figure, which is what the ledger does with it too.
+ */
+export function buildBalanceHistory(wallets: Wallet[], entries: Entry[], tag: WalletTag, days: number, now: Date = new Date()): number[] {
+  if (days <= 0) return [];
+  const current = buildWalletLedger(wallets, entries).totals[tag];
+  const tagged = new Set(wallets.filter((wallet) => wallet.tag === tag).map((wallet) => wallet.id));
+  const fallbackWalletId = defaultWalletId(wallets);
+  const moves = entries
+    .filter((entry) => {
+      const walletId = ledgerWalletId(entry, wallets, fallbackWalletId);
+      return !!walletId && tagged.has(walletId);
+    })
+    .map((entry) => ({ at: Date.parse(entry.occurred_at), impact: entry.wallet_impact }));
+
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
+  const points: number[] = [];
+  for (let back = days - 1; back >= 0; back -= 1) {
+    // The instant day `back` ends: midnight after it, in local time.
+    const dayEnd = new Date(tomorrow);
+    dayEnd.setDate(dayEnd.getDate() - back);
+    const end = dayEnd.getTime();
+    const later = moves.reduce((sum, move) => (move.at >= end ? sum + move.impact : sum), 0);
+    points.push(current - later);
+  }
+  // Today's point is the live balance itself, including anything dated later
+  // today or in the future -- see the note above.
+  points[points.length - 1] = current;
+  return points;
 }
 
 export function buildDebtSummary(debtors: Debtor[], entries: Entry[], kind: DebtorKind, types: TransactionType[]) {

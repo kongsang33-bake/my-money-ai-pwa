@@ -660,12 +660,11 @@ export const QuickAddStrip = memo(function QuickAddStrip({
 }) {
   if (!shortcuts.length) return null;
   return (
-    <section className="quick-add-strip" aria-label="เพิ่มรายการด่วน">
-      <div className="quick-add-head">
-        <div>
-          <p className="eyebrow">บันทึกให้เร็วขึ้น</p>
-          <h2>รายการที่ใช้บ่อย</h2>
-        </div>
+    // A rail on Home, so it takes the rail's heading (.rail/.rail-head) rather
+    // than a two-line eyebrow + title of its own -- one row, one name.
+    <section className="rail quick-add-strip" aria-label="เพิ่มรายการด่วน">
+      <div className="rail-head">
+        <h2>จดเร็ว</h2>
         <button className="text-button" onClick={onMore}>รายการอื่น</button>
       </div>
       <div className="quick-add-list">

@@ -108,15 +108,18 @@ export function Rail({
   title,
   action,
   onAction,
+  compact = false,
   children,
 }: {
   title: string;
   action?: string;
   onAction?: () => void;
+  /** Narrower items, for short stat tiles that would sit half-empty at the default width. */
+  compact?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rail">
+    <section className={`rail${compact ? " is-compact" : ""}`}>
       <div className="rail-head">
         <h2>{title}</h2>
         {action && onAction && <button onClick={onAction}>{action}</button>}

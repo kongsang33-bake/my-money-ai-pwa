@@ -2,11 +2,12 @@
 // token.
 //
 // CLAUDE.md states the rule ("All colors are CSS custom properties defined
-// once in :root (light) and :root[data-theme='dark'] (dark) — never a literal
-// hex/rgb in a component rule"), and gives the reason: every hardcoded colour
-// eventually needs a hand-written dark-mode override, which is easy to miss,
-// and missing one is what broke dark mode repeatedly during earlier
-// development. Until now the rule was written down and enforced by nobody.
+// once in :root — never a literal hex/rgb in a component rule"). It was
+// written when there were two themes and every hardcoded colour needed a
+// hand-written dark-mode override that was easy to miss; with one theme the
+// reason that remains is that a palette change should be a token edit, not
+// a hunt through component rules. Until this script the rule was written
+// down and enforced by nobody.
 // This checks it, the same way verify-preview-stripped.sh checks the preview
 // hook's guarantee instead of trusting it.
 import { readFileSync, readdirSync, statSync } from "node:fs";

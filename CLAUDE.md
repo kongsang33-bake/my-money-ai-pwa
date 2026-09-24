@@ -7,8 +7,8 @@ Guidance for working on this codebase — a Thai personal-finance PWA
 ## Design system: Cinema (dark only)
 
 นับตังค์ (Nubtang) is a Netflix-shaped app now: one billboard per screen
-(the Home balance card, still `.hero-wallet`/`HeroWalletCard` under the
-hood) carrying its own two actions, then horizontal rails of fixed-width
+(`HeroWalletCard`, class `.hero-wallet` -- its own tier, deliberately not
+a `.wallet-card`) carrying its own two actions, then horizontal rails of fixed-width
 cards underneath — a section that used to be a full-width stacked card or
 a CSS grid becomes a rail by wrapping it in the `Rail` component
 (`components/primitives.tsx`) and letting `.rail-track > *` in
@@ -31,11 +31,18 @@ This is the third direction. `docs/design-reference.html` is the first
 app today. **The live tokens at the top of `app/globals.css` are the
 reference; read those before starting a design task.**
 
-**What has actually landed vs. what is still mocked-only.** Phase 1 (the
-token layer + removing light mode entirely) and a first slice of phase 2
-(the billboard's own actions, and Home's insight/due-soon/goal/cash-flow
-sections converted from stacked cards/a CSS grid into rails) are live. Not
-yet built: poster/tile cards with their own art, the title-detail sheet,
+**What has actually landed vs. what is still mocked-only.** Live: the token
+layer with light mode removed entirely; the flat topbar (brand mark left,
+your name and face right) that floats clear over Home's glow until content
+scrolls under it; the billboard as the mock draws it (art filling the box,
+kicker, amount, tags and two actions over a fade at the bottom, landscape
+with the words on the left from 900px up), whose art is the spending
+balance's real last 30 days (`buildBalanceHistory`, which walks back from
+the ledger's own figure so it cannot end on a different number); and every
+Home section below it as a rail. The rails still hold the *old* card
+components at a fixed width, which is the main thing that still looks
+unlike the mock. Not yet built: poster/tile cards with their own art to
+replace those, the title-detail sheet,
 the "กำลังจะมา" timeline tab, restyling More/Wallets/the PIN gate, and a
 genuinely full-bleed desktop billboard (`.phone` still clamps to a
 max-width card at the wide breakpoints, per the rule below about not
@@ -134,9 +141,12 @@ still-mocked pieces are meant to look like before building any of them.
   greeting (`.home-identity`) is a button into the account screen
   (`ProfileView` — profile, month start, AI context, net worth display, PIN,
   sign out). It used to share the topbar with a theme-toggle button; that
-  button is gone along with light mode, and phase 2 has not yet replaced it
-  with the logo/search layout `docs/netflix-reference.html` mocks for the
-  topbar. There was a hamburger drawer here before either of those; once
+  button is gone along with light mode; the bar is now the brand mark on the
+  left and this button (name, then face) on the right, flat and edge to edge
+  with its ground supplied by `.topbar-scrim`. The mock's search button is
+  not there, because there is no search to open from it yet -- a button
+  that does nothing is worse than no button. There was a hamburger drawer
+  here before any of this; once
   every money feature moved into the nav's "อื่น ๆ" it held two links and a
   sign-out button, and paid for them with a permanent topbar button and an
   overlay layer. Don't reintroduce a drawer to hold a setting — a new one

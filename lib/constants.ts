@@ -216,6 +216,11 @@ export const SPEND_BASELINE_TOLERANCE_PERCENT = 10;
 // (buildSetupChecklist below).
 export const INSIGHT_MIN_ENTRIES = 3;
 
+// How many days of the spending balance Home's billboard draws behind the
+// figure (buildBalanceHistory). A month reads as "lately" without the line
+// flattening into noise on a phone-width box.
+export const BILLBOARD_HISTORY_DAYS = 30;
+
 
 // Tallest the Ask-AI composer grows before it starts scrolling internally
 // (~5 lines). The textarea auto-grows in JS off scrollHeight, so the ceiling
