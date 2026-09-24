@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Copy,
   Download,
+  ImagePlus,
   Lightbulb,
   LineChart,
   Lock,
@@ -602,11 +603,15 @@ export function ProfileView({
         ชื่อเล่น
         <input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="เช่น ก้อง" />
       </label>
-      <label>
-        เปลี่ยนรูปโปรไฟล์
-        <input type="file" accept="image/*" onChange={(event) => { void chooseProfileImage(event.target.files); event.currentTarget.value = ""; }} />
+      <div className="sheet-field">
+        <span className="sheet-field-label">รูปโปรไฟล์</span>
+        <label className="file-button">
+          <ImagePlus size={18} strokeWidth={2} aria-hidden="true" />
+          {app_icon_image ? "เปลี่ยนรูป" : "เลือกรูป"}
+          <input type="file" accept="image/*" onChange={(event) => { void chooseProfileImage(event.target.files); event.currentTarget.value = ""; }} />
+        </label>
         <small>รองรับรูปจากมือถือได้ถึง 10MB ระบบจะย่อเป็นไอคอนให้อัตโนมัติ</small>
-      </label>
+      </div>
       {!!app_icon_image && <button className="side-ghost" onClick={() => setAppIconImage("")}>ลบรูปไอคอน</button>}
       <label>
         วันเริ่มรอบเดือน

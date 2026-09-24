@@ -22,6 +22,9 @@
    Tokens — Cinema (dark only)
    ------------------------------------------------------------------------- */
 :root {
+  /* Native checkboxes, date pickers and select menus draw their dark
+     variants: Cinema is dark only. */
+  color-scheme: dark;
   --font-sans: var(--font-sans), "Noto Sans Thai", -apple-system, "Segoe UI", sans-serif;
 
   /* Surfaces — near-black, a hair cool so the emerald brand and the sky/
@@ -152,7 +155,7 @@
      floating nav; --topbar-block is the sticky topbar's own slice of the
      flow. Both are re-declared at the wide breakpoint, where the chrome is
      laid out differently. */
-  --nav-height: 72px;
+  --nav-height: 64px;
   /* The add button's fixed grid column, and how wide the active-tab pill
      is allowed to get once a tab column is wider than a label needs. Both
      are read by the nav's grid *and* by the pill's own arithmetic, which
@@ -163,9 +166,12 @@
   --topbar-height: 58px;
   /* What the bar leaves under its tabs: the home indicator's inset where
      there is one (layout.tsx sets viewport-fit=cover, without which iOS
-     reports it as 0 and the tabs sat on the screen's bottom edge), and never
-     less than a small lift where there isn't. */
-  --nav-lift: max(calc(env(safe-area-inset-bottom) + var(--s-1)), var(--s-3));
+     reports it as 0 and the tabs sat on the screen's bottom edge), less a
+     little -- the labels may sit inside the top of that inset, the way
+     iOS's own tab bars and Facebook's do; the full inset plus extra put the
+     bar visibly higher than every other app on the phone. Never less than
+     --s-2 where there is no inset. */
+  --nav-lift: max(calc(env(safe-area-inset-bottom) - var(--s-2)), var(--s-2));
   --nav-clearance: calc(96px + var(--nav-lift));
   /* The bar is flat and edge to edge now -- no floating margin around it --
      so its slice of the flow is its height plus the notch, nothing else. */
@@ -377,7 +383,7 @@ input, textarea, select {
 
 .date-shell-text {
   position: absolute;
-  left: 14px;
+  left: 16px;
   top: 50%;
   transform: translateY(-50%);
   max-width: calc(100% - 44px);
@@ -386,7 +392,7 @@ input, textarea, select {
   white-space: nowrap;
   color: var(--ink);
   font-size: var(--fs-body);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-medium);
   pointer-events: none;
 }
 
@@ -905,7 +911,7 @@ a:focus-visible {
   margin-left: auto;
   height: 36px;
   padding: 0 var(--s-4);
-  border-radius: var(--r-full);
+  border-radius: var(--r-sm);
   background: var(--primary);
   color: var(--primary-text);
   font-weight: var(--fw-semibold);
@@ -1160,9 +1166,14 @@ a:focus-visible {
    Buttons
    ------------------------------------------------------------------------- */
 .primary, .save {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
   width: 100%;
-  padding: 15px;
-  border-radius: var(--r-lg);
+  min-height: 52px;
+  padding: 14px;
+  border-radius: var(--r-sm);
   background: var(--primary);
   color: var(--primary-text);
   font-weight: var(--fw-semibold);
@@ -1227,8 +1238,9 @@ a:focus-visible {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
-  padding: 4px;
-  border-radius: var(--r-lg);
+  padding: 3px;
+  margin-bottom: var(--s-3);
+  border-radius: var(--r-sm);
   background: var(--surface-2);
   border: 1px solid var(--line);
 }
@@ -1245,7 +1257,7 @@ a:focus-visible {
   justify-content: center;
   min-height: 38px;
   padding: 10px 12px;
-  border-radius: var(--r-md);
+  border-radius: var(--r-xs);
   font-weight: var(--fw-semibold);
   color: var(--ink-3);
   text-align: center;
@@ -2522,20 +2534,20 @@ button.poster:active {
 /* -------------------------------------------------------------------------
    Add tab
    ------------------------------------------------------------------------- */
+/* A bare row under the tabs -- "บันทึกของวันที่ ... 24 ก.ย." -- rather than
+   a third box stacked on the two above it. */
 .entry-date-picker {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
-  padding: var(--s-3) var(--s-4);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  margin-bottom: var(--s-4);
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--s-5);
 }
 
 .entry-date-picker span {
-  font-size: var(--fs-body);
+  font-size: var(--fs-body-sm);
   color: var(--ink-3);
   font-weight: var(--fw-semibold);
 }
@@ -2988,7 +3000,7 @@ button.poster:active {
   gap: var(--s-2);
   min-width: 150px;
   text-align: left;
-  border-radius: var(--r-lg);
+  border-radius: var(--r-md);
   position: relative;
 }
 
@@ -3004,32 +3016,30 @@ button.poster:active {
   color: var(--ink-3);
 }
 
-.assistant-rail {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  font-size: var(--fs-micro);
-  font-weight: var(--fw-semibold);
-  color: var(--ink-3);
-  margin-bottom: var(--s-2);
+.ai-input-wrap {
+  padding: var(--s-4);
+  border-radius: var(--r-md);
+  transition: border-color var(--t-2) var(--e-out);
 }
 
-.assistant-rail i {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--r-full);
-  background: var(--accent);
-  display: block;
+/* The whole composer takes the field's focus edge, since the textarea
+   inside it has none of its own. */
+.ai-input-wrap:focus-within {
+  border-color: var(--ink);
 }
 
 .ai-input-wrap textarea {
   width: 100%;
-  min-height: 120px;
+  min-height: 112px;
   border: 0;
-  resize: vertical;
+  resize: none;
   background: none;
+  color: var(--ink);
   line-height: 1.5;
+}
+
+.ai-input-wrap textarea:focus-visible {
+  outline: none;
 }
 
 .slip-preview-list {
@@ -3082,23 +3092,39 @@ button.poster:active {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
-  border-radius: var(--r-full);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  font-size: var(--fs-body);
+  min-height: 40px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--cta-secondary);
+  font-size: var(--fs-body-sm);
   font-weight: var(--fw-semibold);
-  color: var(--ink-2);
+  color: var(--cta-secondary-text);
+  cursor: pointer;
+}
+
+/* Send, inside the composer: the white Play-role button at chip size. */
+.composer-send {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 var(--s-4);
+  border-radius: var(--r-sm);
+  background: var(--primary);
+  color: var(--primary-text);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+  transition: background var(--t-2) var(--e-out), opacity var(--t-2) var(--e-out);
+}
+
+.composer-send:disabled {
+  opacity: 0.4;
 }
 
 .attach-button input {
   display: none;
 }
 
-.input-tools > span {
-  font-size: var(--fs-caption);
-  color: var(--ink-3);
-}
 
 .review-head {
   display: flex;
@@ -3220,19 +3246,42 @@ button.poster:active {
   margin-bottom: var(--s-3);
 }
 
-/* Reusable per-row color accent (categories, per-item icon colors) for
-   cards whose color isn't a fixed enum, so it can't be a CSS class like
-   .draft-income above — a real element instead of ::before because it
-   needs an inline color from JS, not a class-selected one. */
-.card-accent {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  border-radius: var(--r-full) 0 0 var(--r-full);
-  background: var(--ink-3);
+/* Inside a draft card the amount shares a row with the category, so it
+   steps down from the full-form size. */
+.draft .amount-input {
+  font-size: var(--fs-h2);
 }
+
+.draft .amount-field .amount-input {
+  padding-left: 40px;
+}
+
+.draft .amount-field-sign {
+  font-size: var(--fs-h3);
+}
+
+/* A file input's own chrome ("Choose File / No file chosen") is the one
+   control a stylesheet cannot reach, so it is hidden and its <label> is the
+   button -- the same move as the composer's แนบสลิป. */
+.file-button, .edit-sheet label.file-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 44px;
+  margin: 6px 0 var(--s-2);
+  padding: 0 var(--s-4);
+  border-radius: var(--r-sm);
+  background: var(--cta-secondary);
+  color: var(--cta-secondary-text);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+
+.file-button input {
+  display: none;
+}
+
 
 .draft-header {
   display: flex;
@@ -3436,6 +3485,7 @@ button.poster:active {
    one of it. */
 .draft-split-people-list li .amount-input {
   width: 104px;
+  min-height: 0;
   padding: 6px var(--s-3);
   border-radius: var(--r-sm);
   background: var(--surface);
@@ -3487,8 +3537,8 @@ button.poster:active {
   display: flex;
   align-items: center;
   gap: var(--s-1);
-  padding: 4px;
-  border-radius: var(--r-full);
+  padding: 3px;
+  border-radius: var(--r-sm);
   background: var(--surface-2);
   border: 1px solid var(--line);
 }
@@ -3498,9 +3548,9 @@ button.poster:active {
   height: 32px;
   display: grid;
   place-items: center;
-  border-radius: var(--r-full);
-  background: var(--surface);
-  color: var(--ink-2);
+  border-radius: var(--r-xs);
+  background: var(--surface-3);
+  color: var(--ink);
   transition: background var(--t-2) var(--e-out), color var(--t-2) var(--e-out), transform var(--t-press) var(--e-out);
 }
 
@@ -4667,8 +4717,9 @@ button.entry-main {
 }
 
 .icon-color-picker-preview .debtor-avatar {
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-md);
 }
 
 .icon-color-picker-reset {
@@ -4685,7 +4736,7 @@ button.entry-main {
 
 .icon-color-picker-glyphs button {
   aspect-ratio: 1;
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   background: var(--surface-2);
   border: 1px solid var(--line);
   display: grid;
@@ -4699,20 +4750,25 @@ button.entry-main {
   border-color: var(--primary);
 }
 
+/* One row of small squares, not two rows of 80px discs: a colour is a
+   detail of the wallet, and the discs outweighed everything else in the
+   sheet. The chosen one is ringed in ink with a gap, like a focused title. */
 .icon-color-picker-swatches {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .icon-color-picker-swatches button {
   aspect-ratio: 1;
-  border-radius: var(--r-full);
-  border: 2px solid transparent;
+  min-width: 24px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--line);
 }
 
 .icon-color-picker-swatches button.active {
-  border-color: var(--ink);
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 
 /* -------------------------------------------------------------------------
@@ -5140,12 +5196,11 @@ button.entry-main {
 .sheet-head button {
   width: 36px;
   height: 36px;
-  border-radius: var(--r-md);
-  background: var(--surface-2);
-  border: 1px solid var(--line-soft);
+  border-radius: var(--r-full);
+  background: var(--surface-3);
+  color: var(--ink);
   display: grid;
   place-items: center;
-  font-size: var(--fs-h2);
   flex-shrink: 0;
 }
 
@@ -5178,22 +5233,37 @@ button.entry-main {
 .edit-sheet label input, .edit-sheet label select,
 .edit-sheet label textarea, .auth-screen form input, .budget-row input,
 .manual-entry-form label input, .manual-entry-form label select, .manual-entry-form label textarea,
-.draft label input, .draft label select {
+.draft label input, .draft label select, .setup-amount input {
   width: 100%;
+  min-height: 52px;
   margin-top: 6px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--r-md);
-  padding: 12px 14px;
-  background: var(--surface-3);
-  transition: box-shadow var(--t-2) var(--e-out), background var(--t-2) var(--e-out), border-color var(--t-2) var(--e-out);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 13px 16px;
+  background: var(--surface-2);
+  /* Explicit: the <label> around every field is --ink-3 (it is the field's
+     name), and a value inheriting that read as a disabled field. */
+  color: var(--ink);
+  font-weight: var(--fw-medium);
+  transition: background var(--t-2) var(--e-out), border-color var(--t-2) var(--e-out);
+}
+
+.edit-sheet label ::placeholder, .manual-entry-form label ::placeholder,
+.draft label ::placeholder, .auth-screen form ::placeholder, .ai-input-wrap ::placeholder {
+  color: var(--ink-3);
+  font-weight: var(--fw-regular);
 }
 
 .edit-sheet label input:focus, .edit-sheet label select:focus,
 .edit-sheet label textarea:focus, .auth-screen form input:focus, .budget-row input:focus,
 .manual-entry-form label input:focus, .manual-entry-form label select:focus, .manual-entry-form label textarea:focus,
-.draft label input:focus, .draft label select:focus {
-  border-color: var(--accent);
-  background: var(--surface);
+.draft label input:focus, .draft label select:focus, .setup-amount input:focus {
+  /* Netflix's sign-in field: the edge turns white. No emerald (that is the
+     brand mark, not "you are here") and no second ring outside it. */
+  border-color: var(--ink);
+  outline: 1px solid var(--ink);
+  outline-offset: -2px;
+  background: var(--surface-2);
 }
 
 .amount-input {
@@ -5203,13 +5273,93 @@ button.entry-main {
   font-variant-numeric: tabular-nums;
 }
 
+/* AmountInput's wrapper: the baht sign drawn over the field's left padding. */
+.amount-field {
+  position: relative;
+  display: block;
+  margin-top: 6px;
+}
+
+.amount-field .amount-input {
+  width: 100%;
+  margin-top: 0;
+  padding-left: 48px;
+  /* The field rule's medium weight is for words; an amount is money. */
+  font-weight: var(--fw-bold);
+}
+
+input[type="checkbox"], input[type="radio"] {
+  accent-color: var(--primary);
+}
+
+.amount-field-sign {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-bold);
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+/* A person's share inside a split is a part of the bill's amount, typed in a
+   104px box: the sign would crowd it, and the bill above already says baht. */
+.draft-split-people-list li .amount-field {
+  margin-top: 0;
+}
+
+.draft-split-people-list li .amount-field-sign {
+  display: none;
+}
+
 .entry-kind-toggle {
   margin-bottom: var(--s-2);
 }
 
 .entry-advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 32px;
   padding: var(--s-1) 0;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-2);
   text-align: left;
+}
+
+/* How to jot: AI or by hand. Tabs with an underline, the way Netflix
+   switches between Series and Films -- a different widget from the manual
+   form's รายจ่าย/รายรับ switch below it on purpose. */
+.add-mode-tabs {
+  display: flex;
+  gap: var(--s-5);
+  margin-bottom: var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.add-mode-tabs button {
+  position: relative;
+  min-height: 44px;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-3);
+}
+
+.add-mode-tabs button.active {
+  color: var(--ink);
+}
+
+.add-mode-tabs button.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
 }
 
 .category-picker,
@@ -5225,10 +5375,11 @@ button.entry-main {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-height: 40px;
   padding: 8px 12px;
-  border-radius: var(--r-full);
+  border-radius: var(--r-sm);
   background: var(--surface-2);
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--line);
   color: var(--ink-2);
   font-size: var(--fs-body);
   font-weight: var(--fw-semibold);

@@ -175,6 +175,20 @@ the product name -- leave them.
   Weight tokens `--fw-regular/medium/semibold/bold`: bold is reserved for
   `<strong>`/`<b>` money-value text and `h1`-tier headings — everything
   else uses `--fw-semibold`.
+- **Inputs are Netflix's sign-in fields.** One shape for every field: a
+  `--surface-2` well, hairline `--line` border, `--r-sm` corner, `--ink` text
+  (set explicitly -- the `<label>` around it is `--ink-3`, and a value that
+  inherited that read as disabled), and on focus the edge turns white
+  (`--ink`), never emerald and never a second glow ring. Choices (category
+  and cycle chips, colour swatches, icon tiles, the split stepper) are flat
+  `--r-sm`/`--r-xs` tiles, not pills or discs. Money is always `AmountInput`,
+  which draws the baht sign inside the field. A sheet closes with
+  `SheetClose` (a lucide X), never a typed "x". A file input's own chrome is
+  hidden behind a `.file-button` label, the way the composer's แนบสลิป is.
+  The add tab's AI/manual switch is underlined tabs (`.add-mode-tabs`) so it
+  never stacks two identical segmented controls, and the AI composer sends
+  from inside its own box (`.composer-send`). The coloured left stripe on
+  rows (`.card-accent`) is gone; a row's colour lives in its avatar.
 - **Native `<select>` elements get a `.select-shell` wrapper.** Wrap
   `<select>` in `<div className="select-shell">…</select><ChevronDown
   className="select-shell-chevron" aria-hidden="true" /></div>` — the CSS
@@ -215,10 +229,11 @@ the product name -- leave them.
   it. Its ground (`--nav-bg`) is opaque on purpose: slightly translucent, a
   card scrolling underneath showed through as a stray box behind a tab. `.phone` also carries `scroll-padding-bottom: var(--nav-clearance)`,
   so focus and scroll-into-view stop above the nav rather than under it.
-  Under its tabs it leaves `--nav-lift`: the home indicator's inset, which
-  iOS only reports because layout.tsx sets `viewportFit: "cover"` (drop that
-  and the tabs sit flush on an iPhone's bottom edge again), never less
-  than `--s-3`.
+  Under its tabs it leaves `--nav-lift`: the home indicator's inset less
+  `--s-2`, which iOS only reports because layout.tsx sets
+  `viewportFit: "cover"` (drop that and the tabs sit flush on an iPhone's
+  bottom edge again), never less than `--s-2`. The full inset plus a margin
+  was tried and read as too high next to other apps on an iPhone 17.
 - **`.phone` is the real, edge-to-edge app root at every width — not a
   device mockup.** There is no rounded-card-with-drop-shadow "phone frame"
   centered on a differently-colored backdrop any more; that read as a

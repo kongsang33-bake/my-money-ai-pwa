@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useMemo, useState } from "react";
-import { ArrowDown, ArrowLeftRight, ChevronDown, Lightbulb, Minus, Plus, X } from "lucide-react";
+import { ArrowDown, ArrowLeftRight, ArrowUp, ChevronDown, ImagePlus, Lightbulb, Minus, Plus, X } from "lucide-react";
 import { CATEGORY_DOT_TINT_ALPHA, MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE } from "@/lib/constants";
 import { compressSlipImage } from "@/lib/image";
 import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
@@ -11,7 +11,7 @@ import { DEBT_TYPES, TYPES_USER_OWES, isFormOnlyDerivedType, transactionKind, tr
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
 import { CategoryIcon, CategoryPicker, FundingSelect } from "@/components/shared";
-import { AmountInput, DateField, EmptyNote, SheetFrame, StateCard } from "@/components/primitives";
+import { AmountInput, DateField, EmptyNote, SheetFrame, StateCard, SheetClose } from "@/components/primitives";
 
 // The whole "let AI write it for me" half of the Add tab: the example chips,
 // the date picker, the textarea, slip attachments and the analyse button.
@@ -125,7 +125,6 @@ export function AiComposer({
               className="quick-chip"
               onClick={() => applySuggestion(suggestion)}
             >
-              <i className="card-accent" style={{ background: suggestion.shortcut ? categoryColor(suggestion.shortcut.category) : undefined }} />
               <span className="cat-dot" style={{ background: suggestion.shortcut ? categoryTint(suggestion.shortcut.category, CATEGORY_DOT_TINT_ALPHA) : undefined, color: suggestion.shortcut ? categoryColor(suggestion.shortcut.category) : undefined }}>
                 {suggestion.shortcut ? <CategoryIcon category={suggestion.shortcut.category} /> : <Lightbulb size={14} strokeWidth={2.25} aria-hidden="true" />}
               </span>
@@ -139,10 +138,6 @@ export function AiComposer({
       </div>
 
       <div className="ai-input-wrap">
-        <div className="assistant-rail" aria-hidden="true">
-          <span>AI</span>
-          <i />
-        </div>
         <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="เช่น กินข้าว 120 บาท, ออกให้เพื่อนเอก่อน 500, เพื่อนเอโอนคืน 200" />
 
         {!!slipImages.length && (
@@ -157,18 +152,20 @@ export function AiComposer({
           </div>
         )}
 
+        {/* A chat composer: attach on the left, send on the right, both
+            inside the box they act on -- not a full-width button hanging
+            under it that read as disabled grey until something was typed. */}
         <div className="input-tools">
           <label className="attach-button">
-            แนบสลิป
+            <ImagePlus size={18} strokeWidth={2} aria-hidden="true" />
+            {slipImages.length ? `${slipImages.length}/${maxSlipImages} รูป` : "แนบสลิป"}
             <input type="file" accept="image/*" multiple onChange={(event) => { void addSlipFiles(event.target.files); event.currentTarget.value = ""; }} />
           </label>
-          <span>{slipImages.length ? `${slipImages.length}/${maxSlipImages} รูป` : "Gemini ช่วยอ่านรูปและข้อความ"}</span>
+          <button className="composer-send" onClick={() => onAnalyze(text, slipImages)} disabled={busy || disabled || (!text.trim() && !slipImages.length)}>
+            {busy ? <span className="button-loading-row"><span className="loading-spinner mini on-ink" />{elapsedLabel}</span> : <>ให้ AI แยกรายการ<ArrowUp size={16} strokeWidth={2.5} aria-hidden="true" /></>}
+          </button>
         </div>
       </div>
-
-      <button className="primary" onClick={() => onAnalyze(text, slipImages)} disabled={busy || disabled || (!text.trim() && !slipImages.length)}>
-        {busy ? <span className="button-loading-row"><span className="loading-spinner mini on-ink" />{elapsedLabel}</span> : "ให้ AI แยกรายการ"}
-      </button>
       {error && <StateCard tone="error" title="AI ยังทำรายการนี้ไม่ได้" detail={error} />}
     </>
   );
@@ -721,8 +718,9 @@ export function ManualEntryForm({
         <button type="button" className={isExpense ? "active" : ""} onClick={() => update(retypedTo("personal_expense"))}>รายจ่าย</button>
         <button type="button" className={!isExpense ? "active" : ""} onClick={() => update(retypedTo("income"))}>รายรับ</button>
       </div>
-      <button type="button" className="text-button entry-advanced-toggle" onClick={() => setAdvancedTypeOpen((current) => !current)}>
-        {advancedTypeOpen ? "ซ่อนตัวเลือกเพิ่มเติม" : "รายการพิเศษ (ออกให้ก่อน, หารร่วม, ผ่อนหนี้, โอนเงิน ฯลฯ)"}
+      <button type="button" className="entry-advanced-toggle" aria-expanded={advancedTypeOpen} onClick={() => setAdvancedTypeOpen((current) => !current)}>
+        {advancedTypeOpen ? <Minus size={16} strokeWidth={2.25} aria-hidden="true" /> : <Plus size={16} strokeWidth={2.25} aria-hidden="true" />}
+        {advancedTypeOpen ? "ซ่อนรายการพิเศษ" : "รายการพิเศษ: ออกให้ก่อน, หารร่วม, ผ่อนหนี้, โอนเงิน"}
       </button>
       {advancedTypeOpen && (
         <label>
@@ -895,7 +893,7 @@ export function EditSheet({
           <p className="eyebrow">แก้ไขรายการ</p>
           <h2>{entry.title || "รายการ"}</h2>
         </div>
-        <button onClick={onClose}>x</button>
+        <SheetClose onClick={onClose} />
       </div>
 
       {wasTransfer && <p className="pin-hint">รายการโอนเงินแก้ไขได้เฉพาะชื่อ วันที่ และหมายเหตุ — ลบได้ทั้งสองฝั่งพร้อมกัน</p>}

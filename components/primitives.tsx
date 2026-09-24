@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, CalendarDays, Check, ChevronLeft, Info } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, ChevronLeft, Info, X } from "lucide-react";
 import { formatDateInputValue, formatMonthInputValue, formatMoney, moneySign } from "@/lib/format";
 import type { ConfirmDialogState, EmptyAction, Toast } from "@/lib/types";
 
@@ -460,20 +460,35 @@ export function AmountInput({ value, onChange, disabled, autoFocus }: { value: n
     setText(value ? String(value) : "");
   }
 
+  // The baht sign sits inside the field, drawn over its left padding, so every
+  // amount in the app reads as money before a digit is typed.
   return (
-    <input
-      className="amount-input"
-      inputMode="decimal"
-      value={text}
-      disabled={disabled}
-      autoFocus={autoFocus}
-      onChange={(event) => {
-        const next = event.target.value;
-        if (next !== "" && !decimalInputPattern.test(next)) return;
-        setText(next);
-        onChange(Number(next) || 0);
-      }}
-    />
+    <span className="amount-field">
+      <span className="amount-field-sign" aria-hidden="true">{moneySign}</span>
+      <input
+        className="amount-input"
+        inputMode="decimal"
+        placeholder="0"
+        value={text}
+        disabled={disabled}
+        autoFocus={autoFocus}
+        onChange={(event) => {
+          const next = event.target.value;
+          if (next !== "" && !decimalInputPattern.test(next)) return;
+          setText(next);
+          onChange(Number(next) || 0);
+        }}
+      />
+    </span>
+  );
+}
+
+/** A sheet's close button: the same X icon every sheet uses, never a typed letter. */
+export function SheetClose({ onClick, label = "ปิด" }: { onClick: () => void; label?: string }) {
+  return (
+    <button type="button" className="sheet-close" onClick={onClick} aria-label={label}>
+      <X size={18} strokeWidth={2.25} aria-hidden="true" />
+    </button>
   );
 }
 

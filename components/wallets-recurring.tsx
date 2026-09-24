@@ -9,7 +9,7 @@ import { BILLING_CYCLE_PRESETS, billingIntervalUnitLabels, describeBillingCycle,
 import { nameColor, recurringIconOptions } from "@/lib/category";
 import type { Debtor, Entry, RecurringExpense, Wallet, WalletDisplay } from "@/lib/types";
 import { FundingSelect, IconColorPicker, RecurringAvatarGlyph, WalletAvatarGlyph } from "@/components/shared";
-import { AmountInput, CountUpMoney, DateField, EmptyNote, InfoHint, SheetFrame, SkeletonList, StateCard, decimalInputPattern } from "@/components/primitives";
+import { AmountInput, CountUpMoney, DateField, EmptyNote, InfoHint, SheetFrame, SkeletonList, StateCard, decimalInputPattern, SheetClose } from "@/components/primitives";
 
 export function WalletsView({
   wallets,
@@ -220,7 +220,7 @@ export function ReconcileSheet({
           </p>
           <h2>{wallet.name}</h2>
         </div>
-        <button onClick={onClose}>x</button>
+        <SheetClose onClick={onClose} />
       </div>
       <p className="pin-hint">เปิดแอปธนาคาร (หรือนับเงินสด) แล้วใส่ยอดที่มีอยู่จริงตอนนี้ · ส่วนต่างจะถูกบันทึกเป็นรายการปรับยอด 1 รายการ ไม่นับเป็นรายรับหรือรายจ่ายของเดือน</p>
       <div className="reconcile-compare">
@@ -280,10 +280,10 @@ export function WalletEditSheet({
     <SheetFrame onClose={onClose} closing={closing}>
       <div className="sheet-head">
         <div>
-          <p className="eyebrow">{wallet ? "แก้ไขกระเป๋าตังค์" : "เพิ่มกระเป๋าตังค์"}</p>
+          <p className="eyebrow">{wallet ? "แก้ไขกระเป๋าเงิน" : "เพิ่มกระเป๋าเงิน"}</p>
           <h2>{wallet ? wallet.name : "กระเป๋าใหม่"}</h2>
         </div>
-        <button onClick={onClose}>x</button>
+        <SheetClose onClick={onClose} />
       </div>
       <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} />
       <label>
@@ -387,7 +387,6 @@ export function RecurringExpensesView({
       <div className="debtor-page-list">
         {scheduled.map(({ item, billingDate }) => (
           <article className={`debtor-page-item${item.is_active ? "" : " is-paused"}`} key={item.id}>
-            <i className="card-accent" style={{ background: item.icon_color ?? nameColor(item.name) }} />
             <button className="debtor-main-button" onClick={() => onEdit(item)}>
               <span className="debtor-avatar" style={{ background: item.icon_color ?? nameColor(item.name) }}>
                 <RecurringAvatarGlyph iconKey={item.icon} fallbackName={item.name} />
@@ -520,7 +519,7 @@ export function RecurringExpenseEditSheet({
           <p className="eyebrow">{item ? "แก้ไขรายจ่ายประจำ" : "เพิ่มรายจ่ายประจำ"}</p>
           <h2>{item ? item.name : "รายการใหม่"}</h2>
         </div>
-        <button onClick={onClose}>x</button>
+        <SheetClose onClick={onClose} />
       </div>
       <IconColorPicker value={{ icon, color: iconColor }} onChange={({ icon: nextIcon, color: nextColor }) => { setIcon(nextIcon); setIconColor(nextColor); }} fallbackName={name || "?"} iconOptions={recurringIconOptions} renderGlyph={RecurringAvatarGlyph} />
       <label>

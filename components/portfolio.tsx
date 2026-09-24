@@ -10,7 +10,7 @@ import { compressSlipImage } from "@/lib/image";
 import { nameColor } from "@/lib/category";
 import type { Entry, Investment, InvestmentDraftItem, PortfolioHolding, SlipImage, Wallet } from "@/lib/types";
 import { IconColorPicker, WalletAvatarGlyph } from "@/components/shared";
-import { CountUpMoney, DateField, EmptyNote, SheetFrame, SkeletonList, StateCard, decimalInputPattern } from "@/components/primitives";
+import { CountUpMoney, DateField, EmptyNote, SheetFrame, SkeletonList, StateCard, decimalInputPattern, SheetClose } from "@/components/primitives";
 
 export function PortfolioTrendChart({ trend }: { trend: { date: string; value: number }[] }) {
   if (trend.length < 2) return null;
@@ -111,7 +111,6 @@ export function PortfolioView({
           <div className="debtor-page-list">
             {pendingPurchases.map((entry) => (
               <article className="debtor-page-item" key={entry.id}>
-                <i className="card-accent" style={{ background: nameColor(entry.title) }} />
                 <button className="debtor-main-button" onClick={() => onConfirmPending(entry)}>
                   <div>
                     <span>{entry.title}</span>
@@ -136,7 +135,6 @@ export function PortfolioView({
       <div className="debtor-page-list">
         {holdings.map((holding) => (
           <article className="debtor-page-item" key={holding.id}>
-            <i className="card-accent" style={{ background: holding.icon_color ?? nameColor(holding.name) }} />
             <button className="debtor-main-button" onClick={() => onUpdatePrice(holding)}>
               <span className="debtor-avatar" style={{ background: holding.icon_color ?? nameColor(holding.name) }}>
                 <WalletAvatarGlyph iconKey={holding.icon} fallbackName={holding.name} />
@@ -224,7 +222,7 @@ export function InvestmentBuySheet({
           <p className="eyebrow">พอร์ตลงทุน</p>
           <h2>{selected ? `เพิ่มเงินลงทุนใน ${selected.name}` : "ลงทุนใหม่"}</h2>
         </div>
-        <button onClick={onClose}>x</button>
+        <SheetClose onClick={onClose} />
       </div>
       {!target && !!investments.length && (
         <label>
@@ -319,7 +317,7 @@ export function InvestmentSellSheet({
           <p className="eyebrow">พอร์ตลงทุน</p>
           <h2>ขาย {item.name}</h2>
         </div>
-        <button onClick={onClose}>x</button>
+        <SheetClose onClick={onClose} />
       </div>
       <small className="cycle-note">ถืออยู่ {formatUnits(item.units)} หน่วย</small>
       <label>
@@ -368,7 +366,7 @@ export function InvestmentPriceSheet({
           <p className="eyebrow">พอร์ตลงทุน</p>
           <h2>อัปเดตราคา {item.name}</h2>
         </div>
-        <button onClick={onClose}>x</button>
+        <SheetClose onClick={onClose} />
       </div>
       <label>
         ราคาต่อหน่วย (NAV)
@@ -448,7 +446,7 @@ export function InvestmentConfirmUnitsSheet({
           <p className="eyebrow">พอร์ตลงทุน</p>
           <h2>ยืนยันหน่วย {investmentName}</h2>
         </div>
-        <button onClick={onClose}>x</button>
+        <SheetClose onClick={onClose} />
       </div>
       <small className="cycle-note">จ่ายไปแล้ว {moneySign}{formatMoney(entry.amount)} เมื่อ {formatDateTime(entry.occurred_at)}</small>
       <label className="attach-button">
@@ -558,7 +556,7 @@ export function InvestmentAiSheet({
           <p className="eyebrow">พอร์ตลงทุน</p>
           <h2>บันทึกด้วย AI</h2>
         </div>
-        <button onClick={onClose}>x</button>
+        <SheetClose onClick={onClose} />
       </div>
       {!drafts.length && (
         <>

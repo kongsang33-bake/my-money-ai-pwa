@@ -8,7 +8,7 @@ import { installmentStatusText, monthlyDebtObligation, payableForDisplay } from 
 import { categories, categoryColor, categoryTint, nameColor } from "@/lib/category";
 import type { Debtor, DebtorKind, Entry } from "@/lib/types";
 import { CategoryIcon, IconColorPicker, WalletAvatarGlyph } from "@/components/shared";
-import { CountUpMoney, EmptyNote, PageFrame, SheetFrame, SkeletonList, StateCard, decimalInputPattern } from "@/components/primitives";
+import { CountUpMoney, EmptyNote, PageFrame, SheetFrame, SkeletonList, StateCard, decimalInputPattern, SheetClose } from "@/components/primitives";
 import { EntryList } from "@/components/add";
 
 /**
@@ -159,7 +159,6 @@ export function DebtorsView({
           const amount = summary.find((item) => item.name.trim().toLowerCase() === debtor.name.trim().toLowerCase())?.amount ?? 0;
           return (
             <article className="debtor-page-item" key={debtor.id}>
-              <i className="card-accent" style={{ background: debtor.icon_color ?? nameColor(debtor.name) }} />
               <button className="debtor-main-button" onClick={() => onSelect(debtor)}>
                 <span className="debtor-avatar" style={{ background: debtor.icon_color ?? nameColor(debtor.name) }}>
                   <WalletAvatarGlyph iconKey={debtor.icon} fallbackName={debtor.name} />
@@ -321,7 +320,7 @@ export function DebtorEditSheet({
           <p className="eyebrow">{debtor ? "แก้ไขรายการหนี้" : "เพิ่มรายการหนี้"}</p>
           <h2>{debtor ? debtor.name : "รายการใหม่"}</h2>
         </div>
-        <button onClick={onClose}>x</button>
+        <SheetClose onClick={onClose} />
       </div>
       <div className="report-period-toggle">
         <button type="button" className={kind === "lend" ? "active" : ""} onClick={() => setKind("lend")}>ยืมเรา</button>

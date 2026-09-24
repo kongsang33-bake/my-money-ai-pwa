@@ -3072,14 +3072,16 @@ export default function Home() {
                 drilled into from one of them. */}
             <div className="add-title add-title-compact">
               <div>
-                <p className="eyebrow">{addMode === "manual" ? "เพิ่มรายการ" : "AI Chat"}</p>
                 <h2>{addMode === "manual" ? "กรอกรายการด้วยตัวเอง" : busy ? "กำลังอ่านให้แบบตั้งใจสุด ๆ" : drafts.length ? "แยกข้อมูลให้แล้ว ลองตรวจอีกนิด" : "วันนี้มีรายการอะไรบ้าง?"}</h2>
               </div>
             </div>
 
-            <div className="report-period-toggle">
-              <button className={addMode === "ai" ? "active" : ""} onClick={() => { setError(""); setAddMode("ai"); }}>ให้ AI ช่วยจด</button>
-              <button className={addMode === "manual" ? "active" : ""} onClick={() => { setError(""); setAddMode("manual"); }}>เขียนเอง</button>
+            {/* Tabs, not a second segmented control: the manual form's own
+                รายจ่าย/รายรับ switch is one, and two of the same widget
+                stacked read as one question asked twice. */}
+            <div className="add-mode-tabs" role="group" aria-label="วิธีจดรายการ">
+              <button aria-pressed={addMode === "ai"} className={addMode === "ai" ? "active" : ""} onClick={() => { setError(""); setAddMode("ai"); }}>ให้ AI ช่วยจด</button>
+              <button aria-pressed={addMode === "manual"} className={addMode === "manual" ? "active" : ""} onClick={() => { setError(""); setAddMode("manual"); }}>เขียนเอง</button>
             </div>
 
             {addMode === "ai" && (
