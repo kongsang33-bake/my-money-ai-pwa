@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarClock, MoreHorizontal } from "lucide-react";
+import { CalendarClock, UserRound } from "lucide-react";
 
 export type BottomNavKey = "home" | "history" | "upcoming" | "more";
 
@@ -84,12 +84,14 @@ export function BottomNav({
           <span className="nav-label">กำลังจะมา</span>
         </span>
       </button>
-      <button className={active === "more" ? "active" : ""} onClick={onMore} aria-label="เพิ่มเติม">
+      {/* "ของฉัน", not "อื่น ๆ": the screen behind it starts with you now
+          (MoreView) -- the account and every money tool in one place. */}
+      <button className={active === "more" ? "active" : ""} onClick={onMore} aria-label="ของฉัน">
         <span className="nav-item">
           <span className="nav-icon" aria-hidden="true">
-            <MoreHorizontal aria-hidden="true" />
+            <UserRound aria-hidden="true" />
           </span>
-          <span className="nav-label">อื่น ๆ</span>
+          <span className="nav-label">ของฉัน</span>
         </span>
       </button>
     </nav>

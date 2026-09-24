@@ -72,7 +72,15 @@ Wallets moved off the nav to make room: it is the first tile under "อื่น
 (`MORE_SECTION_TABS`, so it has a back button and the nav shows "อื่น ๆ"),
 still parked like Home and History, still one tap from Home's billboard and
 wallet rail. The e2e fixture's `navigate(page, "wallets")` goes through that
-tile. Not yet built: restyling More/Wallets/the PIN gate, and a
+tile. The nav's fifth slot is **"ของฉัน"** (`MoreView`, still the `more` tab):
+you at the top (the profile header opens the account), one heads-up row
+(the nearest unlogged bill, else an unpaid card, else a budget at its edge —
+it opens "กำลังจะมา"), the money tools, then the account's own rows (profile,
+PIN). The tools are a grid on purpose, not the rail the mock drew: it is a
+menu of eight places to go, and a sideways row would hide most of them. The
+account screens go back to wherever opened them (`accountBack`), the way
+the money screens under "ของฉัน" do (`moreSectionBack`). Not yet built:
+restyling the Wallets screen itself and the PIN gate, and a
 genuinely full-bleed desktop billboard (`.phone` still clamps to a
 max-width card at the wide breakpoints, per the rule below about not
 reintroducing phone-frame chrome — a Netflix-web-style edge-to-edge
@@ -180,8 +188,8 @@ still-mocked pieces are meant to look like before building any of them.
   every money feature moved into the nav's "อื่น ๆ" it held two links and a
   sign-out button, and paid for them with a permanent topbar button and an
   overlay layer. Don't reintroduce a drawer to hold a setting — a new one
-  belongs on the account screen, or in "อื่น ๆ" if it is about money rather
-  than about the account.
+  belongs on the account screen, or under "ของฉัน" (formerly "อื่น ๆ") if it
+  is about money rather than about the account.
 - **The bottom nav is pinned to the viewport below 900px, at every width.**
   It is rendered inside `.phone`, which is the scroll container, so with
   `position: absolute` it scrolls away with the content — which it did from

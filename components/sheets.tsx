@@ -5,6 +5,7 @@ import NextImage from "next/image";
 import type { User } from "@supabase/supabase-js";
 import {
   ArrowUp,
+  Bell,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -17,6 +18,7 @@ import {
   Receipt,
   Trash2,
   TrendingUp,
+  UserRound,
   Users,
   Wallet as WalletIcon,
 } from "lucide-react";
@@ -350,6 +352,15 @@ export function ReportSummaryTiles({ income, outflow, balance, count }: { income
  */
 export function MoreView({
   onBack,
+  displayName,
+  displayIcon,
+  displayIconImage,
+  monthStartDay,
+  pinEnabled,
+  headsUp,
+  onOpenProfile,
+  onOpenSecurity,
+  onOpenUpcoming,
   onOpenWallets,
   walletTotal,
   onOpenDebtors,
@@ -366,6 +377,16 @@ export function MoreView({
   budgetTotal,
 }: {
   onBack: () => void;
+  displayName: string;
+  displayIcon: string;
+  displayIconImage: string;
+  monthStartDay: number;
+  pinEnabled: boolean;
+  /** The most pressing thing on "กำลังจะมา", in a line -- or nothing to flag. */
+  headsUp: { title: string; detail: string } | null;
+  onOpenProfile: () => void;
+  onOpenSecurity: () => void;
+  onOpenUpcoming: () => void;
   onOpenWallets: () => void;
   walletTotal: number;
   onOpenDebtors: () => void;
@@ -384,13 +405,39 @@ export function MoreView({
   const debtNet = receivableTotal - payableTotal;
   return (
     <div className="view more-view">
+      {/* "ของฉัน", the mock's "My Netflix": you at the top, the one thing worth
+          a look right now, every money tool, then the account's own settings.
+          It used to be a launcher titled "ฟีเจอร์ทั้งหมด" with the account
+          reachable only from the topbar; the topbar still leads there too. */}
       <div className="add-title">
         <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
         <div>
-          <p className="eyebrow">เพิ่มเติม</p>
-          <h2>ฟีเจอร์ทั้งหมด</h2>
+          <h2>ของฉัน</h2>
         </div>
       </div>
+      <button className="me-head" onClick={onOpenProfile}>
+        <span className={`me-avatar ${displayIconImage ? "has-image" : ""}`}>
+          {displayIconImage
+            ? <NextImage className="profile-image" src={displayIconImage} alt="" width={72} height={72} unoptimized />
+            : displayIcon}
+        </span>
+        <b>{displayName}</b>
+        <small>รอบเดือนเริ่มวันที่ {monthStartDay} · แก้ไขโปรไฟล์</small>
+      </button>
+      {headsUp && (
+        <button className="me-row me-alert" onClick={onOpenUpcoming}>
+          <span className="me-row-icon"><Bell size={18} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span className="me-row-text">
+            {headsUp.title}
+            <small>{headsUp.detail}</small>
+          </span>
+          <ChevronRight size={18} aria-hidden="true" />
+        </button>
+      )}
+      <h3 className="me-section">เครื่องมือเงิน</h3>
+      {/* A grid, not a rail as the mock drew it: this is a menu of eight
+          places to go, and a row that scrolls sideways would hide most of
+          them. */}
       <div className="more-grid">
         {/* First, because it was a bottom-nav tab until "กำลังจะมา" took the
             slot: the most-used thing on this list. */}
@@ -441,6 +488,25 @@ export function MoreView({
           <span className="more-tile-icon"><Download size={20} strokeWidth={2.25} aria-hidden="true" /></span>
           <span>ส่งออกรีพอร์ท</span>
           <small>ดาวน์โหลดเป็นไฟล์ CSV เปิดใน Excel ได้</small>
+        </button>
+      </div>
+      <h3 className="me-section">บัญชี</h3>
+      <div className="me-list">
+        <button className="me-row" onClick={onOpenProfile}>
+          <span className="me-row-icon"><UserRound size={18} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span className="me-row-text">
+            บัญชีและโปรไฟล์
+            <small>ชื่อ ไอคอน วันเริ่มรอบเดือน บริบทสำหรับ AI และการออกจากระบบ</small>
+          </span>
+          <ChevronRight size={18} aria-hidden="true" />
+        </button>
+        <button className="me-row" onClick={onOpenSecurity}>
+          <span className="me-row-icon"><Lock size={18} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span className="me-row-text">
+            รหัส PIN
+            <small>{pinEnabled ? "เปิดใช้อยู่" : "ยังไม่ได้ตั้ง"}</small>
+          </span>
+          <ChevronRight size={18} aria-hidden="true" />
         </button>
       </div>
     </div>

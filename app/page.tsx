@@ -66,7 +66,7 @@ import {
   unnamedDebtor,
   withEntries,
 } from "@/lib/money";
-import { buildSetupChecklist, buildUpcoming, buildWalletInsight, computeStreak, deriveQuickShortcuts, isRecurringLogged, lastSevenDayCashFlow, unpaidOwnDebts, type SetupStep } from "@/lib/insights";
+import { buildSetupChecklist, buildUpcoming, buildWalletInsight, computeStreak, deriveQuickShortcuts, describeDaysUntil, isRecurringLogged, lastSevenDayCashFlow, unpaidOwnDebts, type SetupStep } from "@/lib/insights";
 import { buildAiExamples, buildCategoryMemory } from "@/lib/ai-memory";
 import { nameColor } from "@/lib/category";
 import { createPinSalt, defaultLockDelay, hashPin, isLockDelayKey, isSixDigitPin, lockDelayMs, pinBlocked, pinMaxAttempts, recordFailedPinAttempt, registerFaceId, timingSafeEqual, verifyFaceId, type LockDelayKey } from "@/lib/pin";
@@ -318,9 +318,17 @@ export default function Home() {
   // itself, during render, so the screen already knows on its first frame.
   const [lastTab, setLastTab] = useState<Tab>(tab);
   const [moreSectionBack, setMoreSectionBack] = useState<Tab>("home");
+  // The account screens (profile, PIN) the same way: "ของฉัน" opens them now as
+  // well as the topbar, and back should land where the tap came from. Moving
+  // between the two of them keeps the origin rather than pointing back at
+  // each other.
+  const [accountBack, setAccountBack] = useState<Tab>("home");
   if (tab !== lastTab) {
     setLastTab(tab);
     if (MORE_SECTION_TABS.includes(tab)) setMoreSectionBack(lastTab === "more" ? "more" : "home");
+    if ((tab === "profile" || tab === "security") && lastTab !== "profile" && lastTab !== "security") {
+      setAccountBack(lastTab === "more" ? "more" : "home");
+    }
   }
   // A save in flight, apart from `busy` (which AI analysis also holds), so
   // the save button can say "saving" without claiming it during analysis.
@@ -1224,6 +1232,18 @@ export default function Home() {
     () => budgetGlance.items.filter((item) => item.percent >= BUDGET_NEAR_PERCENT),
     [budgetGlance],
   );
+  // The one line "ของฉัน" flags at the top: the nearest unlogged bill, else a
+  // card with nothing paid this cycle, else a budget at its edge -- the same
+  // things "กำลังจะมา" lists, in the order they are most likely to cost money
+  // if forgotten.
+  const headsUp = useMemo(() => {
+    const bill = dueSoonRecurring.find((entry) => !entry.isLogged);
+    if (bill) return { title: bill.item.name, detail: `ครบกำหนด${describeDaysUntil(bill.daysUntil)}` };
+    if (unpaidCards[0]) return { title: unpaidCards[0].name, detail: "ยังไม่มีรายการจ่ายในรอบนี้" };
+    const budget = budgetWatch[0];
+    if (budget) return { title: `งบ${budget.category}`, detail: budget.spent > budget.budget ? "เกินงบแล้ว" : `ใช้ไปแล้ว ${Math.round(budget.percent)}%` };
+    return null;
+  }, [dueSoonRecurring, unpaidCards, budgetWatch]);
   const askAiMounted = tab === "ask";
 
   // Built only while the Ask-AI screen is actually open. This allocates ~120
@@ -3315,7 +3335,7 @@ export default function Home() {
             busy={busy}
             error={error}
             pinEnabled={pinEnabled}
-            onBack={() => setTab("home")}
+            onBack={() => setTab(accountBack)}
             onSave={saveProfile}
             netWorthDisplay={netWorthDisplay}
             onSaveNetWorthDisplay={updateNetWorthDisplay}
@@ -3332,7 +3352,7 @@ export default function Home() {
             onChangeLockDelay={changeLockDelay}
             busy={busy}
             error={pinError}
-            onBack={() => { setTab("home"); setPinError(""); }}
+            onBack={() => { setTab(accountBack); setPinError(""); }}
             onEnable={async (nextPin) => {
               const ok = await savePin(nextPin, "unlocked");
               if (ok) setTab("home");
@@ -3357,6 +3377,15 @@ export default function Home() {
         {tab === "more" && (
           <MoreView
             onBack={() => setTab("home")}
+            displayName={displayName}
+            displayIcon={displayIcon}
+            displayIconImage={displayIconImage}
+            monthStartDay={monthStartDay}
+            pinEnabled={pinEnabled}
+            headsUp={headsUp}
+            onOpenProfile={() => setTab("profile")}
+            onOpenSecurity={() => setTab("security")}
+            onOpenUpcoming={() => setTab("upcoming")}
             onOpenWallets={() => setTab("wallets")}
             walletTotal={walletBalanceTotal}
             onOpenDebtors={() => { setSelectedDebtor(null); setTab("debtors"); }}

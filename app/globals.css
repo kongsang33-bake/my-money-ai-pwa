@@ -5415,21 +5415,118 @@ button.entry-main {
 }
 
 /* -------------------------------------------------------------------------
-   More screen (feature launcher)
+   "ของฉัน" (MoreView) -- the mock's "My Netflix": you at the top, a heads-up
+   row, the money tools as a grid, then the account's own settings as a list.
    ------------------------------------------------------------------------- */
+.me-head {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-1);
+  width: 100%;
+  margin-bottom: var(--s-5);
+  padding: var(--s-2) 0 var(--s-4);
+  text-align: center;
+}
+
+.me-avatar {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: var(--s-2);
+  overflow: hidden;
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: var(--fs-h1);
+  font-weight: var(--fw-bold);
+}
+
+.me-avatar.has-image {
+  background: var(--surface-2);
+  padding: 3px;
+}
+
+.me-head b {
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-semibold);
+}
+
+.me-head small {
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+}
+
+.me-section {
+  margin: var(--s-6) 0 var(--s-3);
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+}
+
+.me-list {
+  border-top: 1px solid var(--line);
+}
+
+.me-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: 56px;
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  color: var(--ink-4);
+}
+
+.me-row-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
+.me-row-text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-body);
+  color: var(--ink);
+}
+
+.me-row-text small {
+  display: block;
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+}
+
+/* The heads-up row: the one row with the brand's mark on it, because it is
+   the one thing on this screen asking for attention. */
+.me-alert {
+  border-top: 1px solid var(--line);
+}
+
+.me-alert .me-row-icon {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
 .more-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: var(--s-4);
+  gap: var(--s-3);
 }
 
 .more-grid button {
   display: grid;
   gap: var(--s-2);
-  padding: var(--s-5) var(--s-4);
-  border-radius: var(--r-lg);
-  background: var(--surface-2);
-  border: 1px solid var(--line-soft);
+  padding: var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: var(--card-border);
   text-align: left;
   transition: transform var(--t-press) var(--e-out), background var(--t-2) var(--e-out);
   animation: card-in var(--t-3) var(--e-out) backwards;
@@ -6619,6 +6716,12 @@ button.entry-main {
 
   .topbar {
     padding-inline: var(--s-7);
+  }
+
+  /* Four across on a desk: two columns of 540px cards read as a form, not
+     a set of tools. */
+  .more-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .rail.is-wide .rail-track > * { width: 340px; }

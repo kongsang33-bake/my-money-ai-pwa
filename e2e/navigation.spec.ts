@@ -30,6 +30,26 @@ test.describe("navigation", () => {
     expect(await app.evaluate(() => (document.querySelector(".phone") as HTMLElement).style.overflowY)).toBe("");
   });
 
+  test("opens the account from ของฉัน too, and goes back there rather than Home", async ({ app }) => {
+    // "ของฉัน" starts with you: the profile header and the account row both
+    // lead to the account screen, and back returns to the list it came from.
+    await navigate(app, "more");
+    await expect(app.locator(".me-head")).toContainText("พรีวิว");
+    await app.locator(".me-head").click();
+    await expect(app.locator(".add-title h2")).toHaveText("บัญชีของฉัน");
+    await app.locator(".view:not(.is-parked) .add-title > button:first-child").click();
+    await expect(app.locator(".more-view .add-title h2")).toHaveText("ของฉัน");
+  });
+
+  test("flags the nearest bill at the top of ของฉัน and opens กำลังจะมา from it", async ({ app }) => {
+    await navigate(app, "more");
+    // Netflix is the fixture's nearest live bill, two days out.
+    await expect(app.locator(".me-alert")).toContainText("Netflix");
+    await expect(app.locator(".me-alert")).toContainText("ครบกำหนดอีก 2 วัน");
+    await app.locator(".me-alert").click();
+    await expect(app.locator(".upcoming-view")).toBeVisible();
+  });
+
   test("opens the account screen from the topbar identity", async ({ app }) => {
     // There is no drawer any more: your own name and face in the topbar is
     // the way in, and it goes to a screen rather than an overlay.
@@ -98,9 +118,9 @@ test.describe("navigation", () => {
   // "อื่น ๆ" used to open a sheet over whatever tab was showing, so a wrong
   // tap had to be undone with its close button up in the corner. It is a
   // screen now, and leaving it is tapping another tab, like every other tab.
-  test("opens อื่น ๆ as a screen that another tab replaces", async ({ app }) => {
+  test("opens ของฉัน as a screen that another tab replaces", async ({ app }) => {
     await navigate(app, "more");
-    await expect(app.locator(".more-view .add-title h2")).toHaveText("ฟีเจอร์ทั้งหมด");
+    await expect(app.locator(".more-view .add-title h2")).toHaveText("ของฉัน");
     await expect(app.locator(".sheet-backdrop")).toHaveCount(0);
     await expect(app.locator(".bottom-nav")).not.toHaveAttribute("inert", /.*/);
     await expect(app.locator(".bottom-nav > button").nth(4)).toHaveClass(/\bactive\b/);
