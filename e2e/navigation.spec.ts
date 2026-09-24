@@ -222,8 +222,9 @@ test.describe("navigation", () => {
   // passing everywhere here -- so what is worth pinning is that the arithmetic
   // and the grid still agree: same centre, same width, on the tab that is
   // actually active. The three projects run this at their three widths, and
-  // the nav is laid out differently in each (absolute on mobile, fixed and
-  // -50%-centred above 900px).
+  // the nav is laid out differently in each (a full-width bar on a phone, a
+  // bar -50%-centred over the 560px column from 600px, a floating bar from
+  // 900px).
   test("parks the sliding pill on the active tab", async ({ app }) => {
     const geometry = () => app.evaluate(() => {
       const pill = document.querySelector(".nav-indicator") as HTMLElement;

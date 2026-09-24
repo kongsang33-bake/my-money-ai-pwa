@@ -47,9 +47,14 @@ landscape cards for "เพิ่งจด" (`RecentRail`). A rail item's "art" 
 colour handed in as `--hue` — a `--cat-*` slot, or a colour the user picked
 — mixed into the ground, with its lucide icon large and faint; there are no
 pictures, so never reach for an image or an emoji to fill that slot. How wide
-items are is the rail's `size` prop (`.rail.is-*`), never the card's. Still
-the older wide cards at a rail width: the three "สุขภาพการเงิน" stat tiles
-and the two "ภาพรวมเดือนนี้" cards. Not yet built: the title-detail sheet,
+items are is the rail's `size` prop (`.rail.is-*`), never the card's. The
+"สุขภาพการเงิน" stat tiles (`HomeInsightGrid`) are one quiet shape — colour
+lives in the figure and a thin `StatMeter` along the bottom, the same 3px bar
+the progress tiles carry, never in a full fill — and the "ภาพรวมเดือนนี้"
+cards share the rails' flat surface, the top-category one with its
+category's `.tile-art` across the top. The bottom nav is a full-width solid
+bar with a square emerald + level with the tabs below 900px, and floats as a
+bar on desktop. Not yet built: the title-detail sheet,
 the "กำลังจะมา" timeline tab, restyling More/Wallets/the PIN gate, and a
 genuinely full-bleed desktop billboard (`.phone` still clamps to a
 max-width card at the wide breakpoints, per the rule below about not
@@ -164,7 +169,8 @@ still-mocked pieces are meant to look like before building any of them.
   It is rendered inside `.phone`, which is the scroll container, so with
   `position: absolute` it scrolls away with the content — which it did from
   481px to 899px until the Home rails put a poster where a test tried to tap
-  it. `.phone` also carries `scroll-padding-bottom: var(--nav-clearance)`,
+  it. Its ground (`--nav-bg`) is opaque on purpose: slightly translucent, a
+  card scrolling underneath showed through as a stray box behind a tab. `.phone` also carries `scroll-padding-bottom: var(--nav-clearance)`,
   so focus and scroll-into-view stop above the nav rather than under it.
 - **`.phone` is the real, edge-to-edge app root at every width — not a
   device mockup.** There is no rounded-card-with-drop-shadow "phone frame"

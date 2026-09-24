@@ -2,12 +2,12 @@
 
 import { memo, useId, useMemo, useState } from "react";
 import { Check, ChevronLeft, CreditCard, Info, Plus, Target, TrendingDown, TrendingUp, Users, Wallet as WalletIcon } from "lucide-react";
-import { CATEGORY_DOT_TINT_ALPHA, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
+import { RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
 import { formatChatTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, moneySign, toMoneyAmount } from "@/lib/format";
 import { entryDisplayImpact } from "@/lib/money";
 import { shiftMonthKey } from "@/lib/cycle";
 import { spendingByDay, type CashFlowSummary, type SetupStep, type UnpaidOwnDebt } from "@/lib/insights";
-import { categoryColor, categoryTint, nameColor } from "@/lib/category";
+import { categoryColor, nameColor } from "@/lib/category";
 import type { Entry, MoneyGoal, NetWorthDebtFormula, RecurringExpense } from "@/lib/types";
 import { CategoryIcon, RecurringAvatarGlyph } from "@/components/shared";
 import { CountUpMoney, DateField, EmptyNote, InfoHint, MonthField, Rail, SheetFrame, SkeletonList, decimalInputPattern } from "@/components/primitives";
@@ -216,6 +216,20 @@ export const HeroWalletCard = memo(function HeroWalletCard({
   );
 });
 
+/**
+ * The thin line along the bottom of a stat tile: the same 3px bar the
+ * progress tiles carry, so the "สุขภาพการเงิน" row reads as one family with
+ * "เป้าหมายและงบ" rather than as three boxed numbers. Decorative -- the
+ * percentage it draws is already written in the tile.
+ */
+function StatMeter({ percent, tone }: { percent: number; tone: "income" | "expense" }) {
+  return (
+    <span className={`stat-meter ${tone}`} aria-hidden="true">
+      <i style={{ width: `${Math.max(2, Math.min(100, percent))}%` }} />
+    </span>
+  );
+}
+
 export const HomeInsightGrid = memo(function HomeInsightGrid({
   netWorth,
   netWorthDelta,
@@ -257,6 +271,7 @@ export const HomeInsightGrid = memo(function HomeInsightGrid({
         </div>
         <strong>{Number.isFinite(savingsRate) ? formatPercent(savingsRate) : "0%"}</strong>
         <small>เทียบกับรายรับในรอบนี้</small>
+        <StatMeter percent={Number.isFinite(savingsRate) ? Math.abs(savingsRate) : 0} tone={savingsPositive ? "income" : "expense"} />
       </div>
       <div className="home-insight-card obligation">
         <div className="insight-label">
@@ -270,6 +285,7 @@ export const HomeInsightGrid = memo(function HomeInsightGrid({
           จากหนี้คงเหลือรวม {moneySign}{formatMoney(payableTotal)}
           {dsrPercent != null ? ` · ${dsrPercent}% ของรายรับ` : ""}
         </small>
+        {dsrPercent != null && <StatMeter percent={dsrPercent} tone="expense" />}
       </div>
       {!hideNetWorthCard && (
         <div className={`home-insight-card net-worth ${netWorthTone}`}>
@@ -716,32 +732,44 @@ export const SpendingPersonalityCard = memo(function SpendingPersonalityCard({
 }) {
   const hasSpend = !!topCategory && topCategory.amount > 0.005;
   const percent = hasSpend && monthlyOutflow > 0 ? Math.round((topCategory!.amount / monthlyOutflow) * 100) : 0;
-  const trendNote = trend?.direction === "up"
-    ? ` (เยอะกว่าค่าเฉลี่ย 3 เดือนก่อน ${trend.percent}%)`
-    : trend?.direction === "down"
-      ? ` (น้อยกว่าค่าเฉลี่ย 3 เดือนก่อน ${trend.percent}%)`
-      : "";
 
+  // The category's own colour and icon as the card's art, the way the
+  // posters and tiles on the rails above it carry theirs -- this used to be a
+  // sentence in a box.
   return (
-    <section className="home-focus-card spending-personality-card">
-      <div className="home-focus-head">
-        <div>
-          <span>นิสัยการใช้เงินเดือนนี้</span>
-          <strong>{hasSpend ? topCategory!.category : "ยังไม่มีข้อมูล"}</strong>
-        </div>
-        {hasSpend && (
-          <i className="cat-dot" style={{ background: categoryTint(topCategory!.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(topCategory!.category) }}><CategoryIcon category={topCategory!.category} /></i>
-        )}
-      </div>
+    <section
+      className={`home-focus-card spending-personality-card${hasSpend ? " has-art" : ""}`}
+      style={hasSpend ? ({ "--hue": categoryColor(topCategory!.category) } as React.CSSProperties) : undefined}
+    >
       {hasSpend ? (
-        <p className="spending-personality-note">
-          คุณใช้จ่ายด้าน{topCategory!.category}มากที่สุด (ไม่รวมบิลประจำ) — {moneySign}{formatMoney(topCategory!.amount)} หรือ {percent}% ของรายจ่ายทั้งหมดเดือนนี้{trendNote}
-        </p>
+        <>
+          <span className="tile-art" aria-hidden="true">
+            <span className="tile-glyph"><CategoryIcon category={topCategory!.category} size={40} /></span>
+          </span>
+          <div className="spending-body">
+            <span>จ่ายหนักสุดเดือนนี้ · ไม่รวมบิลประจำ</span>
+            <strong>{topCategory!.category}</strong>
+            <small>{moneySign}{formatMoney(topCategory!.amount)} · {percent}% ของรายจ่ายทั้งหมด</small>
+            {trend && trend.direction !== "flat" && (
+              <small className={`spending-trend ${trend.direction === "up" ? "expense" : "income"}`}>
+                {trend.direction === "up" ? "มากกว่า" : "น้อยกว่า"}ค่าเฉลี่ย 3 เดือนก่อน {trend.percent}%
+              </small>
+            )}
+          </div>
+        </>
       ) : (
-        <div className="home-compact-empty">
-          <span aria-hidden="true">●</span>
-          <p>{hasBillsOnly ? "เดือนนี้มีแต่รายจ่ายประจำ ยังไม่มีรายจ่ายอื่นให้ดูเป็นนิสัย" : "เริ่มจดรายการเพื่อดูว่าคุณใช้จ่ายด้านไหนมากที่สุด"}</p>
-        </div>
+        <>
+          <div className="home-focus-head">
+            <div>
+              <span>จ่ายหนักสุดเดือนนี้</span>
+              <strong>ยังไม่มีข้อมูล</strong>
+            </div>
+          </div>
+          <div className="home-compact-empty">
+            <span aria-hidden="true">●</span>
+            <p>{hasBillsOnly ? "เดือนนี้มีแต่รายจ่ายประจำ ยังไม่มีรายจ่ายอื่นให้ดูเป็นนิสัย" : "เริ่มจดรายการเพื่อดูว่าคุณใช้จ่ายด้านไหนมากที่สุด"}</p>
+          </div>
+        </>
       )}
     </section>
   );
