@@ -105,7 +105,7 @@ export function WalletsView({
       {/* Tiles, not rows: each wallet is a thing with its own colour, the way
           the rails' posters are -- its --hue mixed into the ground, its icon
           large and faint. The bar along the bottom is its share of the total. */}
-      <div className="wallet-grid">
+      <div className="wallet-tiles">
         {wallets.map((wallet) => {
           const share = total > 0 ? Math.max(0, Math.min(100, (wallet.display_balance / total) * 100)) : 0;
           const open = openWalletId === wallet.id;

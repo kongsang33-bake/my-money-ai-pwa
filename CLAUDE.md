@@ -6,7 +6,7 @@ Guidance for working on this codebase — a Thai personal-finance PWA
 
 ## Design system: Cinema (dark only)
 
-นับตังค์ (Nubtang) is a Netflix-shaped app now: one billboard per screen
+NUBTHUNG (formerly นับตังค์) is a Netflix-shaped app now: one billboard per screen
 (`HeroWalletCard`, class `.hero-wallet` -- its own tier, deliberately not
 a `.wallet-card`) carrying its own two actions, then horizontal rails of fixed-width
 cards underneath — a section becomes a rail by wrapping its items in the `Rail` component
@@ -87,13 +87,21 @@ margins, not `align-items`, so a short window scrolls it instead of pushing
 its top out of reach, and it tightens under 800px tall so a laptop sees the
 whole thing. The e2e suite reaches it through the seed's `pinMode`
 (`openPinGate` in e2e/fixture.ts) and the a11y audit measures both modes.
-Not yet built: restyling the Wallets screen itself, and a
-genuinely full-bleed desktop billboard (`.phone` still clamps to a
-max-width card at the wide breakpoints, per the rule below about not
-reintroducing phone-frame chrome — a Netflix-web-style edge-to-edge
-billboard needs that rule revisited deliberately, not as a side effect of
-an unrelated change). Read `docs/netflix-reference.html` for what those
-still-mocked pieces are meant to look like before building any of them.
+Wallets (`WalletsView`) is a bare total -- the billboard's kicker, a display
+figure, the spendable/set-aside split as one bar -- over `.wallet-tiles`:
+each wallet a tile in its own `--hue` with its share of the total as a meter
+(not `.wallet-grid`, which is the older wrapper around Home's billboard). From
+900px up the app is the whole window: Home's billboard runs edge to edge
+under the topbar and fades into the page at the bottom, and every other
+screen keeps a centred 1180px column with the topbar lined up to it.
+
+**The brand is NUBTHUNG and its mark is the green "N"** --
+`public/icons/logo-mark.png` (transparent, for the app's own ground) and the
+home-screen/maskable/Apple/favicon PNGs, all cut from one artwork and set on
+pure black. `.brand-mark` draws that image; it is not a letter in a tile any
+more, so never put text inside it. Internal identifiers that still say
+"nubtang" (`__NUBTANG_PREVIEW__`, the service-worker cache name) are code, not
+the product name -- leave them.
 
 - **Palette is one set now, not per-theme.** `--bg`/`--surface`/
   `--surface-2`/`--surface-3` are near-black grounds; `--ink`/`--ink-2`/
@@ -208,9 +216,10 @@ still-mocked pieces are meant to look like before building any of them.
   device mockup.** There is no rounded-card-with-drop-shadow "phone frame"
   centered on a differently-colored backdrop any more; that read as a
   component showcase, not an app, on anything wider than a literal phone.
-  Widths above mobile only clamp `.phone`'s max-width for readability
-  (`min-width: 600px`/`900px` breakpoints) — they don't reintroduce a card
-  chrome. Don't add `border-radius`/`box-shadow` back onto `.shell`/`.phone`
+  The 600–899px layout clamps `.phone` to a centred 560px column; from
+  900px `.phone` is the full window and the *views* clamp themselves (1180px,
+  all but Home, whose billboard is deliberately full-bleed). Neither
+  reintroduces a card chrome. Don't add `border-radius`/`box-shadow` back onto `.shell`/`.phone`
   as a "polish" pass.
 
 ### What actually counts as a redesign

@@ -587,7 +587,7 @@ a:focus-visible {
 
 /* The wallets themselves: tiles in the wallet's own colour, sized by the
    grid (never by the tile), two across on a phone and more as it widens. */
-.wallet-grid {
+.wallet-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
   gap: var(--s-3);
@@ -6890,11 +6890,25 @@ button.entry-main {
     background: var(--bg);
   }
 
+  /* The window, edge to edge, the way Netflix's web app is: Home's
+     billboard runs under the topbar to both edges (below). Every other
+     screen is a form or a list, not a billboard, so it keeps a centred
+     reading column instead. */
   .phone {
-    max-width: 1180px;
     padding-bottom: calc(96px + env(safe-area-inset-bottom));
     overflow-x: hidden;
     overflow-y: auto;
+  }
+
+  .phone > .view:not(.home-view) {
+    max-width: 1180px;
+    margin-inline: auto;
+  }
+
+  /* ...and off Home the topbar's mark and face line up with that column's
+     edges rather than the window's. */
+  .phone:not(.tab-home) .topbar {
+    padding-inline: max(var(--s-7), calc((100% - 1180px) / 2 + var(--s-7)));
   }
 
   .topbar {
@@ -6918,10 +6932,23 @@ button.entry-main {
      over the page's own ground, the art lit on the right and fading into
      it -- so the billboard's edge disappears into the page rather than
      showing as a box inside .phone's clamped width. */
+  .home-view > .single-wallet {
+    margin: calc(-1 * var(--topbar-block)) calc(-1 * var(--s-7)) var(--s-6);
+  }
+
+  /* Full-bleed: no box, no corner, and a fade into the page along the
+     bottom as well as the left, so the rails below start on the same
+     ground the billboard ends on. */
   .hero-wallet {
-    min-height: 420px;
+    min-height: min(76vh, 680px);
     justify-content: center;
-    background: linear-gradient(100deg, var(--bg) 0%, var(--hero-bg) 42%, var(--hero-glow) 100%);
+    padding-top: var(--topbar-block);
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background:
+      linear-gradient(180deg, transparent 72%, var(--bg) 100%),
+      linear-gradient(100deg, var(--bg) 0%, var(--hero-bg) 42%, var(--hero-glow) 100%);
   }
 
   .billboard-art {
@@ -6931,7 +6958,12 @@ button.entry-main {
   }
 
   .billboard-art::after {
-    background: linear-gradient(180deg, transparent 60%, color-mix(in srgb, var(--bg) 70%, transparent) 100%);
+    background: linear-gradient(180deg, transparent 60%, var(--bg) 100%);
+  }
+
+  .billboard-caption {
+    top: calc(var(--topbar-block) + var(--s-3));
+    right: var(--s-7);
   }
 
   .billboard-body {
