@@ -3221,38 +3221,150 @@ button.poster:active {
   color: var(--ink-3);
 }
 
-.draft::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  border-radius: var(--r-full) 0 0 var(--r-full);
-  background: var(--ink-3);
-}
-
-.draft-income::before, .draft-debt_repayment::before, .draft-borrow::before { background: var(--income); }
-.draft-personal_expense::before, .draft-gift::before, .draft-card_charge::before { background: var(--expense); }
-.draft-lend::before, .draft-split_half::before, .draft-debt_payment::before { background: var(--cat-travel); }
-.draft-transfer::before { background: var(--accent); }
-
-/* A person's name in the text but no clear "free or must-be-repaid" signal
-   (e.g. "พี่แอนให้เงิน 200 บาท") — the AI still picks a best-guess type but
-   flags the row so the review step visibly asks the user to confirm instead
-   of silently trusting a guess between income/gift and lend/borrow. Uses
-   --accent, the same token the AI-parse UI already uses elsewhere for "AI
-   attention" (the ai-input-wrap glow, the AI status dot). */
+/* A draft reads first and opens second (DraftRow): the folded card is a
+   button carrying the title, the amount and every value the AI guessed as one
+   line of facts, and the effects under it say what saving does in words. Only
+   a draft with something to check (draftAttention) starts open, and it says
+   why in the list under the summary -- --accent for "the AI wants a look",
+   --danger for the reasons that keep the save button off. The coloured left
+   stripe these cards used to carry is gone, as it is everywhere else: the
+   category lives in the icon. */
 .draft-needs-review {
-  border: 1px solid var(--accent-line);
-  background: var(--accent-soft);
+  border-color: var(--accent-line);
 }
 
-.draft-ambiguous-hint {
+.draft-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  width: 100%;
+  padding-right: var(--s-7);
+  text-align: left;
+  color: var(--ink);
+}
+
+.draft-summary-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.draft-summary-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.draft-summary-title {
+  min-width: 0;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  overflow-wrap: anywhere;
+}
+
+.draft-summary-amount {
+  flex-shrink: 0;
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.draft-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 0;
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+}
+
+.draft-fact {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The separator trails its fact rather than leading the next one, so a
+   line that wraps ends on a dot instead of starting with one. */
+.draft-fact:not(:last-child)::after {
+  content: "·";
+  padding-inline: 6px;
+}
+
+.draft-fact.is-note {
+  font-style: italic;
+}
+
+.draft-summary-chevron {
+  position: absolute;
+  top: 46px;
+  right: var(--s-3);
+  color: var(--ink-3);
+  transition: transform var(--t-2) var(--e-out);
+}
+
+.draft.is-open .draft-summary-chevron {
+  transform: rotate(180deg);
+}
+
+.draft-attention, .draft-effects {
+  display: grid;
+  gap: 2px;
+  margin: var(--s-3) 0 0 calc(40px + var(--s-3));
+  list-style: none;
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
+}
+
+.draft-attention {
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
   color: var(--accent-strong);
-  margin: 0 0 var(--s-3);
+}
+
+.draft-attention li.is-blocking {
+  color: var(--danger);
+}
+
+/* One line per balance the save moves, each marked with a small dot in its
+   direction's colour -- the words carry the meaning, so the colour stays in
+   the dot and the figure rather than filling a box around every line. */
+.draft-effects li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  min-width: 0;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.draft-effects li::before {
+  content: "";
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--ink-4);
+  transform: translateY(-2px);
+}
+
+.draft-effects li.is-out { color: var(--expense); }
+.draft-effects li.is-out::before { background: var(--expense); }
+.draft-effects li.is-in { color: var(--income); }
+.draft-effects li.is-in::before { background: var(--income); }
+.draft-effects li.is-owed::before { background: var(--income); }
+.draft-effects li.is-owe::before { background: var(--expense); }
+
+.draft-editor {
+  margin-top: var(--s-4);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line-soft);
+}
+
+.draft-done {
+  display: block;
+  margin: var(--s-1) auto 0;
 }
 
 .draft label {
@@ -3263,7 +3375,7 @@ button.poster:active {
   color: var(--ink-3);
 }
 
-.draft > label {
+.draft-editor > label {
   margin-bottom: var(--s-3);
 }
 
@@ -3303,17 +3415,6 @@ button.poster:active {
   display: none;
 }
 
-
-.draft-header {
-  display: flex;
-  /* flex-end, not flex-start: the title field carries its name above the
-     control like every other field now, so aligning to the top would park
-     the category icon beside the label instead of beside the input. */
-  align-items: flex-end;
-  gap: var(--s-3);
-  margin-bottom: var(--s-3);
-  padding-right: var(--s-6);
-}
 
 .draft-title-field {
   flex: 1;
@@ -3600,35 +3701,10 @@ button.poster:active {
   outline: none;
 }
 
-.draft-result {
-  padding: var(--s-3) var(--s-4);
-  border-radius: var(--r-md);
-  background: var(--surface-3);
-  border: 1px solid var(--line-soft);
-}
-
-.draft-result-title {
-  font-size: var(--fs-micro);
-  font-weight: var(--fw-semibold);
-  color: var(--ink-3);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  margin-bottom: 4px;
-}
-
-/* Both impact summaries name wallets now, and a wallet name can be longer
-   than half a card -- so they wrap to their own line instead of pushing the
-   card into a horizontal scroll. */
-.impact-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px var(--s-4);
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-semibold);
-  color: var(--ink-2);
-}
-
-.impact-row > span, .draft-impact > span {
+/* The batch total names wallets, and a wallet name can be longer than half
+   a card -- so each figure wraps to its own line instead of pushing the card
+   into a horizontal scroll. */
+.draft-impact > span {
   min-width: 0;
   overflow-wrap: anywhere;
 }

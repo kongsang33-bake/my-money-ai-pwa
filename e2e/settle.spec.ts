@@ -1,4 +1,4 @@
-import { test, expect, navigate, openApp, seedDraft, buildSeed } from "./fixture.ts";
+import { test, expect, navigate, openApp, openDraft, seedDraft, buildSeed } from "./fixture.ts";
 
 // Two halves of the same evening: an expense someone else fronted, and
 // clearing what is left between you afterwards.
@@ -13,6 +13,7 @@ test.describe("settling up", () => {
       drafts: [seedDraft({ title: "ค่าเบียร์", amount: 389, transaction_type: "personal_expense", debtor_name: "", funding_card_name: "อ้อน" })],
     });
     await navigate(page, "add");
+    await openDraft(page);
 
     // A funder the user has never owed before is still offered, and is marked
     // as the new debt it is about to become.
@@ -34,7 +35,7 @@ test.describe("settling up", () => {
 
     // The row's own preview and the total underneath it have to agree: อ้อน
     // is owed 389 and no wallet paid anything.
-    await expect(page.locator(".draft-result .impact-row")).toContainText("อ้อน");
+    await expect(page.locator(".draft-effects")).toContainText("อ้อน");
     const summary = page.locator("section .draft-impact").last();
     await expect(summary).toContainText("รวมทุกกระเป๋า +฿ 0");
     // The user's own tab, not someone else's: two books, never one number.

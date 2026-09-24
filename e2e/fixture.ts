@@ -136,6 +136,17 @@ export function seedDraft(overrides: Partial<Draft> = {}): Draft {
   }, false) as Draft;
 }
 
+/**
+ * Opens a draft card in "ตรวจสอบก่อนบันทึก" for editing. A draft starts folded
+ * to its summary unless it has something to check (draftAttention), so a spec
+ * that edits one cannot assume which -- this opens it either way.
+ */
+export async function openDraft(page: Page, index = 0) {
+  const summary = page.locator(".draft-summary").nth(index);
+  if (await summary.getAttribute("aria-expanded") !== "true") await summary.click();
+  await page.locator(".draft").nth(index).locator(".draft-editor").waitFor();
+}
+
 export const NAV = { home: 0, history: 1, add: 2, upcoming: 3, more: 4 } as const;
 
 /** The wallets screen's tile under "อื่น ๆ" -- how Wallets is reached since it left the nav. */

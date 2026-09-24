@@ -2,11 +2,12 @@
 
 import { memo, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowLeftRight, ArrowUp, ChevronDown, ImagePlus, Lightbulb, Minus, Pencil, Plus, Trash2, X } from "lucide-react";
+import { reviewDraft } from "@/lib/draft-review";
 import { CATEGORY_DOT_TINT_ALPHA, ENTRY_SWIPE_ACTIONS_WIDTH, ENTRY_SWIPE_SLOP, MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE } from "@/lib/constants";
 import { compressSlipImage } from "@/lib/image";
 import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
 import { todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
-import { CARD_FUNDABLE_TYPES, SHARED_EXPENSE_TYPES, defaultWalletId, draftTotals, draftSplitPins, entryDisplayImpact, fundingLegType, isFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, retypedTo, splitDebtorNames, splitPinMismatch, splitSharesBetween, unnamedDebtor } from "@/lib/money";
+import { CARD_FUNDABLE_TYPES, SHARED_EXPENSE_TYPES, defaultWalletId, draftTotals, draftSplitPins, entryDisplayImpact, isFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, retypedTo, splitDebtorNames, splitPinMismatch, splitSharesBetween, unnamedDebtor } from "@/lib/money";
 import { DEBT_TYPES, TYPES_USER_OWES, isFormOnlyDerivedType, transactionKind, transactionTypeLabels, transactionTypeOptions, type TransactionType } from "@/lib/taxonomy";
 import { summarizeDayEntries } from "@/lib/insights";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
@@ -177,11 +178,6 @@ export function DraftRow({ draft, knownDebtors, receivable = [], wallets, onChan
   const isDebtType = DEBT_TYPES.includes(draft.transaction_type);
   const isOwnDebtType = TYPES_USER_OWES.includes(draft.transaction_type);
   const relevantKind: DebtorKind = isOwnDebtType ? "own" : "lend";
-  const knownNames = knownDebtors.filter((debtor) => debtor.kind === relevantKind).map((debtor) => debtor.name);
-  const newDebtorNames = isDebtType
-    ? (SHARED_EXPENSE_TYPES.includes(draft.transaction_type) ? splitDebtorNames(draft.debtor_name) : [draft.debtor_name.trim()])
-      .filter((name) => name && name !== unnamedDebtor && !knownNames.some((known) => known.trim().toLowerCase() === name.toLowerCase()))
-    : [];
   const isTransfer = draft.transaction_type === "transfer";
   const transferInvalid = isTransfer && (!draft.transfer_to_wallet_id || draft.transfer_to_wallet_id === draft.wallet_id);
   const debtorFieldLabel =
@@ -192,19 +188,23 @@ export function DraftRow({ draft, knownDebtors, receivable = [], wallets, onChan
     draft.transaction_type === "card_charge" ? "เช่น กรุงศรีเฟิร์สช้อย" :
     draft.transaction_type === "borrow" ? "เช่น พี่แอน" :
     relevantKind === "own" ? "เช่น ผ่อนบ้าน ผ่อนรถ" : "เช่น แฟน หรือ เพื่อนเอ";
-  const [detailsOpen, setDetailsOpen] = useState(draft.ambiguous || transferInvalid);
-  const showDetails = detailsOpen || draft.ambiguous || transferInvalid;
+  // The card reads first and opens second: every value the AI guessed and
+  // what saving does are on the folded card (reviewDraft), so a draft that
+  // needs nothing from the user is checked by reading it. Only one that does
+  // -- a guess, a new name, a transfer with nowhere to go -- starts open, and
+  // one that would block the save cannot be folded away at all.
+  const review = useMemo(() => reviewDraft(draft, wallets, knownDebtors), [draft, wallets, knownDebtors]);
+  const blocked = review.attention.some((reason) => reason.blocking);
+  const [expanded, setExpanded] = useState(review.attention.length > 0);
+  const open = expanded || blocked;
+  const [detailsOpen, setDetailsOpen] = useState(transferInvalid);
+  const showDetails = detailsOpen || transferInvalid;
   // A split or a lend can come off a credit card instead of a wallet. Cards
   // live in the debtors table (kind "own"), not in wallets, which is why the
   // wallet dropdown alone could not express "dinner split with จูน, paid on
   // SPay" -- the one thing this row could not say before.
   const canPayWithCard = CARD_FUNDABLE_TYPES.includes(draft.transaction_type);
   const fundingCard = canPayWithCard ? draft.funding_card_name?.trim() || "" : "";
-  // ...and whoever fronted it may be someone who already owes the user, in
-  // which case the bill is paid off their balance rather than added to the
-  // user's -- the one figure the preview below has to get the sign of right.
-  const fundingSettlesDebt = !!fundingCard && fundingLegType(fundingCard, knownDebtors) === "debt_repayment";
-  const fundingAmount = fundingSettlesDebt ? -draft.amount : draft.amount;
   const isSplit = draft.transaction_type === "split_half";
   // Several names in the one debtor field means one debt each, worked out at
   // save (expandDraftForSave). The headcount and the share are then the list's
@@ -234,222 +234,221 @@ export function DraftRow({ draft, knownDebtors, receivable = [], wallets, onChan
   });
 
   return (
-    <div className={`draft draft-${draft.transaction_type}${draft.ambiguous ? " draft-needs-review" : ""}`}>
+    <div className={`draft${open ? " is-open" : ""}${review.attention.length ? " draft-needs-review" : ""}`} data-draft-id={draft.id}>
       <button className="draft-remove" onClick={onRemove} aria-label="ลบรายการนี้ออกจากรายการที่ตรวจสอบ">
         <X size={14} strokeWidth={2.5} />
       </button>
-      <div className="draft-header">
+      <button
+        type="button"
+        className="draft-summary"
+        aria-expanded={open}
+        onClick={() => { if (!blocked) setExpanded((current) => !current); }}
+      >
         {isTransfer ? (
           <span className="cat-icon draft-transfer-icon"><ArrowLeftRight size={18} strokeWidth={2.25} aria-hidden="true" /></span>
         ) : (
           <span className="cat-icon" style={{ background: categoryTint(draft.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(draft.category) }}><CategoryIcon category={draft.category} size={18} /></span>
         )}
-        <label className="draft-title-field">
-          ชื่อรายการ
-          <input value={draft.title} onChange={(event) => update({ title: event.target.value })} />
-        </label>
-      </div>
-      {draft.ambiguous && <p className="draft-ambiguous-hint">AI ไม่แน่ใจว่าให้เปล่าหรือให้ยืม โปรดเลือกประเภทที่ถูกต้องด้านบน</p>}
-      <label>
-        ชนิดรายการ
-        <div className="select-shell">
-          <select value={draft.transaction_type} onChange={(event) => update({ ...retypedTo(event.target.value as TransactionType), ambiguous: false })}>
-          {transactionTypeOptions().map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-          <ChevronDown className="select-shell-chevron" aria-hidden="true" />
-        </div>
-      </label>
-      <div className="draft-grid">
-        {!isTransfer && (
+        <span className="draft-summary-main">
+          <span className="draft-summary-line">
+            <b className="draft-summary-title">{draft.title.trim() || "ไม่มีชื่อรายการ"}</b>
+            <strong className="draft-summary-amount">{moneySign}{formatMoney(draft.amount)}</strong>
+          </span>
+          <span className="draft-facts">
+            {review.facts.map((fact) => <span key={fact.key} className={`draft-fact is-${fact.key}`}>{fact.text}</span>)}
+          </span>
+        </span>
+        {!blocked && <ChevronDown className="draft-summary-chevron" size={16} strokeWidth={2.5} aria-hidden="true" />}
+      </button>
+      {!!review.attention.length && (
+        <ul className="draft-attention">
+          {review.attention.map((reason) => <li key={reason.text} className={reason.blocking ? "is-blocking" : undefined}>{reason.text}</li>)}
+        </ul>
+      )}
+      {!!review.effects.length && (
+        <ul className="draft-effects" aria-label="ผลหลังบันทึก">
+          {review.effects.map((effect) => <li key={effect.text} className={`is-${effect.tone}`}>{effect.text}</li>)}
+        </ul>
+      )}
+      {open && (
+        <div className="draft-editor">
+          <label className="draft-title-field">
+            ชื่อรายการ
+            <input value={draft.title} onChange={(event) => update({ title: event.target.value })} />
+          </label>
           <label>
-            หมวดหมู่
+            ชนิดรายการ
             <div className="select-shell">
-              <select value={draft.category} onChange={(event) => update({ category: event.target.value })}>
-              {categories.map((category) => (
-                <option key={category}>{category}</option>
+              <select value={draft.transaction_type} onChange={(event) => update({ ...retypedTo(event.target.value as TransactionType), ambiguous: false })}>
+              {transactionTypeOptions().map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
               ))}
             </select>
               <ChevronDown className="select-shell-chevron" aria-hidden="true" />
             </div>
           </label>
-        )}
-        <label className={isTransfer ? "draft-field-full" : undefined}>
-          จำนวนเงิน
-          <AmountInput value={draft.amount} onChange={setAmount} />
-        </label>
-      </div>
-      {isTransfer && !!wallets.length && (
-        // Which two wallets the money moved between IS the transfer -- it
-        // doesn't belong behind the "edit date/wallet/note" toggle with the
-        // optional fields, and the two legs read as one route rather than as
-        // two dropdowns that happen to sit near each other.
-        <div className="draft-route">
-          <label>
-            จากกระเป๋า
-            <div className="select-shell">
-              <select value={draft.wallet_id || defaultWalletId(wallets) || ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
-                {wallets.map((wallet) => (
-                  <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
-                ))}
-              </select>
-              <ChevronDown className="select-shell-chevron" aria-hidden="true" />
-            </div>
-          </label>
-          <span className="draft-route-arrow" aria-hidden="true"><ArrowDown size={16} strokeWidth={2.5} /></span>
-          <label>
-            ไปกระเป๋า
-            <div className="select-shell">
-              <select aria-invalid={transferInvalid} value={draft.transfer_to_wallet_id ?? ""} onChange={(event) => update({ transfer_to_wallet_id: event.target.value || null })}>
-                <option value="">เลือกกระเป๋าปลายทาง</option>
-                {wallets.map((wallet) => (
-                  <option key={wallet.id} value={wallet.id} disabled={wallet.id === draft.wallet_id}>{wallet.name}</option>
-                ))}
-              </select>
-              <ChevronDown className="select-shell-chevron" aria-hidden="true" />
-            </div>
-          </label>
-          {transferInvalid && <small className="draft-route-hint">เลือกกระเป๋าปลายทางก่อนบันทึก</small>}
-        </div>
-      )}
-      {isDebtType && (
-        <div className="draft-debtor-field">
-          <label>
-            {debtorFieldLabel}
-            <input placeholder={debtorFieldPlaceholder} value={draft.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
-          </label>
-          {SHARED_EXPENSE_TYPES.includes(draft.transaction_type) && (
-            <small className="draft-debtor-hint">ใส่หลายชื่อได้ คั่นด้วย , แล้วจะแยกเป็นหนี้รายคนให้</small>
-          )}
-          {!!newDebtorNames.length && (
-            <small>{relevantKind === "own" ? "หนี้ใหม่" : "ลูกหนี้ใหม่"} · {newDebtorNames.join(", ")} · จะสร้างให้อัตโนมัติเมื่อบันทึก</small>
-          )}
-        </div>
-      )}
-      {perPerson && (
-        <div className="draft-split-people-list">
-          <div className="draft-split-people-head">
-            <p className="draft-split-people-title">
-              {isSplit ? `หารกัน ${perPersonSplit.heads} คน` : `ออกให้ ${splitNames.length} คน`}
-            </p>
-            {hasPins && (
-              <button type="button" className="text-button" onClick={() => update({ split_shares: null, split_self_share: null })}>
-                หารเท่ากัน
-              </button>
+          <div className="draft-grid">
+            {!isTransfer && (
+              <label>
+                หมวดหมู่
+                <div className="select-shell">
+                  <select value={draft.category} onChange={(event) => update({ category: event.target.value })}>
+                  {categories.map((category) => (
+                    <option key={category}>{category}</option>
+                  ))}
+                </select>
+                  <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+                </div>
+              </label>
             )}
-          </div>
-          <ul>
-            {splitNames.map((name, index) => (
-              <li key={name}>
-                <span>{name}</span>
-                <AmountInput value={shareShown(index)} onChange={(share) => pinShare(index, share)} />
-              </li>
-            ))}
-            {isSplit && (
-              <li className="is-self">
-                <span>ส่วนของคุณ</span>
-                <AmountInput value={draft.split_self_share ?? perPersonSplit.userShare} onChange={(split_self_share) => update({ split_self_share })} />
-              </li>
-            )}
-          </ul>
-          {pinMismatch ? (
-            <p className="draft-split-warning">{pinMismatch.detail}</p>
-          ) : (
-            <small>
-              แก้ยอดของใครก็ได้ ที่เหลือจะหารกันเอง · บันทึกแล้วจะแยกเป็น{" "}
-              {splitNames.length + (perPersonSplit.userShare > 0 ? 1 : 0)} รายการ เพื่อให้ยอดหนี้แยกรายคน
-            </small>
-          )}
-        </div>
-      )}
-      {isSplit && !perPerson && (
-        <SplitShareField
-          amount={draft.amount}
-          partnerShare={draft.partner_share}
-          userShare={draft.user_share}
-          debtorName={draft.debtor_name}
-          onChange={(partner_share) => update({ partner_share })}
-        />
-      )}
-      {canPayWithCard && (!!knownDebtors.length || !!fundingCard) && (
-        <FundingSelect
-          className="draft-funding"
-          walletId={draft.wallet_id ?? null}
-          cardName={fundingCard}
-          wallets={wallets}
-          debtors={knownDebtors}
-          receivable={receivable}
-          onChange={update}
-        />
-      )}
-      <button
-        type="button"
-        className={`text-button draft-details-toggle${showDetails ? " is-open" : ""}`}
-        aria-expanded={showDetails}
-        onClick={() => setDetailsOpen((current) => !current)}
-      >
-        {`${showDetails ? "ซ่อน" : "แก้ไข"}วันที่ / ${isTransfer || fundingCard ? "" : "กระเป๋า / "}หมายเหตุ`}
-        <ChevronDown size={14} strokeWidth={2.5} aria-hidden="true" />
-      </button>
-      {showDetails && (
-        <div className="draft-grid draft-grid-secondary">
-          <label>
-            วันที่
-            <DateField value={toDateInput(draft.occurred_at)} onChange={(next) => update({ occurred_at: withDateKeepingTime(next, draft.occurred_at) })} />
-          </label>
-          {!isTransfer && !fundingCard && !!wallets.length && draft.transaction_type !== "card_charge" && (
-            <label>
-              กระเป๋า
-              <div className="select-shell">
-                <select value={draft.wallet_id || defaultWalletId(wallets) || ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
-                {wallets.map((wallet) => (
-                  <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
-                ))}
-              </select>
-                <ChevronDown className="select-shell-chevron" aria-hidden="true" />
-              </div>
+            <label className={isTransfer ? "draft-field-full" : undefined}>
+              จำนวนเงิน
+              <AmountInput value={draft.amount} onChange={setAmount} />
             </label>
+          </div>
+          {isTransfer && !!wallets.length && (
+            // Which two wallets the money moved between IS the transfer -- it
+            // doesn't belong behind the "edit date/wallet/note" toggle with the
+            // optional fields, and the two legs read as one route rather than as
+            // two dropdowns that happen to sit near each other.
+            <div className="draft-route">
+              <label>
+                จากกระเป๋า
+                <div className="select-shell">
+                  <select value={draft.wallet_id || defaultWalletId(wallets) || ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
+                    {wallets.map((wallet) => (
+                      <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+                </div>
+              </label>
+              <span className="draft-route-arrow" aria-hidden="true"><ArrowDown size={16} strokeWidth={2.5} /></span>
+              <label>
+                ไปกระเป๋า
+                <div className="select-shell">
+                  <select aria-invalid={transferInvalid} value={draft.transfer_to_wallet_id ?? ""} onChange={(event) => update({ transfer_to_wallet_id: event.target.value || null })}>
+                    <option value="">เลือกกระเป๋าปลายทาง</option>
+                    {wallets.map((wallet) => (
+                      <option key={wallet.id} value={wallet.id} disabled={wallet.id === draft.wallet_id}>{wallet.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+                </div>
+              </label>
+              {transferInvalid && <small className="draft-route-hint">เลือกกระเป๋าปลายทางก่อนบันทึก</small>}
+            </div>
           )}
-          <label className="draft-field-full">
-            หมายเหตุ
-            <input value={draft.note ?? ""} onChange={(event) => update({ note: event.target.value })} />
-          </label>
+          {isDebtType && (
+            <div className="draft-debtor-field">
+              <label>
+                {debtorFieldLabel}
+                <input placeholder={debtorFieldPlaceholder} value={draft.debtor_name} onChange={(event) => update({ debtor_name: event.target.value })} />
+              </label>
+              {SHARED_EXPENSE_TYPES.includes(draft.transaction_type) && (
+                <small className="draft-debtor-hint">ใส่หลายชื่อได้ คั่นด้วย , แล้วจะแยกเป็นหนี้รายคนให้</small>
+              )}
+            </div>
+          )}
+          {perPerson && (
+            <div className="draft-split-people-list">
+              <div className="draft-split-people-head">
+                <p className="draft-split-people-title">
+                  {isSplit ? `หารกัน ${perPersonSplit.heads} คน` : `ออกให้ ${splitNames.length} คน`}
+                </p>
+                {hasPins && (
+                  <button type="button" className="text-button" onClick={() => update({ split_shares: null, split_self_share: null })}>
+                    หารเท่ากัน
+                  </button>
+                )}
+              </div>
+              <ul>
+                {splitNames.map((name, index) => (
+                  <li key={name}>
+                    <span>{name}</span>
+                    <AmountInput value={shareShown(index)} onChange={(share) => pinShare(index, share)} />
+                  </li>
+                ))}
+                {isSplit && (
+                  <li className="is-self">
+                    <span>ส่วนของคุณ</span>
+                    <AmountInput value={draft.split_self_share ?? perPersonSplit.userShare} onChange={(split_self_share) => update({ split_self_share })} />
+                  </li>
+                )}
+              </ul>
+              {pinMismatch ? (
+                <p className="draft-split-warning">{pinMismatch.detail}</p>
+              ) : (
+                <small>
+                  แก้ยอดของใครก็ได้ ที่เหลือจะหารกันเอง · บันทึกแล้วจะแยกเป็น{" "}
+                  {splitNames.length + (perPersonSplit.userShare > 0 ? 1 : 0)} รายการ เพื่อให้ยอดหนี้แยกรายคน
+                </small>
+              )}
+            </div>
+          )}
+          {isSplit && !perPerson && (
+            <SplitShareField
+              amount={draft.amount}
+              partnerShare={draft.partner_share}
+              userShare={draft.user_share}
+              debtorName={draft.debtor_name}
+              onChange={(partner_share) => update({ partner_share })}
+            />
+          )}
+          {canPayWithCard && (!!knownDebtors.length || !!fundingCard) && (
+            <FundingSelect
+              className="draft-funding"
+              walletId={draft.wallet_id ?? null}
+              cardName={fundingCard}
+              wallets={wallets}
+              debtors={knownDebtors}
+              receivable={receivable}
+              onChange={update}
+            />
+          )}
+          <button
+            type="button"
+            className={`text-button draft-details-toggle${showDetails ? " is-open" : ""}`}
+            aria-expanded={showDetails}
+            onClick={() => setDetailsOpen((current) => !current)}
+          >
+            {`${showDetails ? "ซ่อน" : "แก้ไข"}วันที่ / ${isTransfer || fundingCard ? "" : "กระเป๋า / "}หมายเหตุ`}
+            <ChevronDown size={14} strokeWidth={2.5} aria-hidden="true" />
+          </button>
+          {showDetails && (
+            <div className="draft-grid draft-grid-secondary">
+              <label>
+                วันที่
+                <DateField value={toDateInput(draft.occurred_at)} onChange={(next) => update({ occurred_at: withDateKeepingTime(next, draft.occurred_at) })} />
+              </label>
+              {!isTransfer && !fundingCard && !!wallets.length && draft.transaction_type !== "card_charge" && (
+                <label>
+                  กระเป๋า
+                  <div className="select-shell">
+                    <select value={draft.wallet_id || defaultWalletId(wallets) || ""} onChange={(event) => update({ wallet_id: event.target.value || null })}>
+                    {wallets.map((wallet) => (
+                      <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
+                    ))}
+                  </select>
+                    <ChevronDown className="select-shell-chevron" aria-hidden="true" />
+                  </div>
+                </label>
+              )}
+              <label className="draft-field-full">
+                หมายเหตุ
+                <input value={draft.note ?? ""} onChange={(event) => update({ note: event.target.value })} />
+              </label>
+            </div>
+          )}
+          {!blocked && (
+            <button type="button" className="text-button draft-done" onClick={() => setExpanded(false)}>
+              เสร็จ พับรายการนี้
+            </button>
+          )}
         </div>
       )}
-      <div className="draft-result">
-        <p className="draft-result-title">ผลหลังบันทึก</p>
-        {isTransfer ? (
-          <div className="impact-row">
-            <span>{wallets.find((wallet) => wallet.id === draft.wallet_id)?.name ?? "กระเป๋าต้นทาง"} {formatSignedMoney(-draft.amount)}</span>
-            <span>{wallets.find((wallet) => wallet.id === draft.transfer_to_wallet_id)?.name ?? "กระเป๋าปลายทาง"} {formatSignedMoney(draft.amount)}</span>
-          </div>
-        ) : perPerson ? (
-          <div className="impact-row">
-            <span>{fundingCard || "กระเป๋า"} {formatSignedMoney(fundingCard ? fundingAmount : -draft.amount)}</span>
-            <span>ลูกหนี้ {splitNames.length} คน {formatSignedMoney(perPersonSplit.shares.reduce((sum, share) => sum + share, 0))}</span>
-          </div>
-        ) : fundingCard ? (
-          // Two rows get written here, so the preview shows both: the funding
-          // that lands on whoever paid, and the share that lands on the person
-          // it was split with -- when there is one. An expense someone else
-          // simply covered has no debtor of its own, and "ไม่ระบุ +฿ 0" is not
-          // a line worth printing.
-          <div className="impact-row">
-            <span>{fundingCard} {formatSignedMoney(fundingAmount)}</span>
-            {draft.debt_impact !== 0
-              ? <span>{draft.debtor_name || "ลูกหนี้"} {formatSignedMoney(draft.debt_impact)}</span>
-              : <span>กระเป๋า {formatSignedMoney(0)}</span>}
-          </div>
-        ) : (
-          <div className="impact-row">
-            <span>กระเป๋า {formatSignedMoney(draft.wallet_impact)}</span>
-            <span>หนี้ {formatSignedMoney(draft.debt_impact)}</span>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

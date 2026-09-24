@@ -1,4 +1,4 @@
-import { test, expect, buildSeed, navigate, openApp } from "./fixture.ts";
+import { test, expect, buildSeed, navigate, openApp, openDraft } from "./fixture.ts";
 
 test.describe("AI composer", () => {
   // Specs taking `app` get the standard fixture already on the Add tab; the
@@ -58,6 +58,7 @@ test.describe("AI composer", () => {
   // date the overlay is not showing.
   test("shows the draft's date in Thai and keeps it in step with the input", async ({ app }) => {
     await app.locator(".ai-suggestions .quick-chip").first().click();
+    await openDraft(app);
     await app.locator(".draft-details-toggle").first().click();
 
     const shell = app.locator(".draft .date-shell").first();
@@ -66,6 +67,9 @@ test.describe("AI composer", () => {
     await shell.locator('input[type="date"]').fill("2026-01-15");
     await expect(shell.locator(".date-shell-text")).toHaveText("15 ม.ค. 2569");
     await expect(shell.locator('input[type="date"]')).toHaveValue("2026-01-15");
+    // ...and the folded summary says the same date, since that is where the
+    // user reads it when the card is closed.
+    await expect(app.locator(".draft .draft-fact.is-date").first()).toHaveText("15 ม.ค. 2569");
   });
 
   test("keeps the analyse button disabled until there is something to analyse", async ({ app }) => {

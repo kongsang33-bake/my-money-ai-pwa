@@ -67,6 +67,7 @@ import {
 } from "@/lib/money";
 import { buildCyclePace, buildSetupChecklist, buildUpcoming, buildWalletInsight, computeStreak, deriveQuickShortcuts, describeDaysUntil, isRecurringLogged, lastSevenDayCashFlow, unpaidOwnDebts, type SetupStep } from "@/lib/insights";
 import { buildAiExamples, buildCategoryMemory } from "@/lib/ai-memory";
+import { draftAttention } from "@/lib/draft-review";
 import { nameColor } from "@/lib/category";
 import { createPinSalt, defaultLockDelay, hashPin, isLockDelayKey, isSixDigitPin, lockDelayMs, pinBlocked, pinMaxAttempts, recordFailedPinAttempt, registerFaceId, timingSafeEqual, verifyFaceId, type LockDelayKey } from "@/lib/pin";
 import { authHeaders } from "@/lib/api";
@@ -1285,6 +1286,9 @@ export default function Home() {
   const unfinishedTransfers = useMemo(() => incompleteTransferDrafts(drafts), [drafts]);
   const unbalancedSplits = useMemo(() => mismatchedSplitDrafts(drafts), [drafts]);
   const draftMismatch = useMemo(() => receiptMismatch(drafts, receiptTotal), [drafts, receiptTotal]);
+  // How many parsed drafts want the user's eyes -- the same reasons that make
+  // a DraftRow start open (draftAttention), counted for the review's header.
+  const draftsToCheck = useMemo(() => drafts.filter((draft) => draftAttention(draft, debtors).length).length, [drafts, debtors]);
 
   const openAddTab = useCallback((mode: "ai" | "manual" = "ai", shortcut?: QuickShortcut) => {
     setError("");
@@ -3139,7 +3143,11 @@ export default function Home() {
                     <div className="review-head">
                       <div>
                         <h3>ตรวจสอบก่อนบันทึก</h3>
-                        <p>พบ {drafts.length} รายการ แก้ข้อมูลได้ก่อนยืนยัน</p>
+                        <p>
+                          {draftsToCheck
+                            ? `พบ ${drafts.length} รายการ · ต้องเช็ก ${draftsToCheck}`
+                            : `พบ ${drafts.length} รายการ · แตะรายการเพื่อแก้`}
+                        </p>
                       </div>
                       <div className="review-head-actions">
                         <span>AI</span>

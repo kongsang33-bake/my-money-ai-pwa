@@ -1,4 +1,4 @@
-import { test, expect, navigate, openApp, seedDraft, buildSeed } from "./fixture.ts";
+import { test, expect, navigate, openApp, openDraft, seedDraft, buildSeed } from "./fixture.ts";
 import type { Page } from "@playwright/test";
 
 // iOS Safari zooms the whole page in when a field whose text is under 16px
@@ -61,6 +61,7 @@ test.describe("no zoom on focus", () => {
   test("the split review's per-person fields are at least 16px", async ({ page }) => {
     await openApp(page, { ...buildSeed(), drafts: [seedDraft({ title: "ค่าเบียร์", amount: 1500, debtor_name: "อ้อน, แบงค์, วิน, พี่พัก" })] });
     await navigate(page, "add");
+    await openDraft(page);
     await expect(page.locator(".draft-split-people-list li")).toHaveCount(5);
     expect(await undersizedFields(page)).toEqual([]);
   });
