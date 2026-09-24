@@ -30,9 +30,9 @@ test.describe("navigation", () => {
     expect(await app.evaluate(() => (document.querySelector(".phone") as HTMLElement).style.overflowY)).toBe("");
   });
 
-  test("opens the account from ของฉัน too, and goes back there rather than Home", async ({ app }) => {
-    // "ของฉัน" starts with you: the profile header and the account row both
-    // lead to the account screen, and back returns to the list it came from.
+  test("opens the account from ของฉัน, and goes back there rather than Home", async ({ app }) => {
+    // "ของฉัน" starts with you: the profile row is the one way into the
+    // account screen, and back returns to the list it came from.
     await navigate(app, "more");
     await expect(app.locator(".me-head")).toContainText("พรีวิว");
     await app.locator(".me-head").click();
@@ -50,12 +50,14 @@ test.describe("navigation", () => {
     await expect(app.locator(".upcoming-view")).toBeVisible();
   });
 
-  test("opens the account screen from the topbar identity", async ({ app }) => {
-    // There is no drawer any more: your own name and face in the topbar is
-    // the way in, and it goes to a screen rather than an overlay.
+  test("opens ของฉัน from the topbar identity", async ({ app }) => {
+    // There is no drawer any more: your own name and face in the topbar lead
+    // to "ของฉัน", the one hub the account hangs off -- a screen, not an
+    // overlay -- rather than straight into the profile form.
     await app.locator(".home-identity").click();
-    await expect(app.locator(".add-title h2")).toHaveText("บัญชีของฉัน");
+    await expect(app.locator(".more-view .add-title h2")).toHaveText("ของฉัน");
     await expect(app.locator(".sheet-backdrop")).toHaveCount(0);
+    await expect(app.locator(".me-head")).toBeVisible();
     await expect(app.getByRole("button", { name: "ออกจากระบบ" })).toBeVisible();
   });
 
@@ -65,8 +67,9 @@ test.describe("navigation", () => {
   // and does not scroll-lock the page behind it.
   //
   // Where it is reached from is the second thing checked here: every money
-  // feature is under the nav's "อื่น ๆ", and the account is behind the
-  // topbar identity. They used to be split down no line at all, across an
+  // feature is under the nav's "ของฉัน", and the account's rows sit at its
+  // foot (the topbar identity opens it too). They used to be split down no
+  // line at all, across an
   // "อื่น ๆ" sheet and a hamburger drawer.
   const MENU_SCREENS = [
     { label: "งบประมาณ", heading: "งบประมาณต่อเดือน", from: "more" },
@@ -78,7 +81,7 @@ test.describe("navigation", () => {
   async function openMenuScreen(app: Parameters<typeof navigate>[0], label: string, from: "more" | "account") {
     if (from === "account") {
       await app.locator(".home-identity").click();
-      await app.locator(".account-action-row", { hasText: label }).click();
+      await app.locator(".me-list .me-row", { hasText: label }).click();
       return;
     }
     await navigate(app, "more");
@@ -107,11 +110,10 @@ test.describe("navigation", () => {
       expect(await app.evaluate(() => (document.querySelector(".phone") as HTMLElement).style.overflowY)).toBe("");
       await expect(app.locator(".bottom-nav")).not.toHaveAttribute("inert", /.*/);
 
-      // Back goes where the screen was opened from: the "อื่น ๆ" list for
-      // a money feature, Home for the account's own screens.
+      // Back goes where the screen was opened from.
       await app.locator(".view:not(.is-parked) .add-title > button:first-child").click();
-      if (from === "more") await expect(app.locator(".more-grid")).toBeVisible();
-      else await expect(app.locator(".hero-wallet-card, .wallet-grid").first()).toBeVisible();
+      // Both kinds are reached through "ของฉัน" now, so back lands there.
+      await expect(app.locator(".more-grid")).toBeVisible();
     });
   }
 
@@ -281,7 +283,8 @@ test.describe("navigation", () => {
 
     // A menu screen selects no tab: the pill fades out where it stands
     // rather than sliding off to somewhere arbitrary.
-    await app.locator(".home-identity").click();
+    await navigate(app, "more");
+    await app.locator(".me-head").click();
     await app.waitForTimeout(400);
     expect((await geometry()).opacity).toBe(0);
   });

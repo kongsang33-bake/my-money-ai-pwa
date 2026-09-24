@@ -15,11 +15,11 @@ import {
   Lightbulb,
   LineChart,
   Lock,
+  LogOut,
   PiggyBank,
   Receipt,
   Trash2,
   TrendingUp,
-  UserRound,
   Users,
   Wallet as WalletIcon,
 } from "lucide-react";
@@ -361,6 +361,7 @@ export function MoreView({
   headsUp,
   onOpenProfile,
   onOpenSecurity,
+  onLogout,
   onOpenUpcoming,
   onOpenWallets,
   walletTotal,
@@ -387,6 +388,7 @@ export function MoreView({
   headsUp: { title: string; detail: string } | null;
   onOpenProfile: () => void;
   onOpenSecurity: () => void;
+  onLogout: () => void;
   onOpenUpcoming: () => void;
   onOpenWallets: () => void;
   walletTotal: number;
@@ -408,8 +410,11 @@ export function MoreView({
     <div className="view more-view">
       {/* "ของฉัน", the mock's "My Netflix": you at the top, the one thing worth
           a look right now, every money tool, then the account's own settings.
-          It used to be a launcher titled "ฟีเจอร์ทั้งหมด" with the account
-          reachable only from the topbar; the topbar still leads there too. */}
+          This is the one way into the account: the topbar's name and face
+          lead here, not past it, and "you" is a single row rather than a
+          poster -- it used to be a large centred portrait plus a second
+          "บัญชีและโปรไฟล์" row further down, three doors into one screen, and
+          the portrait pushed the money tools below the first screenful. */}
       <div className="add-title">
         <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
         <div>
@@ -419,11 +424,14 @@ export function MoreView({
       <button className="me-head" onClick={onOpenProfile}>
         <span className={`me-avatar ${displayIconImage ? "has-image" : ""}`}>
           {displayIconImage
-            ? <NextImage className="profile-image" src={displayIconImage} alt="" width={72} height={72} unoptimized />
+            ? <NextImage className="profile-image" src={displayIconImage} alt="" width={48} height={48} unoptimized />
             : displayIcon}
         </span>
-        <b>{displayName}</b>
-        <small>รอบเดือนเริ่มวันที่ {monthStartDay} · แก้ไขโปรไฟล์</small>
+        <span className="me-head-text">
+          <b>{displayName}</b>
+          <small>รอบเดือนเริ่มวันที่ {monthStartDay} · แก้ไขโปรไฟล์</small>
+        </span>
+        <ChevronRight size={18} aria-hidden="true" />
       </button>
       {headsUp && (
         <button className="me-row me-alert" onClick={onOpenUpcoming}>
@@ -493,14 +501,6 @@ export function MoreView({
       </div>
       <h3 className="me-section">บัญชี</h3>
       <div className="me-list">
-        <button className="me-row" onClick={onOpenProfile}>
-          <span className="me-row-icon"><UserRound size={18} strokeWidth={2.25} aria-hidden="true" /></span>
-          <span className="me-row-text">
-            บัญชีและโปรไฟล์
-            <small>ชื่อ ไอคอน วันเริ่มรอบเดือน บริบทสำหรับ AI และการออกจากระบบ</small>
-          </span>
-          <ChevronRight size={18} aria-hidden="true" />
-        </button>
         <button className="me-row" onClick={onOpenSecurity}>
           <span className="me-row-icon"><Lock size={18} strokeWidth={2.25} aria-hidden="true" /></span>
           <span className="me-row-text">
@@ -508,6 +508,10 @@ export function MoreView({
             <small>{pinEnabled ? "เปิดใช้อยู่" : "ยังไม่ได้ตั้ง"}</small>
           </span>
           <ChevronRight size={18} aria-hidden="true" />
+        </button>
+        <button className="me-row me-logout" onClick={onLogout}>
+          <span className="me-row-icon"><LogOut size={18} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span className="me-row-text">ออกจากระบบ</span>
         </button>
       </div>
     </div>
@@ -529,38 +533,32 @@ const aiContextTemplate = [
 ].join("\n");
 
 /**
- * The whole account in one screen: who you are, how the app counts your
- * month, what the AI knows about your vocabulary, the lock, and the way out.
+ * The profile form: who you are, how the app counts your month, what the AI
+ * knows about your vocabulary, and how net worth reads. Only things to edit --
+ * the lock and the way out are rows on "ของฉัน", which is the one way in here.
  *
  * It absorbed the side drawer, which by the end held two links (one of them
  * to here) and a sign-out button, and paid for them with a permanent
- * hamburger in the topbar and an overlay layer of its own. Tapping your own
- * name and face in the topbar opens this instead.
+ * hamburger in the topbar and an overlay layer of its own.
  */
 export function ProfileView({
   profile,
   user,
   busy,
   error,
-  pinEnabled,
   onBack,
   onSave,
   netWorthDisplay,
   onSaveNetWorthDisplay,
-  onOpenPin,
-  onLogout,
 }: {
   profile: Profile | null;
   user: User;
   busy: boolean;
   error: string;
-  pinEnabled: boolean;
   onBack: () => void;
   onSave: (next: { nickname: string; app_icon: string; app_icon_image: string; month_start_day: number; ai_context: string }) => Promise<boolean>;
   netWorthDisplay: NetWorthDisplaySettings;
   onSaveNetWorthDisplay: (next: NetWorthDisplaySettings) => void;
-  onOpenPin: () => void;
-  onLogout: () => void;
 }) {
   const [nickname, setNickname] = useState(profile?.nickname ?? "");
   const app_icon = profile?.app_icon ?? "";
@@ -589,30 +587,28 @@ export function ProfileView({
 
   return (
     <PageFrame onBack={onBack} eyebrow="ตั้งค่า" title="บัญชีของฉัน" className="profile-page">
-      <section className="profile-editor-preview" aria-label="ตัวอย่างโปรไฟล์">
+      {/* The picture and the controls that change it, side by side -- no
+          name-and-email card repeating what "ของฉัน" just showed. The email
+          stays as a line under it: it is the one thing here that can't be
+          edited, and the only place the app says which account is signed in. */}
+      <section className="profile-photo" aria-label="รูปโปรไฟล์">
         <span className={`profile-editor-avatar ${app_icon_image ? "has-image" : ""}`}>
-          {app_icon_image ? <NextImage className="profile-image" src={app_icon_image} alt="รูปโปรไฟล์ปัจจุบัน" width={72} height={72} unoptimized /> : (app_icon || nameInitial(profileName))}
+          {app_icon_image ? <NextImage className="profile-image" src={app_icon_image} alt="รูปโปรไฟล์ปัจจุบัน" width={64} height={64} unoptimized /> : (app_icon || nameInitial(profileName))}
         </span>
-        <div>
-          <small>บัญชีที่ล็อกอินอยู่</small>
-          <b>{profileName}</b>
-          <span>{user.email}</span>
+        <div className="profile-photo-actions">
+          <label className="file-button">
+            <ImagePlus size={18} strokeWidth={2} aria-hidden="true" />
+            {app_icon_image ? "เปลี่ยนรูป" : "เลือกรูป"}
+            <input type="file" accept="image/*" onChange={(event) => { void chooseProfileImage(event.target.files); event.currentTarget.value = ""; }} />
+          </label>
+          {!!app_icon_image && <button className="side-ghost" onClick={() => setAppIconImage("")}>ลบรูป</button>}
         </div>
+        <small className="profile-photo-email">{user.email}</small>
       </section>
       <label>
         ชื่อเล่น
         <input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="เช่น ก้อง" />
       </label>
-      <div className="sheet-field">
-        <span className="sheet-field-label">รูปโปรไฟล์</span>
-        <label className="file-button">
-          <ImagePlus size={18} strokeWidth={2} aria-hidden="true" />
-          {app_icon_image ? "เปลี่ยนรูป" : "เลือกรูป"}
-          <input type="file" accept="image/*" onChange={(event) => { void chooseProfileImage(event.target.files); event.currentTarget.value = ""; }} />
-        </label>
-        <small>รองรับรูปจากมือถือได้ถึง 10MB ระบบจะย่อเป็นไอคอนให้อัตโนมัติ</small>
-      </div>
-      {!!app_icon_image && <button className="side-ghost" onClick={() => setAppIconImage("")}>ลบรูปไอคอน</button>}
       <label>
         วันเริ่มรอบเดือน
         <input type="number" min={MONTH_START_DAY_MIN} max={MONTH_START_DAY_MAX} value={month_start_day} onChange={(event) => setMonthStartDay(clampInteger(event.target.value, MONTH_START_DAY_MIN, MONTH_START_DAY_MAX, 1))} />
@@ -669,21 +665,6 @@ export function ProfileView({
       <button className="save" onClick={submit} disabled={busy}>
         {busy ? "กำลังบันทึก..." : "บันทึก"}
       </button>
-
-      {/* Below the save button on purpose: neither of these edits the form
-          above, and putting them in the same flow would make "บันทึก" look
-          like it applied to them too. */}
-      <section className="account-actions">
-        <button className="account-action-row" onClick={onOpenPin}>
-          <Lock size={16} strokeWidth={2.25} aria-hidden="true" />
-          <span>
-            <b>รหัส PIN</b>
-            <small>{pinEnabled ? "เปิดใช้อยู่ · เปลี่ยนรหัสหรือปิดได้" : "ยังไม่ได้ตั้ง · ล็อกแอพกันคนอื่นเปิดดู"}</small>
-          </span>
-          <ChevronRight size={16} strokeWidth={2.25} aria-hidden="true" />
-        </button>
-        <button className="logout-button" onClick={onLogout}>ออกจากระบบ</button>
-      </section>
     </PageFrame>
   );
 }

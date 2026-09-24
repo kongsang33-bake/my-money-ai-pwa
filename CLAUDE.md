@@ -79,10 +79,14 @@ Wallets moved off the nav to make room: it is the first tile under "อื่น
 still parked like Home and History, still one tap from Home's billboard and
 wallet rail. The e2e fixture's `navigate(page, "wallets")` goes through that
 tile. The nav's fifth slot is **"ของฉัน"** (`MoreView`, still the `more` tab):
-you at the top (the profile header opens the account), one heads-up row
+you at the top as one compact row (`.me-head`, the only way into the
+profile form -- it was a large centred portrait plus a second "บัญชีและโปรไฟล์"
+row, three doors into one screen counting the topbar, and the portrait pushed
+the tools off the first screenful; don't grow it back), one heads-up row
 (the nearest unlogged bill, else an unpaid card, else a budget at its edge —
-it opens "กำลังจะมา"), the money tools, then the account's own rows (profile,
-PIN). The tools are a grid on purpose, not the rail the mock drew: it is a
+it opens "กำลังจะมา"), the money tools, then the account's own rows (PIN, then
+ออกจากระบบ in `--danger`). The profile form (`ProfileView`) edits and nothing
+else: the lock and sign-out moved out of it onto those rows. The tools are a grid on purpose, not the rail the mock drew: it is a
 menu of eight places to go, and a sideways row would hide most of them. The
 account screens go back to wherever opened them (`accountBack`), the way
 the money screens under "ของฉัน" do (`moreSectionBack`). The PIN gate
@@ -226,9 +230,10 @@ the product name -- leave them.
   icons already handle this internally via their `strokeWidth` prop, so
   they don't need it.
 - **The topbar holds the account, not a menu.** Your own avatar and
-  greeting (`.home-identity`) is a button into the account screen
-  (`ProfileView` — profile, month start, AI context, net worth display, PIN,
-  sign out). It used to share the topbar with a theme-toggle button; that
+  greeting (`.home-identity`) is a button into "ของฉัน" (the `more` tab), the
+  one hub the account hangs off -- not straight into `ProfileView` (profile,
+  month start, AI context, net worth display), which only "ของฉัน"'s
+  `.me-head` opens. It used to share the topbar with a theme-toggle button; that
   button is gone along with light mode; the bar is now the brand mark on the
   left and this button (name, then face) on the right, flat and edge to edge
   with its ground supplied by `.topbar-scrim`. The mock's search button is

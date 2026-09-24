@@ -820,15 +820,33 @@ a:focus-visible {
   padding: 3px;
 }
 
-.profile-editor-preview {
-  display: flex;
+/* The account form's head: the picture beside the buttons that change it,
+   and the signed-in email under both. Bare -- it is the top of a form, not a
+   card; the name and cycle it used to repeat are on "ของฉัน" one tap back. */
+.profile-photo {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: var(--s-3);
+  gap: var(--s-2) var(--s-4);
   margin-bottom: var(--s-5);
-  padding: var(--s-4);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--r-lg);
-  background: var(--surface-2);
+}
+
+.profile-photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.profile-photo-actions .side-ghost {
+  width: auto;
+}
+
+.profile-photo-email {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
 }
 
 .profile-editor-avatar {
@@ -848,20 +866,6 @@ a:focus-visible {
 .profile-editor-avatar.has-image {
   padding: 3px;
   background: var(--surface);
-}
-
-.profile-editor-preview small, .profile-editor-preview b, .profile-editor-preview span {
-  display: block;
-}
-
-.profile-editor-preview small, .profile-editor-preview span {
-  color: var(--ink-3);
-  font-size: var(--fs-micro);
-}
-
-.profile-editor-preview b {
-  margin: 2px 0;
-  font-size: var(--fs-body);
 }
 
 .home-identity b {
@@ -1218,16 +1222,6 @@ a:focus-visible {
   background: var(--surface-2);
   border: 1px solid var(--line);
   color: var(--ink-3);
-  font-weight: var(--fw-semibold);
-}
-
-.logout-button {
-  width: 100%;
-  padding: 13px;
-  border-radius: var(--r-lg);
-  background: var(--danger-soft);
-  border: 1px solid var(--danger-border);
-  color: var(--danger);
   font-weight: var(--fw-semibold);
 }
 
@@ -5725,61 +5719,8 @@ input[type="checkbox"], input[type="radio"] {
   flex-shrink: 0;
 }
 
-/* The foot of the account screen: the lock, and the way out. Bare tier --
-   these are two actions after a form, not a card of their own, and a box
-   around them would make them look like more settings to fill in. */
-.account-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-3);
-  margin-top: var(--s-7);
-  padding-top: var(--s-5);
-  border-top: 1px solid var(--line-soft);
-}
-
-.account-action-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--s-3);
-  min-height: 44px;
-  padding: var(--s-3);
-  margin-inline: calc(var(--s-3) * -1);
-  border-radius: var(--r-md);
-  background: transparent;
-  text-align: left;
-  color: var(--ink-3);
-  transition: transform var(--t-press) var(--e-out), background var(--t-2) var(--e-out);
-}
-
-.account-action-row:hover, .account-action-row:focus-visible {
-  background: var(--surface-2);
-}
-
-.account-action-row:active {
-  transform: scale(0.99);
-}
-
-.account-action-row > span {
-  display: grid;
-  min-width: 0;
-}
-
-.account-action-row b {
-  font-size: var(--fs-body);
-  font-weight: var(--fw-semibold);
-  color: var(--ink);
-}
-
-.account-action-row small {
-  font-size: var(--fs-caption);
-  line-height: var(--lh-snug);
-  color: var(--ink-3);
-}
-
-/* The lock-window picker at the foot of the security screen. Same bare tier
-   and same rule above it as .account-actions on the account screen, for the
-   same reason: it sits after a form it has nothing to do with. */
+/* The lock-window picker at the foot of the security screen. Bare tier with
+   a rule above it: it sits after a form it has nothing to do with. */
 .lock-delay {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -5794,37 +5735,49 @@ input[type="checkbox"], input[type="radio"] {
    row, the money tools as a grid, then the account's own settings as a list.
    ------------------------------------------------------------------------- */
 .me-head {
-  display: grid;
-  justify-items: center;
-  gap: var(--s-1);
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
   width: 100%;
-  margin-bottom: var(--s-5);
-  padding: var(--s-2) 0 var(--s-4);
-  text-align: center;
+  min-height: 64px;
+  margin-bottom: var(--s-4);
+  padding: var(--s-2) 0;
+  text-align: left;
+  color: var(--ink-4);
 }
 
 .me-avatar {
   display: grid;
+  flex-shrink: 0;
   place-items: center;
-  width: 72px;
-  height: 72px;
-  margin-bottom: var(--s-2);
+  width: 48px;
+  height: 48px;
   overflow: hidden;
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   background: var(--accent-soft);
   color: var(--accent-strong);
-  font-size: var(--fs-h1);
+  font-size: var(--fs-h3);
   font-weight: var(--fw-bold);
 }
 
 .me-avatar.has-image {
   background: var(--surface-2);
-  padding: 3px;
+  padding: 2px;
+}
+
+.me-head-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
 }
 
 .me-head b {
-  font-size: var(--fs-h2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-h3);
   font-weight: var(--fw-semibold);
+  color: var(--ink);
 }
 
 .me-head small {
@@ -5887,6 +5840,17 @@ input[type="checkbox"], input[type="radio"] {
 .me-alert .me-row-icon {
   background: var(--accent);
   color: var(--accent-contrast);
+}
+
+/* Sign out: the last row of the account list, in --danger so it can't be
+   mistaken for one more screen to open (it has no chevron either). */
+.me-logout .me-row-icon {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.me-logout .me-row-text {
+  color: var(--danger);
 }
 
 .more-grid {

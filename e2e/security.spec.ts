@@ -14,7 +14,7 @@ async function openSecurity(page: Page) {
   const seed = buildSeed();
   await openApp(page, { ...seed, profile: { ...seed.profile, pin_hash: "x", pin_salt: "y" } });
   await page.locator(".home-identity").click();
-  await page.locator(".account-action-row", { hasText: "รหัส PIN" }).click();
+  await page.locator(".me-list .me-row", { hasText: "รหัส PIN" }).click();
 }
 
 test.describe("lock window", () => {

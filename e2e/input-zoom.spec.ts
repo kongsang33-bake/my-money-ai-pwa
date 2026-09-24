@@ -47,8 +47,8 @@ test.describe("no zoom on focus", () => {
       ["budgets", () => openMoreScreen(app, "งบประมาณ")],
       ["report", () => openMoreScreen(app, "ส่งออกรีพอร์ท")],
       ["account", async () => {
-        await navigate(app, "home");
-        await app.locator(".home-identity").click();
+        await navigate(app, "more");
+        await app.locator(".me-head").click();
       }],
     ];
     for (const [name, open] of screens) {

@@ -318,8 +318,10 @@ export default function Home() {
   // itself, during render, so the screen already knows on its first frame.
   const [lastTab, setLastTab] = useState<Tab>(tab);
   const [moreSectionBack, setMoreSectionBack] = useState<Tab>("home");
-  // The account screens (profile, PIN) the same way: "ของฉัน" opens them now as
-  // well as the topbar, and back should land where the tap came from. Moving
+  // The account screens (profile, PIN) the same way. Only "ของฉัน" opens them
+  // now (the topbar leads to "ของฉัน" itself) -- except Home's setup
+  // checklist, whose PIN step opens security directly -- so back still has
+  // to land where the tap came from. Moving
   // between the two of them keeps the origin rather than pointing back at
   // each other.
   const [accountBack, setAccountBack] = useState<Tab>("home");
@@ -2946,14 +2948,16 @@ export default function Home() {
             the right. It carries no ground of its own -- .topbar-scrim does,
             and on Home only once something has scrolled under it (see
             attachScrollRoot), so at the top of Home it floats clear over the
-            billboard's glow. Your own name and face are still the way into
-            the account, as they were when this was a greeting. */}
+            billboard's glow. Your own name and face lead to "ของฉัน", the
+            one hub the account hangs off, rather than straight into the
+            profile form -- three separate doors into that form was the
+            clutter "ของฉัน" was cleaned up to remove. */}
         <header className="topbar">
           <div className="topbar-brand">
             <i className="brand-mark" aria-hidden="true" />
             <b className="brand-name">{APP_NAME}</b>
           </div>
-          <button className="home-identity" onClick={() => setTab("profile")} aria-label="บัญชีและการตั้งค่า">
+          <button className="home-identity" onClick={() => setTab("more")} aria-label="ของฉัน" aria-current={tab === "more" ? "page" : undefined}>
             <b>{displayName}</b>
             <span className={`home-profile-icon ${displayIconImage ? "has-image" : ""}`}>
               {displayIconImage && <NextImage className="profile-image" src={displayIconImage} alt="" width={34} height={34} unoptimized />}
@@ -3331,13 +3335,10 @@ export default function Home() {
             user={user}
             busy={busy}
             error={error}
-            pinEnabled={pinEnabled}
             onBack={() => setTab(accountBack)}
             onSave={saveProfile}
             netWorthDisplay={netWorthDisplay}
             onSaveNetWorthDisplay={updateNetWorthDisplay}
-            onOpenPin={() => setTab("security")}
-            onLogout={() => setLogoutOpen(true)}
           />
         )}
 
@@ -3382,6 +3383,7 @@ export default function Home() {
             headsUp={headsUp}
             onOpenProfile={() => setTab("profile")}
             onOpenSecurity={() => setTab("security")}
+            onLogout={() => setLogoutOpen(true)}
             onOpenUpcoming={() => setTab("upcoming")}
             onOpenWallets={() => setTab("wallets")}
             walletTotal={walletBalanceTotal}
