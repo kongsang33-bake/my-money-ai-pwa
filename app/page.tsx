@@ -66,7 +66,7 @@ import {
   unnamedDebtor,
   withEntries,
 } from "@/lib/money";
-import { buildSetupChecklist, buildWalletInsight, computeStreak, deriveQuickShortcuts, isRecurringLogged, lastSevenDayCashFlow, unpaidOwnDebts, type SetupStep } from "@/lib/insights";
+import { buildSetupChecklist, buildUpcoming, buildWalletInsight, computeStreak, deriveQuickShortcuts, isRecurringLogged, lastSevenDayCashFlow, unpaidOwnDebts, type SetupStep } from "@/lib/insights";
 import { buildAiExamples, buildCategoryMemory } from "@/lib/ai-memory";
 import { nameColor } from "@/lib/category";
 import { createPinSalt, defaultLockDelay, hashPin, isLockDelayKey, isSixDigitPin, lockDelayMs, pinBlocked, pinMaxAttempts, recordFailedPinAttempt, registerFaceId, timingSafeEqual, verifyFaceId, type LockDelayKey } from "@/lib/pin";
@@ -76,6 +76,7 @@ import {
   AI_CONTEXT_MAX_LENGTH,
   BILLBOARD_HISTORY_DAYS,
   BUDGET_COLUMNS,
+  BUDGET_NEAR_PERCENT,
   DEBTOR_COLUMNS,
   ENTRY_PAGE_MAX_REQUESTS,
   ENTRY_PAGE_SIZE,
@@ -95,10 +96,12 @@ import {
   SPLASH_MIN_VISIBLE_MS,
   TABLES,
   TRANSACTION_COLUMNS,
+  UPCOMING_WINDOW_DAYS,
   WALLET_COLUMNS,
 } from "@/lib/constants";
 import { WalletAvatarGlyph } from "@/components/shared";
 import { BottomNav } from "@/components/bottom-nav";
+import { UpcomingView } from "@/components/upcoming";
 import { ConfirmDialog, CountUpMoney, ElapsedSeconds, ErrorActions, Rail, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useStableHandler } from "@/components/primitives";
 import { AiComposer, DraftImpact, DraftRow, EditSheet, EntryList, ManualEntryForm, QuickAddStrip } from "@/components/add";
 import {
@@ -170,12 +173,12 @@ const InvestmentAiSheet = dynamic(() => import("@/components/portfolio").then((m
 // its own, and gone the moment you tapped the scrim.
 type Tab =
   | "home" | "add" | "history" | "debtors" | "wallets" | "recurring" | "goals" | "portfolio"
-  | "budgets" | "ask" | "report" | "profile" | "security" | "more";
+  | "budgets" | "ask" | "report" | "profile" | "security" | "more" | "upcoming";
 
 // The screens listed on "อื่น ๆ". While one is open the nav keeps "อื่น ๆ"
 // selected, because that is the section the user is in and the tab that
 // gets them back to the list.
-const MORE_SECTION_TABS: readonly Tab[] = ["debtors", "recurring", "goals", "portfolio", "budgets", "ask", "report"];
+const MORE_SECTION_TABS: readonly Tab[] = ["wallets", "debtors", "recurring", "goals", "portfolio", "budgets", "ask", "report"];
 
 const secondaryWalletTags: { tag: WalletTag; label: string; className: string }[] = [
   { tag: "savings", label: walletTagLabels.savings, className: "savings-wallet" },
@@ -1043,6 +1046,16 @@ export default function Home() {
     return unpaidOwnDebts(debtors, payableSummary, entries, currentCycleRange);
   }, [debtors, payableSummary, entries, monthStartDay]);
 
+  // The "กำลังจะมา" tab's dated list: a window counted from today, not the
+  // cycle (see buildUpcoming). Built only while the tab is open -- it walks
+  // every bill's schedule and the whole entry list for "already logged".
+  const upcomingItems = useMemo(() => {
+    if (tab !== "upcoming") return [];
+    const now = new Date();
+    const cycleEnd = cycleBounds(currentCycleMonthKey(monthStartDay, now), monthStartDay).end;
+    return buildUpcoming({ recurring: recurringExpenses, entries, goals, cycleEnd, now, windowDays: UPCOMING_WINDOW_DAYS });
+  }, [tab, recurringExpenses, entries, goals, monthStartDay]);
+
   useEffect(() => {
     if (!user || !dueSoonRecurring.length) return;
     const key = `money-ai-recurring-reminded:${user.id}:${todayDateInput()}`;
@@ -1205,6 +1218,12 @@ export default function Home() {
       totalSpent: budgeted.reduce((sum, item) => sum + item.spent, 0),
     };
   }, [budgets, categorySummary]);
+  // Budgets nearly or already used up, for the "ตอนนี้" group of the
+  // "กำลังจะมา" tab.
+  const budgetWatch = useMemo(
+    () => budgetGlance.items.filter((item) => item.percent >= BUDGET_NEAR_PERCENT),
+    [budgetGlance],
+  );
   const askAiMounted = tab === "ask";
 
   // Built only while the Ask-AI screen is actually open. This allocates ~120
@@ -3220,6 +3239,7 @@ export default function Home() {
         {walletsKept && (
           <WalletsView
             parked={tab !== "wallets"}
+            onBack={backFromMoreSection}
             wallets={displayWallets}
             entries={entries}
             loading={dataLoading}
@@ -3227,6 +3247,21 @@ export default function Home() {
             onEdit={openSheet((wallet: Wallet) => { setEditingWallet(wallet); setWalletSheetMode("edit"); })}
             onDelete={deleteWallet}
             onReconcile={openSheet((wallet: WalletDisplay) => setReconcilingWallet(wallet))}
+          />
+        )}
+
+        {tab === "upcoming" && (
+          <UpcomingView
+            items={upcomingItems}
+            unpaid={unpaidCards}
+            budgets={budgetWatch}
+            wallets={wallets}
+            windowDays={UPCOMING_WINDOW_DAYS}
+            onLogNow={logRecurringNowHandler}
+            onManageBills={openRecurringTab}
+            onOpenDebts={openCardDebts}
+            onOpenBudgets={openBudgetsTab}
+            onOpenGoals={openGoalsTab}
           />
         )}
 
@@ -3322,6 +3357,8 @@ export default function Home() {
         {tab === "more" && (
           <MoreView
             onBack={() => setTab("home")}
+            onOpenWallets={() => setTab("wallets")}
+            walletTotal={walletBalanceTotal}
             onOpenDebtors={() => { setSelectedDebtor(null); setTab("debtors"); }}
             onOpenRecurring={() => setTab("recurring")}
             onOpenGoals={() => setTab("goals")}
@@ -3509,7 +3546,7 @@ export default function Home() {
             `inert` is what keeps it out of reach of focus and screen readers
             meanwhile. */}
         <BottomNav
-          active={tab === "more" || MORE_SECTION_TABS.includes(tab) ? "more" : tab === "home" || tab === "history" || tab === "wallets" ? tab : null}
+          active={tab === "more" || MORE_SECTION_TABS.includes(tab) ? "more" : tab === "home" || tab === "history" || tab === "upcoming" ? tab : null}
           inert={overlayOpen}
           onSelect={setTab}
           onAdd={() => openAddTab()}

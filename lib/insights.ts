@@ -11,10 +11,10 @@ import {
   SPEND_BASELINE_WINDOW_DAYS,
 } from "./constants.ts";
 import { formatMoney, moneySign } from "./format.ts";
-import { currentBillingPeriod, daysRemainingInCycle, entriesInRange, startOfDay } from "./cycle.ts";
+import { currentBillingPeriod, daysRemainingInCycle, entriesInRange, nextBillingInfo, startOfDay } from "./cycle.ts";
 import { countsAsEarnedOrSpent } from "./taxonomy.ts";
 import { entryDisplayImpact } from "./money.ts";
-import type { Debtor, Entry, QuickShortcut, RecurringExpense } from "./types.ts";
+import type { Debtor, Entry, MoneyGoal, QuickShortcut, RecurringExpense } from "./types.ts";
 
 export function deriveQuickShortcuts(entries: Entry[]): QuickShortcut[] {
   const cutoff = Date.now() - 90 * MS_PER_DAY;
@@ -381,4 +381,64 @@ export function sameTitleSummary(entry: Entry, entries: Entry[]): { count: numbe
     count: matches.length,
     total: matches.reduce((sum, item) => sum + Math.abs(entryDisplayImpact(item)), 0),
   };
+}
+
+export type UpcomingItem =
+  | { key: string; kind: "bill"; date: Date; daysUntil: number; bill: RecurringExpense; isLogged: boolean }
+  | { key: string; kind: "goal"; date: Date; daysUntil: number; goal: MoneyGoal }
+  | { key: string; kind: "cycle"; date: Date; daysUntil: number };
+
+/**
+ * Everything with a date in the next `windowDays` days, counted from today:
+ * each active bill's next charge, each goal's deadline, and the day the next
+ * cycle starts -- soonest first. The window is deliberately not the cycle: on
+ * the 30th of a cycle that ends on the 30th, a bill due on the 1st is
+ * tomorrow, and a list that stopped at the cycle's edge would hide it until
+ * the day it charged. Paused bills are left out, the way the due-soon rail
+ * leaves them out.
+ */
+export function buildUpcoming(input: {
+  recurring: RecurringExpense[];
+  entries: Entry[];
+  goals: MoneyGoal[];
+  cycleEnd: Date;
+  now: Date;
+  windowDays: number;
+}): UpcomingItem[] {
+  const { recurring, entries, goals, cycleEnd, now, windowDays } = input;
+  // startOfDay returns a timestamp, not a Date.
+  const today = startOfDay(now);
+  const daysFromToday = (date: Date) => Math.round((startOfDay(date) - today) / MS_PER_DAY);
+  const inWindow = (days: number) => days >= 0 && days <= windowDays;
+  const items: UpcomingItem[] = [];
+
+  for (const bill of recurring) {
+    if (!bill.is_active) continue;
+    const { billingDate, daysUntil } = nextBillingInfo(bill, now);
+    if (!inWindow(daysUntil)) continue;
+    items.push({ key: `bill:${bill.id}`, kind: "bill", date: billingDate, daysUntil, bill, isLogged: isRecurringLogged(bill, entries, now) });
+  }
+  for (const goal of goals) {
+    if (!goal.deadline) continue;
+    const date = new Date(`${goal.deadline}T00:00:00`);
+    const daysUntil = daysFromToday(date);
+    if (Number.isNaN(daysUntil) || !inWindow(daysUntil)) continue;
+    items.push({ key: `goal:${goal.id}`, kind: "goal", date, daysUntil, goal });
+  }
+  // cycleEnd is exclusive -- the first instant of the next cycle -- so it is
+  // the start date itself. A cycle that starts today is not "coming up".
+  const cycleDays = daysFromToday(cycleEnd);
+  if (cycleDays > 0 && inWindow(cycleDays)) {
+    items.push({ key: "cycle", kind: "cycle", date: new Date(startOfDay(cycleEnd)), daysUntil: cycleDays });
+  }
+
+  const order = { bill: 0, goal: 1, cycle: 2 } as const;
+  return items.sort((a, b) => a.daysUntil - b.daysUntil || order[a.kind] - order[b.kind]);
+}
+
+/** "วันนี้", "พรุ่งนี้", "อีก 5 วัน" -- how the timeline words a distance. */
+export function describeDaysUntil(days: number): string {
+  if (days <= 0) return "วันนี้";
+  if (days === 1) return "พรุ่งนี้";
+  return `อีก ${days} วัน`;
 }

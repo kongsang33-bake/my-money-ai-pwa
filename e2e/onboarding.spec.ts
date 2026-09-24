@@ -78,8 +78,10 @@ test.describe("first run", () => {
     // next to sign-out, where nobody looking for a budget would find them.
     await navigate(app, "more");
     const tiles = app.locator(".more-grid button");
-    await expect(tiles).toHaveCount(7);
-    for (const label of ["จัดการหนี้", "งบประมาณ", "ถาม AI เรื่องเงิน", "ส่งออกรีพอร์ท"]) {
+    // Eight since Wallets moved here from the bottom nav to make room for
+    // "กำลังจะมา".
+    await expect(tiles).toHaveCount(8);
+    for (const label of ["กระเป๋าเงิน", "จัดการหนี้", "งบประมาณ", "ถาม AI เรื่องเงิน", "ส่งออกรีพอร์ท"]) {
       await expect(tiles.filter({ hasText: label })).toHaveCount(1);
     }
   });

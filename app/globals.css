@@ -909,7 +909,7 @@ a:focus-visible {
 }
 
 /* Past the add button's column, so its width joins the sum. */
-.bottom-nav .nav-indicator[data-tab="wallets"] {
+.bottom-nav .nav-indicator[data-tab="upcoming"] {
   left: calc(var(--nav-edge) + 2 * var(--nav-tab-col) + var(--nav-add-col));
 }
 
@@ -4621,6 +4621,184 @@ button.entry-main {
   border-radius: var(--r-full);
   background: var(--line);
   margin: 0 auto var(--s-5);
+}
+
+/* -------------------------------------------------------------------------
+   "กำลังจะมา" tab (UpcomingView in components/upcoming.tsx) -- the mock's
+   "New & Hot": a timeline with the date down the left, each row a banner in
+   the item's own --hue (the same .tile-art the rails use) and the words and
+   actions under it.
+   ------------------------------------------------------------------------- */
+.upcoming-head {
+  margin: var(--s-2) 0 var(--s-4);
+}
+
+.upcoming-head h1 {
+  font-size: var(--fs-h1);
+  font-weight: var(--fw-bold);
+}
+
+.upcoming-head p {
+  margin-top: var(--s-1);
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+}
+
+.upcoming-chips {
+  display: flex;
+  gap: var(--s-2);
+  margin-bottom: var(--s-5);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.upcoming-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.upcoming-chips button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--ink) 35%, transparent);
+  border-radius: var(--r-full);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-medium);
+  color: var(--ink);
+}
+
+.upcoming-chips button.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--ink-inverse);
+}
+
+.upcoming-group {
+  display: grid;
+  gap: var(--s-6);
+  margin-bottom: var(--s-6);
+}
+
+.upcoming-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: var(--s-3);
+}
+
+.upcoming-date {
+  padding-top: var(--s-1);
+  text-align: center;
+}
+
+.upcoming-date small {
+  display: block;
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-3);
+}
+
+.upcoming-date b {
+  display: block;
+  font-size: var(--fs-h1);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
+}
+
+/* A banner of a fixed-ish height, not an aspect ratio: at the width of a
+   desktop column a 16:6 banner was 400px of colour per row. */
+.upcoming-art {
+  aspect-ratio: auto;
+  height: clamp(72px, 20vw, 112px);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+
+/* A timeline reads down, not across: past a phone's width the rows keep a
+   reading measure rather than stretching to the page. */
+.upcoming-view > * {
+  max-width: 720px;
+}
+
+.upcoming-body {
+  padding-top: var(--s-2);
+}
+
+.upcoming-kicker {
+  display: block;
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-wide);
+}
+
+.upcoming-kicker.brand {
+  color: var(--accent-strong);
+}
+
+.upcoming-kicker.warn {
+  color: var(--expense);
+}
+
+.upcoming-line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin: 2px 0 var(--s-1);
+}
+
+.upcoming-line > div:first-child {
+  min-width: 0;
+}
+
+.upcoming-line h3 {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+  overflow-wrap: anywhere;
+}
+
+.upcoming-line strong {
+  display: block;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-bold);
+}
+
+.upcoming-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.upcoming-action {
+  min-height: 32px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-xs);
+  background: var(--cta-secondary);
+  color: var(--cta-secondary-text);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
+.upcoming-action.primary {
+  background: var(--primary);
+  color: var(--primary-text);
+}
+
+.upcoming-done {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--accent-strong);
+  white-space: nowrap;
+}
+
+.upcoming-body p {
+  font-size: var(--fs-body-sm);
+  color: var(--ink-2);
+  line-height: var(--lh-snug);
 }
 
 /* -------------------------------------------------------------------------

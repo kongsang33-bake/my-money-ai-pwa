@@ -84,7 +84,7 @@ test("meets contrast, target size and overflow limits", async ({ page }) => {
   await page.waitForTimeout(500);
   audits.push(await auditScreen(page, "home"));
 
-  for (const tab of ["history", "add", "wallets"] as const) {
+  for (const tab of ["history", "add", "upcoming", "wallets"] as const) {
     await navigate(page, tab);
     audits.push(await auditScreen(page, tab));
   }

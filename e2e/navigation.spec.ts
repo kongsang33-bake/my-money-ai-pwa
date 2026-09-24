@@ -210,7 +210,7 @@ test.describe("navigation", () => {
   });
 
   test("keeps the bottom nav reachable on every tab", async ({ app }) => {
-    for (const tab of ["home", "history", "add", "wallets"] as const) {
+    for (const tab of ["home", "history", "add", "upcoming", "wallets"] as const) {
       await navigate(app, tab);
       await expect(app.locator(".bottom-nav")).toBeVisible();
     }
@@ -242,7 +242,7 @@ test.describe("navigation", () => {
       };
     });
 
-    for (const tab of ["home", "history", "wallets"] as const) {
+    for (const tab of ["home", "history", "upcoming"] as const) {
       await navigate(app, tab);
       await app.waitForTimeout(400);
       const { opacity, pill, item, label } = await geometry();

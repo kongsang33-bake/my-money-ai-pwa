@@ -19,6 +19,7 @@ export function WalletsView({
   onEdit,
   onDelete,
   onReconcile,
+  onBack,
   parked = false,
 }: {
   wallets: WalletDisplay[];
@@ -30,6 +31,7 @@ export function WalletsView({
   onEdit: (wallet: Wallet) => void;
   onDelete: (wallet: Wallet) => void;
   onReconcile: (wallet: WalletDisplay) => void;
+  onBack: () => void;
 }) {
   const total = wallets.reduce((sum, wallet) => sum + wallet.display_balance, 0);
   // The one split worth making on a total: money that spends itself today
@@ -67,11 +69,12 @@ export function WalletsView({
   return (
     <div ref={rootRef} className={`view debtor-view wallets-view${parked ? " is-parked" : ""}`} inert={parked}>
       {loading && <SkeletonList rows={3} />}
-      {/* No back chevron here: Wallets is a bottom-nav tab, a peer of Home
-          and History rather than a screen drilled into from one of them, so
-          the nav itself -- always on screen -- is how you leave it. A back
-          arrow that always lands on Home read as a sub-screen, not a tab. */}
+      {/* A back chevron again: Wallets left the bottom nav when "กำลังจะมา"
+          took its slot, and is a screen under "อื่น ๆ" now (or opened from
+          Home's billboard and wallet rail), so back goes to wherever it was
+          opened from -- backFromMoreSection. */}
       <div className="add-title">
+        <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
         <div>
           <p className="eyebrow">จัดการกองเงิน</p>
           <h2>กระเป๋าตังค์</h2>

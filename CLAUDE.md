@@ -61,8 +61,18 @@ amount, date/category/wallet, then "แก้ไข" and "ลบ", then "รา�
 same event) and how often the title recurs (`sameTitleSummary`). It edits
 and deletes nothing itself: "แก้ไข" hands the row to `EditSheet` and "ลบ" to
 `deleteEntry`, so there is still one edit path and one delete path. History's
-own "แก้"/"ลบ" buttons stay as the fast path. Not yet built:
-the "กำลังจะมา" timeline tab, restyling More/Wallets/the PIN gate, and a
+own "แก้"/"ลบ" buttons stay as the fast path. The nav's fourth slot is
+**"กำลังจะมา"** (`UpcomingView`, components/upcoming.tsx): a timeline, date
+down the left, of what `buildUpcoming` finds in the next
+`UPCOMING_WINDOW_DAYS` counted **from today, not from the cycle** — so on the
+30th a bill due on the 1st is "พรุ่งนี้" rather than hidden behind a month
+edge the user does not think in — under a "ตอนนี้" group for undated things
+already wanting attention (unpaid cards, budgets at `BUDGET_NEAR_PERCENT`).
+Wallets moved off the nav to make room: it is the first tile under "อื่น ๆ"
+(`MORE_SECTION_TABS`, so it has a back button and the nav shows "อื่น ๆ"),
+still parked like Home and History, still one tap from Home's billboard and
+wallet rail. The e2e fixture's `navigate(page, "wallets")` goes through that
+tile. Not yet built: restyling More/Wallets/the PIN gate, and a
 genuinely full-bleed desktop billboard (`.phone` still clamps to a
 max-width card at the wide breakpoints, per the rule below about not
 reintroducing phone-frame chrome — a Netflix-web-style edge-to-edge

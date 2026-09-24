@@ -32,7 +32,7 @@ test.describe("boot", () => {
     // Debtors, Wallets and Portfolio are dynamic imports; before this suite
     // existed, a broken chunk there was only ever found by tapping the tab by
     // hand. The fixture's afterEach fails on any page error.
-    for (const tab of ["history", "add", "wallets", "home"] as const) {
+    for (const tab of ["history", "add", "upcoming", "wallets", "home"] as const) {
       await navigate(app, tab);
       await expect(app.locator(".view, .debtor-page-list, .wallet-page")).not.toHaveCount(0);
     }

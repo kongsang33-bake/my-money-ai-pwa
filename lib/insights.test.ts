@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildSetupChecklist, buildWalletInsight, lastSevenDayCashFlow, isRecurringLogged, sameTitleSummary, similarEntries, spendingByDay, summarizeDayEntries, unpaidOwnDebts } from "./insights.ts";
+import { buildSetupChecklist, buildWalletInsight, lastSevenDayCashFlow, isRecurringLogged, buildUpcoming, describeDaysUntil, sameTitleSummary, similarEntries, spendingByDay, summarizeDayEntries, unpaidOwnDebts } from "./insights.ts";
 import type { Debtor, Entry, RecurringExpense } from "./types.ts";
 import type { TransactionType } from "./taxonomy.ts";
 import { MS_PER_DAY } from "./constants.ts";
@@ -359,5 +359,42 @@ describe("sameTitleSummary", () => {
       { ...makeEntry("กาแฟ", 999, new Date(2026, 8, 18).toISOString()), id: "c", type: "income" as const, wallet_impact: 999 },
     ];
     assert.deepEqual(sameTitleSummary(entry, entries), { count: 2, total: 115 });
+  });
+});
+
+describe("buildUpcoming", () => {
+  const base = { entries: [] as Entry[], goals: [], windowDays: 30 };
+
+  it("shows a bill due on the 1st as tomorrow on the 30th, across the cycle's edge", () => {
+    // The cycle ends on the 30th (the next one starts on the 1st), and the
+    // bill charges on the 1st: tomorrow, not next cycle's business.
+    const now = new Date(2026, 8, 30, 21, 0);
+    const bill = makeItem("ค่าเช่า", 8500, { id: "rent", anchor_date: "2026-07-01" });
+    const items = buildUpcoming({ ...base, recurring: [bill], cycleEnd: new Date(2026, 9, 1), now });
+    const rent = items.find((item) => item.kind === "bill")!;
+    assert.equal(rent.daysUntil, 1);
+    assert.equal(describeDaysUntil(rent.daysUntil), "พรุ่งนี้");
+    assert.equal(items.find((item) => item.kind === "cycle")!.daysUntil, 1);
+  });
+
+  it("keeps to the window, leaves paused bills out, and puts the soonest first", () => {
+    const now = new Date(2026, 8, 10, 9, 0);
+    const recurring = [
+      makeItem("ไกล", 100, { id: "far", anchor_date: "2026-10-20", interval_count: 12 }),
+      makeItem("หยุดไว้", 100, { id: "paused", anchor_date: "2026-08-12", is_active: false }),
+      makeItem("ค่าเน็ต", 599, { id: "net", anchor_date: "2026-08-14" }),
+      makeItem("ค่าไฟ", 900, { id: "power", anchor_date: "2026-08-12" }),
+    ];
+    const goals = [
+      { id: "g1", name: "ทริป", target: 1000, saved: 0, deadline: "2026-09-20" },
+      { id: "g2", name: "ไกลมาก", target: 1000, saved: 0, deadline: "2027-01-01" },
+    ];
+    const items = buildUpcoming({ ...base, recurring, goals, cycleEnd: new Date(2026, 8, 25), now });
+    assert.deepEqual(items.map((item) => item.key), ["bill:power", "bill:net", "goal:g1", "cycle"]);
+  });
+
+  it("does not list the cycle when the new one starts today", () => {
+    const now = new Date(2026, 8, 25, 9, 0);
+    assert.deepEqual(buildUpcoming({ ...base, recurring: [], cycleEnd: new Date(2026, 8, 25), now }), []);
   });
 });

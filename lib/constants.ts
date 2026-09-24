@@ -231,6 +231,17 @@ export const TOP_CATEGORY_LIMIT = 10;
 // three on a phone, which is as far as anyone looks before editing instead.
 export const DETAIL_SIMILAR_LIMIT = 6;
 
+// How far ahead the "กำลังจะมา" tab looks, counted from today -- not from the
+// cycle, so a bill due on the 1st is "พรุ่งนี้" on the 30th rather than
+// hidden behind a month boundary the user does not think in.
+export const UPCOMING_WINDOW_DAYS = 30;
+
+// A budget at or past this share of its limit is listed under "ตอนนี้" on the
+// "กำลังจะมา" tab: close enough to the edge to be worth a look before the
+// cycle ends. There was no threshold for this before; it lives here so the
+// next place that wants "nearly used up" reads the same number.
+export const BUDGET_NEAR_PERCENT = 80;
+
 
 // Tallest the Ask-AI composer grows before it starts scrolling internally
 // (~5 lines). The textarea auto-grows in JS off scrollHeight, so the ceiling

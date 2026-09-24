@@ -1,4 +1,4 @@
-import { test, expect, navigate, waitForAnimations } from "./fixture.ts";
+import { test, expect, navigate, waitForAnimations, WALLETS_TILE } from "./fixture.ts";
 import type { Page } from "@playwright/test";
 
 // Home, History and Wallets are the screens a thumb goes back and forth
@@ -26,16 +26,20 @@ const PARKED_SCREENS = [
 const CPU_THROTTLE = 4;
 const TAP_TO_FRAME_CEILING_MS = 120;
 
-async function tapToNextFrame(page: Page, navIndex: number) {
-  return page.evaluate(async (index) => {
-    const button = document.querySelectorAll<HTMLButtonElement>(".bottom-nav > button")[index];
+/** A tap target: the nth match of a selector, or the match containing some text. */
+type Target = { selector: string; index?: number; text?: string };
+
+async function tapToNextFrame(page: Page, target: Target) {
+  return page.evaluate(async ({ selector, index, text }) => {
+    const matches = [...document.querySelectorAll<HTMLButtonElement>(selector)];
+    const button = text ? matches.find((node) => node.textContent?.includes(text))! : matches[index ?? 0];
     const start = performance.now();
     button.click();
     // The frame after the click has been painted: rAF runs before paint, and
     // the task queued from it runs after.
     await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
     return performance.now() - start;
-  }, navIndex);
+  }, target);
 }
 
 test.describe("performance", () => {
@@ -99,10 +103,22 @@ test.describe("performance", () => {
     await navigate(app, "history");
     await navigate(app, "wallets");
     const samples: Record<"home" | "history" | "wallets", number[]> = { home: [], history: [], wallets: [] };
+    // Home and History come back from the nav; Wallets from its tile under
+    // "อื่น ๆ", which is where it lives now -- the tap being timed is the one
+    // that un-parks the screen either way.
+    const returns = [
+      { tab: "home", from: "add", target: { selector: ".bottom-nav > button", index: 0 } },
+      { tab: "history", from: "add", target: { selector: ".bottom-nav > button", index: 1 } },
+      { tab: "wallets", from: "more", target: WALLETS_TILE },
+    ] as const;
     for (let round = 0; round < 3; round += 1) {
-      for (const [tab, index] of [["home", 0], ["history", 1], ["wallets", 3]] as const) {
-        await navigate(app, "add");
-        samples[tab].push(await tapToNextFrame(app, index));
+      for (const { tab, from, target } of returns) {
+        await navigate(app, from);
+        if (from === "more") {
+          await app.waitForFunction(({ selector, text }) =>
+            [...document.querySelectorAll(selector)].some((node) => node.textContent?.includes(text)), WALLETS_TILE);
+        }
+        samples[tab].push(await tapToNextFrame(app, target));
         await app.waitForTimeout(400);
       }
     }

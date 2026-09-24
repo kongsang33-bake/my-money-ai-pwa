@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { MoreHorizontal, Wallet as WalletIcon } from "lucide-react";
+import { CalendarClock, MoreHorizontal } from "lucide-react";
 
-export type BottomNavKey = "home" | "history" | "wallets" | "more";
+export type BottomNavKey = "home" | "history" | "upcoming" | "more";
 
 /**
  * The five-slot bottom bar: four tabs around the AI add button. The button
  * order is load-bearing -- e2e/fixture.ts clicks `.bottom-nav > button` by
- * index -- so keep home / history / add / wallets / more in that order.
+ * index -- so keep home / history / add / upcoming / more in that order.
+ * "กำลังจะมา" took the fourth slot from Wallets, which is a screen under
+ * "อื่น ๆ" now (see MoreView).
  *
  * The "you are here" highlight is one pill that slides between tabs rather
  * than a separate highlight fading in under each button; the movement is what
@@ -23,7 +25,7 @@ export function BottomNav({
 }: {
   active: BottomNavKey | null;
   inert: boolean;
-  onSelect: (key: "home" | "history" | "wallets") => void;
+  onSelect: (key: "home" | "history" | "upcoming") => void;
   onAdd: () => void;
   onMore: () => void;
 }) {
@@ -74,12 +76,12 @@ export function BottomNav({
           </svg>
         </span>
       </button>
-      <button className={active === "wallets" ? "active" : ""} onClick={() => onSelect("wallets")} aria-label="กระเป๋าตังค์">
+      <button className={active === "upcoming" ? "active" : ""} onClick={() => onSelect("upcoming")} aria-label="กำลังจะมา">
         <span className="nav-item">
           <span className="nav-icon" aria-hidden="true">
-            <WalletIcon aria-hidden="true" />
+            <CalendarClock aria-hidden="true" />
           </span>
-          <span className="nav-label">กระเป๋า</span>
+          <span className="nav-label">กำลังจะมา</span>
         </span>
       </button>
       <button className={active === "more" ? "active" : ""} onClick={onMore} aria-label="เพิ่มเติม">

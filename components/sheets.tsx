@@ -18,6 +18,7 @@ import {
   Trash2,
   TrendingUp,
   Users,
+  Wallet as WalletIcon,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { AI_CHAT_HISTORY_LIMIT, AI_CHAT_MESSAGE_COLUMNS, AI_CONTEXT_MAX_LENGTH, ASK_COMPOSER_MAX_HEIGHT, MONTH_START_DAY_MAX, MONTH_START_DAY_MIN, TABLES } from "@/lib/constants";
@@ -349,6 +350,8 @@ export function ReportSummaryTiles({ income, outflow, balance, count }: { income
  */
 export function MoreView({
   onBack,
+  onOpenWallets,
+  walletTotal,
   onOpenDebtors,
   onOpenRecurring,
   onOpenGoals,
@@ -363,6 +366,8 @@ export function MoreView({
   budgetTotal,
 }: {
   onBack: () => void;
+  onOpenWallets: () => void;
+  walletTotal: number;
   onOpenDebtors: () => void;
   onOpenRecurring: () => void;
   onOpenGoals: () => void;
@@ -387,6 +392,14 @@ export function MoreView({
         </div>
       </div>
       <div className="more-grid">
+        {/* First, because it was a bottom-nav tab until "กำลังจะมา" took the
+            slot: the most-used thing on this list. */}
+        <button onClick={onOpenWallets}>
+          <span className="more-tile-icon"><WalletIcon size={20} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span>กระเป๋าเงิน</span>
+          <small>ยอดแต่ละกระเป๋า เทียบยอดกับธนาคาร และประวัติเงินเข้าออก</small>
+          <b>{moneySign}{formatMoney(walletTotal)}</b>
+        </button>
         <button onClick={onOpenDebtors}>
           <span className="more-tile-icon"><Users size={20} strokeWidth={2.25} aria-hidden="true" /></span>
           <span>จัดการหนี้</span>

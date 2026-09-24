@@ -136,15 +136,33 @@ export function seedDraft(overrides: Partial<Draft> = {}): Draft {
   }, false) as Draft;
 }
 
-export const NAV = { home: 0, history: 1, add: 2, wallets: 3, more: 4 } as const;
+export const NAV = { home: 0, history: 1, add: 2, upcoming: 3, more: 4 } as const;
+
+/** The wallets screen's tile under "อื่น ๆ" -- how Wallets is reached since it left the nav. */
+export const WALLETS_TILE = { selector: ".more-grid button", text: "กระเป๋าเงิน" } as const;
 
 /**
  * Clicks a bottom-nav item from inside the page. Playwright's own click does
  * an actionability check that scrolls and hit-tests first, which is fine for
  * asserting behaviour but muddies anything timing-related -- and the nav is
  * fixed, so the check buys nothing here.
+ *
+ * "wallets" is not a nav slot any more ("กำลังจะมา" took it): it goes through
+ * "อื่น ๆ" and its tile, the way a user now gets there.
  */
-export async function navigate(page: Page, tab: keyof typeof NAV) {
+export async function navigate(page: Page, tab: keyof typeof NAV | "wallets") {
+  if (tab === "wallets") {
+    await navigate(page, "more");
+    // MoreView is code-split, so its grid can arrive a moment after the tab.
+    await page.waitForFunction(({ selector, text }) =>
+      [...document.querySelectorAll(selector)].some((node) => node.textContent?.includes(text)), WALLETS_TILE);
+    await page.evaluate(({ selector, text }) => {
+      const tile = [...document.querySelectorAll<HTMLButtonElement>(selector)].find((node) => node.textContent?.includes(text));
+      tile!.click();
+    }, WALLETS_TILE);
+    await page.waitForTimeout(400);
+    return;
+  }
   await page.evaluate((index) => {
     const button = document.querySelectorAll<HTMLButtonElement>(".bottom-nav > button")[index];
     if (!button) throw new Error(`no bottom-nav button at index ${index}`);
