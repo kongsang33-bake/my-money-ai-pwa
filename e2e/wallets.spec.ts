@@ -8,13 +8,13 @@ test.describe("wallets", () => {
 
   test("lists every wallet with its balance and which one is the default", async ({ app, seed }) => {
     for (const wallet of seed.wallets) {
-      await expect(app.locator(".debtor-page-list > .debtor-page-item").filter({ hasText: wallet.name })).toHaveCount(1);
+      await expect(app.locator(".wallet-grid > .wallet-tile").filter({ hasText: wallet.name })).toHaveCount(1);
     }
     await expect(app.getByText("กระเป๋าหลัก")).toBeVisible();
   });
 
   test("opens a wallet's actions without a page error", async ({ app }) => {
-    const card = app.locator(".debtor-page-list > .debtor-page-item").filter({ hasText: "กระเป๋าย่อย" }).first();
+    const card = app.locator(".wallet-grid > .wallet-tile").filter({ hasText: "กระเป๋าย่อย" }).first();
     await card.locator(".kebab-menu summary").click();
     await expect(card.getByRole("button", { name: "แก้ไข" })).toBeVisible();
     await expect(card.getByRole("button", { name: "ลบ" })).toBeVisible();
@@ -30,7 +30,7 @@ test.describe("wallets", () => {
     // .section-title had no rule of its own, so the button under every one of
     // these headings sat on a second line -- here, on Home's heatmap, on the
     // debtor history.
-    await app.locator(".debtor-page-list .debtor-main-button").first().click();
+    await app.locator(".wallet-grid .wallet-tile-main").first().click();
     const heading = app.locator(".wallet-statement-panel .section-title h2");
     const action = app.locator(".wallet-statement-panel .section-title button");
     await waitForStableBox(heading);
@@ -42,7 +42,7 @@ test.describe("wallets", () => {
   });
 
   test("reads a wallet's history as a statement: what, when, and the amount", async ({ app }) => {
-    await app.locator(".debtor-page-list .debtor-main-button").first().click();
+    await app.locator(".wallet-grid .wallet-tile-main").first().click();
     const row = app.locator(".wallet-statement-row").first();
     await waitForStableBox(row);
     const [title, date, amount] = [row.locator("span"), row.locator("small"), row.locator("b")];

@@ -67,7 +67,7 @@ export function WalletsView({
   const selectedWalletEntries = selectedWallet ? (entriesByWallet.get(selectedWallet.id) ?? []).slice(0, 8) : [];
 
   return (
-    <div ref={rootRef} className={`view debtor-view wallets-view${parked ? " is-parked" : ""}`} inert={parked}>
+    <div ref={rootRef} className={`view wallets-view${parked ? " is-parked" : ""}`} inert={parked}>
       {loading && <SkeletonList rows={3} />}
       {/* A back chevron again: Wallets left the bottom nav when "กำลังจะมา"
           took its slot, and is a screen under "อื่น ๆ" now (or opened from
@@ -77,54 +77,74 @@ export function WalletsView({
         <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
         <div>
           <p className="eyebrow">จัดการกองเงิน</p>
-          <h2>กระเป๋าตังค์</h2>
+          <h2>กระเป๋าเงิน</h2>
         </div>
         <button className="header-add-button" onClick={onAdd}>เพิ่ม</button>
       </div>
-      <section className="debtor-detail-card wallet-total-card">
-        <span>ยอดรวมทุกกระเป๋า</span>
+      {/* Bare, like the billboard's words without the box: the one figure
+          this screen is about, and the split under it drawn as a bar so the
+          proportion reads before the numbers do. */}
+      <section className="wallet-total-card">
+        <div className="billboard-kicker">
+          <i className="brand-mark" aria-hidden="true" />
+          <span>ยอดรวมทุกกระเป๋า</span>
+        </div>
         <strong><CountUpMoney value={total} /></strong>
         {setAside > 0 && (
-          <p className="wallet-total-split">
-            <span>ใช้ได้ตอนนี้ <b>{moneySign}{formatMoney(spendable)}</b></span>
-            <span>กันไว้ <b>{moneySign}{formatMoney(setAside)}</b></span>
-          </p>
+          <>
+            <span className="wallet-total-bar" aria-hidden="true">
+              <i style={{ width: `${total > 0 ? Math.max(0, Math.min(100, (spendable / total) * 100)) : 0}%` }} />
+            </span>
+            <p className="wallet-total-split">
+              <span className="spendable">ใช้ได้ตอนนี้ <b>{moneySign}{formatMoney(spendable)}</b></span>
+              <span className="set-aside">กันไว้ <b>{moneySign}{formatMoney(setAside)}</b></span>
+            </p>
+          </>
         )}
       </section>
-      <div className="debtor-page-list">
-        {wallets.map((wallet) => (
-          <article className={`debtor-page-item ${openWalletId === wallet.id ? "active" : ""}`} key={wallet.id}>
-            <i className="card-accent" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }} />
-            <button
-              className="debtor-main-button"
-              onClick={() => {
-                setOpenWalletId((current) => (current === wallet.id ? null : wallet.id));
-                requestAnimationFrame(() => statementRef.current?.scrollIntoView({ block: "nearest" }));
-              }}
+      {/* Tiles, not rows: each wallet is a thing with its own colour, the way
+          the rails' posters are -- its --hue mixed into the ground, its icon
+          large and faint. The bar along the bottom is its share of the total. */}
+      <div className="wallet-grid">
+        {wallets.map((wallet) => {
+          const share = total > 0 ? Math.max(0, Math.min(100, (wallet.display_balance / total) * 100)) : 0;
+          const open = openWalletId === wallet.id;
+          return (
+            <article
+              className={`wallet-tile ${open ? "active" : ""}`}
+              key={wallet.id}
+              style={{ "--hue": wallet.icon_color ?? nameColor(wallet.name) } as React.CSSProperties}
             >
-              <span className="debtor-avatar" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>
-                <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} />
-              </span>
-              <div>
-                <span>{wallet.name}</span>
-                <small>
-                  {walletTagLabels[wallet.tag]} · {moneySign}{formatMoney(wallet.display_balance)}
-                  {wallet.is_default ? " · กระเป๋าหลัก" : ""}
-                </small>
-              </div>
-            </button>
-            <details className="kebab-menu" name="wallet-kebab">
-              <summary>⋮</summary>
-              <menu>
-                <button onClick={() => onReconcile(wallet)}>ปรับยอดให้ตรง</button>
-                <button onClick={() => onEdit(wallet)}>แก้ไข</button>
-                <button onClick={() => onDelete(wallet)}>ลบ</button>
-              </menu>
-            </details>
-          </article>
-        ))}
-        {!wallets.length && <EmptyNote glyph="▣" action={{ label: "เพิ่มกระเป๋า", onClick: onAdd }}>กระเป๋าคือที่ที่เงินอยู่จริง — เงินสด บัญชีธนาคาร เงินออม · ต้องมีอย่างน้อยหนึ่งใบ ไม่งั้นรายการที่จดจะไม่ถูกนับเข้ายอดเงิน</EmptyNote>}
+              {wallet.is_default && <span className="poster-ribbon">กระเป๋าหลัก</span>}
+              <button
+                className="wallet-tile-main"
+                aria-expanded={open}
+                onClick={() => {
+                  setOpenWalletId((current) => (current === wallet.id ? null : wallet.id));
+                  requestAnimationFrame(() => statementRef.current?.scrollIntoView({ block: "nearest" }));
+                }}
+              >
+                <span className="wallet-tile-glyph" aria-hidden="true">
+                  <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} size={64} />
+                </span>
+                <small>{walletTagLabels[wallet.tag]}</small>
+                <span className="wallet-tile-name">{wallet.name}</span>
+                <strong>{moneySign}{formatMoney(wallet.display_balance)}</strong>
+                <span className="stat-meter wallet-tile-share" aria-hidden="true"><i style={{ width: `${share}%` }} /></span>
+              </button>
+              <details className="kebab-menu" name="wallet-kebab">
+                <summary aria-label={`ตัวเลือกของ ${wallet.name}`}>⋮</summary>
+                <menu>
+                  <button onClick={() => onReconcile(wallet)}>ปรับยอดให้ตรง</button>
+                  <button onClick={() => onEdit(wallet)}>แก้ไข</button>
+                  <button onClick={() => onDelete(wallet)}>ลบ</button>
+                </menu>
+              </details>
+            </article>
+          );
+        })}
       </div>
+      {!wallets.length && <EmptyNote glyph="▣" action={{ label: "เพิ่มกระเป๋า", onClick: onAdd }}>กระเป๋าคือที่ที่เงินอยู่จริง — เงินสด บัญชีธนาคาร เงินออม · ต้องมีอย่างน้อยหนึ่งใบ ไม่งั้นรายการที่จดจะไม่ถูกนับเข้ายอดเงิน</EmptyNote>}
       {selectedWallet && (
         <section className="wallet-statement-panel" ref={statementRef}>
           <div className="section-title">

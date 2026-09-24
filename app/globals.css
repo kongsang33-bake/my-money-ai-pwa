@@ -522,20 +522,169 @@ a:focus-visible {
   justify-self: start;
 }
 
+/* Wallets' header: bare (no box), the billboard's kicker and a display
+   figure, then the spendable/set-aside split as one bar and its legend. */
+.wallet-total-card {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-2) 0 var(--s-4);
+}
+
+.wallet-total-card > strong {
+  font-size: var(--fs-display);
+  font-weight: var(--fw-bold);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.wallet-total-bar {
+  display: block;
+  height: 6px;
+  margin-top: var(--s-2);
+  border-radius: var(--r-full);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.wallet-total-bar i {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+}
+
 .wallet-total-split {
   display: flex;
   flex-wrap: wrap;
+  justify-content: space-between;
   gap: var(--s-2) var(--s-5);
-  margin-top: var(--s-3);
-  padding-top: var(--s-3);
-  border-top: 1px solid var(--line-soft);
   font-size: var(--fs-caption);
   color: var(--ink-3);
 }
 
+.wallet-total-split > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+/* The legend's swatch: the bar's two colours, in the same order. */
+.wallet-total-split > span::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-xs);
+  background: var(--surface-3);
+}
+
+.wallet-total-split > .spendable::before {
+  background: var(--primary);
+}
+
 .wallet-total-split b {
-  color: var(--ink-2);
+  color: var(--ink);
   font-weight: var(--fw-semibold);
+}
+
+/* The wallets themselves: tiles in the wallet's own colour, sized by the
+   grid (never by the tile), two across on a phone and more as it widens. */
+.wallet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  gap: var(--s-3);
+}
+
+.wallet-tile {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--card-border);
+  border-radius: var(--r-sm);
+  background: linear-gradient(150deg, color-mix(in oklab, var(--hue) 42%, var(--bg)), color-mix(in oklab, var(--hue) 10%, var(--bg)));
+  overflow: hidden;
+  transition: border-color var(--t-1) var(--e-out), transform var(--t-1) var(--e-out);
+}
+
+.wallet-tile:has(.kebab-menu[open]) {
+  overflow: visible;
+  z-index: 2;
+}
+
+.wallet-tile:not(:has(.kebab-menu[open])):active {
+  transform: scale(0.98);
+}
+
+/* The open one is ringed in ink, the way a focused title is on a TV. */
+.wallet-tile.active {
+  border-color: var(--ink);
+}
+
+.wallet-tile .poster-ribbon {
+  left: var(--s-3);
+  transform: none;
+}
+
+.wallet-tile-main {
+  display: grid;
+  align-content: end;
+  gap: 2px;
+  width: 100%;
+  min-height: 132px;
+  padding: var(--s-6) var(--s-3) var(--s-3);
+  text-align: left;
+}
+
+.wallet-tile-glyph {
+  position: absolute;
+  right: var(--s-2);
+  bottom: var(--s-5);
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  color: var(--hue);
+  opacity: 0.35;
+  font-size: var(--fs-value);
+  font-weight: var(--fw-bold);
+  pointer-events: none;
+}
+
+.wallet-tile-main small {
+  position: relative;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+.wallet-tile-name {
+  position: relative;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-tile-main strong {
+  position: relative;
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-bold);
+}
+
+.wallet-tile-share {
+  position: relative;
+  margin-top: var(--s-2);
+}
+
+.wallet-tile-share i {
+  background: var(--hue);
+}
+
+.wallet-tile .kebab-menu {
+  position: absolute;
+  top: var(--s-1);
+  right: var(--s-1);
+}
+
+.wallet-tile .kebab-menu summary {
+  color: var(--ink-2);
 }
 
 /* The topbar's ground. Pulled back up by its own height so it occupies no

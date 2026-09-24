@@ -11,7 +11,7 @@ import { test, expect, navigate } from "./fixture.ts";
 test.describe("reconcile", () => {
   test("shows the gap between the app and the real balance", async ({ app }) => {
     await navigate(app, "wallets");
-    const firstWallet = app.locator(".debtor-page-item").first();
+    const firstWallet = app.locator(".wallet-tile").first();
     await firstWallet.locator("summary").click();
     await firstWallet.locator(".kebab-menu button", { hasText: "ปรับยอดให้ตรง" }).click();
 

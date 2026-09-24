@@ -87,7 +87,7 @@ test.describe("performance", () => {
     // Unmounting used to close an open statement for free; parked, WalletsView
     // has to close it itself.
     await navigate(app, "wallets");
-    await app.locator(".debtor-page-list .debtor-main-button").first().click();
+    await app.locator(".wallet-grid .wallet-tile-main").first().click();
     await expect(app.locator(".wallet-statement-row").first()).toBeVisible();
     await navigate(app, "home");
     await navigate(app, "wallets");
