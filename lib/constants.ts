@@ -227,6 +227,10 @@ export const BILLBOARD_HISTORY_DAYS = 30;
 export const RECENT_RAIL_LIMIT = 8;
 export const TOP_CATEGORY_LIMIT = 10;
 
+// How many "รายการคล้ายกัน" posters the entry detail sheet shows: two rows of
+// three on a phone, which is as far as anyone looks before editing instead.
+export const DETAIL_SIMILAR_LIMIT = 6;
+
 
 // Tallest the Ask-AI composer grows before it starts scrolling internally
 // (~5 lines). The textarea auto-grows in JS off scrollHeight, so the ceiling

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildSetupChecklist, buildWalletInsight, lastSevenDayCashFlow, isRecurringLogged, spendingByDay, summarizeDayEntries, unpaidOwnDebts } from "./insights.ts";
+import { buildSetupChecklist, buildWalletInsight, lastSevenDayCashFlow, isRecurringLogged, sameTitleSummary, similarEntries, spendingByDay, summarizeDayEntries, unpaidOwnDebts } from "./insights.ts";
 import type { Debtor, Entry, RecurringExpense } from "./types.ts";
 import type { TransactionType } from "./taxonomy.ts";
 import { MS_PER_DAY } from "./constants.ts";
@@ -316,5 +316,48 @@ describe("buildSetupChecklist", () => {
     const { remaining, next } = buildSetupChecklist({ walletCount: 2, entryCount: 300, budgetCount: 3, recurringCount: 2, pinEnabled: true });
     assert.equal(remaining, 0);
     assert.equal(next, null);
+  });
+});
+
+describe("similarEntries", () => {
+  const at = (day: number) => new Date(2026, 8, day, 12, 0).toISOString();
+  const row = (id: string, title: string, category: string, day: number, extra: Partial<Entry> = {}): Entry => ({
+    ...makeEntry(title, 60, at(day)), id, category, ...extra,
+  });
+
+  it("puts the same title first, then the same category, newest first, without the entry itself", () => {
+    const entry = row("a", "ข้าวมันไก่", "อาหาร", 20);
+    const entries = [
+      entry,
+      row("b", "ก๋วยเตี๋ยว", "อาหาร", 19),
+      row("c", " ข้าวมันไก่", "อาหาร", 10),
+      row("d", "ข้าวมันไก่", "อาหาร", 15),
+      row("e", "BTS", "เดินทาง", 21),
+    ];
+    assert.deepEqual(similarEntries(entry, entries, 10).map((item) => item.id), ["d", "c", "b"]);
+  });
+
+  it("leaves out the other rows of the same event", () => {
+    const entry = row("a", "โอนเข้าออม", "อื่น ๆ", 20, { transfer_group_id: "g1" });
+    const entries = [entry, row("b", "โอนเข้าออม", "อื่น ๆ", 20, { transfer_group_id: "g1" }), row("c", "โอนเข้าออม", "อื่น ๆ", 1)];
+    assert.deepEqual(similarEntries(entry, entries, 10).map((item) => item.id), ["c"]);
+  });
+
+  it("stops at the limit", () => {
+    const entry = row("a", "กาแฟ", "อาหาร", 20);
+    const entries = [entry, ...Array.from({ length: 8 }, (_, index) => row(`x${index}`, "กาแฟ", "อาหาร", index + 1))];
+    assert.equal(similarEntries(entry, entries, 6).length, 6);
+  });
+});
+
+describe("sameTitleSummary", () => {
+  it("counts rows of the same title and kind, and adds what each shows", () => {
+    const entry = { ...makeEntry("กาแฟ", 65, new Date(2026, 8, 20).toISOString()), id: "a" };
+    const entries = [
+      entry,
+      { ...makeEntry("กาแฟ ", 50, new Date(2026, 8, 19).toISOString()), id: "b" },
+      { ...makeEntry("กาแฟ", 999, new Date(2026, 8, 18).toISOString()), id: "c", type: "income" as const, wallet_impact: 999 },
+    ];
+    assert.deepEqual(sameTitleSummary(entry, entries), { count: 2, total: 115 });
   });
 });

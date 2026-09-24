@@ -22,11 +22,11 @@ test.describe("navigation", () => {
     // so the old <body> position:fixed lock was a no-op and the page went on
     // scrolling under the sheet.
     await app.locator(".recent-tile, .entry-tappable").first().click();
-    await expect(app.locator(".sheet-backdrop > .edit-sheet")).toBeVisible();
+    await expect(app.locator(".sheet-backdrop > .entry-detail-sheet")).toBeVisible();
     expect(await app.evaluate(() => (document.querySelector(".phone") as HTMLElement).style.overflowY)).toBe("hidden");
 
     await app.keyboard.press("Escape");
-    await expect(app.locator(".sheet-backdrop > .edit-sheet")).toHaveCount(0);
+    await expect(app.locator(".sheet-backdrop > .entry-detail-sheet")).toHaveCount(0);
     expect(await app.evaluate(() => (document.querySelector(".phone") as HTMLElement).style.overflowY)).toBe("");
   });
 

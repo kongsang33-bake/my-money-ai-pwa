@@ -4623,6 +4623,167 @@ button.entry-main {
   margin: 0 auto var(--s-5);
 }
 
+/* -------------------------------------------------------------------------
+   Entry detail sheet (EntryDetailSheet in components/home.tsx) -- the
+   mock's title page for one entry. The panel runs its art to the edges, so it
+   takes none of .edit-sheet's form padding or grabber; the words sit in
+   .detail-body, pulled up over the art's fade.
+   ------------------------------------------------------------------------- */
+.sheet-backdrop > .entry-detail-sheet {
+  position: relative;
+  width: 100%;
+  max-height: min(92vh, 820px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  animation: sheet-in var(--t-3) var(--e-out) both;
+}
+
+.entry-detail-sheet.closing {
+  animation: sheet-out var(--t-3) var(--e-out) both;
+}
+
+.detail-hero {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  max-height: 260px;
+  width: 100%;
+  overflow: hidden;
+  background: linear-gradient(160deg, color-mix(in oklab, var(--hue) 62%, var(--bg)), color-mix(in oklab, var(--hue) 14%, var(--bg)));
+}
+
+.detail-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 40%, var(--surface) 100%);
+}
+
+.detail-glyph {
+  position: absolute;
+  top: var(--s-5);
+  right: var(--s-6);
+  width: 34%;
+  aspect-ratio: 1;
+  color: var(--hue);
+  opacity: 0.45;
+}
+
+.detail-glyph svg {
+  width: 100%;
+  height: 100%;
+}
+
+.detail-close {
+  position: absolute;
+  top: var(--s-3);
+  right: var(--s-3);
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  color: var(--ink);
+}
+
+.detail-body {
+  position: relative;
+  z-index: 1;
+  margin-top: calc(-1 * var(--s-8));
+  padding: 0 var(--s-5) max(var(--s-7), env(safe-area-inset-bottom));
+}
+
+.detail-body h2 {
+  margin-top: var(--s-2);
+  font-size: var(--fs-h1);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+
+.detail-amount {
+  display: block;
+  margin: var(--s-1) 0 var(--s-3);
+  font-size: var(--fs-value);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-tight);
+}
+
+.detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-3);
+  margin: 0 0 var(--s-4);
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+.detail-pill {
+  padding: 1px var(--s-2);
+  border: 1px solid var(--ink-4);
+  border-radius: var(--r-xs);
+}
+
+.detail-note {
+  margin-bottom: var(--s-4);
+  font-size: var(--fs-body-sm);
+  color: var(--ink-2);
+  line-height: var(--lh-body);
+}
+
+.detail-actions {
+  display: grid;
+  gap: var(--s-2);
+  margin-bottom: var(--s-5);
+}
+
+.detail-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: 44px;
+  border-radius: var(--r-sm);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  color: var(--danger);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+}
+
+.detail-repeat {
+  margin-bottom: var(--s-5);
+  font-size: var(--fs-body-sm);
+  color: var(--ink-2);
+}
+
+.detail-repeat b {
+  color: var(--ink);
+  font-weight: var(--fw-semibold);
+}
+
+.detail-similar {
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+
+.detail-similar h3 {
+  margin-bottom: var(--s-3);
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+}
+
+.detail-similar-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
 .sheet-head {
   display: flex;
   align-items: flex-start;
@@ -6246,6 +6407,11 @@ button.entry-main {
     min-height: 720px;
   }
 
+  /* The detail sheet rises over the same 560px column the page sits in. */
+  .sheet-backdrop > .entry-detail-sheet {
+    width: min(560px, 100%);
+  }
+
   /* .phone is a centred 560px column here, so the bar spans the column
      rather than the whole window. */
   .bottom-nav {
@@ -6392,6 +6558,11 @@ button.entry-main {
     width: min(560px, calc(100vw - 48px));
     max-height: min(84vh, 780px);
     border-radius: var(--r-xl);
+  }
+
+  .sheet-backdrop > .entry-detail-sheet {
+    width: min(560px, calc(100vw - 48px));
+    border-radius: var(--r-lg);
   }
 
   .sheet-backdrop, .dialog-backdrop {

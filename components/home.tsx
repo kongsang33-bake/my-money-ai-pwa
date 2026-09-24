@@ -1,14 +1,15 @@
 "use client";
 
 import { memo, useId, useMemo, useState } from "react";
-import { Check, ChevronLeft, CreditCard, Info, Plus, Target, TrendingDown, TrendingUp, Users, Wallet as WalletIcon } from "lucide-react";
-import { RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
-import { formatChatTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, moneySign, toMoneyAmount } from "@/lib/format";
+import { Check, ChevronLeft, CreditCard, Info, Pencil, Plus, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet as WalletIcon, X } from "lucide-react";
+import { DETAIL_SIMILAR_LIMIT, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
+import { formatChatTime, formatDateTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, moneySign, toMoneyAmount } from "@/lib/format";
 import { entryDisplayImpact } from "@/lib/money";
 import { shiftMonthKey } from "@/lib/cycle";
-import { spendingByDay, type CashFlowSummary, type SetupStep, type UnpaidOwnDebt } from "@/lib/insights";
+import { sameTitleSummary, similarEntries, spendingByDay, type CashFlowSummary, type SetupStep, type UnpaidOwnDebt } from "@/lib/insights";
+import { transactionTypeLabels } from "@/lib/taxonomy";
 import { categoryColor, nameColor } from "@/lib/category";
-import type { Entry, MoneyGoal, NetWorthDebtFormula, RecurringExpense } from "@/lib/types";
+import type { Entry, MoneyGoal, NetWorthDebtFormula, RecurringExpense, Wallet } from "@/lib/types";
 import { CategoryIcon, RecurringAvatarGlyph } from "@/components/shared";
 import { CountUpMoney, DateField, EmptyNote, InfoHint, MonthField, Rail, SheetFrame, SkeletonList, decimalInputPattern } from "@/components/primitives";
 
@@ -548,11 +549,11 @@ export const TopCategoriesRail = memo(function TopCategoriesRail({
  */
 export const RecentRail = memo(function RecentRail({
   entries,
-  onEdit,
+  onOpen,
   onSeeAll,
 }: {
   entries: Entry[];
-  onEdit: (entry: Entry) => void;
+  onOpen: (entry: Entry) => void;
   onSeeAll: () => void;
 }) {
   const recent = entries.slice(0, RECENT_RAIL_LIMIT);
@@ -562,7 +563,7 @@ export const RecentRail = memo(function RecentRail({
       {recent.map((entry) => {
         const impact = entryDisplayImpact(entry);
         return (
-          <button className="recent-tile" key={entry.id} style={{ "--hue": categoryColor(entry.category) } as React.CSSProperties} onClick={() => onEdit(entry)}>
+          <button className="recent-tile" key={entry.id} style={{ "--hue": categoryColor(entry.category) } as React.CSSProperties} onClick={() => onOpen(entry)}>
             <span className="tile-art">
               <span className="tile-glyph" aria-hidden="true"><CategoryIcon category={entry.category} size={40} /></span>
             </span>
@@ -869,3 +870,95 @@ export function SuccessPulse({ count, onAddMore, closing }: { count: number; onA
   );
 }
 
+
+/**
+ * One entry, opened the way docs/netflix-reference.html opens a title: its
+ * category's art across the top, then what it was, what it cost, when and
+ * from where, the two things you can do with it, and the entries like it.
+ * It edits and deletes nothing itself -- "แก้ไข" hands the row to the existing
+ * EditSheet and "ลบ" to deleteEntry, with its confirm and its undo, so there
+ * is still exactly one edit path and one delete path.
+ */
+export function EntryDetailSheet({
+  entry,
+  entries,
+  wallets,
+  onClose,
+  onEdit,
+  onDelete,
+  onOpen,
+  closing,
+}: {
+  entry: Entry;
+  entries: Entry[];
+  wallets: Wallet[];
+  onClose: () => void;
+  onEdit: (entry: Entry) => void;
+  onDelete: (entry: Entry) => void;
+  onOpen: (entry: Entry) => void;
+  closing?: boolean;
+}) {
+  const impact = entryDisplayImpact(entry);
+  const wallet = wallets.find((item) => item.id === entry.wallet_id);
+  const similar = useMemo(() => similarEntries(entry, entries, DETAIL_SIMILAR_LIMIT), [entry, entries]);
+  const repeat = useMemo(() => sameTitleSummary(entry, entries), [entry, entries]);
+  const hue = categoryColor(entry.category);
+
+  return (
+    <SheetFrame onClose={onClose} className="entry-detail-sheet" closing={closing}>
+      <div className="detail-hero" style={{ "--hue": hue } as React.CSSProperties} aria-hidden="true">
+        <span className="detail-glyph"><CategoryIcon category={entry.category} size={120} /></span>
+      </div>
+      <button className="detail-close" onClick={onClose} aria-label="ปิด">
+        <X size={20} strokeWidth={2.25} aria-hidden="true" />
+      </button>
+      <div className="detail-body">
+        <div className="billboard-kicker">
+          <i className="brand-mark" aria-hidden="true">น</i>
+          <span>{transactionTypeLabels[entry.transaction_type]}</span>
+        </div>
+        <h2>{entry.title}</h2>
+        <strong className={`detail-amount ${impact >= 0 ? "income" : "expense"}`}>{formatSignedMoney(impact)}</strong>
+        <ul className="detail-meta">
+          <li>{formatDateTime(entry.occurred_at)}</li>
+          <li className="detail-pill">{entry.category}</li>
+          {wallet && <li>{wallet.name}</li>}
+          {entry.debt_impact !== 0 && <li>{entry.debtor_name}</li>}
+          {entry.source_text && <li>จดด้วย AI</li>}
+        </ul>
+        {entry.note && <p className="detail-note">{entry.note}</p>}
+        <div className="detail-actions">
+          <button className="billboard-cta" onClick={() => onEdit(entry)}>
+            <Pencil size={18} strokeWidth={2.25} aria-hidden="true" />แก้ไข
+          </button>
+          <button className="detail-delete" onClick={() => onDelete(entry)}>
+            <Trash2 size={18} strokeWidth={2.25} aria-hidden="true" />ลบรายการนี้
+          </button>
+        </div>
+        {repeat.count > 1 && (
+          <p className="detail-repeat">
+            จดชื่อนี้ไว้ <b>{repeat.count} ครั้ง</b> · รวม <b>{moneySign}{formatMoney(repeat.total)}</b>
+          </p>
+        )}
+        {similar.length > 0 && (
+          <section className="detail-similar" aria-label="รายการคล้ายกัน">
+            <h3>รายการคล้ายกัน</h3>
+            <div className="detail-similar-grid">
+              {similar.map((item) => (
+                <Poster
+                  key={item.id}
+                  hue={categoryColor(item.category)}
+                  glyph={<CategoryIcon category={item.category} size={64} />}
+                  title={item.title}
+                  sub={formatShortDate(item.occurred_at)}
+                  amount={formatSignedMoney(entryDisplayImpact(item))}
+                  onClick={() => onOpen(item)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </SheetFrame>
+  );
+}

@@ -54,7 +54,14 @@ the progress tiles carry, never in a full fill — and the "ภาพรวม�
 cards share the rails' flat surface, the top-category one with its
 category's `.tile-art` across the top. The bottom nav is a full-width solid
 bar with a square emerald + level with the tabs below 900px, and floats as a
-bar on desktop. Not yet built: the title-detail sheet,
+bar on desktop. A tap on an entry (Home's "เพิ่งจด", a History row) opens
+**`EntryDetailSheet`** — the mock's title page: category art, type, name,
+amount, date/category/wallet, then "แก้ไข" and "ลบ", then "รายการคล้ายกัน"
+(`similarEntries`: same title, then same category, never another leg of the
+same event) and how often the title recurs (`sameTitleSummary`). It edits
+and deletes nothing itself: "แก้ไข" hands the row to `EditSheet` and "ลบ" to
+`deleteEntry`, so there is still one edit path and one delete path. History's
+own "แก้"/"ลบ" buttons stay as the fast path. Not yet built:
 the "กำลังจะมา" timeline tab, restyling More/Wallets/the PIN gate, and a
 genuinely full-bleed desktop billboard (`.phone` still clamps to a
 max-width card at the wide breakpoints, per the rule below about not

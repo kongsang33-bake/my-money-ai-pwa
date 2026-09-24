@@ -564,12 +564,15 @@ export function DraftImpact({ items, wallets, knownDebtors }: { items: Draft[]; 
 
 export const EntryList = memo(function EntryList({
   entries,
+  onOpen,
   onEdit,
   onDelete,
   emptyAction,
   amountField = "wallet",
 }: {
   entries: Entry[];
+  /** What a tap on the row does -- the detail sheet, where one exists. Falls back to onEdit. */
+  onOpen?: (entry: Entry) => void;
   onEdit?: (entry: Entry) => void;
   onDelete?: (entry: Entry) => void;
   emptyAction?: EmptyAction;
@@ -602,8 +605,8 @@ export const EntryList = memo(function EntryList({
             );
             return (
             <article className="entry" key={entry.id}>
-              {onEdit ? (
-                <button type="button" className="entry-main entry-tappable" onClick={() => onEdit(entry)}>
+              {onOpen ?? onEdit ? (
+                <button type="button" className="entry-main entry-tappable" onClick={() => (onOpen ?? onEdit)!(entry)}>
                   {entryContent}
                 </button>
               ) : (

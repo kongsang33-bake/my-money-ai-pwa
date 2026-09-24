@@ -107,6 +107,7 @@ import {
   GoalEditSheet,
   GoalsView,
   DueSoonRail,
+  EntryDetailSheet,
   GoalsBudgetsRail,
   HeroWalletCard,
   RecentRail,
@@ -348,6 +349,9 @@ export default function Home() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [receiptTotal, setReceiptTotal] = useState(0);
   const [editing, setEditing] = useState<Entry | null>(null);
+  // The entry open in the detail sheet (EntryDetailSheet), which is where a
+  // tap on an entry lands now; editing is one step on from there.
+  const [viewing, setViewing] = useState<Entry | null>(null);
   // Where the "อื่น ๆ" nav button sat when it was tapped, so the sheet can
   // expand out of it instead of just sliding up from the bottom edge.
   const [debtorSheetMode, setDebtorSheetMode] = useState<"create" | "edit" | null>(null);
@@ -503,6 +507,7 @@ export default function Home() {
   // stable identity like this one; the inline openSheet(...) calls that
   // remain all feed plain components, where a new closure costs nothing.
   const openEditSheet = useMemo(() => openSheet(setEditing), [openSheet]);
+  const openEntryDetail = useMemo(() => openSheet(setViewing), [openSheet]);
 
   useEffect(() => {
     const next = toasts.find((toast) => !closingToastIds.includes(toast.id));
@@ -870,6 +875,7 @@ export default function Home() {
 
   const overlayOpen =
     !!editing ||
+    !!viewing ||
     !!debtorSheetMode ||
     !!walletSheetMode ||
     !!reconcilingWallet ||
@@ -2792,6 +2798,18 @@ export default function Home() {
   }
 
   const editingDismiss = useDismiss(!!editing, () => setEditing(null));
+  const viewingDismiss = useDismiss(!!viewing, () => setViewing(null));
+  // The detail sheet hands off rather than stacking: "แก้ไข" swaps it for the
+  // edit sheet, and "ลบ" closes it before deleteEntry's own confirm, so a
+  // cancelled delete lands back on the list rather than on a stale sheet.
+  const editFromDetail = useCallback((entry: Entry) => {
+    setViewing(null);
+    openEditSheet(entry);
+  }, [openEditSheet]);
+  const deleteFromDetail = useCallback((entry: Entry) => {
+    setViewing(null);
+    void deleteEntry(entry);
+  }, [deleteEntry]);
   const debtorSheetDismiss = useDismiss(!!debtorSheetMode, () => { setDebtorSheetMode(null); setEditingDebtor(null); });
   const walletSheetDismiss = useDismiss(!!walletSheetMode, () => { setWalletSheetMode(null); setEditingWallet(null); });
   const reconcileDismiss = useDismiss(!!reconcilingWallet, () => setReconcilingWallet(null));
@@ -3019,7 +3037,7 @@ export default function Home() {
             </section>
           )}
 
-          {!dataLoading && <RecentRail entries={entries} onEdit={openEditSheet} onSeeAll={openHistoryTab} />}
+          {!dataLoading && <RecentRail entries={entries} onOpen={openEntryDetail} onSeeAll={openHistoryTab} />}
 
           {error && <ErrorActions onRetry={retrySync} onDismiss={() => setError("")} />}
           {error && <StateCard tone="error" title="มีบางอย่างไม่สำเร็จ" detail={error} />}
@@ -3154,7 +3172,7 @@ export default function Home() {
                     ? `แสดง ${SEARCH_RESULT_LIMIT} รายการแรกจากทุกเดือน · ลองใส่ตัวกรองเพิ่มเพื่อจำกัดผลลัพธ์`
                     : `พบ ${searchResults.length} รายการจากทุกเดือน`}
                 </p>
-                <EntryList entries={searchResults} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+                <EntryList entries={searchResults} onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
               </>
             ) : (
               <>
@@ -3174,7 +3192,7 @@ export default function Home() {
                 <IncomeBreakdown items={incomeSummary} />
                 <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedMonth={selectedMonth} onChangeMonth={selectHistoryMonth} selectedDay={selectedDay} defaultDay={defaultHistoryDay} onSelectDay={setSelectedDay} />
                 {activeDay && <HistoryInsight entries={dayEntries} />}
-                <EntryList entries={dayEntries} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+                <EntryList entries={dayEntries} onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
               </>
             )}
           </div>
@@ -3340,6 +3358,21 @@ export default function Home() {
           />
         )}
 
+        {viewingDismiss.mounted && viewing && (
+          <EntryDetailSheet
+            // Keyed by row, so opening a similar entry from inside the sheet
+            // starts it again at the top rather than mid-scroll.
+            key={viewing.id}
+            entry={viewing}
+            entries={entries}
+            wallets={wallets}
+            onClose={viewingDismiss.requestClose}
+            onEdit={editFromDetail}
+            onDelete={deleteFromDetail}
+            onOpen={setViewing}
+            closing={viewingDismiss.closing}
+          />
+        )}
         {editingDismiss.mounted && editing && (
           <EditSheet entry={editing} wallets={wallets} busy={busy} error={error} onChange={setEditing} onClose={editingDismiss.requestClose} onSave={updateEntry} closing={editingDismiss.closing} />
         )}

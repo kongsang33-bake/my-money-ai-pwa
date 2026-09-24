@@ -13,6 +13,7 @@ import {
 import { formatMoney, moneySign } from "./format.ts";
 import { currentBillingPeriod, daysRemainingInCycle, entriesInRange, startOfDay } from "./cycle.ts";
 import { countsAsEarnedOrSpent } from "./taxonomy.ts";
+import { entryDisplayImpact } from "./money.ts";
 import type { Debtor, Entry, QuickShortcut, RecurringExpense } from "./types.ts";
 
 export function deriveQuickShortcuts(entries: Entry[]): QuickShortcut[] {
@@ -341,5 +342,43 @@ export function summarizeDayEntries(entries: Entry[]): DaySummary {
     income: counted.filter((entry) => entry.wallet_impact > 0).reduce((sum, entry) => sum + entry.wallet_impact, 0),
     outflow: spent.reduce((sum, entry) => sum + Math.abs(entry.wallet_impact), 0),
     top: [...spent].sort((a, b) => Math.abs(b.wallet_impact) - Math.abs(a.wallet_impact))[0] ?? null,
+  };
+}
+
+/** An entry title as a key: a café typed "Cafe Amazon " once and "cafe amazon" the next time is one place. */
+const titleKey = (title: string) => title.trim().toLocaleLowerCase("th-TH");
+
+/**
+ * What the entry detail sheet shows under "รายการคล้ายกัน": other entries
+ * with the same title first (the same shop, the same bill), then others in the
+ * same category, newest first within each, at most `limit`. The entry's own
+ * row is left out, and so is every row sharing its transfer_group_id -- a
+ * transfer's other leg or a funded bill's funding leg is the same event, not
+ * a similar one.
+ */
+export function similarEntries(entry: Entry, entries: Entry[], limit: number): Entry[] {
+  const sameEvent = (item: Entry) =>
+    item.id === entry.id || (!!entry.transfer_group_id && item.transfer_group_id === entry.transfer_group_id);
+  const newestFirst = (a: Entry, b: Entry) => (a.occurred_at < b.occurred_at ? 1 : -1);
+  const key = titleKey(entry.title);
+  const sameTitle = entries.filter((item) => !sameEvent(item) && titleKey(item.title) === key).sort(newestFirst);
+  const sameCategory = entries
+    .filter((item) => !sameEvent(item) && titleKey(item.title) !== key && item.category === entry.category)
+    .sort(newestFirst);
+  return [...sameTitle, ...sameCategory].slice(0, limit);
+}
+
+/**
+ * How often this title has been jotted, and what those rows came to -- the
+ * "จดชื่อนี้ไว้ 6 ครั้ง · รวม ฿360" line on the detail sheet. Counts only
+ * rows of the same kind (an expense titled like a refund is a different
+ * thing), and sums entryDisplayImpact, the figure each row shows in History.
+ */
+export function sameTitleSummary(entry: Entry, entries: Entry[]): { count: number; total: number } {
+  const key = titleKey(entry.title);
+  const matches = entries.filter((item) => item.type === entry.type && titleKey(item.title) === key);
+  return {
+    count: matches.length,
+    total: matches.reduce((sum, item) => sum + Math.abs(entryDisplayImpact(item)), 0),
   };
 }
