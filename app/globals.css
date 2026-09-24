@@ -5340,15 +5340,32 @@ button.entry-main {
   margin-top: var(--s-2);
 }
 
-.success-pulse {
+/* A floating confirmation, not a card in the page's own flow: it used to
+   sit as the first child of .home-view and shove the hero balance down
+   while it was up, then pop the layout back when it left. Fixed and
+   centered instead, it settles in over whatever is already there and
+   drifts back out without moving a single other element.
+   Scoped through .home-view for specificity, not just .success-pulse: the
+   card-ladder stagger's `.view > *` rule (further down this file) sets a
+   full `animation` shorthand on every direct child at equal (one-class)
+   specificity, and being later in the file it would otherwise win over
+   this rule and put the old stagger fade back in its place. */
+.home-view .success-pulse {
+  position: fixed;
+  left: var(--s-5);
+  right: var(--s-5);
+  top: calc(var(--topbar-block) + var(--s-2));
+  z-index: var(--z-toast);
+  max-width: 380px;
+  margin: 0 auto;
   display: flex;
   align-items: center;
   gap: var(--s-3);
-  animation: pop-in var(--t-2) var(--e-spring) both;
+  animation: float-in var(--t-2) var(--e-spring) both;
 }
 
-.success-pulse.closing {
-  animation: pop-out var(--t-2) var(--e-out) both;
+.home-view .success-pulse.closing {
+  animation: float-out var(--t-2) var(--e-out) both;
 }
 
 .success-pulse-icon {
@@ -6119,6 +6136,19 @@ button.entry-main {
 @keyframes pop-out {
   from { opacity: 1; transform: scale(1) translateY(0); }
   to { opacity: 0; transform: scale(0.94) translateY(6px); }
+}
+
+/* The save-success card settling in from above the content it floats
+   over, then drifting back up as it fades -- rather than the scale-pop
+   .success-pulse used while it still lived in the page's own flow. */
+@keyframes float-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-10px); }
 }
 
 /* Exit-animation counterparts — a closing overlay gets this instead of
