@@ -877,7 +877,7 @@ export function ManualEntryForm({
       )}
       <label>
         จำนวนเงิน
-        <AmountInput value={draft.amount} onChange={(amount) => update({ amount })} autoFocus />
+        <AmountInput value={draft.amount} onChange={(amount) => update({ amount })} />
       </label>
       <label>
         ชื่อรายการ{isTransfer && <small> (เว้นว่างได้ จะตั้งชื่อให้อัตโนมัติ)</small>}
