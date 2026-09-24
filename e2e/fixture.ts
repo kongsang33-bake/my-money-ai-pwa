@@ -214,6 +214,13 @@ export async function openSetup(page: Page, seed: PreviewSeed = buildEmptySeed()
   await waitForSetup(page);
 }
 
+/** Opens on the PIN gate (seed.pinMode), which has no bottom nav to wait for. */
+export async function openPinGate(page: Page, mode: "locked" | "setup" = "locked") {
+  await injectSeed(page, { ...buildSeed(), pinMode: mode });
+  await expect(page.locator(".pin-screen")).toBeVisible({ timeout: 15000 });
+  await waitForSplash(page);
+}
+
 async function injectSeed(page: Page, seed: PreviewSeed) {
   await page.addInitScript((injected) => {
     (window as unknown as { __NUBTANG_PREVIEW__: unknown }).__NUBTANG_PREVIEW__ = injected;

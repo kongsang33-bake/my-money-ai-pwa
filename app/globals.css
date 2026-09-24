@@ -6343,15 +6343,36 @@ button.entry-main {
   color: var(--ink-3);
 }
 
+/* The PIN gate, laid out as the mock's "who's watching" screen: the app's
+   mark in the corner, a welcome over a large square avatar with a ring, the
+   name under it, then the dots and a bare keypad. */
 .pin-screen {
+  position: relative;
   display: flex;
-  align-items: center;
   justify-content: center;
   min-height: 100dvh;
-  padding: var(--s-6) var(--s-5);
+  padding: calc(var(--topbar-block) + var(--s-4)) var(--s-5) var(--s-6);
 }
 
+.pin-brand {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + var(--s-4));
+  left: var(--s-5);
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.pin-brand b {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-bold);
+}
+
+/* Centred by auto margins, not align-items: when the gate is taller than the
+   window (a laptop, landscape), centring would push its top out of reach
+   under the brand mark; auto margins collapse to zero and it scrolls. */
 .pin-content {
+  margin-block: auto;
   width: 100%;
   max-width: 320px;
   display: grid;
@@ -6371,17 +6392,20 @@ button.entry-main {
 }
 
 .pin-avatar {
-  width: 64px;
-  height: 64px;
-  border-radius: var(--r-full);
+  width: 96px;
+  height: 96px;
+  margin: var(--s-4) 0 var(--s-2);
+  border-radius: var(--r-md);
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
   background: var(--accent-soft);
   color: var(--accent-strong);
   display: grid;
   place-items: center;
   font-size: var(--fs-value);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
   flex-shrink: 0;
-  margin-bottom: var(--s-2);
+  overflow: hidden;
 }
 
 .pin-avatar.has-image {
@@ -6389,13 +6413,14 @@ button.entry-main {
   padding: 3px;
 }
 
-.pin-identity .eyebrow {
-  color: var(--ink-3);
-}
-
 .pin-identity h1 {
   font-size: var(--fs-h2);
-  font-weight: var(--fw-bold);
+  font-weight: var(--fw-medium);
+}
+
+.pin-name {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
 }
 
 .pin-copy {
@@ -6419,17 +6444,18 @@ button.entry-main {
 }
 
 .pin-dots span {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border-radius: var(--r-full);
-  background: var(--surface-3);
-  border: 1px solid var(--line);
+  background: transparent;
+  border: 2px solid var(--ink-3);
   transition: background var(--t-1) var(--e-out), border-color var(--t-1) var(--e-out);
 }
 
+/* Filled in the brand's ink: progress, which is what --accent marks. */
 .pin-dots span.filled {
-  background: var(--primary);
-  border-color: var(--primary);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .pin-dots span.error {
@@ -6460,13 +6486,15 @@ button.entry-main {
   width: 100%;
 }
 
+/* Bare numerals, no discs, as the mock draws them -- the key is still a
+   64px target, it just does not paint one until it is pressed. */
 .pin-keypad button {
-  aspect-ratio: 1;
+  height: 64px;
   border-radius: var(--r-full);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
+  background: transparent;
+  border: none;
   font-size: var(--fs-h1);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-medium);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6474,7 +6502,7 @@ button.entry-main {
 }
 
 .pin-keypad button:active:not(:disabled) {
-  background: var(--surface-3);
+  background: var(--surface-2);
   transform: scale(0.94);
 }
 
@@ -6491,6 +6519,15 @@ button.entry-main {
 .pin-footer {
   display: grid;
   justify-items: center;
+}
+
+/* A laptop window is short: tighten the gaps and keys so the whole gate,
+   forgot link included, fits without scrolling. Keys stay above 44px. */
+@media (max-height: 800px) {
+  .pin-content { gap: var(--s-4); }
+  .pin-avatar { width: 80px; height: 80px; margin: var(--s-2) 0 var(--s-1); }
+  .pin-keypad { gap: var(--s-2); }
+  .pin-keypad button { height: 52px; }
 }
 
 .pin-link-button {

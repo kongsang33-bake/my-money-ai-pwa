@@ -462,7 +462,7 @@ export default function Home() {
     /* eslint-disable react-hooks/set-state-in-effect */
     setUser(seed.user as unknown as User);
     setProfile(seed.profile as unknown as Profile);
-    setPinMode("unlocked");
+    setPinMode(seed.pinMode ?? "unlocked");
     setReady(true);
     // The seed IS this account's fetched state, so it stands in for the read
     // loadUserData would otherwise have done -- see showSetupGate.

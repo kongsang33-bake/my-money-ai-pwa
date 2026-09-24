@@ -300,6 +300,11 @@ export type PreviewSeed = {
   // whole draft editor -- split shares, funding source, the impact preview --
   // is unreachable from a test.
   drafts?: Draft[];
+  // Opens on the PIN gate instead of the unlocked app, for the specs and
+  // screenshots that need to see it. Unlocking cannot succeed here (it is a
+  // Supabase read), so the gate simply stays put -- which is all a layout or
+  // an accessibility check needs.
+  pinMode?: Extract<PinMode, "locked" | "setup">;
 };
 
 export type MoneyGoal = { id: string; name: string; target: number; saved: number; deadline: string };

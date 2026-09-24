@@ -122,11 +122,11 @@ export function PinGate({
     });
   }, [pin, mode, setupStage, newPinDraft, onSetup]);
 
+  // Locked, the gate reads like the mock's "who's watching" screen: a welcome
+  // over your face, your name under it. Setting up, it says what it wants.
   const title = mode === "setup"
     ? (setupStage === "new" ? "ตั้งรหัส PIN 6 หลัก" : "ยืนยันรหัส PIN อีกครั้ง")
-    : displayName
-      ? `สวัสดี ${displayName}`
-      : "ใส่รหัส PIN";
+    : "ยินดีต้อนรับกลับ";
   const copy = mode === "setup"
     ? (setupStage === "new" ? "ตั้ง PIN สำหรับเข้าใช้งานแอพนี้บนทุกเครื่องที่ล็อกอินบัญชีเดียวกัน" : "กรอกรหัสเดิมอีกครั้งเพื่อยืนยัน")
     : "ใส่รหัส PIN เพื่อเข้าใช้งาน";
@@ -134,14 +134,18 @@ export function PinGate({
   return (
     <main className="shell pin-shell">
       <section className="phone pin-screen">
+        <header className="pin-brand">
+          <i className="brand-mark" aria-hidden="true">น</i>
+          <b>นับตังค์</b>
+        </header>
         <div className={`pin-content ${shake ? "shake" : ""}`}>
           <div className="pin-identity">
-            <span className={`avatar pin-avatar ${displayIconImage ? "has-image" : ""}`}>
-              {displayIconImage && <NextImage className="profile-image" src={displayIconImage} alt="" width={64} height={64} unoptimized />}
-              {!displayIconImage && (mode === "setup" ? <Lock size={26} strokeWidth={2.25} aria-hidden="true" /> : displayIcon)}
-            </span>
-            <p className="eyebrow">{mode === "setup" ? "ตั้งค่าความเป็นส่วนตัว" : "ยืนยันตัวตน"}</p>
             <h1>{title}</h1>
+            <span className={`avatar pin-avatar ${displayIconImage ? "has-image" : ""}`}>
+              {displayIconImage && <NextImage className="profile-image" src={displayIconImage} alt="" width={96} height={96} unoptimized />}
+              {!displayIconImage && (mode === "setup" ? <Lock size={34} strokeWidth={2.25} aria-hidden="true" /> : displayIcon)}
+            </span>
+            {mode !== "setup" && displayName && <b className="pin-name">{displayName}</b>}
             <p className="pin-copy">{copy}</p>
           </div>
 

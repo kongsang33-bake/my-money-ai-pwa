@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { test, expect, buildEmptySeed, buildSeed, navigate, openApp, openSetup, waitForApp } from "./fixture.ts";
+import { test, expect, buildEmptySeed, buildSeed, navigate, openApp, openPinGate, openSetup, waitForApp } from "./fixture.ts";
 import { auditScreen, type Finding, type ScreenAudit } from "./audit.ts";
 
 // The objective half of a design review, run on every screen, at all three
@@ -56,6 +56,13 @@ test("meets contrast, target size and overflow limits", async ({ page }) => {
   page.on("pageerror", (error) => errors.push(error.message));
 
   const audits: ScreenAudit[] = [];
+
+  // The PIN gate, both ways it opens: a returning user, and one choosing a
+  // PIN for the first time.
+  await openPinGate(page, "locked");
+  audits.push(await auditScreen(page, "pin-locked"));
+  await openPinGate(page, "setup");
+  audits.push(await auditScreen(page, "pin-setup"));
 
   // A brand-new account first: its own screens, and the only ones a user who
   // has never signed in before can reach.

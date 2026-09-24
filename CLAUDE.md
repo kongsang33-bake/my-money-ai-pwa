@@ -79,8 +79,15 @@ it opens "กำลังจะมา"), the money tools, then the account's own
 PIN). The tools are a grid on purpose, not the rail the mock drew: it is a
 menu of eight places to go, and a sideways row would hide most of them. The
 account screens go back to wherever opened them (`accountBack`), the way
-the money screens under "ของฉัน" do (`moreSectionBack`). Not yet built:
-restyling the Wallets screen itself and the PIN gate, and a
+the money screens under "ของฉัน" do (`moreSectionBack`). The PIN gate
+(`PinGate`, components/auth.tsx) is the mock's "who's watching": brand mark
+top-left, "ยินดีต้อนรับกลับ", your face as a large ringed square, your name,
+dots that fill in `--accent`, and a bare keypad. It is centred with auto
+margins, not `align-items`, so a short window scrolls it instead of pushing
+its top out of reach, and it tightens under 800px tall so a laptop sees the
+whole thing. The e2e suite reaches it through the seed's `pinMode`
+(`openPinGate` in e2e/fixture.ts) and the a11y audit measures both modes.
+Not yet built: restyling the Wallets screen itself, and a
 genuinely full-bleed desktop billboard (`.phone` still clamps to a
 max-width card at the wide breakpoints, per the rule below about not
 reintroducing phone-frame chrome — a Netflix-web-style edge-to-edge
