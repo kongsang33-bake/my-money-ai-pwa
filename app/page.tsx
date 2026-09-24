@@ -1286,6 +1286,17 @@ export default function Home() {
   const unfinishedTransfers = useMemo(() => incompleteTransferDrafts(drafts), [drafts]);
   const unbalancedSplits = useMemo(() => mismatchedSplitDrafts(drafts), [drafts]);
   const draftMismatch = useMemo(() => receiptMismatch(drafts, receiptTotal), [drafts, receiptTotal]);
+  // The save bar's "ไปที่รายการ": a blocked draft is always open (DraftRow),
+  // so bringing its card into view is all it takes to show what to fix.
+  const scrollToDraft = useCallback((id: string) => {
+    const card = document.querySelector<HTMLElement>(`[data-draft-id="${CSS.escape(id)}"]`);
+    card?.scrollIntoView({ behavior: "smooth", block: "center" });
+    card?.querySelector<HTMLElement>(".draft-summary")?.focus({ preventScroll: true });
+  }, []);
+  const blockedDrafts = useMemo(
+    () => drafts.filter((draft) => unfinishedTransfers.includes(draft) || unbalancedSplits.includes(draft)),
+    [drafts, unfinishedTransfers, unbalancedSplits],
+  );
   // How many parsed drafts want the user's eyes -- the same reasons that make
   // a DraftRow start open (draftAttention), counted for the review's header.
   const draftsToCheck = useMemo(() => drafts.filter((draft) => draftAttention(draft, debtors).length).length, [drafts, debtors]);
@@ -3168,23 +3179,29 @@ export default function Home() {
                     {draftMismatch && (
                       <StateCard tone="error" title="ยอดรวมไม่ตรงกับสลิป" detail={draftMismatch.detail} />
                     )}
-                    <DraftImpact items={drafts} wallets={wallets} knownDebtors={debtors} />
-                    {!!unfinishedTransfers.length && (
-                      <p className="pin-hint">มีรายการโอนเงินที่ยังไม่ได้เลือกกระเป๋าปลายทาง</p>
-                    )}
-                    {!!unbalancedSplits.length && (
-                      <p className="pin-hint">มีรายการที่ยอดรายคนรวมกันไม่เท่ากับยอดบิล — แก้ให้ตรงกันก่อนบันทึก</p>
-                    )}
                     {saveFailure && <StateCard tone="error" title={saveFailure.title} detail={saveFailure.detail} />}
-                    <button
-                      className="save"
-                      onClick={() => saveEntries(drafts)}
-                      disabled={busy || !isOnline || !!unfinishedTransfers.length || !!unbalancedSplits.length}
-                    >
-                      {saving
-                        ? <span className="button-loading-row"><span className="loading-spinner mini on-ink" />กำลังบันทึก...</span>
-                        : saveFailure ? "ลองบันทึกอีกครั้ง" : `บันทึก ${drafts.length} รายการ`}
-                    </button>
+                    {/* Held above the nav while the drafts scroll under it, so
+                        the batch total and the one button are never a scroll
+                        away -- and when something blocks the save, the bar
+                        says how many and takes the user to the first one. */}
+                    <div className="review-savebar">
+                      <DraftImpact items={drafts} wallets={wallets} knownDebtors={debtors} />
+                      {!!blockedDrafts.length && (
+                        <p className="review-savebar-blocked">
+                          <span>ต้องแก้อีก {blockedDrafts.length} รายการก่อนบันทึก</span>
+                          <button type="button" className="text-button" onClick={() => scrollToDraft(blockedDrafts[0].id)}>ไปที่รายการ</button>
+                        </p>
+                      )}
+                      <button
+                        className="save"
+                        onClick={() => saveEntries(drafts)}
+                        disabled={busy || !isOnline || !!blockedDrafts.length}
+                      >
+                        {saving
+                          ? <span className="button-loading-row"><span className="loading-spinner mini on-ink" />กำลังบันทึก...</span>
+                          : saveFailure ? "ลองบันทึกอีกครั้ง" : `บันทึก ${drafts.length} รายการ`}
+                      </button>
+                    </div>
                     <p className="privacy">AI ช่วยอ่านและแยกข้อมูล แต่สูตรคำนวณกระเป๋า/ลูกหนี้ยังล็อกอยู่ในแอพ</p>
                   </section>
                 )}

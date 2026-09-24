@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { blockingDraftIds, draftAttention, draftEffects, draftFacts, newDebtorNames } from "./draft-review.ts";
+import { draftAttention, draftEffects, draftFacts, newDebtorNames } from "./draft-review.ts";
 import { draftTotals, normalizeEntry } from "./money.ts";
 import type { Debtor, Draft, Wallet } from "./types.ts";
 
@@ -141,16 +141,5 @@ describe("newDebtorNames", () => {
   it("looks in the book the type writes to", () => {
     // จูน owes the user; borrowing from her opens the other book.
     assert.deepEqual(newDebtorNames(draft({ transaction_type: "borrow", debtor_name: "จูน" }), [debtor()]), ["จูน"]);
-  });
-});
-
-describe("blockingDraftIds", () => {
-  it("lists only the drafts that stop the save, in order", () => {
-    const items = [
-      draft({ id: "a", ambiguous: true, transaction_type: "gift" }),
-      draft({ id: "b", transaction_type: "transfer", transfer_to_wallet_id: null }),
-      draft({ id: "c" }),
-    ];
-    assert.deepEqual(blockingDraftIds(items, []), ["b"]);
   });
 });

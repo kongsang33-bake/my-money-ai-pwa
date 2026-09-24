@@ -3182,6 +3182,9 @@ button.poster:active {
 }
 
 .review-cancel-all {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
   color: var(--ink-3);
@@ -3195,6 +3198,55 @@ button.poster:active {
   color: var(--ink-3);
   text-align: center;
   margin-top: var(--s-3);
+}
+
+/* The review's batch total and save button, held above the nav while the
+   drafts scroll under it. It genuinely floats over content, which is the one
+   case the --sh-* lift is for. A sticky inset is measured from inside
+   .phone's padding, and that padding (--nav-clearance) already reaches past
+   the nav's top edge -- so the offset is the gap wanted above the nav less
+   that overshoot, which comes out negative. The wide layout re-declares it
+   for the floating nav, whose top sits exactly at .phone's padding there. */
+.review-savebar {
+  position: sticky;
+  bottom: calc(var(--nav-height) + var(--nav-lift) + var(--s-2) - var(--nav-clearance));
+  z-index: 2;
+  display: grid;
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+  padding: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--sh-2);
+}
+
+.review-savebar .draft-impact {
+  margin: 0;
+  padding: 0 var(--s-1);
+  border: 0;
+  background: none;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+.review-savebar-blocked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-1) var(--s-3);
+  padding: 0 var(--s-1);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--danger);
+}
+
+.review-savebar-blocked .text-button {
+  margin-inline: 0;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 /* -------------------------------------------------------------------------
@@ -7268,6 +7320,10 @@ input[type="checkbox"], input[type="radio"] {
   /* The nav floats --s-7 off the bottom here, so that is the room left. */
   .phone.tab-ask {
     padding-bottom: calc(var(--nav-height) + var(--s-7) + var(--s-3));
+  }
+
+  .review-savebar {
+    bottom: var(--s-3);
   }
 
   .phone > .view.ask-ai-page {

@@ -21,9 +21,10 @@ import {
   categorySpendAmount,
   defaultWalletId,
   expandDraftForSave,
+  incompleteTransferDrafts,
+  mismatchedSplitDrafts,
   sameDebtorName,
   splitDebtorNames,
-  splitPinMismatch,
   unnamedDebtor,
 } from "./money.ts";
 import { DEBT_TYPES, TYPES_OWED_TO_USER, TYPES_USER_OWES, transactionTypeLabels } from "./taxonomy.ts";
@@ -80,11 +81,12 @@ export function newDebtorNames(draft: Draft, debtors: Debtor[]): string[] {
  */
 export function draftAttention(draft: Draft, debtors: Debtor[]): DraftAttention[] {
   const reasons: DraftAttention[] = [];
-  if (draft.transaction_type === "transfer" && (!draft.transfer_to_wallet_id || draft.transfer_to_wallet_id === draft.wallet_id)) {
+  // The two blocking checks are the save button's own (page.tsx disables it
+  // on the same two functions), so the card and the button cannot disagree.
+  if (incompleteTransferDrafts([draft]).length) {
     reasons.push({ text: "ยังไม่ได้เลือกกระเป๋าปลายทาง", blocking: true });
   }
-  const mismatch = splitPinMismatch(draft);
-  if (mismatch) reasons.push({ text: "ยอดรายคนรวมกันไม่เท่ากับยอดบิล", blocking: true });
+  if (mismatchedSplitDrafts([draft]).length) reasons.push({ text: "ยอดรายคนรวมกันไม่เท่ากับยอดบิล", blocking: true });
   if (draft.ambiguous) reasons.push({ text: "AI ไม่แน่ใจว่าให้เปล่าหรือให้ยืม เลือกชนิดรายการให้ถูก", blocking: false });
   if (!(draft.amount > 0)) reasons.push({ text: "ยังไม่มีจำนวนเงิน", blocking: false });
   if (DEBT_TYPES.includes(draft.transaction_type) && draft.transaction_type !== "card_charge") {
@@ -210,9 +212,4 @@ export function reviewDraft(draft: Draft, wallets: Wallet[], debtors: Debtor[]):
     effects: draftEffects(draft, wallets, debtors),
     attention: draftAttention(draft, debtors),
   };
-}
-
-/** Drafts with something blocking the save, in list order -- for the save bar's "go to it". */
-export function blockingDraftIds(drafts: Draft[], debtors: Debtor[]): string[] {
-  return drafts.filter((draft) => draftAttention(draft, debtors).some((reason) => reason.blocking)).map((draft) => draft.id);
 }

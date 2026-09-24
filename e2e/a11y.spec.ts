@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { test, expect, buildEmptySeed, buildSeed, navigate, openApp, openPinGate, openSetup, waitForApp } from "./fixture.ts";
+import { test, expect, buildEmptySeed, buildSeed, navigate, openApp, openPinGate, openSetup, seedDraft, waitForApp } from "./fixture.ts";
 import { auditScreen, type Finding, type ScreenAudit } from "./audit.ts";
 
 // The objective half of a design review, run on every screen, at all three
@@ -103,6 +103,21 @@ test("meets contrast, target size and overflow limits", async ({ page }) => {
   await navigate(page, "more");
   await page.waitForTimeout(500);
   audits.push(await auditScreen(page, "more"));
+
+  // The AI review: a folded draft, one open because it names people the
+  // account has never seen, and one whose missing destination blocks the
+  // save -- every state a card and the save bar under them can be in.
+  await openApp(page, {
+    ...buildSeed(),
+    drafts: [
+      seedDraft({ id: "a11y-plain", title: "ข้าวมันไก่", amount: 60, transaction_type: "personal_expense", debtor_name: "" }),
+      seedDraft({ id: "a11y-party", title: "ค่าเบียร์", amount: 1500, debtor_name: "อ้อน, แบงค์, วิน" }),
+      seedDraft({ id: "a11y-transfer", title: "โอนเข้าออม", amount: 2000, transaction_type: "transfer", debtor_name: "", transfer_to_wallet_id: null }),
+    ],
+  });
+  await navigate(page, "add");
+  await page.waitForTimeout(400);
+  audits.push(await auditScreen(page, "add-review"));
 
   const all = <K extends "contrast" | "tapSize" | "overflow" | "crowded">(key: K) => audits.flatMap((audit) => audit[key]);
   const checked = audits.reduce((sum, audit) => sum + audit.checked, 0);
