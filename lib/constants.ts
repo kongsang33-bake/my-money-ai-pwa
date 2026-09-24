@@ -2,6 +2,21 @@
 // Domain taxonomy (transaction types, categories) lives in lib/taxonomy.ts —
 // this file is for everything else that would otherwise get re-typed per file.
 
+// The product's name, wherever the app says it (topbar, PIN gate, splash,
+// page title, passkey prompt). public/manifest.webmanifest is JSON and cannot
+// import this -- keep it in step by hand.
+export const APP_NAME = "Nub-Mon";
+
+// The billboard's top-left line on Home. One is drawn at random each time
+// Home is shown (never the same one twice running), so the order here means
+// nothing.
+export const BRAND_SLOGANS = [
+  "หามาเท่าไหร่... ก็มานับมัน",
+  "ใช้กี่บาทก็ช่าง... แวะมานับมันก่อน",
+  "Nub-Mon: จดทุกวัน นับมันทุกบาท",
+  "Nub-Mon: นับเงินง่าย สนุกได้ทุกวัน",
+] as const;
+
 export const MS_PER_DAY = 86_400_000;
 
 // Used to put a weekly bill on the same footing as a monthly one ("what does

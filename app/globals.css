@@ -1,5 +1,5 @@
 /* ==========================================================================
-   NUBTHUNG — Cinema design system
+   Nub-Mon — Cinema design system
    A Netflix-shaped app: one billboard per screen, then horizontal rails of
    poster/tile cards. Dark only -- there is no light theme and no toggle;
    this is the direction chosen after two lighter/dual-theme passes (see
@@ -739,7 +739,7 @@ a:focus-visible {
   padding: env(safe-area-inset-top) var(--s-5) 0;
 }
 
-/* The app's mark: the NUBTHUNG "N" (public/icons/logo-mark.png, cut from the
+/* The app's mark: the Nub-Mon "N" (public/icons/logo-mark.png, cut from the
    same artwork as the home-screen icon), drawn on whatever ground it sits on.
    Reused as the billboard's kicker bullet, the way Netflix's "N" is. */
 .brand-mark {
@@ -1618,6 +1618,21 @@ a:focus-visible {
   font-size: var(--fs-micro);
   font-weight: var(--fw-semibold);
   color: var(--ink-2);
+}
+
+/* Top-left, across from .billboard-caption: the brand's line over the art.
+   Held clear of the caption on the right so a long slogan wraps rather than
+   running into "30 วันล่าสุด". */
+.billboard-slogan {
+  position: absolute;
+  top: var(--s-4);
+  left: var(--s-4);
+  right: 34%;
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+  line-height: 1.4;
+  color: var(--ink);
 }
 
 .billboard-body {
@@ -7177,6 +7192,13 @@ input[type="checkbox"], input[type="radio"] {
   .billboard-caption {
     top: calc(var(--topbar-block) + var(--s-3));
     right: var(--s-7);
+  }
+
+  .billboard-slogan {
+    top: calc(var(--topbar-block) + var(--s-3));
+    left: var(--s-7);
+    right: auto;
+    font-size: var(--fs-body);
   }
 
   .billboard-body {

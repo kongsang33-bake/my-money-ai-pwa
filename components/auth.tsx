@@ -5,6 +5,7 @@ import NextImage from "next/image";
 import type { User } from "@supabase/supabase-js";
 import { ChevronDown, Delete, Lock, ScanFace } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { APP_NAME } from "@/lib/constants";
 import { clampInteger } from "@/lib/format";
 import { isPlatformAuthenticatorAvailable, isSixDigitPin, lockDelayOptions, pinLength, pinMaxAttempts, type LockDelayKey } from "@/lib/pin";
 import type { PinMode, Profile } from "@/lib/types";
@@ -136,7 +137,7 @@ export function PinGate({
       <section className="phone pin-screen">
         <header className="pin-brand">
           <i className="brand-mark" aria-hidden="true" />
-          <b className="brand-name">NUBTHUNG</b>
+          <b className="brand-name">{APP_NAME}</b>
         </header>
         <div className={`pin-content ${shake ? "shake" : ""}`}>
           <div className="pin-identity">

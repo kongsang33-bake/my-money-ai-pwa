@@ -1,8 +1,8 @@
 "use client";
 
-import { memo, useId, useMemo, useState } from "react";
+import { memo, useEffect, useId, useMemo, useState } from "react";
 import { Check, ChevronLeft, CreditCard, Info, Pencil, Plus, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet as WalletIcon, X } from "lucide-react";
-import { DETAIL_SIMILAR_LIMIT, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
+import { BRAND_SLOGANS, DETAIL_SIMILAR_LIMIT, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
 import { formatChatTime, formatDateTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, moneySign, toMoneyAmount } from "@/lib/format";
 import { entryDisplayImpact } from "@/lib/money";
 import { shiftMonthKey } from "@/lib/cycle";
@@ -150,6 +150,29 @@ function BalanceArt({ points }: { points: number[] }) {
   );
 }
 
+// Which slogan the billboard showed last, so the next visit to Home draws a
+// different one rather than, one time in four, the same line again.
+let lastSloganIndex = -1;
+
+function pickSlogan() {
+  let next = Math.floor(Math.random() * BRAND_SLOGANS.length);
+  if (next === lastSloganIndex) next = (next + 1) % BRAND_SLOGANS.length;
+  lastSloganIndex = next;
+  return next;
+}
+
+/**
+ * The billboard's top-left line: one of BRAND_SLOGANS, drawn afresh each time
+ * Home mounts. Drawn in an effect, not during render, so the server's HTML and
+ * the first client render agree; until then it holds its line's space empty.
+ */
+function BillboardSlogan() {
+  const [index, setIndex] = useState<number | null>(null);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- a random draw must wait for the client
+  useEffect(() => setIndex(pickSlogan()), []);
+  return <p className="billboard-slogan">{index === null ? "\u00a0" : BRAND_SLOGANS[index]}</p>;
+}
+
 /**
  * Home's billboard: the one full-bleed moment on the screen, the job the coral
  * hero used to do. Laid out the way docs/netflix-reference.html's .billboard
@@ -182,6 +205,7 @@ export const HeroWalletCard = memo(function HeroWalletCard({
           </>
         )}
       </div>
+      <BillboardSlogan />
       <div className="billboard-body">
         {/* The hint is a sibling of the label, not inside it, so nothing the
             label's own styling does (letter-spacing, the brand colour) leaks

@@ -1,6 +1,6 @@
 {
-  "name": "NUBTHUNG",
-  "short_name": "NUBTHUNG",
+  "name": "Nub-Mon",
+  "short_name": "Nub-Mon",
   "description": "บันทึกรายรับรายจ่ายอย่างง่ายด้วย AI",
   "start_url": "/",
   "display": "standalone",

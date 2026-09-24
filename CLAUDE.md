@@ -6,7 +6,7 @@ Guidance for working on this codebase — a Thai personal-finance PWA
 
 ## Design system: Cinema (dark only)
 
-NUBTHUNG (formerly นับตังค์) is a Netflix-shaped app now: one billboard per screen
+Nub-Mon (formerly NUBTHUNG, and before that นับตังค์) is a Netflix-shaped app now: one billboard per screen
 (`HeroWalletCard`, class `.hero-wallet` -- its own tier, deliberately not
 a `.wallet-card`) carrying its own two actions, then horizontal rails of fixed-width
 cards underneath — a section becomes a rail by wrapping its items in the `Rail` component
@@ -113,7 +113,10 @@ totals; those are Home's job, and that card is gone along with `MonthSummary`,
 sources moved into "สรุปเดือนนี้" (`RecapSheet`), which is a dark sheet like
 the rest now, not the white card with an emerald button it used to be.
 
-**The brand is NUBTHUNG and its mark is the green "N"** --
+**The brand is Nub-Mon (`APP_NAME`, lib/constants.ts; the manifest repeats it
+by hand) and its mark is the green "N"** -- the billboard's top-left line is
+one of `BRAND_SLOGANS`, drawn at random each time Home mounts (`BillboardSlogan`),
+never the same one twice running --
 `public/icons/logo-mark.png` (transparent, for the app's own ground) and the
 home-screen/maskable/Apple/favicon PNGs, all cut from one artwork and set on
 pure black. `.brand-mark` draws that image; it is not a letter in a tile any

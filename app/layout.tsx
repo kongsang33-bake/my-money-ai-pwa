@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Sans_Thai } from "next/font/google";
 import { ServiceWorkerRegistrar } from "./service-worker-registrar";
+import { APP_NAME } from "@/lib/constants";
 import "./globals.css";
 
 const ibmPlexSansThai = IBM_Plex_Sans_Thai({
@@ -11,7 +12,7 @@ const ibmPlexSansThai = IBM_Plex_Sans_Thai({
 });
 
 export const metadata: Metadata = {
-  title: "NUBTHUNG - บันทึกรายรับรายจ่ายด้วย AI",
+  title: `${APP_NAME} - บันทึกรายรับรายจ่ายด้วย AI`,
   description: "แอปบันทึกรายรับรายจ่ายที่ช่วยแยกรายการและจัดหมวดหมู่ด้วย AI",
   manifest: "/manifest.webmanifest",
   icons: {
@@ -55,7 +56,7 @@ export default function RootLayout({
               <img id="app-splash-logo" src="/icons/icon-512.png" alt="" width={112} height={112} decoding="sync" fetchPriority="high" />
             </div>
             <div id="app-splash-text-wrap">
-              <p id="app-splash-text">NUBTHUNG</p>
+              <p id="app-splash-text">{APP_NAME}</p>
             </div>
           </div>
         </div>

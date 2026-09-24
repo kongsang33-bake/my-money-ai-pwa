@@ -1,7 +1,7 @@
 // PIN lock (PBKDF2 hash + salt) and the WebAuthn/Face ID quick-unlock
 // layered on top of it. Both are client-side device gates, not
 // server-verified remote authentication -- see verifyFaceId's note below.
-import { WEBAUTHN_TIMEOUT_MS } from "./constants.ts";
+import { APP_NAME, WEBAUTHN_TIMEOUT_MS } from "./constants.ts";
 import { clampInteger } from "./format.ts";
 import type { Profile } from "./types.ts";
 import type { User } from "@supabase/supabase-js";
@@ -176,8 +176,8 @@ export async function registerFaceId(user: User): Promise<string | null> {
   try {
     const credential = await navigator.credentials.create({
       publicKey: {
-        rp: { name: "NUBTHUNG", id: window.location.hostname },
-        user: { id: userId, name: user.email ?? user.id, displayName: user.email ?? "NUBTHUNG" },
+        rp: { name: APP_NAME, id: window.location.hostname },
+        user: { id: userId, name: user.email ?? user.id, displayName: user.email ?? APP_NAME },
         challenge,
         pubKeyCredParams: [
           { type: "public-key", alg: -7 },

@@ -73,6 +73,7 @@ import { authHeaders } from "@/lib/api";
 import { isConnectionFailure, isDuplicateRowError, rowIdsForSave, type SaveAttempt } from "@/lib/save";
 import {
   AI_CONTEXT_MAX_LENGTH,
+  APP_NAME,
   BILLBOARD_HISTORY_DAYS,
   BUDGET_COLUMNS,
   BUDGET_NEAR_PERCENT,
@@ -2950,7 +2951,7 @@ export default function Home() {
         <header className="topbar">
           <div className="topbar-brand">
             <i className="brand-mark" aria-hidden="true" />
-            <b className="brand-name">NUBTHUNG</b>
+            <b className="brand-name">{APP_NAME}</b>
           </div>
           <button className="home-identity" onClick={() => setTab("profile")} aria-label="บัญชีและการตั้งค่า">
             <b>{displayName}</b>
