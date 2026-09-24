@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Sans_Thai } from "next/font/google";
-import { THEME_STORAGE_KEY } from "@/lib/constants";
 import { ServiceWorkerRegistrar } from "./service-worker-registrar";
 import "./globals.css";
 
@@ -26,18 +25,16 @@ export const metadata: Metadata = {
   },
 };
 
-// Kept in sync with --bg in app/globals.css (:root and :root[data-theme="dark"])
-// by hand -- metadata here can't read CSS custom properties.
+// Kept in sync with --bg in app/globals.css (:root) by hand -- metadata
+// here can't read CSS custom properties. Cinema is dark only, so there is
+// just the one color now.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f9f5f0" },
-    { media: "(prefers-color-scheme: dark)", color: "#101116" },
-  ],
+  themeColor: "#0a0b0c",
 };
 
-const themeInitScript = `(function(){try{var t=localStorage.getItem("${THEME_STORAGE_KEY}");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}catch(e){}window.__splashStartedAt=Date.now();var el=document.getElementById("app-splash");if(el)el.classList.add("app-splash-play");})();`;
+const splashInitScript = `(function(){window.__splashStartedAt=Date.now();var el=document.getElementById("app-splash");if(el)el.classList.add("app-splash-play");})();`;
 
 export default function RootLayout({
   children,
@@ -58,7 +55,7 @@ export default function RootLayout({
             </div>
           </div>
         </div>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <script dangerouslySetInnerHTML={{ __html: splashInitScript }} />
         <ServiceWorkerRegistrar />
         {children}
       </body>

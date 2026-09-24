@@ -1,160 +1,137 @@
 /* ==========================================================================
-   นับตังค์ (Nubtang) — Bento / Terminal design system
-   Light mode is a saturated color-blocked bento (every tile a full hue, very
-   round radius, soft colorful shadows, no hairline borders). Dark mode is a
-   near-black neon terminal (quiet dark panels, hairline borders, one glowing
-   acid accent doing the shouting, moderate "squircle" radius). The two are
-   deliberately different visual worlds, not one palette re-lit — but the
-   *mechanism* is unchanged from before: every difference, including radius,
-   shadow and border style now (not just color), lives in the token layer
-   below. No component rule should ever need a [data-theme="dark"] override
-   of its own — see --card-border/--card-shadow/--tile-edge-width for how
-   structural properties flip per theme the same way colors do.
+   นับตังค์ (Nubtang) — Cinema design system
+   A Netflix-shaped app: one billboard per screen, then horizontal rails of
+   poster/tile cards. Dark only -- there is no light theme and no toggle;
+   this is the direction chosen after two lighter/dual-theme passes (see
+   docs/design-reference.html for the color-blocked-bento/neon-terminal pass
+   and docs/netflix-reference.html for the phase-0 mock this token set was
+   taken from). Near-black grounds throughout; emerald --brand is used as
+   INK ONLY (logo, progress fill, the active nav/tab state, ribbons, the FAB)
+   and never as a button fill -- the primary CTA is white, the way Netflix's
+   own Play button is, so the one color that means "money app default
+   action" never has to compete with the one color that means "this thing is
+   highlighted/on/new." --income and --expense were moved off green/red
+   entirely (sky and coral) for the same reason: green is spoken for by the
+   brand now, and red would make every "จดรายการ" primary action read as a
+   warning.
    ========================================================================== */
 
 @import "tailwindcss";
 
 /* -------------------------------------------------------------------------
-   Tokens — light ("Color-Blocked Bento")
+   Tokens — Cinema (dark only)
    ------------------------------------------------------------------------- */
 :root {
   --font-sans: var(--font-sans), "Noto Sans Thai", -apple-system, "Segoe UI", sans-serif;
 
-  /* Surfaces — soft paper. Every one of these is the old cream's own hue
-     with the chroma taken almost to zero in OKLCH, so the warmth survives
-     and the orange does not: a page you could write on, not a peach tile.
-     --surface is the freshest sheet and sits ABOVE --bg on purpose, which
-     is what makes a card read as paper laid on a desk rather than a hole
-     cut in it. */
-  --bg: #f9f5f0;
-  --surface: #fffdfa;
-  --surface-2: #f1ece6;
-  --surface-3: #e6e1d9;
-  --line: #e5dfd6;
-  --line-soft: #efeae4;
-  --line-strong: #d3cbbf;
+  /* Surfaces — near-black, a hair cool so the emerald brand and the sky/
+     coral money colors all read clean against it. --surface sits ABOVE
+     --bg, same relationship as before: a card is a panel laid on the page,
+     not a hole cut in it. */
+  --bg: #0a0b0c;
+  --surface: #141618;
+  --surface-2: #1c1f22;
+  --surface-3: #262a2e;
+  --line: #2a2e33;
+  --line-soft: #202327;
+  --line-strong: #383d43;
 
-  /* text — deep plum-ink (chosen, not pure black: has a violet cast) */
-  --ink: #241536;
-  --ink-2: #4a3a63;
-  --ink-3: #6f5c82;
-  --ink-4: #9c8fb0;
-  --ink-inverse: #fff3e1;
+  --ink: #f1f3f2;
+  --ink-2: #b8bdbb;
+  --ink-3: #8b918e;
+  --ink-4: #5f6562;
+  --ink-inverse: #0a0b0c;
 
-  /* brand — primary is the plum-ink used for every button/nav/CTA fill;
-     accent is the secondary citrus hue (no longer reserved for AI-only) */
-  --accent: #ffc93c;
-  --accent-strong: #e8ae1e;
-  --accent-soft: #fcefd1;
-  --accent-line: rgba(255, 201, 60, 0.45);
-  /* --accent is a bright/light hue in both themes (citrus here, electric
-     cyan in dark) — text on a full-strength --accent fill needs a genuinely
-     dark color in both themes, unlike --text-on-color (always white) or
-     --ink-inverse (flips opposite the theme, which for dark mode's citrus
-     analogue would still land near-white — wrong direction here) */
-  --accent-contrast: var(--ink);
-  /* Text on a full-strength --income-fill, in both themes, for the same
-     reason --accent-contrast exists: the income fill is a bright hue on both
-     sides (mint here, the same acid as --primary in dark), and white on it
-     reads at 2.35:1. Dark ink is the only thing that works over either.
-     --expense-fill is the same story from the other side. In light both
-     fills are pale washes on paper, so both take ink; in dark both are
-     saturated and light, so both take the carbon ground. Either way the
-     answer is "the dark one", which is why neither is --text-on-color. */
-  --income-contrast: var(--ink);
-  --expense-contrast: var(--ink);
-  --primary: #241536;
-  --primary-hover: #34204c;
-  --primary-text: #fff3e1;
+  /* brand — emerald, ink only. --primary is the button/FAB/nav-active fill
+     and is white (the Netflix "Play" role), NOT the brand hue -- see the
+     header comment for why the two must never collide. --accent carries
+     the brand mark: the logo, progress bars, the active tab underline,
+     "ใกล้ถึง" ribbons, the + FAB. Kept as its own token rather than
+     renaming --primary to --brand so every existing --primary call site
+     (buttons, chips, focus rings) keeps meaning "the loud interactive
+     fill" without a repo-wide rename; component work in phase 2 is what
+     actually re-points each one at --primary vs --accent correctly. */
+  --accent: #1fc58e;
+  --accent-strong: #3fdca6;
+  --accent-soft: #0f2c22;
+  --accent-line: rgba(31, 197, 142, 0.30);
+  --accent-contrast: #03140d;
+  --income-contrast: #03140d;
+  --expense-contrast: #03140d;
+  --primary: #f1f3f2;
+  --primary-hover: #ffffff;
+  --primary-text: #0a0b0c;
 
-  /* the one full-bleed "hero" identity fill (balance card) — deliberately
-     its own token, not --primary, so the hero stays a singular moment and
-     buttons elsewhere don't compete with it */
-  --hero-bg: #ba594a;
-  --hero-text: #ffffff;
-  --hero-amount: #ffffff;
-  --hero-border: none;
-  --hero-shadow: var(--sh-2);
-  --hero-amount-glow: 0 0 0 rgba(36, 21, 54, 0);
+  /* the one full-bleed "hero"/billboard identity fill -- phase 2 turns this
+     into a per-card gradient keyed off the wallet/category color the way
+     docs/netflix-reference.html's .billboard does; until then it stays a
+     flat deep-emerald panel close to the old dark hero's near-black one */
+  --hero-bg: #0f2c22;
+  --hero-text: #f1f3f2;
+  --hero-amount: #f1f3f2;
+  --hero-border: 1px solid var(--line);
+  --hero-shadow: none;
+  --hero-amount-glow: 0 0 24px rgba(31, 197, 142, 0.16);
 
   /* text on a saturated semantic-color fill (danger red, a random avatar
-     chip color, …) that doesn't itself flip with theme — always white,
-     unlike --ink-inverse which flips opposite of the theme-aware --ink */
+     chip color, …) that doesn't itself flip with theme */
   --text-on-color: #ffffff;
-  --overlay-on-primary-soft: rgba(255, 255, 255, 0.08);
-  --overlay-on-primary: rgba(255, 255, 255, 0.14);
-  --overlay-on-primary-strong: rgba(255, 255, 255, 0.22);
-  --overlay-on-primary-border: rgba(255, 255, 255, 0.3);
-  --shimmer-sheen: rgba(255, 255, 255, 0.35);
+  --overlay-on-primary-soft: rgba(10, 11, 12, 0.08);
+  --overlay-on-primary: rgba(10, 11, 12, 0.14);
+  --overlay-on-primary-strong: rgba(10, 11, 12, 0.22);
+  --overlay-on-primary-border: rgba(10, 11, 12, 0.3);
+  --shimmer-sheen: rgba(255, 255, 255, 0.06);
 
-  /* Semantic amounts. These are the colours money is WRITTEN in -- every
-     +฿ and −฿ on the timeline, the statement, the pace verdict -- so they
-     are picked to clear WCAG AA (4.5:1) as 13-15px text on all three light
-     grounds (--bg, --surface, --surface-2), not to look good as a 300px
-     tile. Darkened from the original mint/magenta in OKLCH with the hue
-     held and as much chroma kept as the gamut allowed, which is why they
-     are still unmistakably green and pink rather than the muddy result of
-     scaling toward black. The bright originals live on below as
-     --income-fill / --expense-fill, which is what large areas use. */
-  --income: #037b53;
-  --income-soft: #e0f7ea;
-  --expense: #cb1a76;
-  --expense-soft: #ffeaf0;
-  /* Large-area ("bold tier") variants of the three fill hues. A color that
-     reads as confident on a 12px bar, a chip or a 56px FAB turns into a
-     light source once it fills a 300px tile — which on a dark ground is
-     what actually makes a theme tiring to look at, not the hue itself. So
-     every full-tile fill goes through these instead of --income/--expense/
-     --accent directly, and only the small uses keep the undimmed hue.
-     In light mode they are pale washes: the paper theme spends its one
-     colour block on the hero and nothing else, so the tiles that used to
-     be saturated (the savings rate, the due-soon bill) are tinted paper
-     with the semantic colour as their ink. No component rule knows about
-     this -- .home-insight-card.savings-rate and .due-soon-card point at the
-     fill token, and the token is a wash here and a fill in dark. That is
-     the whole reason the tier goes through a token at all. */
-  --income-fill: #daf4e6;
-  --expense-fill: #ffe5ed;
-  --accent-fill: #fbebc9;
-  --danger: #d11b47;
-  --danger-soft: #ffeaeb;
-  --danger-border: #f5b9c7;
+  /* Semantic amounts, moved off the brand's green entirely (see header
+     comment): income is sky, expense is coral. Kept at a lightness/chroma
+     that clears WCAG AA as 13-15px text on --bg/--surface/--surface-2. */
+  --income: #72bdf7;
+  --income-soft: #12283c;
+  --expense: #ff8e7e;
+  --expense-soft: #341c18;
+  /* Large-area ("bold tier") variants -- a hue that reads as confident as
+     13px text turns into a light source once it fills a 300px tile, so any
+     full-tile fill goes through these instead of --income/--expense/
+     --accent directly. Not yet consumed anywhere on a billboard/poster/
+     tile (phase 2 work); kept in step with the base hues for continuity
+     with the tint-tier cards phase 2 hasn't replaced yet. */
+  --income-fill: #4a9ee0;
+  --expense-fill: #e06e5c;
+  --accent-fill: #1aa87b;
+  --danger: #ff6b6b;
+  --danger-soft: #341a1a;
+  --danger-border: #5c2b2b;
 
-  /* category palette (8-slot, re-saturated for the bold palette) */
-  --cat-travel: #3d7cff;
-  --cat-food: #ff6a2e;
-  --cat-bills: #12c99a;
-  --cat-home: #f5a623;
-  --cat-entertainment: #c24fd1;
-  --cat-goods: #7b5cfa;
-  --cat-health: #ff4d6d;
-  --cat-other: #8a7a9e;
+  /* category palette (8-slot) */
+  --cat-travel: #7ec8d8;
+  --cat-food: #d9896b;
+  --cat-bills: #76ccae;
+  --cat-home: #d8be7b;
+  --cat-entertainment: #d289b4;
+  --cat-goods: #958bd4;
+  --cat-health: #d57c89;
+  --cat-other: #7a7887;
 
-  /* sequential ramp (heatmap) — citrus, matches --accent at its peak */
+  /* sequential ramp (heatmap) — follows --accent (emerald) */
   --seq-0: var(--surface-3);
-  --seq-1: #fff0cc;
-  --seq-2: #ffde94;
-  --seq-3: #ffcb57;
-  --seq-4: #ffc93c;
+  --seq-1: #0f2c22;
+  --seq-2: #16452f;
+  --seq-3: #1c7654;
+  --seq-4: #1fc58e;
 
-  /* elevation — the bento tiles float on soft colorful (not black) shadow;
-     --card-border/--card-shadow are what the shared card block below and
-     any future component consume, so the border-vs-shadow language for a
-     "card" is itself a token, not hardcoded per component */
-  /* Paper on a desk: a hairline edge and the faintest lift, in warm grey
-     rather than the old plum. The bento's colourful drop shadows were the
-     other half of what made this theme read as tiles instead of pages. */
-  --sh-1: 0 1px 2px rgba(74, 58, 46, 0.06);
-  --sh-2: 0 2px 8px -3px rgba(74, 58, 46, 0.10);
-  --sh-3: 0 12px 28px -12px rgba(74, 58, 46, 0.16);
+  /* elevation — Cinema is flat: hairline borders, no ambient shadow. The
+     only shadow left is a genuine overlay lift (sheets/dialogs sitting
+     above content), which stays a plain black shadow rather than a tinted
+     one -- there is no colored-shadow language in this direction. */
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-2: 0 10px 24px -12px rgba(0, 0, 0, 0.5);
+  --sh-3: 0 26px 54px -16px rgba(0, 0, 0, 0.6);
   --card-border: 1px solid var(--line);
-  --card-shadow: var(--sh-1);
+  --card-shadow: none;
   --tile-edge-width: 0px;
-  /* a real zero-effect shadow, not the none keyword, so it can sit in a
-     comma-separated box-shadow list unconditionally (see .add-button) */
-  --glow-primary: 0 0 0 rgba(36, 21, 54, 0);
-  --overlay-scrim: rgba(58, 48, 40, 0.38);
-  --focus-ring: rgba(186, 89, 74, 0.45);
+  --glow-primary: 0 0 22px -2px rgba(31, 197, 142, 0.28);
+  --overlay-scrim: rgba(0, 0, 0, 0.7);
+  --focus-ring: rgba(31, 197, 142, 0.4);
 
   /* scales */
   /* Fixed-chrome heights, named so a screen that wants to fill exactly the
@@ -188,14 +165,14 @@
   --s-8: 40px;
   --s-9: 56px;
 
-  /* Radius — eased back from the bento's "very round" to the corner of a
-     card of paper. Still soft, no longer a pill. */
-  --r-xs: 7px;
-  --r-sm: 10px;
-  --r-md: 14px;
-  --r-lg: 18px;
-  --r-xl: 22px;
-  --r-2xl: 28px;
+  /* Radius — small, the way a Netflix tile/button corner is small; not the
+     bento's pill nor even quiet-dark's "moderate squircle." */
+  --r-xs: 3px;
+  --r-sm: 5px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-2xl: 20px;
   --r-full: 999px;
 
   /* type scale — 9 steps, re-ratioed so the top of the scale can actually
@@ -255,135 +232,6 @@
   --e-out: cubic-bezier(0.2, 0.9, 0.25, 1);
   --e-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   --e-spring: cubic-bezier(0.22, 1.24, 0.36, 1);
-}
-
-/* -------------------------------------------------------------------------
-   Tokens — dark ("Neon Terminal")
-   ------------------------------------------------------------------------- */
-/* Comfort note (read before brightening anything here): this theme is used
-   at night, on OLED phones, at low screen brightness. Two things made the
-   first pass physically uncomfortable to read, and both are easy to
-   reintroduce by "fixing" one token at a time:
-   1. Pure-black ground + near-white text = ~17:1 contrast. Way past the
-      ~7:1 AAA bar, and on an emissive screen the eye keeps re-adapting
-      between the two extremes. --bg sits a few steps off black and --ink a
-      few steps off white so the pair lands ~12:1 — still comfortably AAA,
-      no longer a headlight.
-   2. Saturated hues at near-maximum lightness bloom on dark ground: the
-      eye cannot focus the fringe, so edges shimmer. This theme has been
-      pulled back twice for that reason. First from fluorescent (#e8ff52 /
-      #4de8ff / #ff3d7f) to acid; then, when acid lime and electric cyan
-      still read as glare at low brightness, off the neon axis entirely to
-      sage and warm sand. Lightness is unchanged in both moves -- what came
-      out was chroma, which is what blooms. The glows that multiply the
-      effect (--glow-primary, --hero-amount-glow) stay at roughly half
-      their original alpha. Keep new hues in the same lightness AND chroma
-      band as their neighbours, rather than matching a swatch picked on a
-      white screen. */
-:root[data-theme="dark"] {
-  --bg: #101116;
-  --surface: #171922;
-  --surface-2: #1d1f2a;
-  --surface-3: #242733;
-  --line: #2b2e3a;
-  --line-soft: #22242e;
-  --line-strong: #383c4a;
-
-  --ink: #d5d4de;
-  --ink-2: #b6b5c4;
-  --ink-3: #8d8b9e;
-  --ink-4: #6f6d80;
-  --ink-inverse: #101116;
-
-  /* primary is the one loud color in this theme, spent on buttons, the
-     nav's active state and the FAB; accent marks secondary structure
-     (insight-tile edges, the heatmap ramp). The pair used to be acid lime
-     and electric cyan — a cold, high-chroma combination that glares on a
-     near-black ground. Sage and warm sand hold the same two jobs at the
-     same lightness, with the chroma that made them tiring taken out. */
-  --accent: #d3b27f;
-  --accent-strong: #e7c592;
-  --accent-soft: #2a1c05;
-  --accent-line: rgba(211, 178, 127, 0.30);
-  --accent-contrast: #101116;
-  --income-contrast: #101116;
-  --expense-contrast: #101116;
-  /* Sage, not the acid lime it was. The acid read as "terminal" but it is
-     a light source at this chroma, and this is an app someone opens in bed:
-     the whole point of the dark theme is that it should be restful. Same
-     lightness, same "positive/go" meaning, roughly two thirds the chroma. */
-  --primary: #a4cc86;
-  --primary-hover: #b7e099;
-  --primary-text: #101116;
-
-  /* the hero has no fill at all here — it's the same near-black as the
-     page, and boldness is spent entirely on the glowing amount instead */
-  --hero-bg: #101116;
-  --hero-text: #8d8b9e;
-  --hero-amount: #a4cc86;
-  --hero-border: 1px dashed var(--line);
-  --hero-shadow: none;
-  --hero-amount-glow: 0 0 24px rgba(164, 204, 134, 0.16);
-
-  --shimmer-sheen: rgba(255, 255, 255, 0.06);
-
-  /* dark merges "expense" and "danger" into one alert hue — income
-     intentionally shares --primary's sage (both read as "positive/go"),
-     which only works because they never appear in the same element. The
-     pink is a softened rose now for the same comfort reason as --primary. */
-  --income: #a4cc86;
-  --income-soft: #1a2413;
-  --expense: #e47697;
-  --expense-soft: #2b1620;
-  /* A step down in lightness from the hues above (see the light block for
-     why): enough that a full tile stops glaring, still the same family. */
-  --income-fill: #85ac67;
-  --expense-fill: #c25779;
-  --accent-fill: #b39361;
-  --danger: #e47697;
-  --danger-soft: #2b1620;
-  --danger-border: #4d2634;
-
-  /* Same eight hues, chroma eased by about a quarter. A category chip is
-     a 14px dot next to text, so it needs to be identifiable, not vivid --
-     eight fully saturated dots down a list was the other thing making this
-     theme tiring. */
-  --cat-travel: #7ec8d8;
-  --cat-food: #d9896b;
-  --cat-bills: #76ccae;
-  --cat-home: #d8be7b;
-  --cat-entertainment: #d289b4;
-  --cat-goods: #958bd4;
-  --cat-health: #d57c89;
-  --cat-other: #7a7887;
-
-  /* The heatmap ramp follows --accent, so it moves to sand with it. */
-  --seq-1: #3e2901;
-  --seq-2: #614820;
-  --seq-3: #876d44;
-  --seq-4: #b59a70;
-
-  /* elevation — panels are flat and bordered, not shadowed; the only
-     shadow work left is a colored glow, reserved for the FAB/hero */
-  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --sh-2: 0 10px 24px -12px rgba(0, 0, 0, 0.5);
-  --sh-3: 0 26px 54px -16px rgba(0, 0, 0, 0.6);
-  --card-border: 1px solid var(--line);
-  --card-shadow: none;
-  --tile-edge-width: 3px;
-  --glow-primary: 0 0 22px -2px rgba(164, 204, 134, 0.28);
-  --overlay-scrim: rgba(0, 0, 0, 0.6);
-  --focus-ring: rgba(164, 204, 134, 0.4);
-
-  /* radius — a flatter, "moderate squircle" scale; every step is tighter
-     than light mode's, not just re-hued */
-  --r-xs: 6px;
-  --r-sm: 10px;
-  --r-md: 14px;
-  --r-lg: 16px;
-  --r-xl: 18px;
-  --r-2xl: 22px;
-  --r-full: 999px;
 }
 
 /* -------------------------------------------------------------------------
@@ -827,27 +675,6 @@ a:focus-visible {
   line-height: 1.1;
 }
 
-.menu-button {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-full);
-  background: transparent;
-  border: 1px solid transparent;
-  display: grid;
-  place-items: center;
-  color: var(--ink-2);
-  transition: transform var(--t-press) var(--e-out), background var(--t-2) var(--e-out), color var(--t-2) var(--e-out);
-}
-
-.menu-button:hover, .menu-button:focus-visible {
-  background: var(--surface-2);
-  color: var(--ink);
-}
-
-.menu-button:active {
-  transform: scale(0.92);
-}
-
 /* Below the desktop 2-column dashboard breakpoint, Home's topbar sits
    directly on top of the hero balance card and shares its exact fill
    color, so the two read as one continuous full-bleed zone rather than a
@@ -872,32 +699,15 @@ a:focus-visible {
     color: var(--hero-text);
   }
 
-  /* The topbar shares the hero's coral fill on Home, so both buttons in it
-     have to invert with it -- the theme switch used --ink-2, which is all
-     but invisible there. */
-  .phone.tab-home .menu-button {
-    color: var(--hero-text);
-  }
-
+  /* The topbar shares the hero's fill on Home, so the identity button has
+     to invert with it. */
   .phone.tab-home .home-identity:hover,
-  .phone.tab-home .home-identity:focus-visible,
-  .phone.tab-home .menu-button:hover,
-  .phone.tab-home .menu-button:focus-visible {
+  .phone.tab-home .home-identity:focus-visible {
     background: var(--overlay-on-primary);
     color: var(--hero-text);
   }
 
   .phone.tab-home .home-profile-icon {
-    background: var(--overlay-on-primary);
-    color: var(--hero-text);
-  }
-
-  .phone.tab-home .menu-button {
-    color: var(--hero-text);
-    background: var(--overlay-on-primary-soft);
-  }
-
-  .phone.tab-home .menu-button:hover, .phone.tab-home .menu-button:focus-visible {
     background: var(--overlay-on-primary);
     color: var(--hero-text);
   }
@@ -1318,9 +1128,8 @@ a:focus-visible {
    the hero, and the bento tiles built in the Home rebuild), and bare
    (.activity-timeline below — no box at all, separated by the page's own
    gutter and whitespace instead of a border). Tint's border/shadow come
-   from --card-border/--card-shadow so light vs dark can pick "soft shadow,
-   no border" or "hairline border, no shadow" without any component rule
-   needing a [data-theme="dark"] override.
+   from --card-border/--card-shadow, both Cinema's "hairline border, no
+   shadow" now that there is only one theme.
    ------------------------------------------------------------------------- */
 .wallet-card, .summary-panel, .entry-list, .heatmap-panel, .debtor-detail-card,
 .debtor-page-item, .draft, .state-card, .empty-note, .report-preview,

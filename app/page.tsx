@@ -25,7 +25,6 @@ import type {
   QuickShortcut,
   RecurringExpense,
   SlipImage,
-  Theme,
   Toast,
   Wallet,
   WalletDisplay,
@@ -92,11 +91,9 @@ import {
   SAVE_TIMEOUT_MS,
   SPLASH_MIN_VISIBLE_MS,
   TABLES,
-  THEME_STORAGE_KEY,
   TRANSACTION_COLUMNS,
   WALLET_COLUMNS,
 } from "@/lib/constants";
-import { Moon, Sun } from "lucide-react";
 import { WalletAvatarGlyph } from "@/components/shared";
 import { BottomNav } from "@/components/bottom-nav";
 import { ConfirmDialog, CountUpMoney, ElapsedSeconds, ErrorActions, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useStableHandler } from "@/components/primitives";
@@ -381,13 +378,6 @@ export default function Home() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [closingToastIds, setClosingToastIds] = useState<number[]>([]);
   const [savePulse, setSavePulse] = useState(0);
-  // Seeded from the attribute app/layout.tsx's pre-paint script already set
-  // from localStorage, so React's state agrees with what is on screen from
-  // the very first render instead of racing it. Guarded for the server pass,
-  // where there is no document (and where this component renders nothing
-  // anyway, since `ready` is false until the auth check resolves).
-  const [theme, setTheme] = useState<Theme>(() =>
-    (typeof document !== "undefined" && document.documentElement.dataset.theme === "dark" ? "dark" : "light"));
   const [pinMode, setPinMode] = useState<PinMode>("checking");
   const [pinError, setPinError] = useState("");
   const scrollRootRef = useRef<HTMLElement | null>(null);
@@ -529,35 +519,6 @@ export default function Home() {
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
     };
-  }, []);
-
-  // Mirrors <html data-theme> onto the DOM whenever the user switches themes.
-  // It does NOT need to restore the stored theme on mount: the inline script
-  // in app/layout.tsx has already read localStorage and stamped the attribute
-  // before first paint, and the useState initializer above reads that same
-  // attribute back -- so this effect's first write is always the value that
-  // is already there.
-  //
-  // The previous shape had the state default to "light" and a setTimeout(0)
-  // effect correct it afterwards, which meant this effect stamped "light"
-  // over the pre-paint value on every single load and put it back a tick
-  // later: a light flash on every app open for a dark-mode user, and a
-  // crashed render (app/error.tsx) left showing the wrong theme entirely,
-  // since the correcting timeout belongs to the component that just failed.
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
-
-  // Persist on change rather than in an effect on `theme`. An effect would
-  // also fire on mount and write a theme the user never actually picked.
-  const changeTheme = useCallback((next: Theme) => {
-    setTheme(next);
-    try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, next);
-    } catch {
-      // Private mode / storage blocked: the theme still applies for this
-      // session, it just won't be remembered for the next one.
-    }
   }, []);
 
   // Warm the code-split tab/sheet chunks once the app is up and idle. Without
@@ -2908,19 +2869,10 @@ export default function Home() {
               <b>{displayName}</b>
             </span>
           </button>
-          {/* The one setting worth a permanent button: it is the only one
-              people flip more than once, and at two states it needs no menu
-              to choose from -- the icon shows where the tap will take you. */}
-          <button
-            className="menu-button"
-            onClick={() => changeTheme(theme === "dark" ? "light" : "dark")}
-            title={theme === "dark" ? "ใช้ธีมสว่าง" : "ใช้ธีมมืด"}
-            aria-label={theme === "dark" ? "เปลี่ยนเป็นธีมสว่าง" : "เปลี่ยนเป็นธีมมืด"}
-          >
-            {theme === "dark"
-              ? <Sun size={18} strokeWidth={2.25} aria-hidden="true" />
-              : <Moon size={18} strokeWidth={2.25} aria-hidden="true" />}
-          </button>
+          {/* The theme toggle that used to live here is gone along with light
+              mode -- Cinema is dark only. The topbar's one remaining job is
+              the way into the account; phase 2 gives it the logo/search
+              layout docs/netflix-reference.html mocks. */}
         </header>
 
         {!isOnline && <StateCard tone="error" title="ออฟไลน์อยู่" detail="ข้อมูลอาจไม่อัปเดต และบันทึก/วิเคราะห์รายการใหม่ไม่ได้จนกว่าจะกลับมาออนไลน์" />}

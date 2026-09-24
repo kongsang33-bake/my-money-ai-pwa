@@ -43,8 +43,8 @@ export const categoryIconMap: Record<string, LucideIcon> = {
 
 // Categorical palette validated for CVD-safe adjacency + normal-vision separation
 // (dataviz skill, 7-slot subset of the default 8-hue order; brand accent reserved for income).
-// Values live as CSS custom properties (--cat-*) so dark mode adapts them automatically —
-// see :root / :root[data-theme="dark"] in globals.css.
+// Values live as CSS custom properties (--cat-*), defined once in :root in
+// globals.css.
 export const categoryColorVars: Record<string, string> = {
   เดินทาง: "--cat-travel",
   อาหาร: "--cat-food",

@@ -37,9 +37,9 @@ describe("categoryColorVar", () => {
 });
 
 describe("categoryColor / categoryTint", () => {
-  it("wraps the slot in var() so the value follows the theme", () => {
-    // Never a literal color: the whole point is that :root and
-    // :root[data-theme="dark"] redefine --cat-* per theme.
+  it("wraps the slot in var() rather than a literal color", () => {
+    // Never a literal color: :root defines --cat-* once in globals.css, so
+    // a future token change never needs a call-site edit.
     assert.equal(categoryColor("อาหาร"), "var(--cat-food)");
     assert.ok(!/#[0-9a-f]{3}/i.test(categoryColor("อาหาร")));
   });

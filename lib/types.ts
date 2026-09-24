@@ -184,8 +184,6 @@ export type NetWorthDebtFormula = "full" | "obligation";
 
 export type NetWorthDisplaySettings = { formula: NetWorthDebtFormula; hideCard: boolean };
 
-export type Theme = "light" | "dark";
-
 export type PinMode = "checking" | "setup" | "locked" | "unlocked";
 
 export type Profile = {

@@ -207,34 +207,32 @@ token value.
 - `npm run test:e2e` runs the Playwright suite against a **production**
   build across three viewports (mobile / 700px / desktop — the 600–899px
   breakpoint is a real layout, don't only check mobile and desktop). It
-  covers boot, theme switching and persistence, tab navigation and scroll
-  behaviour, sheet scroll-lock, the AI composer, and the error boundary.
-  Every spec fails on an uncaught page error, so a crash cannot pass
-  silently now that the error boundary keeps the app on its feet. If
-  Playwright cannot download its own browser, point `E2E_CHROMIUM_PATH` at
-  an existing Chromium binary.
+  covers boot, tab navigation and scroll behaviour, sheet scroll-lock, the
+  AI composer, and the error boundary. There is no `theme.spec.ts` any
+  more -- Cinema is dark only, so the switching/persistence/no-flash
+  behaviour that file tested no longer exists to test. Every spec fails on
+  an uncaught page error, so a crash cannot pass silently now that the
+  error boundary keeps the app on its feet. If Playwright cannot download
+  its own browser, point `E2E_CHROMIUM_PATH` at an existing Chromium
+  binary.
 - **The design rules in this file are checked, not just written down.**
   `npm run verify:design` fails on a colour written as a literal anywhere
-  outside the `:root` token blocks (the rule under "Use the token scales"),
+  outside the `:root` token block (the rule under "Use the token scales"),
   with four documented exceptions it names when it fails. `e2e/a11y.spec.ts`
-  measures the *rendered* page on every screen, in both themes, at all three
-  widths, for three things a screenshot only catches if you happen to look:
-  WCAG 1.4.3 contrast, WCAG 2.5.8 target size (24×24), and content wider than
-  `.phone` — which is invisible by construction, since `.phone` sets
-  `overflow-x: hidden` and simply clips it. Target size and overflow are held
-  at zero. Contrast is ratcheted against `e2e/contrast-baseline.json`: 23
-  pairs in the palette still do not reach AA, clearing them is a deliberate
-  re-tuning rather than a bug fix, and the ledger exists so the list cannot
-  quietly grow in the meantime. Read the comment at the top of that spec
-  before regenerating it. The money colours were the first group cleared —
-  see the `--income`/`--expense` comment in `globals.css` for the
-  text-weight vs fill-weight split that made it possible. What is left is
-  mostly the coral hero's dimmed captions (they carry an `opacity` of their
-  own on top of white), the `--cat-*` avatar initials, and the heatmap's two
-  darkest buckets. The audit opens every `InfoHint` before measuring, because
-  a `<details>` renders nothing until it does — a popover that inherited the
-  hero's white text onto its own white panel shipped invisible while the gate
-  reported green.
+  measures the *rendered* page on every screen, at all three widths (one run
+  each now that there is one theme -- see git history before the Cinema
+  pass for the two-theme version), for three things a screenshot only
+  catches if you happen to look: WCAG 1.4.3 contrast, WCAG 2.5.8 target size
+  (24×24), and content wider than `.phone` — which is invisible by
+  construction, since `.phone` sets `overflow-x: hidden` and simply clips
+  it. Target size and overflow are held at zero. Contrast is ratcheted
+  against `e2e/contrast-baseline.json`: it was reset to `{}` and regenerated
+  against the Cinema palette (6 pairs, down from 23 against the old paper/
+  quiet-dark palette -- not yet zero, so still read the comment at the top
+  of that spec before regenerating it further). The audit opens every
+  `InfoHint` before measuring, because a `<details>` renders nothing until
+  it does — a popover that inherited surrounding light text onto its own
+  light panel shipped invisible while the gate reported green.
 - **The e2e suite stops at the first write, and that is not a gap you can
   close with another spec.** It runs without Supabase credentials, and every
   mutation in `app/page.tsx` opens with `if (!supabase) return` — so save,
@@ -244,9 +242,8 @@ token value.
   unit-testing the pure functions they delegate to instead
   (`planEntryUpdate`, `describeWalletDeletion`, `recordFailedPinAttempt`).
   Moving that boundary needs a stub Supabase client in `e2e/fixture.ts`.
-- For a *visual* check, screenshot through the same fixture in both themes
-  and at all three widths. Judge a design change on the screenshots, not on
-  the diff.
+- For a *visual* check, screenshot through the same fixture at all three
+  widths. Judge a design change on the screenshots, not on the diff.
 - When a `<span>`/`<b>`/`<strong>` pair is meant to stack as a label above
   a value (most "total" cards and stat tiles follow this pattern), give the
   label element `display: block` explicitly, or make the parent

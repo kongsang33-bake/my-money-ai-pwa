@@ -81,8 +81,6 @@ export const MONTH_START_DAY_MAX = 28;
 // own deliberately higher alpha values (16, 20) and stay inline.
 export const CATEGORY_DOT_TINT_ALPHA = 13;
 
-export const THEME_STORAGE_KEY = "money-ai-theme";
-
 export const TABLES = {
   transactions: "transactions",
   profiles: "profiles",
