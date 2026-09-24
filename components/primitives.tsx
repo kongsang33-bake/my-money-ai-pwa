@@ -140,7 +140,9 @@ export function Rail({
 export function EmptyNote({ glyph, children, action }: { glyph: string; children: React.ReactNode; action?: EmptyAction }) {
   return (
     <div className="empty-note">
-      <span className="empty-glyph">{glyph}</span>
+      {/* U+FE0E asks for the text form: iOS draws several geometric dingbats
+          (▪ was one) as a colour emoji square without it. */}
+      <span className="empty-glyph" aria-hidden="true">{`${glyph}\uFE0E`}</span>
       <p>{children}</p>
       {action && <button onClick={action.onClick}>{action.label}</button>}
     </div>

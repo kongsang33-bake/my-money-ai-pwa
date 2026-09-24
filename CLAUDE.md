@@ -168,7 +168,7 @@ the product name -- leave them.
   from `lucide-react` (`categoryIconMap`, `walletIconOptions`), rendered
   with `currentColor` so they inherit the surrounding text/icon color.
   `EmptyNote`'s `glyph` prop takes a plain monochrome dingbat character
-  (`● ◆ ฿ ✚ ▣ ↻`), matching that same family — not an emoji, not the old
+  (`● ◆ ฿ ✚ ▣ ↻`; never `▪`, which iOS draws as an emoji square), matching that same family — not an emoji, not the old
   mascot.
 - **Use the token scales, never hand-picked values.** `app/globals.css`
   defines the full system in `:root` — spacing (`--s-0`…`--s-9`), radius

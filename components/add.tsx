@@ -587,7 +587,7 @@ export const EntryList = memo(function EntryList({
   // tapping the open one, closes it.
   const [openId, setOpenId] = useState<string | null>(null);
 
-  if (!entries.length) return <EmptyNote glyph="▪" action={emptyAction}>ยังไม่มีรายการในช่วงนี้</EmptyNote>;
+  if (!entries.length) return <EmptyNote glyph="▣" action={emptyAction}>ยังไม่มีรายการในช่วงนี้</EmptyNote>;
 
   return (
     <div className="entry-list">

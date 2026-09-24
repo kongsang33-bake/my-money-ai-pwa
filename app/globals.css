@@ -6079,6 +6079,7 @@ input[type="checkbox"], input[type="radio"] {
   font-size: var(--fs-value);
   color: var(--ink-3);
   margin-bottom: var(--s-3);
+  font-variant-emoji: text;
 }
 
 .empty-note p {
