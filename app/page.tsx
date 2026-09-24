@@ -96,7 +96,7 @@ import {
 } from "@/lib/constants";
 import { WalletAvatarGlyph } from "@/components/shared";
 import { BottomNav } from "@/components/bottom-nav";
-import { ConfirmDialog, CountUpMoney, ElapsedSeconds, ErrorActions, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useStableHandler } from "@/components/primitives";
+import { ConfirmDialog, CountUpMoney, ElapsedSeconds, ErrorActions, Rail, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useStableHandler } from "@/components/primitives";
 import { AiComposer, DraftImpact, DraftRow, EditSheet, EntryList, ManualEntryForm, QuickAddStrip, RecentActivityTimeline } from "@/components/add";
 import {
   BudgetGlanceCard,
@@ -2892,8 +2892,17 @@ export default function Home() {
           {savePulseDismiss.mounted && <SuccessPulse count={savePulse} onAddMore={openAddTab} closing={savePulseDismiss.closing} />}
           {!dataLoading && (
             <>
+              {/* The billboard: Home's one full-bleed identity moment, same
+                  job the coral hero used to do, now carrying its own two
+                  actions instead of the whole card being one tap target. */}
               <section className="wallet-grid single-wallet">
-                <HeroWalletCard balance={mainWallet} insight={walletInsight} streak={streak} />
+                <HeroWalletCard
+                  balance={mainWallet}
+                  insight={walletInsight}
+                  streak={streak}
+                  onAddEntry={openAddTabDefault}
+                  onViewDetails={() => setTab("wallets")}
+                />
               </section>
               {!wallets.length && !!entries.length && (
                 <MissingWalletNotice entryCount={entries.length} onCreateWallet={openWalletCreateSheet} />
@@ -2923,36 +2932,59 @@ export default function Home() {
                   payableTotal={payableTotal}
                 />
               )}
-              <QuickAddStrip shortcuts={homeShortcuts} onSelect={addFromShortcut} onMore={openAddTabDefault} />
-              {!!goals.length && <GoalCard goals={goals} onAdd={openGoalSheet} onDelete={removeGoalHandler} />}
-              {(dueSoonRecurring.length > 0 || budgetGlance.totalBudget > 0) && (
-                <div className="home-focus-grid">
+              {/* Everything below here is a rail: a named row of fixed-width
+                  cards that scrolls on its own, rather than a stack of
+                  full-width blocks or a CSS grid -- see the "Rails" section
+                  of globals.css and the Rail component in primitives.tsx.
+                  Each card component (QuickAddStrip, DueSoonCard, …) is
+                  untouched; only its wrapper changed. */}
+              <section className="rail">
+                <div className="rail-head"><h2>จดเร็ว</h2></div>
+                <QuickAddStrip shortcuts={homeShortcuts} onSelect={addFromShortcut} onMore={openAddTabDefault} />
+              </section>
+              {(dueSoonRecurring.length > 0 || unpaidCards.length > 0) && (
+                // No rail-level action here: DueSoonCard/UnpaidCardsCard each
+                // already carry their own "จัดการ"/"ดูหนี้" button, and a
+                // second one on the rail head would just repeat it.
+                <Rail title="ใกล้ถึงกำหนด">
                   {dueSoonRecurring.length > 0 && <DueSoonCard items={dueSoonRecurring} onManage={openRecurringTab} onLogNow={logRecurringNowHandler} />}
                   {unpaidCards.length > 0 && <UnpaidCardsCard items={unpaidCards} onManage={openCardDebts} />}
+                </Rail>
+              )}
+              {(!!goals.length || budgetGlance.totalBudget > 0) && (
+                <Rail title="เป้าหมายและงบ">
+                  {!!goals.length && <GoalCard goals={goals} onAdd={openGoalSheet} onDelete={removeGoalHandler} />}
                   {budgetGlance.totalBudget > 0 && <BudgetGlanceCard budgetGlance={budgetGlance} onManage={openBudgetsTab} />}
-                </div>
+                </Rail>
               )}
               {hasEnoughForInsights && (
-                <>
+                <Rail title="ภาพรวมเดือนนี้">
                   <CashFlowTrendCard summary={cashFlowSummary} />
                   <SpendingPersonalityCard topCategory={discretionaryTopCategory} trend={discretionaryCategoryTrend} monthlyOutflow={monthlyOutflow} hasBillsOnly={!discretionaryTopCategory && monthlyOutflow > 0} />
-                </>
+                </Rail>
               )}
             </>
           )}
 
           {!dataLoading && !!secondaryWallets.length && (
-            <div className="wallet-carousel">
-              {secondaryWallets.map((wallet) => (
-                <button className={`wallet-carousel-card ${secondaryWalletTags.find((entry) => entry.tag === wallet.tag)?.className ?? ""}`} key={wallet.id} onClick={() => setTab("wallets")}>
-                  <i className="debtor-avatar sm" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>
-                    <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} size={16} />
-                  </i>
-                  <span>{wallet.name}</span>
-                  <strong><CountUpMoney value={wallet.display_balance} /></strong>
-                </button>
-              ))}
-            </div>
+            <section className="rail">
+              <div className="rail-head"><h2>กระเป๋าของคุณ</h2><button onClick={() => setTab("wallets")}>จัดการ</button></div>
+              {/* Its own scroller, not routed through .rail-track: the
+                  fixed 160px card width here is deliberate and older than
+                  the rail pattern, and .rail-track's wider default would
+                  just be a second, uncoordinated width rule fighting it. */}
+              <div className="wallet-carousel">
+                {secondaryWallets.map((wallet) => (
+                  <button className={`wallet-carousel-card ${secondaryWalletTags.find((entry) => entry.tag === wallet.tag)?.className ?? ""}`} key={wallet.id} onClick={() => setTab("wallets")}>
+                    <i className="debtor-avatar sm" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>
+                      <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} size={16} />
+                    </i>
+                    <span>{wallet.name}</span>
+                    <strong><CountUpMoney value={wallet.display_balance} /></strong>
+                  </button>
+                ))}
+              </div>
+            </section>
           )}
 
           {!dataLoading && <RecentActivityTimeline entries={entries} onEdit={openEditSheet} />}

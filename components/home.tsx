@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useMemo, useState } from "react";
-import { ChevronLeft, TrendingDown, TrendingUp, Users, Wallet as WalletIcon } from "lucide-react";
+import { ChevronLeft, Info, Plus, TrendingDown, TrendingUp, Users, Wallet as WalletIcon } from "lucide-react";
 import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
 import { formatMoney, formatPercent, formatShortDate, formatSignedMoney, moneySign, toMoneyAmount } from "@/lib/format";
 import { shiftMonthKey } from "@/lib/cycle";
@@ -116,10 +116,14 @@ export const HeroWalletCard = memo(function HeroWalletCard({
   balance,
   insight,
   streak,
+  onAddEntry,
+  onViewDetails,
 }: {
   balance: number;
   insight: { tone: string; label: string; text: string; perDay: number };
   streak: number;
+  onAddEntry: () => void;
+  onViewDetails: () => void;
 }) {
   return (
     <div className={`wallet-card primary-wallet hero-wallet hero-${insight.tone}`}>
@@ -145,6 +149,20 @@ export const HeroWalletCard = memo(function HeroWalletCard({
       </strong>
       <div className="hero-wallet-foot">
         <small>{insight.text}</small>
+      </div>
+      {/* The billboard's own two actions, the way a Netflix billboard carries
+          Play/More info rather than making the whole card one big tap
+          target -- see docs/netflix-reference.html. "จดรายการ" is the
+          white --primary CTA (the Cinema direction's one non-brand loud
+          fill); "รายละเอียด" reuses --overlay-on-primary the way the topbar
+          buttons already do when they sit on this same --hero-bg. */}
+      <div className="billboard-actions">
+        <button className="billboard-cta" onClick={onAddEntry}>
+          <Plus size={18} strokeWidth={2.5} aria-hidden="true" />จดรายการ
+        </button>
+        <button className="billboard-cta-2" onClick={onViewDetails}>
+          <Info size={18} strokeWidth={2.25} aria-hidden="true" />รายละเอียด
+        </button>
       </div>
     </div>
   );

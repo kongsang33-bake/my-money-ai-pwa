@@ -95,6 +95,37 @@ export function InfoHint({ label, children }: { label: string; children: React.R
   );
 }
 
+/**
+ * A named, horizontally-scrolling row of cards -- Home's basic unit under
+ * the billboard (see docs/netflix-reference.html). Deliberately generic: it
+ * only lays out a heading, an optional "ดูทั้งหมด" action and a scroll-snap
+ * track, and knows nothing about what is inside each item. A section that
+ * used to be a CSS grid of full-width cards becomes a Rail by giving each
+ * card a fixed rail width in CSS (see .rail-track > * in globals.css) and
+ * wrapping the group here -- the cards' own components are untouched.
+ */
+export function Rail({
+  title,
+  action,
+  onAction,
+  children,
+}: {
+  title: string;
+  action?: string;
+  onAction?: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rail">
+      <div className="rail-head">
+        <h2>{title}</h2>
+        {action && onAction && <button onClick={onAction}>{action}</button>}
+      </div>
+      <div className="rail-track">{children}</div>
+    </section>
+  );
+}
+
 export function EmptyNote({ glyph, children, action }: { glyph: string; children: React.ReactNode; action?: EmptyAction }) {
   return (
     <div className="empty-note">

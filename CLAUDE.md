@@ -4,82 +4,77 @@ Guidance for working on this codebase — a Thai personal-finance PWA
 (Next.js App Router, single-file `app/page.tsx`, design system in
 `app/globals.css`).
 
-## Design system: Paper (light) / Quiet Dark (dark)
+## Design system: Cinema (dark only)
 
-> **A third direction is agreed and not yet built: "Cinema".** A
-> Netflix-shaped app — one billboard per screen, then horizontal rails of
-> poster/tile cards, a title-detail sheet, an "กำลังจะมา" timeline tab —
-> dark only (light mode and the theme toggle are to be removed), emerald
-> `--brand` used as ink only, a white primary button, and income/expense
-> moved off green to sky/coral so money meaning never collides with the
-> brand. `docs/netflix-reference.html` renders it and carries the proposed
-> `:root` tokens and the list of rules below that change with it. Until
-> phase 1 lands, everything in this section still describes the live app;
-> when it lands, rewrite this section rather than appending to it.
+นับตังค์ (Nubtang) is a Netflix-shaped app now: one billboard per screen
+(the Home balance card, still `.hero-wallet`/`HeroWalletCard` under the
+hood) carrying its own two actions, then horizontal rails of fixed-width
+cards underneath — a section that used to be a full-width stacked card or
+a CSS grid becomes a rail by wrapping it in the `Rail` component
+(`components/primitives.tsx`) and letting `.rail-track > *` in
+`globals.css` give every item inside it a fixed width, never by rewriting
+the card's own component. There is **one theme, dark only** — no
+`[data-theme]`, no toggle, no `prefers-color-scheme` branching. Grounds
+are near-black; the emerald `--accent` is ink, never a fill, spent on the
+logo mark, the nav's FAB, ribbons and progress — never a button. The
+button fill is `--primary`, and `--primary` is white (the Netflix "Play"
+role), which is *why* `--accent` can't also be a button: the app's one
+default action and its one "this is highlighted" mark would read as the
+same thing. `--income`/`--expense` were moved off green/red entirely (sky
+and coral) for the same reason — green means the brand now, and red on a
+primary "จดรายการ" button would read as a warning.
 
-นับตังค์ (Nubtang) should feel like keeping a notebook, not like operating a dashboard.
-Light mode is **paper**: warm off-white grounds with the chroma taken almost
-to zero, a hairline edge and the faintest lift instead of coloured drop
-shadows, corners eased back from pill to sheet, and colour used as ink —
-small marks, deep enough to read — rather than as tile fills. Exactly one
-full colour block survives, the coral hero, which reads as a band across the
-top of the page. Dark mode is **quiet dark**: near-black panels with hairline
-borders and no shadow, and its two loud hues are sage and warm sand, at the
-same lightness as the acid lime and electric cyan they replaced but with the
-chroma that made them glare taken out. The two are still different visual
-worlds tied by the same token names; they are no longer a bright theme and a
-neon one.
+This is the third direction. `docs/design-reference.html` is the first
+(a saturated color-blocked bento against a near-black neon terminal) and
+`docs/netflix-reference.html` is the phase-0 mock this one was built from
+— both are records of how a direction got chosen, not a description of the
+app today. **The live tokens at the top of `app/globals.css` are the
+reference; read those before starting a design task.**
 
-This is the second direction. The first — a saturated color-blocked bento
-against a near-black neon terminal — is what `docs/design-reference.html`
-renders, so read that file as the record of how a direction gets chosen
-here, not as a description of the app today. **The live tokens at the top of
-`app/globals.css` are the reference; read those before starting a design
-task.**
+**What has actually landed vs. what is still mocked-only.** Phase 1 (the
+token layer + removing light mode entirely) and a first slice of phase 2
+(the billboard's own actions, and Home's insight/due-soon/goal/cash-flow
+sections converted from stacked cards/a CSS grid into rails) are live. Not
+yet built: poster/tile cards with their own art, the title-detail sheet,
+the "กำลังจะมา" timeline tab, restyling More/Wallets/the PIN gate, and a
+genuinely full-bleed desktop billboard (`.phone` still clamps to a
+max-width card at the wide breakpoints, per the rule below about not
+reintroducing phone-frame chrome — a Netflix-web-style edge-to-edge
+billboard needs that rule revisited deliberately, not as a side effect of
+an unrelated change). Read `docs/netflix-reference.html` for what those
+still-mocked pieces are meant to look like before building any of them.
 
-- **Palette is per-theme, not just re-hued.** Light: warm paper `--bg`,
-  deep plum-ink `--ink`/`--primary` for text and every button/nav fill, a
-  deep coral `--hero-bg` reserved for the one full-bleed hero moment —
-  deep because white sits on it, which the old bright coral could not carry.
-  `--accent` (citrus) is a mark colour here, not a tile fill. Dark: carbon
-  `--bg`, sage `--primary` (buttons, FAB, active nav, the hero numeral),
-  warm sand `--accent` for secondary structure. `--income`/
-  `--expense`/`--danger` carry all positive/negative/destructive meaning
-  and are picked to stay distinct from `--primary`/`--accent` in each
-  theme — don't reuse a semantic color as a decorative fill or vice versa.
-  Category chips use the 8-slot `--cat-*` palette (`categoryColorVars` in
-  `app/page.tsx`), never a color chosen ad hoc. `--accent-contrast` exists
-  because `--accent` is a bright/light hue in *both* themes — text on a
-  full-strength `--accent` fill needs it instead of `--text-on-color`
-  (always white — wrong on a light citrus fill) or `--ink-inverse` (flips
-  the wrong direction for this specific case).
-- **Radius, border and shadow are theme tokens too, not just color.**
-  `--card-border`/`--card-shadow` (tint-tier surfaces), `--hero-border`/
-  `--hero-shadow`/`--hero-amount-glow` (the hero card), and the `--r-*`
-  scale itself all have different *shapes* per theme (light: hairline
-  border, the faintest warm-grey lift, sheet-of-paper radius; dark:
-  hairline border, no shadow at all, slightly tighter radius) — not just
-  different colors. The two are closer in shape than they used to be, which
-  is the accepted cost of light mode reading as paper: a page with a
-  coloured drop shadow reads as a tile. This is what makes a component rule
-  never need its own `[data-theme="dark"]` override: point a component at
-  the token, and both the color and the shape follow the theme.
+- **Palette is one set now, not per-theme.** `--bg`/`--surface`/
+  `--surface-2`/`--surface-3` are near-black grounds; `--ink`/`--ink-2`/
+  `--ink-3`/`--ink-4` are light text at descending emphasis. `--accent` is
+  the emerald brand mark (logo, progress, active tab text, ribbons, the
+  nav's FAB); `--primary` is the white CTA fill every "จดรายการ"-style
+  button uses. `--income`/`--expense`/`--danger` carry all positive/
+  negative/destructive meaning and are picked to stay distinct from both
+  `--primary` and `--accent` — don't reuse a semantic color as a decorative
+  fill or vice versa. Category chips use the 8-slot `--cat-*` palette
+  (`categoryColorVars` in `app/page.tsx`), never a color chosen ad hoc.
+- **Radius and shadow are flat now.** The `--r-*` scale is small (3–20px,
+  a tile/button corner, not a pill) and `--card-shadow` is `none` —
+  hairline borders (`--card-border`) do all the separating work; the only
+  real shadow left (`--sh-1`/`--sh-2`/`--sh-3`) is a plain black overlay
+  lift, reserved for something that genuinely floats above content (a
+  sheet, a dialog, the FAB's glow), never a card sitting in the page flow.
+  Since there is one theme, a component points at the token and gets both
+  the color and the shape — there is no `[data-theme="dark"]` branch to
+  keep in sync any more.
 - **Three surface tiers, chosen per component, not one card rule for
   everything.** `app/globals.css`'s "Surface tiers" section: **tint** (the
   shared mega-selector rule — a quiet, still-boxed card; most content),
   **bold** (`.surface-bold` utility, or a component's own bold variant like
-  `.home-insight-card.savings-rate` / `.due-soon-card`), and **bare** (no box
-  at all — `.activity-timeline`, `.quick-add-strip` — content separated by the
-  page's own gutter and whitespace, not a border). When adding a new
-  section, decide its tier deliberately; don't default to copying the
-  nearest existing card.
-  **What "bold" means is itself per-theme, and goes through a token, not a
-  component rule.** `.home-insight-card.savings-rate` and `.due-soon-card`
-  point at `--income-fill` / `--expense-fill` / `--accent-fill`; in dark
-  those are saturated fills, in light they are pale washes on paper, because
-  light spends its one colour block on the hero. Neither component knows.
-  If a new card wants to be loud, give it a fill token and let the token
-  decide per theme — don't write a saturated background into the rule.
+  `.home-insight-card.savings-rate` / `.due-soon-card`), and **bare** (no
+  box at all — `.activity-timeline`, `.quick-add-strip` — content separated
+  by the page's own gutter and whitespace, not a border). `.due-soon-card`
+  and friends point at `--income-fill`/`--expense-fill`/`--accent-fill`
+  rather than a hand-picked saturated color, so a future re-tuning of what
+  "bold" means only touches those three tokens. When adding a new section,
+  decide its tier (or whether it's a rail item instead) deliberately;
+  don't default to copying the nearest existing card.
 - **Font**: IBM Plex Sans Thai, loaded via `next/font/google` in
   `app/layout.tsx` and exposed as `--font-sans`. Don't add a second font or
   fall back to a system stack without a real reason.
@@ -101,10 +96,8 @@ task.**
   `--e-in-out`, `--e-spring`), and type (see below). A new component should
   compose from these, not invent a new radius, a one-off box-shadow, or a
   hand-picked `font-size`. All colors are CSS custom properties defined
-  once in `:root` (light) and `:root[data-theme="dark"]` (dark) — never a
-  literal hex/rgb in a component rule. Every hardcoded color eventually
-  needs a manually-written dark-mode override, which is easy to miss and
-  is what broke dark mode repeatedly during earlier development.
+  once in `:root` — never a literal hex/rgb in a component rule.
+  `npm run verify:design` checks this mechanically (see Dev workflow).
 - **Type scale — 9 steps, all tokenized, re-ratioed for real hierarchy.**
   `--fs-display` (hero balance, ~44–64px) → `--fs-value` (large money
   amounts, ~28–40px) → `--fs-h1` (28px) → `--fs-h2` (21px) → `--fs-h3`
@@ -137,15 +130,18 @@ task.**
   `fill: none; stroke: currentColor` set explicitly in CSS; `lucide-react`
   icons already handle this internally via their `strokeWidth` prop, so
   they don't need it.
-- **The topbar holds the account and one setting, not a menu.** Your own
-  avatar and greeting (`.home-identity`) is a button into the account screen
+- **The topbar holds the account, not a menu.** Your own avatar and
+  greeting (`.home-identity`) is a button into the account screen
   (`ProfileView` — profile, month start, AI context, net worth display, PIN,
-  sign out), and the button on the right flips the theme in one tap. There
-  was a hamburger drawer here; once every money feature moved into the nav's
-  "อื่น ๆ" it held two links and a sign-out button, and paid for them with a
-  permanent topbar button and an overlay layer. Don't reintroduce a drawer to
-  hold a setting — a new one belongs on the account screen, or in
-  "อื่น ๆ" if it is about money rather than about the account.
+  sign out). It used to share the topbar with a theme-toggle button; that
+  button is gone along with light mode, and phase 2 has not yet replaced it
+  with the logo/search layout `docs/netflix-reference.html` mocks for the
+  topbar. There was a hamburger drawer here before either of those; once
+  every money feature moved into the nav's "อื่น ๆ" it held two links and a
+  sign-out button, and paid for them with a permanent topbar button and an
+  overlay layer. Don't reintroduce a drawer to hold a setting — a new one
+  belongs on the account screen, or in "อื่น ๆ" if it is about money rather
+  than about the account.
 - **`.phone` is the real, edge-to-edge app root at every width — not a
   device mockup.** There is no rounded-card-with-drop-shadow "phone frame"
   centered on a differently-colored backdrop any more; that read as a

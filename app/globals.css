@@ -903,7 +903,12 @@ a:focus-visible {
   left: var(--nav-edge);
   z-index: -1;
   border-radius: var(--r-full);
-  background: var(--primary);
+  /* Not var(--primary): that token is white now (the Cinema CTA fill --
+     see the header comment in globals.css), and a white sliding pill would
+     read as a second, competing button rather than "you are here." A
+     raised neutral tile plus the active label/icon turning full --ink
+     (below) is what a Netflix-style active tab actually does. */
+  background: var(--surface-3);
   transition: left var(--t-3) var(--e-spring), opacity var(--t-2) var(--e-out);
 }
 
@@ -947,7 +952,7 @@ a:focus-visible {
 
 .bottom-nav button.active .nav-icon,
 .bottom-nav button.active .nav-label {
-  color: var(--primary-text);
+  color: var(--ink);
 }
 
 .bottom-nav button.active .nav-icon {
@@ -976,8 +981,11 @@ a:focus-visible {
   width: 56px;
   height: 56px;
   border-radius: var(--r-full);
-  background: var(--primary);
-  color: var(--primary-text);
+  /* The FAB is the brand mark (--accent, emerald), not the white --primary
+     CTA fill -- the one place in the nav Cinema's ink color is allowed to
+     be a fill, the same way docs/netflix-reference.html's .nav-add is. */
+  background: var(--accent);
+  color: var(--accent-contrast);
   display: grid;
   place-items: center;
   transform: translateY(-14px);
@@ -1471,6 +1479,41 @@ a:focus-visible {
   font-size: var(--fs-body);
 }
 
+.billboard-actions {
+  display: flex;
+  gap: var(--s-3);
+  margin-top: var(--s-5);
+  position: relative;
+  z-index: 2;
+}
+
+.billboard-cta, .billboard-cta-2 {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  transition: transform var(--t-press) var(--e-out), background var(--t-2) var(--e-out);
+}
+
+.billboard-cta:active, .billboard-cta-2:active {
+  transform: scale(0.97);
+}
+
+.billboard-cta {
+  background: var(--primary);
+  color: var(--primary-text);
+}
+
+.billboard-cta-2 {
+  background: var(--overlay-on-primary);
+  color: var(--hero-text);
+}
+
 .streak-badge {
   display: inline-block;
   margin-top: var(--s-2);
@@ -1655,10 +1698,59 @@ a:focus-visible {
   color: var(--text-on-color);
 }
 
-.home-focus-grid {
-  display: grid;
-  gap: var(--s-4);
+/* -------------------------------------------------------------------------
+   Rails -- Home's basic unit under the billboard (see the Rail component in
+   components/primitives.tsx and docs/netflix-reference.html). A named,
+   horizontally-scrolling row; .rail-track > * gives every rail item a fixed
+   width regardless of what card component it wraps, so a section that used
+   to be a full-width stacked card or a CSS grid becomes a rail without its
+   own component needing to know. Stays within the page's own gutter (like
+   .wallet-carousel/.quick-add-strip already did) rather than bleeding to
+   the true edge -- a later pass can revisit that once the billboard itself
+   bleeds full width. */
+.rail {
   margin-bottom: var(--s-4);
+}
+
+.rail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+
+.rail-head h2 {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+  margin: 0;
+}
+
+.rail-head button {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+  color: var(--ink-3);
+  min-height: 24px;
+}
+
+.rail-track {
+  display: flex;
+  gap: var(--s-3);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.rail-track::-webkit-scrollbar {
+  display: none;
+}
+
+.rail-track > * {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  width: min(82vw, 300px);
+  margin-bottom: 0;
 }
 
 /* Due-soon gets the bold fill of this pair, budget-glance stays the quiet
@@ -6045,10 +6137,6 @@ button.entry-main {
   .summary-grid, .report-summary-tiles, .debtor-page-list {
     grid-template-columns: repeat(2, 1fr);
   }
-
-  .home-focus-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 /* Desktop */
@@ -6091,34 +6179,15 @@ button.entry-main {
     width: 100%;
   }
 
-  .phone .view.home-view {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--s-4);
-    align-items: start;
-  }
-
-  .phone .home-view .wallet-grid.single-wallet,
-  .phone .home-view .home-insight-wrap,
-  .phone .home-view .wallet-grid:not(.single-wallet),
-  .phone .home-view .start-checklist,
-  .phone .home-view .missing-wallet-notice,
-  .phone .home-view .error-actions,
-  .phone .home-view .state-card,
-  .phone .home-view .activity-timeline {
-    grid-column: 1 / -1;
-  }
-
-  .phone .home-view .home-focus-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .phone .home-view .quick-add-strip,
-  .phone .home-view .goal-card,
-  .phone .home-view .cashflow-trend-card,
-  .phone .home-view .spending-personality-card {
-    grid-column: auto;
-  }
+  /* Home used to switch to a 2-column masonry dashboard here, with most
+     cards spanning both columns and a handful (quick-add, goals, the cash-
+     flow pair) sitting side by side as the only things that actually used
+     the second column. Now that every one of those is a full-width rail
+     that scrolls its own cards horizontally (see the "Rails" section
+     above), a second column has nothing left to hold -- .home-view is a
+     single stack of full-width sections at every width, same as mobile,
+     which is also what a Netflix web homepage does (one column of rails,
+     each one scrolling on its own). */
 
   .history-view {
     display: grid;
@@ -6209,11 +6278,12 @@ button.entry-main {
 }
 
 @media (min-width: 900px) and (max-width: 1040px) {
-  .phone .view.home-view, .history-view {
+  /* .home-view has no grid left to narrow (see the comment above) -- only
+     History's 2-column layout still needs to fold to one column here. */
+  .history-view {
     grid-template-columns: 1fr;
   }
 
-  .phone .home-view .home-focus-grid,
   .history-view > .entry-list,
   .history-view > .add-title {
     grid-column: 1;
