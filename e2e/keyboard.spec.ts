@@ -53,6 +53,28 @@ test.describe("keyboard", () => {
     expect((await composer.boundingBox())!.y + (await composer.boundingBox())!.height).toBeCloseTo(before.composerBottom, 0);
   });
 
+  test("brings the whole AI composer up above the keyboard, send button included", async ({ app }, info) => {
+    test.skip(info.project.name !== "mobile", "only a touch screen has an on-screen keyboard");
+    await navigate(app, "add");
+    await app.locator(".phone").evaluate((phone) => phone.scrollTo(0, 0));
+    const size = app.viewportSize()!;
+
+    // Focus, then the keyboard slides up: the visible area shrinks (see the
+    // Ask AI test below for why a smaller window is the same event).
+    await app.locator(".ai-input-wrap textarea").focus();
+    await app.setViewportSize({ width: size.width, height: Math.round(size.height * 0.55) });
+    await app.waitForTimeout(1200);
+
+    const visible = await app.evaluate(() => (document.querySelector(".phone") as HTMLElement).getBoundingClientRect().bottom);
+    const send = (await app.locator(".composer-send").boundingBox())!;
+    expect(send.y + send.height, "the send button should sit above the keyboard").toBeLessThanOrEqual(visible);
+    const wrapTop = (await app.locator(".ai-input-wrap").boundingBox())!.y;
+    const topbarBottom = await app.evaluate(() => document.querySelector(".topbar")!.getBoundingClientRect().bottom);
+    expect(wrapTop, "and the box's top should not be under the topbar").toBeGreaterThanOrEqual(topbarBottom);
+
+    await app.setViewportSize(size);
+  });
+
   test("keeps Ask AI's composer on the keyboard's edge as the visible area shrinks", async ({ app }, info) => {
     test.skip(info.project.name !== "mobile", "only a touch screen has an on-screen keyboard");
     // iOS does not resize the page for the keyboard; it shrinks the visual

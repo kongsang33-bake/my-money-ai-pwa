@@ -3,7 +3,7 @@
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, CalendarDays, Check, ChevronLeft, Info, RefreshCw, X } from "lucide-react";
-import { PULL_REFRESH_MAX, PULL_REFRESH_MIN_MS, PULL_REFRESH_THRESHOLD } from "@/lib/constants";
+import { KEYBOARD_SETTLE_MAX_MS, KEYBOARD_SETTLE_QUIET_MS, PULL_REFRESH_MAX, PULL_REFRESH_MIN_MS, PULL_REFRESH_THRESHOLD } from "@/lib/constants";
 import { formatDateInputValue, formatMonthInputValue, formatMoney, moneySign } from "@/lib/format";
 import type { ConfirmDialogState, EmptyAction, Toast } from "@/lib/types";
 
@@ -410,6 +410,47 @@ export function useStableHandler<A extends unknown[], R>(fn: (...args: A) => R):
     latest.current = fn;
   });
   return useCallback((...args: A) => latest.current(...args), []);
+}
+
+/**
+ * Scrolls `.phone` so all of `target` sits above the on-screen keyboard, not
+ * just the line being typed on. When a field is focused the browser scrolls
+ * only far enough to show the caret, which for the AI composer left its own
+ * "ให้ AI แยกรายการ" button under the keyboard: type, then scroll, then send.
+ * Call it on focus with the box the field lives in. It waits for the
+ * keyboard to finish opening (the visual viewport stops shrinking, and
+ * page.tsx has sized `.phone` to what is left), then brings the box's foot
+ * up to the visible bottom -- never so far that its top goes under the
+ * topbar. Nothing moves when the box already fits, as on a desktop.
+ */
+export function revealAboveKeyboard(target: HTMLElement | null) {
+  const scroller = target?.closest<HTMLElement>(".phone");
+  if (!target || !scroller) return;
+  const settle = () => {
+    const box = target.getBoundingClientRect();
+    const view = scroller.getBoundingClientRect();
+    const topbar = document.querySelector(".topbar")?.getBoundingClientRect().bottom ?? view.top;
+    const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--s-3")) || 0;
+    const delta = Math.min(box.bottom + gap - view.bottom, box.top - gap - topbar);
+    if (delta < 1) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    scroller.scrollBy({ top: delta, behavior: reduce ? "auto" : "smooth" });
+  };
+  const viewport = window.visualViewport;
+  if (!viewport) {
+    window.setTimeout(settle, KEYBOARD_SETTLE_MAX_MS);
+    return;
+  }
+  let timer = window.setTimeout(done, KEYBOARD_SETTLE_MAX_MS);
+  function onResize() {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(done, KEYBOARD_SETTLE_QUIET_MS);
+  }
+  function done() {
+    viewport?.removeEventListener("resize", onResize);
+    settle();
+  }
+  viewport.addEventListener("resize", onResize);
 }
 
 /**

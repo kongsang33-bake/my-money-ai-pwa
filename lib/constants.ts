@@ -27,6 +27,14 @@ export const PRIVACY_ACK_STORAGE_KEY = "nubmon-privacy-ack";
 // Where the policy tells people to write to have their account deleted.
 export const PRIVACY_CONTACT_EMAIL = "kongsang33@gmail.com";
 
+// Revealing a whole field above the on-screen keyboard (revealAboveKeyboard,
+// components/primitives.tsx). The keyboard is still sliding up when focus
+// lands, so the reveal waits for the visible area to stop shrinking: this
+// long without a resize means it has; and if none comes at all (a hardware
+// keyboard, or one already open), it goes ahead after the longer wait.
+export const KEYBOARD_SETTLE_QUIET_MS = 120;
+export const KEYBOARD_SETTLE_MAX_MS = 450;
+
 export const MS_PER_DAY = 86_400_000;
 
 // Used to put a weekly bill on the same footing as a monthly one ("what does

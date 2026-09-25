@@ -13,7 +13,7 @@ import { summarizeDayEntries } from "@/lib/insights";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
 import { CategoryIcon, CategoryPicker, FundingSelect } from "@/components/shared";
-import { AmountInput, DateField, EmptyNote, SheetFrame, StateCard, SheetClose } from "@/components/primitives";
+import { AmountInput, DateField, EmptyNote, SheetFrame, StateCard, SheetClose, revealAboveKeyboard } from "@/components/primitives";
 
 // The whole "let AI write it for me" half of the Add tab: the example chips,
 // the date picker, the textarea, slip attachments and the analyse button.
@@ -143,7 +143,14 @@ export function AiComposer({
       </div>
 
       <div className="ai-input-wrap">
-        <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="เช่น กินข้าว 120 บาท, ออกให้เพื่อนเอก่อน 500, เพื่อนเอโอนคืน 200" />
+        {/* On focus the whole box comes up above the keyboard, send button
+            included, so typing ends one tap from sending. */}
+        <textarea
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          onFocus={(event) => revealAboveKeyboard(event.currentTarget.closest<HTMLElement>(".ai-input-wrap"))}
+          placeholder="เช่น กินข้าว 120 บาท, ออกให้เพื่อนเอก่อน 500, เพื่อนเอโอนคืน 200"
+        />
 
         {!!slipImages.length && (
           <div className="slip-preview-list">
