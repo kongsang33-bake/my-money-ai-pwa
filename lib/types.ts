@@ -306,6 +306,10 @@ export type PreviewSeed = {
   // Supabase read), so the gate simply stays put -- which is all a layout or
   // an accessibility check needs.
   pinMode?: Extract<PinMode, "locked" | "setup">;
+  // Opens on PrivacyGate, the screen a signed-in user with no acknowledgement
+  // of the current policy is held at. Accepting it is a write, so in the
+  // suite the gate stays put -- which is what a scroll or layout check needs.
+  privacyGate?: boolean;
   // The billboard's card pocket (pocket_cards). Optional so a spec that does
   // not care about it can leave it out and get an empty pocket.
   pocketCards?: PocketCard[];

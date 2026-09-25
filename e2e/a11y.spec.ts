@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { test, expect, buildEmptySeed, buildSeed, navigate, openApp, openLanding, openPinGate, openSetup, seedDraft, waitForApp } from "./fixture.ts";
+import { test, expect, buildEmptySeed, buildSeed, navigate, openApp, openLanding, openPinGate, openPrivacyGate, openSetup, seedDraft, waitForApp } from "./fixture.ts";
 import { auditScreen, type Finding, type ScreenAudit } from "./audit.ts";
 
 // The objective half of a design review, run on every screen, at all three
@@ -52,6 +52,10 @@ function report(title: string, findings: Finding[]) {
 }
 
 test("meets contrast, target size and overflow limits", async ({ page }) => {
+  // One test walks every screen (~30 of them), which takes about as long as
+  // Playwright's default 30s allows on its own -- under a parallel run it
+  // timed out partway through and reported whatever it was measuring then.
+  test.setTimeout(120_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
 
@@ -83,6 +87,10 @@ test("meets contrast, target size and overflow limits", async ({ page }) => {
   audits.push(await auditScreen(page, "pin-locked"));
   await openPinGate(page, "setup");
   audits.push(await auditScreen(page, "pin-setup"));
+
+  // Signed in but holding an acknowledgement of an older policy.
+  await openPrivacyGate(page);
+  audits.push(await auditScreen(page, "privacy-gate"));
 
   // A brand-new account first: its own screens, and the only ones a user who
   // has never signed in before can reach.

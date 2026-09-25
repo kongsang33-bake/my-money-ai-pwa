@@ -503,6 +503,7 @@ export default function Home() {
     setUser(seed.user as unknown as User);
     setProfile(seed.profile as unknown as Profile);
     setPinMode(seed.pinMode ?? "unlocked");
+    if (seed.privacyGate) setPrivacyNeeded(true);
     setReady(true);
     // The seed IS this account's fetched state, so it stands in for the read
     // loadUserData would otherwise have done -- see showSetupGate.

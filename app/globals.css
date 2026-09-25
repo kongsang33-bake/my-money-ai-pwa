@@ -8126,6 +8126,17 @@ body:has(.login-page) #app-splash {
   letter-spacing: var(--ls-tight);
 }
 
+/* The in-app gate (PrivacyGate) is not the /privacy route: app/page.tsx is
+   mounted around it, and its --vvh effect puts any scroll of the document
+   back to the top when a finger lifts. Scrolling the document here juddered
+   and then jumped back up before รับทราบ could be reached, so the gate is its
+   own scroller, the way .login-page and .phone are. */
+.privacy-gate {
+  height: var(--vvh, 100dvh);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
 .privacy-gate-copy {
   margin: calc(var(--s-3) * -1) 0 var(--s-5);
   font-size: var(--fs-body);

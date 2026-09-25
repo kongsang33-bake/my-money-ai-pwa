@@ -277,6 +277,16 @@ export async function openPinGate(page: Page, mode: "locked" | "setup" = "locked
 }
 
 /**
+ * Opens on PrivacyGate (seed.privacyGate), the policy a signed-in user must
+ * acknowledge before anything else opens. Accepting is a write, so it stays.
+ */
+export async function openPrivacyGate(page: Page) {
+  await injectSeed(page, { ...buildSeed(), privacyGate: true });
+  await expect(page.locator(".privacy-gate")).toBeVisible({ timeout: 15000 });
+  await waitForSplash(page);
+}
+
+/**
  * Opens signed out: no seed, so the app lands where every visitor who is not
  * signed in does -- the landing page, whose last screen is the sign-in form.
  */
