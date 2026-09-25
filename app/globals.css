@@ -1197,17 +1197,10 @@ a:focus-visible {
   box-shadow: none;
 }
 
-.google-button {
-  width: 100%;
-  min-height: 50px;
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s-2);
-  font-weight: var(--fw-semibold);
+/* Google's button is the sign-in page's one default action, so it takes
+   .primary's white fill (the "Play" role); this only keeps the mark whole. */
+.google-button svg {
+  flex-shrink: 0;
 }
 
 .side-ghost {
@@ -6834,6 +6827,116 @@ input[type="checkbox"], input[type="radio"] {
   text-align: center;
   color: var(--ink-2);
   margin-top: var(--s-3);
+}
+
+/* The sign-in page (Auth), laid out like the PIN gate it leads to: the mark
+   in the corner (.pin-brand), then one bare column -- no card, the page's own
+   ground is the surface -- lit by the same glow Home's billboard sits in.
+   .auth-screen/.auth-card above stay for the error boundary's card. */
+.login-screen {
+  position: relative;
+  flex-direction: row;
+  align-items: stretch;
+  padding: calc(var(--topbar-block) + var(--s-4)) var(--s-5) calc(var(--s-6) + env(safe-area-inset-bottom));
+  background:
+    radial-gradient(ellipse 120% 480px at 50% 0, color-mix(in srgb, var(--hero-glow) 55%, transparent), transparent 80%) no-repeat,
+    var(--bg);
+}
+
+/* Narrower glow once .phone is a clamped column, so it fades out before
+   .phone's edge -- the same fix .phone.tab-home needs. */
+@media (min-width: 600px) {
+  .login-screen {
+    background:
+      radial-gradient(ellipse 48% 480px at 50% 0, color-mix(in srgb, var(--hero-glow) 50%, transparent), transparent 85%) no-repeat,
+      var(--bg);
+  }
+}
+
+/* Centred by auto margins for the same reason .pin-content is: a short
+   window scrolls it rather than pushing its top under the corner mark. */
+.login-content {
+  margin-block: auto;
+  width: 100%;
+  max-width: 360px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-4);
+}
+
+.login-intro {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-2);
+  margin-bottom: var(--s-4);
+  text-align: center;
+}
+
+/* The mark at a welcome's size, the way .setup-hero-mark sets it. */
+.login-mark {
+  width: 72px;
+  height: 72px;
+  margin-bottom: var(--s-3);
+}
+
+.login-intro h1 {
+  font-size: var(--fs-h1);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-tight);
+  line-height: var(--lh-tight);
+}
+
+.login-intro .auth-copy {
+  line-height: var(--lh-body);
+}
+
+.login-screen .email-fallback {
+  margin-top: 0;
+}
+
+.login-screen .email-fallback summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  cursor: pointer;
+}
+
+.login-screen .email-fallback summary svg {
+  transition: transform var(--t-2) var(--e-out);
+}
+
+.login-screen .email-fallback[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.login-screen .email-fallback form {
+  display: grid;
+  gap: var(--s-3);
+  padding-top: var(--s-2);
+}
+
+.login-screen .email-fallback form label,
+.login-screen .email-fallback input {
+  margin: 0;
+}
+
+.auth-email-submit {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+}
+
+.login-terms {
+  display: block;
+  margin-top: var(--s-2);
+  text-align: center;
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+  line-height: var(--lh-snug);
 }
 
 /* -------------------------------------------------------------------------

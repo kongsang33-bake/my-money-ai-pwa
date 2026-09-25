@@ -105,7 +105,10 @@ top-left, "ยินดีต้อนรับกลับ", your face as a lar
 dots that fill in `--accent`, and a bare keypad. It is centred with auto
 margins, not `align-items`, so a short window scrolls it instead of pushing
 its top out of reach, and it tightens under 800px tall so a laptop sees the
-whole thing. The e2e suite reaches it through the seed's `pinMode`
+whole thing. The sign-in page (`Auth`, same file) is the same door: the brand in the
+corner (`.pin-brand`), one bare column under Home's glow, the logo at a
+welcome's size, and Google as the one white `.primary` -- no card (`.auth-card`
+is the error boundary's now). The e2e suite reaches it through the seed's `pinMode`
 (`openPinGate` in e2e/fixture.ts) and the a11y audit measures both modes.
 Wallets (`WalletsView`) is a bare total -- the billboard's kicker, a display
 figure, the spendable/set-aside split as one bar -- over `.wallet-tiles`:

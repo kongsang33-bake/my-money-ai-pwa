@@ -5,7 +5,7 @@ import NextImage from "next/image";
 import type { User } from "@supabase/supabase-js";
 import { ChevronDown, Delete, Lock, ScanFace } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, BRAND_SLOGANS } from "@/lib/constants";
 import { clampInteger } from "@/lib/format";
 import { isPlatformAuthenticatorAvailable, isSixDigitPin, lockDelayOptions, pinLength, pinMaxAttempts, type LockDelayKey } from "@/lib/pin";
 import type { PinMode, Profile } from "@/lib/types";
@@ -405,33 +405,41 @@ export function Auth() {
     setBusy(false);
   }
 
+  // The same shape as PinGate -- the mark in the corner, one bare centred
+  // column, no card -- so signing in and unlocking read as the same door.
   return (
     <main className="shell">
-      <section className="phone auth-screen">
-        <div className="auth-card">
-          <div className="auth-mark">฿</div>
-          <p className="eyebrow">รายรับรายจ่ายที่เข้าใจคุณ</p>
-          <h1>เข้าสู่ระบบ</h1>
-          <p className="auth-copy">ใช้บัญชี Google เพื่อซิงก์ข้อมูลรายรับรายจ่ายทุกเครื่อง</p>
-          <button className="google-button" onClick={signInWithGoogle} disabled={busy}>
+      <section className="phone auth-screen login-screen">
+        <header className="pin-brand">
+          <i className="brand-mark" aria-hidden="true" />
+          <b className="brand-name">{APP_NAME}</b>
+        </header>
+        <div className="login-content">
+          <div className="login-intro">
+            <i className="brand-mark login-mark" aria-hidden="true" />
+            <p className="eyebrow">{BRAND_SLOGANS[0]}</p>
+            <h1>เข้าสู่ระบบ</h1>
+            <p className="auth-copy">ใช้บัญชี Google เพื่อซิงก์ข้อมูลรายรับรายจ่ายทุกเครื่อง</p>
+          </div>
+          <button className="primary google-button" onClick={signInWithGoogle} disabled={busy}>
             <GoogleIcon />
             {busy ? "กำลังพาไป Google..." : "ดำเนินการต่อด้วย Google"}
           </button>
           <details className="email-fallback">
-            <summary>หรือเข้าใช้งานด้วยอีเมล</summary>
+            <summary>หรือเข้าใช้งานด้วยอีเมล<ChevronDown size={16} strokeWidth={2.25} aria-hidden="true" /></summary>
             <form onSubmit={submit}>
               <label htmlFor="email">อีเมล</label>
               <input id="email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" />
-              <button className="primary" disabled={busy}>
+              <button className="side-ghost auth-email-submit" disabled={busy}>
                 {busy ? "กำลังส่ง..." : "ส่งลิงก์เข้าใช้งาน"}
               </button>
             </form>
           </details>
-          <small>
-            การเข้าสู่ระบบถือว่าคุณยอมรับ <span>ข้อกำหนด</span> และ <span>นโยบาย</span>
+          {message && <p className="auth-message" role="status">{message}</p>}
+          <small className="login-terms">
+            การเข้าสู่ระบบถือว่าคุณยอมรับข้อกำหนดและนโยบายความเป็นส่วนตัว
           </small>
         </div>
-        {message && <p className="auth-message">{message}</p>}
       </section>
     </main>
   );
