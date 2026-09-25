@@ -247,7 +247,7 @@ export const HeroWalletCard = memo(function HeroWalletCard({
  * "เป้าหมายและงบ" rather than as three boxed numbers. Decorative -- the
  * percentage it draws is already written in the tile.
  */
-function StatMeter({ percent, tone }: { percent: number; tone: "income" | "expense" }) {
+function StatMeter({ percent, tone }: { percent: number; tone: "income" | "expense" | "hue" }) {
   return (
     <span className={`stat-meter ${tone}`} aria-hidden="true">
       <i style={{ width: `${Math.max(2, Math.min(100, percent))}%` }} />
@@ -332,10 +332,18 @@ export const HomeInsightGrid = memo(function HomeInsightGrid({
 
 /**
  * A 2:3 poster, the rail item docs/netflix-reference.html builds most rails
- * from. There are no pictures in a money app, so the "key art" is the item's
- * own colour (a --cat-* slot, or the colour the user picked for a bill) as a
- * gradient, with its icon large and faint in the corner, and the words set
- * over a fade at the bottom the way a film title sits on its poster.
+ * from. There are no pictures in a money app, so the "key art" is two things:
+ * the figure the poster is about, set large (`hero` -- days until a bill, a
+ * card's minimum, a category's share), and the item's own icon printed small
+ * and repeated across its colour as a pattern (PosterPattern).
+ *
+ * The icon used to be the art on its own, one lucide glyph blown up to most of
+ * the poster and cropped off the edge. Those glyphs are drawn for 16-24px: at
+ * a hundred their stroke went clumsy, a cropped card read as a door, and two
+ * thirds of the poster said nothing while the days and the amount squeezed
+ * into the bottom edge. So the icon stays the size it is everywhere else --
+ * the tinted square จดเร็ว uses, top left -- and the pattern only ever prints
+ * it at that size too.
  *
  * A poster with `onClick` is one button. One without it is a plain box, which
  * is what lets `children` hold a button of its own (a bill's "บันทึกเลย")
@@ -343,30 +351,42 @@ export const HomeInsightGrid = memo(function HomeInsightGrid({
  */
 function Poster({
   hue,
-  glyph,
+  renderGlyph,
+  hero,
+  meter,
   title,
   sub,
   amount,
-  ribbon,
   onClick,
   className = "",
   children,
 }: {
   hue: string;
-  glyph: React.ReactNode;
+  /** The item's lucide icon at a given size -- drawn in the chip and, smaller, as the pattern. */
+  renderGlyph: (size: number) => React.ReactNode;
+  /** Sized by what it holds: a day count reads at display size, a share at value size, and money or a word at compact. */
+  hero?: { value: string; label?: string; size?: "display" | "value" | "compact"; warn?: boolean };
+  /** A share of something, drawn as the same 3px bar as the stat tiles' StatMeter. */
+  meter?: number;
   title: string;
   sub?: string;
   amount?: string;
-  ribbon?: { text: string; tone?: "warn" };
   onClick?: () => void;
   className?: string;
   children?: React.ReactNode;
 }) {
   const content = (
     <>
-      {ribbon && <span className={`poster-ribbon${ribbon.tone === "warn" ? " warn" : ""}`}>{ribbon.text}</span>}
-      <span className="poster-glyph" aria-hidden="true">{glyph}</span>
+      <PosterPattern renderGlyph={renderGlyph} />
+      <span className="poster-chip" aria-hidden="true">{renderGlyph(18)}</span>
+      {hero && (
+        <span className={`poster-hero is-${hero.size ?? "display"}${hero.warn ? " warn" : ""}`}>
+          <b>{hero.value}</b>
+          {hero.label && <small>{hero.label}</small>}
+        </span>
+      )}
       <span className="poster-body">
+        {meter != null && <StatMeter percent={meter} tone="hue" />}
         <span className="poster-title">{title}</span>
         {sub && <span className="poster-sub">{sub}</span>}
         {amount && <span className="poster-amount">{amount}</span>}
@@ -378,6 +398,41 @@ function Poster({
   return onClick
     ? <button className={`poster ${className}`} style={style} onClick={onClick}>{content}</button>
     : <div className={`poster ${className}`} style={style}>{content}</div>;
+}
+
+// The pattern's repeat, in px: two icons per tile on a diagonal, so the rows
+// interlock like a printed wrapper instead of lining up as a grid.
+const POSTER_PATTERN_TILE = 56;
+const POSTER_PATTERN_ICON = 18;
+
+/**
+ * The poster's icon, printed small and repeated across its ground. An SVG
+ * <pattern> rather than a grid of elements, so a rail of ten posters is ten
+ * small SVGs and not two hundred. The icon is rendered at lucide's own 24px
+ * and scaled down into each slot, which also thins its stroke to roughly
+ * 1.7px -- a pattern is texture, and the full-weight line read as clutter.
+ * How strongly it shows, and where it fades out so the words stay readable,
+ * is .poster-pattern's business.
+ */
+function PosterPattern({ renderGlyph }: { renderGlyph: (size: number) => React.ReactNode }) {
+  // useId's characters are not all valid in a url(#...) reference.
+  const id = `poster-pattern-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const slot = (offset: number) => (
+    <svg x={offset} y={offset} width={POSTER_PATTERN_ICON} height={POSTER_PATTERN_ICON} viewBox="0 0 24 24" overflow="visible">
+      {renderGlyph(24)}
+    </svg>
+  );
+  return (
+    <svg className="poster-pattern" aria-hidden="true" focusable="false">
+      <defs>
+        <pattern id={id} width={POSTER_PATTERN_TILE} height={POSTER_PATTERN_TILE} patternUnits="userSpaceOnUse">
+          {slot(6)}
+          {slot(6 + POSTER_PATTERN_TILE / 2)}
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill={`url(#${id})`} />
+    </svg>
+  );
 }
 
 /**
@@ -426,10 +481,11 @@ function ProgressTile({
 
 /**
  * Bills due in the next few days, then the cards and instalments with nothing
- * paid against them this cycle -- one poster each, with a ribbon saying how
- * soon. The unpaid ones stay distinct (a coral ribbon) because they are not
- * money about to leave: a card charge never moved the wallet, so this is money
- * the bank may already have taken while the app still shows it as there.
+ * paid against them this cycle -- one poster each, led by the figure to act
+ * on: how many days until a bill, what a card needs at minimum. The unpaid
+ * ones stay distinct (their figure and its label in coral) because they are
+ * not money about to leave: a card charge never moved the wallet, so this is
+ * money the bank may already have taken while the app still shows it as there.
  */
 export const DueSoonRail = memo(function DueSoonRail({
   items,
@@ -451,11 +507,12 @@ export const DueSoonRail = memo(function DueSoonRail({
           key={item.id}
           className="due-soon-poster"
           hue={item.icon_color ?? nameColor(item.name)}
-          glyph={<RecurringAvatarGlyph iconKey={item.icon} fallbackName={item.name} size={64} />}
+          renderGlyph={(size) => <RecurringAvatarGlyph iconKey={item.icon} fallbackName={item.name} size={size} />}
+          hero={daysUntil === 0
+            ? { value: "วันนี้", label: formatShortDate(billingDate), size: "compact" }
+            : { value: String(daysUntil), label: `วัน · ${formatShortDate(billingDate)}` }}
           title={item.name}
-          sub={`${billingDate.getDate()}/${billingDate.getMonth() + 1}`}
           amount={`${moneySign}${formatMoney(item.amount)}`}
-          ribbon={{ text: daysUntil === 0 ? "วันนี้" : `อีก ${daysUntil} วัน` }}
         >
           {isLogged ? (
             <span className="poster-done"><Check size={14} strokeWidth={2.5} aria-hidden="true" />บันทึกแล้ว</span>
@@ -469,11 +526,12 @@ export const DueSoonRail = memo(function DueSoonRail({
           key={debt.name}
           className="unpaid-poster"
           hue={nameColor(debt.name)}
-          glyph={<CreditCard size={64} strokeWidth={2.25} />}
+          renderGlyph={(size) => <CreditCard size={size} strokeWidth={2.25} />}
+          hero={debt.minimum > 0
+            ? { value: `${moneySign}${formatMoney(debt.minimum)}`, label: "ขั้นต่ำ · ยังไม่จ่ายรอบนี้", size: "compact", warn: true }
+            : { value: "ยังไม่จ่าย", label: "ยังไม่จ่ายรอบนี้", size: "compact", warn: true }}
           title={debt.name}
-          sub={debt.minimum > 0 ? `ขั้นต่ำ ${moneySign}${formatMoney(debt.minimum)}` : "ยังไม่มีรายการจ่าย"}
-          amount={`${moneySign}${formatMoney(debt.balance)}`}
-          ribbon={{ text: "ยังไม่จ่ายรอบนี้", tone: "warn" }}
+          sub={`ค้าง ${moneySign}${formatMoney(debt.balance)}`}
           onClick={onOpenDebts}
         />
       ))}
@@ -544,6 +602,9 @@ export const TopCategoriesRail = memo(function TopCategoriesRail({
   items: { category: string; amount: number }[];
   onSelect: (category: string) => void;
 }) {
+  // The share is of everything spent this cycle, not of the ten shown --
+  // `items` is spendByCategory's whole list, so its sum is that total.
+  const total = items.reduce((sum, item) => sum + item.amount, 0);
   if (!items.length) return null;
   return (
     <Rail title="หมวดที่จ่ายมากสุดรอบนี้" size="rank" className="top-categories-rail">
@@ -554,7 +615,9 @@ export const TopCategoriesRail = memo(function TopCategoriesRail({
           <span className="rank-number" aria-hidden="true">{index + 1}</span>
           <Poster
             hue={categoryColor(item.category)}
-            glyph={<CategoryIcon category={item.category} size={64} />}
+            renderGlyph={(size) => <CategoryIcon category={item.category} size={size} />}
+            hero={{ value: formatPercent(total > 0 ? (item.amount / total) * 100 : 0), label: "ของรายจ่าย", size: "value" }}
+            meter={total > 0 ? (item.amount / total) * 100 : 0}
             title={item.category}
             amount={`${moneySign}${formatMoney(item.amount)}`}
             onClick={() => onSelect(item.category)}
@@ -965,7 +1028,7 @@ export function EntryDetailSheet({
                 <Poster
                   key={item.id}
                   hue={categoryColor(item.category)}
-                  glyph={<CategoryIcon category={item.category} size={64} />}
+                  renderGlyph={(size) => <CategoryIcon category={item.category} size={size} />}
                   title={item.title}
                   sub={formatShortDate(item.occurred_at)}
                   amount={formatSignedMoney(entryDisplayImpact(item))}

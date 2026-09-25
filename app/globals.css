@@ -1871,6 +1871,7 @@ a:focus-visible {
 
 .stat-meter.income i { background: var(--income); }
 .stat-meter.expense i { background: var(--expense); }
+.stat-meter.hue i { background: var(--hue); }
 
 /* -------------------------------------------------------------------------
    Rails -- Home's basic unit under the billboard (see the Rail component in
@@ -1955,18 +1956,24 @@ a:focus-visible {
 }
 
 /* -------------------------------------------------------------------------
-   Posters (2:3) -- see Poster in components/home.tsx. The "art" is the
+   Posters (2:3) -- see Poster in components/home.tsx. The ground is the
    item's own colour, handed in as --hue (a --cat-* slot, or a colour the user
-   picked for a bill), mixed down into the page's ground, with its icon large
-   and faint in the corner and the words over a fade at the bottom.
+   picked for a bill), mixed down into the page's ground and printed with its
+   icon as a small repeating pattern. Over it, top to bottom: the icon in its
+   tinted square (the same one จดเร็ว uses), the figure the poster is about
+   set large, and the words. Nothing is drawn larger than it was designed to
+   be read, which is what the old cropped, hundred-pixel icon got wrong.
    ------------------------------------------------------------------------- */
 .poster {
   position: relative;
-  display: block;
+  display: flex;
+  flex-direction: column;
   aspect-ratio: 2 / 3;
   overflow: hidden;
+  padding: var(--s-2);
+  border: 1px solid color-mix(in oklab, var(--hue) 24%, var(--bg));
   border-radius: var(--r-sm);
-  background: linear-gradient(165deg, color-mix(in oklab, var(--hue) 58%, var(--bg)) 0%, color-mix(in oklab, var(--hue) 16%, var(--bg)) 70%);
+  background: linear-gradient(170deg, color-mix(in oklab, var(--hue) 34%, var(--bg)) 0%, color-mix(in oklab, var(--hue) 9%, var(--bg)) 100%);
   color: var(--ink);
   text-align: left;
   transition: transform var(--t-press) var(--e-out);
@@ -1976,28 +1983,77 @@ button.poster:active {
   transform: scale(0.97);
 }
 
-.poster-glyph {
+/* The printed pattern. Strongest in the top-right corner and gone by the
+   lower third, so it sits behind the icon and the edge of the figure but
+   never behind the title, the amount or the button -- the words always read
+   against the plain ground. Kept faint for the same reason: it is texture. */
+.poster-pattern {
   position: absolute;
-  top: var(--s-5);
-  right: calc(-1 * var(--s-3));
-  width: 68%;
-  aspect-ratio: 1;
-  color: var(--hue);
-  opacity: 0.42;
-}
-
-.poster-glyph svg {
+  inset: 0;
   width: 100%;
   height: 100%;
+  color: var(--hue);
+  opacity: 0.3;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(205deg, var(--bg) 0%, transparent 62%);
+  mask-image: linear-gradient(205deg, var(--bg) 0%, transparent 62%);
+}
+
+.poster-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--hue) 24%, var(--bg));
+  color: var(--hue);
+}
+
+/* The figure the poster is about. Its size follows what it holds (see the
+   `hero.size` prop): a day count is a numeral to see from across the room,
+   a share is a value, and money or a word has to fit a narrow poster. */
+.poster-hero {
+  position: relative;
+  display: grid;
+  gap: var(--s-1);
+  margin-top: var(--s-3);
+  line-height: 1;
+}
+
+.poster-hero b {
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--ls-tight);
+  overflow-wrap: anywhere;
+}
+
+.poster-hero.is-display b { font-size: var(--fs-display); }
+.poster-hero.is-value b { font-size: var(--fs-value); }
+.poster-hero.is-compact b { font-size: var(--fs-h2); line-height: var(--lh-snug); }
+
+.poster-hero small {
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  color: var(--ink-2);
+}
+
+.poster-hero.warn small {
+  color: var(--expense);
 }
 
 .poster-body {
-  position: absolute;
-  inset: auto 0 0 0;
+  position: relative;
   display: grid;
   gap: 2px;
-  padding: var(--s-7) var(--s-2) var(--s-2);
-  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bg) 92%, transparent) 45%);
+  margin-top: auto;
+}
+
+.poster-body .stat-meter {
+  margin: 0 0 var(--s-1);
 }
 
 .poster-title {
@@ -2019,9 +2075,9 @@ button.poster:active {
   font-weight: var(--fw-bold);
 }
 
-/* The "อีก 2 วัน" tab hanging from the poster's top edge. Brand ink by
-   default; coral for something already overdue in spirit (a card with
-   nothing paid this cycle). */
+/* A tab hanging from a tile's top edge -- the wallet tiles' "กระเป๋าหลัก".
+   Brand ink by default; coral for the warning variant. The Home posters
+   carried "อีก 2 วัน" here until their figure took over saying it. */
 .poster-ribbon {
   position: absolute;
   top: 0;

@@ -45,8 +45,14 @@ opens History filtered to it); **progress tiles** (16:9 with a bar,
 `ProgressTile`) for goals and budgets (`GoalsBudgetsRail`); and small
 landscape cards for "เพิ่งจด" (`RecentRail`). A rail item's "art" is its own
 colour handed in as `--hue` — a `--cat-*` slot, or a colour the user picked
-— mixed into the ground, with its lucide icon large and faint; there are no
-pictures, so never reach for an image or an emoji to fill that slot. How wide
+— mixed into the ground; there are no pictures, so never reach for an image
+or an emoji to fill that slot. A poster's art is the figure it is about, set
+large (`hero`: days until a bill, a card's minimum, a category's share of the
+cycle's spending), over its own icon printed small as a repeating pattern
+(`PosterPattern`) that fades out before the words, with the icon itself in
+the same tinted square จดเร็ว uses. A lucide icon is never drawn larger than
+it is meant to be read: blown up to most of the poster and cropped, it read
+as clip-art. How wide
 items are is the rail's `size` prop (`.rail.is-*`), never the card's. The
 "สุขภาพการเงิน" stat tiles (`HomeInsightGrid`) are one quiet shape — colour
 lives in the figure and a thin `StatMeter` along the bottom, the same 3px bar
