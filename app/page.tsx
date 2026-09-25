@@ -95,6 +95,7 @@ import {
   SAVE_TIMEOUT_MS,
   SEARCH_RESULT_LIMIT,
   SPLASH_MIN_VISIBLE_MS,
+  RPC,
   TABLES,
   TRANSACTION_COLUMNS,
   UPCOMING_WINDOW_DAYS,
@@ -145,6 +146,7 @@ import dynamic from "next/dynamic";
 // practice the skeleton is only ever seen on a cold, slow connection.
 const AskFinanceView = dynamic(() => import("@/components/sheets").then((m) => m.AskFinanceView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const ConfirmLogout = dynamic(() => import("@/components/sheets").then((m) => m.ConfirmLogout), { ssr: false });
+const ConfirmDeleteAccount = dynamic(() => import("@/components/sheets").then((m) => m.ConfirmDeleteAccount), { ssr: false });
 const MoreView = dynamic(() => import("@/components/sheets").then((m) => m.MoreView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const ProfileView = dynamic(() => import("@/components/sheets").then((m) => m.ProfileView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
 const ReportExportView = dynamic(() => import("@/components/sheets").then((m) => m.ReportExportView), { ssr: false, loading: () => <div className="view"><SkeletonList rows={4} /></div> });
@@ -389,6 +391,8 @@ export default function Home() {
   const [investmentConfirmTarget, setInvestmentConfirmTarget] = useState<Entry | null>(null);
   const [investmentAiSheetOpen, setInvestmentAiSheetOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
@@ -2351,6 +2355,34 @@ export default function Home() {
     void preparePinGate(user.id);
   }
 
+  // One call removes the account and, by cascade, every row it owns (RPC's
+  // comment). Then this device forgets it too: the session, and anything
+  // kept in localStorage under the user's id. A failure leaves the dialog
+  // open with the reason, and nothing has been deleted.
+  async function deleteAccount() {
+    if (!supabase || !user) return;
+    setBusy(true);
+    setDeleteAccountError("");
+    const { error } = await supabase.rpc(RPC.deleteMyAccount);
+    if (error) {
+      setDeleteAccountError(error.message);
+      setBusy(false);
+      return;
+    }
+    try {
+      for (const key of Object.keys(window.localStorage)) {
+        if (key.includes(user.id)) window.localStorage.removeItem(key);
+      }
+    } catch {
+      // Storage unavailable: nothing of this account can be left in it.
+    }
+    setBusy(false);
+    setDeleteAccountOpen(false);
+    // The server no longer has this user, so only the local session is left
+    // to clear; a global sign-out would fail looking for it.
+    await supabase.auth.signOut({ scope: "local" });
+  }
+
   async function resetPinAndSignOut() {
     if (!supabase || !user) return;
     setBusy(true);
@@ -2985,6 +3017,7 @@ export default function Home() {
   const logRecurringNowHandler = useStableHandler(logRecurringNow);
   const goalSheetDismiss = useDismiss(goalSheetOpen, () => setGoalSheetOpen(false));
   const recapDismiss = useDismiss(recapOpen, () => setRecapOpen(false));
+  const deleteAccountDismiss = useDismiss(deleteAccountOpen, () => setDeleteAccountOpen(false));
   const logoutDismiss = useDismiss<[boolean]>(logoutOpen, (confirmed) => { setLogoutOpen(false); if (confirmed) void supabase?.auth.signOut(); });
   const confirmDialogDismiss = useDismiss<[boolean]>(!!confirmDialog, (confirmed) => closeConfirmDialog(confirmed));
   const clearSavePulse = useCallback(() => setSavePulse(0), []);
@@ -3519,6 +3552,7 @@ export default function Home() {
             onOpenProfile={() => setTab("profile")}
             onOpenSecurity={() => setTab("security")}
             onLogout={() => setLogoutOpen(true)}
+            onDeleteAccount={() => { setDeleteAccountError(""); setDeleteAccountOpen(true); }}
             onOpenUpcoming={() => setTab("upcoming")}
             onOpenWallets={() => setTab("wallets")}
             walletTotal={walletBalanceTotal}
@@ -3696,6 +3730,15 @@ export default function Home() {
             incomeSources={incomeSummary}
             onClose={recapDismiss.requestClose}
             closing={recapDismiss.closing}
+          />
+        )}
+        {deleteAccountDismiss.mounted && (
+          <ConfirmDeleteAccount
+            busy={busy}
+            error={deleteAccountError}
+            onCancel={deleteAccountDismiss.requestClose}
+            onConfirm={deleteAccount}
+            closing={deleteAccountDismiss.closing}
           />
         )}
         {logoutDismiss.mounted && (

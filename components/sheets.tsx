@@ -24,7 +24,7 @@ import {
   Wallet as WalletIcon,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { AI_CHAT_HISTORY_LIMIT, AI_CHAT_MESSAGE_COLUMNS, AI_CONTEXT_MAX_LENGTH, ASK_COMPOSER_MAX_HEIGHT, MONTH_START_DAY_MAX, MONTH_START_DAY_MIN, TABLES } from "@/lib/constants";
+import { AI_CHAT_HISTORY_LIMIT, AI_CHAT_MESSAGE_COLUMNS, AI_CONTEXT_MAX_LENGTH, ASK_COMPOSER_MAX_HEIGHT, DELETE_ACCOUNT_CONFIRM_TEXT, MONTH_START_DAY_MAX, MONTH_START_DAY_MIN, TABLES } from "@/lib/constants";
 import { authHeaders } from "@/lib/api";
 import { formatChatTime, formatMoney, formatSignedMoney, moneySign, clampInteger } from "@/lib/format";
 import { entriesInRange, reportBounds, reportLabel } from "@/lib/cycle";
@@ -361,6 +361,7 @@ export function MoreView({
   onOpenProfile,
   onOpenSecurity,
   onLogout,
+  onDeleteAccount,
   onOpenUpcoming,
   onOpenWallets,
   walletTotal,
@@ -387,6 +388,7 @@ export function MoreView({
   onOpenProfile: () => void;
   onOpenSecurity: () => void;
   onLogout: () => void;
+  onDeleteAccount: () => void;
   onOpenUpcoming: () => void;
   onOpenWallets: () => void;
   walletTotal: number;
@@ -517,6 +519,13 @@ export function MoreView({
         <button className="me-row me-logout" onClick={onLogout}>
           <span className="me-row-icon"><LogOut size={18} strokeWidth={2.25} aria-hidden="true" /></span>
           <span className="me-row-text">ออกจากระบบ</span>
+        </button>
+        <button className="me-row me-logout" onClick={onDeleteAccount}>
+          <span className="me-row-icon"><Trash2 size={18} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span className="me-row-text">
+            ลบบัญชี
+            <small>ลบบัญชีและข้อมูลทั้งหมดถาวร</small>
+          </span>
         </button>
       </div>
     </div>
@@ -673,6 +682,66 @@ export function ProfileView({
     </PageFrame>
   );
 }
+// Deleting the account cannot be undone, so it takes more than one tap: the
+// dialog says exactly what goes, points at the CSV export first, and its
+// button stays shut until DELETE_ACCOUNT_CONFIRM_TEXT has been typed. It
+// only asks; page.tsx does the delete and keeps the dialog open on failure.
+export function ConfirmDeleteAccount({
+  busy,
+  error,
+  onCancel,
+  onConfirm,
+  closing,
+}: {
+  busy: boolean;
+  error: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+  closing?: boolean;
+}) {
+  const [typed, setTyped] = useState("");
+  const cancel = () => { if (!busy) onCancel(); };
+  useEscapeToClose(cancel);
+  const dialogRef = useFocusTrap<HTMLElement>(!closing);
+  const matches = typed.trim() === DELETE_ACCOUNT_CONFIRM_TEXT;
+
+  return (
+    <div className={`dialog-backdrop ${closing ? "closing" : ""}`} onMouseDown={cancel}>
+      <section
+        ref={dialogRef}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-account-title"
+        tabIndex={-1}
+        className={`confirm-dialog delete-account-dialog ${closing ? "closing" : ""}`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <h2 id="delete-account-title">ลบบัญชีถาวร?</h2>
+        <p>
+          รายการ กระเป๋าเงิน หนี้ บิล งบ เป้าหมาย พอร์ต และประวัติแชททั้งหมดจะถูกลบทันที
+          และกู้คืนไม่ได้ ถ้าอยากเก็บไว้ ส่งออกเป็น CSV ที่ &ldquo;ส่งออกรีพอร์ท&rdquo; ก่อน
+        </p>
+        <label className="delete-account-field">
+          พิมพ์ &ldquo;{DELETE_ACCOUNT_CONFIRM_TEXT}&rdquo; เพื่อยืนยัน
+          <input
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            autoComplete="off"
+            disabled={busy}
+          />
+        </label>
+        {error && <p className="delete-account-error" role="alert">{error}</p>}
+        <div>
+          <button onClick={cancel} disabled={busy}>ยกเลิก</button>
+          <button className="danger" onClick={onConfirm} disabled={!matches || busy}>
+            {busy ? "กำลังลบ..." : "ลบบัญชีถาวร"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function ConfirmLogout({ onCancel, onConfirm, closing }: { onCancel: () => void; onConfirm: () => void; closing?: boolean }) {
   useEscapeToClose(onCancel);
   const dialogRef = useFocusTrap<HTMLElement>(!closing);

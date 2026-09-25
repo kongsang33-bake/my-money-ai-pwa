@@ -120,6 +120,16 @@ export const TABLES = {
   privacyAcknowledgements: "privacy_acknowledgements",
 } as const;
 
+// Postgres functions the app calls through supabase.rpc(...).
+export const RPC = {
+  // Deletes the caller's own account and, by cascade, all of its data
+  // (supabase/migrations/20260926090000_add_delete_my_account.sql).
+  deleteMyAccount: "delete_my_account",
+} as const;
+
+// What the user types into the delete-account dialog before its button wakes.
+export const DELETE_ACCOUNT_CONFIRM_TEXT = "ลบบัญชี";
+
 // Every entries.select(...) in app/page.tsx pulls this same column list —
 // keep it in one place so a renamed/added column can't silently drift out
 // of sync between call sites.

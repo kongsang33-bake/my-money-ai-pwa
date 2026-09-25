@@ -116,6 +116,10 @@ test("meets contrast, target size and overflow limits", async ({ page }) => {
   await navigate(page, "more");
   await page.waitForTimeout(500);
   audits.push(await auditScreen(page, "more"));
+  await page.getByRole("button", { name: /ลบบัญชี/ }).click();
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+  audits.push(await auditScreen(page, "delete-account"));
+  await page.keyboard.press("Escape");
 
   // The AI review: a folded draft, one open because it names people the
   // account has never seen, and one whose missing destination blocks the

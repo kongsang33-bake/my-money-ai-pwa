@@ -5589,7 +5589,7 @@ button.entry-main {
 }
 
 .edit-sheet label input, .edit-sheet label select,
-.edit-sheet label textarea, .login-content form input, .budget-row input,
+.edit-sheet label textarea, .login-content form input, .delete-account-field input, .budget-row input,
 .manual-entry-form label input, .manual-entry-form label select, .manual-entry-form label textarea,
 .draft label input, .draft label select, .setup-amount input {
   width: 100%;
@@ -5613,7 +5613,7 @@ button.entry-main {
 }
 
 .edit-sheet label input:focus, .edit-sheet label select:focus,
-.edit-sheet label textarea:focus, .login-content form input:focus, .budget-row input:focus,
+.edit-sheet label textarea:focus, .login-content form input:focus, .delete-account-field input:focus, .budget-row input:focus,
 .manual-entry-form label input:focus, .manual-entry-form label select:focus, .manual-entry-form label textarea:focus,
 .draft label input:focus, .draft label select:focus, .setup-amount input:focus {
   /* Netflix's sign-in field: the edge turns white. No emerald (that is the
@@ -6270,6 +6270,23 @@ input[type="checkbox"], input[type="radio"] {
   border-radius: var(--r-md);
   padding: 11px;
   font-weight: var(--fw-semibold);
+}
+
+/* Delete account: a typed confirmation between the warning and the buttons. */
+.delete-account-field {
+  display: block;
+  margin-bottom: var(--s-5);
+  text-align: left;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-3);
+}
+
+.confirm-dialog .delete-account-error {
+  margin: calc(var(--s-3) * -1) 0 var(--s-4);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--danger);
 }
 
 /* -------------------------------------------------------------------------

@@ -94,8 +94,12 @@ profile form -- it was a large centred portrait plus a second "บัญชี�
 row, three doors into one screen counting the topbar, and the portrait pushed
 the tools off the first screenful; don't grow it back), one heads-up row
 (the nearest unlogged bill, else an unpaid card, else a budget at its edge —
-it opens "กำลังจะมา"), the money tools, then the account's own rows (PIN, then
-ออกจากระบบ in `--danger`). The profile form (`ProfileView`) edits and nothing
+it opens "กำลังจะมา"), the money tools, then the account's own rows (PIN, the
+privacy policy, ออกจากระบบ and ลบบัญชี in `--danger`). ลบบัญชี opens
+`ConfirmDeleteAccount`, whose button stays disabled until
+`DELETE_ACCOUNT_CONFIRM_TEXT` is typed; the delete is one `RPC.deleteMyAccount`
+call (a security-definer function that deletes only `auth.uid()` from
+`auth.users`, every table cascading from it), then a local sign-out. The profile form (`ProfileView`) edits and nothing
 else: the lock and sign-out moved out of it onto those rows. The tools are a grid on purpose, not the rail the mock drew: it is a
 menu of eight places to go, and a sideways row would hide most of them. The
 account screens go back to wherever opened them (`accountBack`), the way
