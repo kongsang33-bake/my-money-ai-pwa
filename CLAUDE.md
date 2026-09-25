@@ -267,14 +267,20 @@ the product name -- leave them.
   overlay layer. Don't reintroduce a drawer to hold a setting — a new one
   belongs on the account screen, or under "ของฉัน" (formerly "อื่น ๆ") if it
   is about money rather than about the account.
-- **Pull down to refresh is the app's own** (`usePullToRefresh`,
+- **Pull down to refresh is the app's own** (`PullToRefresh`,
   components/primitives.tsx). The document never scrolls -- `.phone` does --
   so neither iOS nor Android offers theirs. It listens on `.phone` with
   passive touch listeners, counts only from the very top and only a mostly
   vertical drag, and reloads through `refreshUserData`, which is
   `loadUserData` without `dataLoading`: a pull updates the numbers in place
   instead of swapping the screen for skeletons. It is off while a sheet is
-  open and on Ask AI, whose chat has its own scroller.
+  open and on Ask AI, whose chat has its own scroller. The drag writes the
+  disc's position straight to the DOM; as state in the root component it
+  re-rendered the whole app per touchmove and juddered. `.phone` is
+  `overscroll-behavior-y: contain` and the document `none`, so a drag past
+  the top bounces `.phone` and never the document -- and the `--vvh` effect
+  in page.tsx leaves the document alone while a finger is down. Snapping it
+  back mid-drag is what made the top of every tab judder on an iPhone.
 - **The bottom nav is pinned to the viewport below 900px, at every width.**
   It is rendered inside `.phone`, which is the scroll container, so with
   `position: absolute` it scrolls away with the content — which it did from

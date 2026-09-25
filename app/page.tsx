@@ -103,7 +103,7 @@ import {
 import { WalletAvatarGlyph } from "@/components/shared";
 import { BottomNav } from "@/components/bottom-nav";
 import { UpcomingView } from "@/components/upcoming";
-import { ConfirmDialog, CountUpMoney, ElapsedSeconds, EmptyNote, ErrorActions, PullRefreshIndicator, Rail, usePullToRefresh, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useStableHandler } from "@/components/primitives";
+import { ConfirmDialog, CountUpMoney, ElapsedSeconds, EmptyNote, ErrorActions, PullToRefresh, Rail, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useStableHandler } from "@/components/primitives";
 import { AiComposer, DraftImpact, DraftRow, EditSheet, EntryList, ManualEntryForm, QuickAddStrip } from "@/components/add";
 import {
   CalendarHeatmap,
@@ -404,7 +404,7 @@ export default function Home() {
   const [pinError, setPinError] = useState("");
   const scrollRootRef = useRef<HTMLElement | null>(null);
   // The same element as state, for the one consumer that has to know when it
-  // appears (usePullToRefresh attaches its listeners to it).
+  // appears (PullToRefresh attaches its listeners to it).
   const [scrollRootEl, setScrollRootEl] = useState<HTMLElement | null>(null);
   const backgroundedAtRef = useRef<number | null>(null);
   const authUserIdRef = useRef<string | null | undefined>(undefined);
@@ -915,9 +915,6 @@ export default function Home() {
     recapOpen ||
     logoutOpen;
 
-  // Ask AI fills the viewport with its own chat scroller, so a pull there
-  // belongs to the conversation, not to the page.
-  const pullRefresh = usePullToRefresh(scrollRootEl, refreshUserData, !overlayOpen && !dataLoading && tab !== "ask");
   // Scroll-lock behind an open sheet. This has to target .phone, not <body>:
   // .phone is the app's real scroll container (height: 100dvh; overflow-y:
   // auto), so the document itself never scrolls -- the old body-level
@@ -949,17 +946,37 @@ export default function Home() {
     const viewport = window.visualViewport;
     if (!viewport) return;
     const root = document.documentElement;
+    // Never while a finger is down. At the top of a screen a drag downwards
+    // rubber-bands the document, which fires this on every frame; snapping
+    // it back to 0 mid-drag fought the finger, and that was the judder at
+    // the top of every tab on an iPhone. The pan this exists to undo is the
+    // keyboard's, which lands with no finger down -- and a real one left
+    // behind by a gesture is put back when the finger lifts.
+    let touching = false;
     const update = () => {
       if (Math.abs(viewport.scale - 1) > 0.01) return;
       root.style.setProperty("--vvh", `${Math.round(viewport.height)}px`);
-      if (window.scrollY !== 0 || viewport.offsetTop > 0) window.scrollTo(0, 0);
+      if (touching) return;
+      if (window.scrollY > 0 || viewport.offsetTop > 0) window.scrollTo(0, 0);
+    };
+    const onTouchStart = () => { touching = true; };
+    const onTouchEnd = (event: TouchEvent) => {
+      if (event.touches.length) return;
+      touching = false;
+      update();
     };
     update();
     viewport.addEventListener("resize", update);
     viewport.addEventListener("scroll", update);
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    window.addEventListener("touchcancel", onTouchEnd, { passive: true });
     return () => {
       viewport.removeEventListener("resize", update);
       viewport.removeEventListener("scroll", update);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
       root.style.removeProperty("--vvh");
     };
   }, []);
@@ -2970,7 +2987,9 @@ export default function Home() {
 
   return (
     <main className="shell">
-      <PullRefreshIndicator pull={pullRefresh.pull} refreshing={pullRefresh.refreshing} />
+      {/* Off on Ask AI, whose chat has its own scroller -- a pull there
+          belongs to the conversation, not to the page. */}
+      <PullToRefresh root={scrollRootEl} onRefresh={refreshUserData} enabled={!overlayOpen && !dataLoading && tab !== "ask"} />
       <section className={`phone tab-${tab}`} ref={attachScrollRoot}>
         {/* The topbar is a floating pill, so the page scrolls through the gap
             above and beside it -- a hero balance sliding past the header used

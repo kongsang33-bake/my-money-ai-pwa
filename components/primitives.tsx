@@ -616,35 +616,59 @@ export function ErrorActions({ onRetry, onDismiss }: { onRetry: () => void; onDi
  * pull-to-refresh here -- this listens on that one scroll container instead.
  *
  * The listeners are passive and never cancel the touch: the page scrolls and
- * rubber-bands exactly as it would without this, and the gesture only counts
+ * bounces exactly as it would without this, and the gesture only counts
  * while the container is at its very top and the finger is moving down more
  * than sideways (so a horizontal rail swipe near the top is left alone).
  * `enabled` is false while a sheet is open or on a screen that fills the
  * viewport itself. `root` is the element itself rather than a ref, so the
  * listeners attach when `.phone` mounts -- behind the PIN or setup gate that
- * is later than this hook's first run.
+ * is later than this component's first render.
+ *
+ * Its own component, and the drag writes the indicator's position straight
+ * to the DOM: it used to be state in the app's root component, so every
+ * touchmove re-rendered the whole app, and the pull juddered on a phone.
+ * React only hears about the two moments that change what is on screen --
+ * the disc appearing, and the refresh starting and ending.
  */
-export function usePullToRefresh(
-  root: HTMLElement | null,
-  onRefresh: () => Promise<unknown>,
-  enabled: boolean,
-) {
-  const [pull, setPull] = useState(0);
+export function PullToRefresh({
+  root,
+  onRefresh,
+  enabled,
+}: {
+  root: HTMLElement | null;
+  onRefresh: () => Promise<unknown>;
+  enabled: boolean;
+}) {
+  const [shown, setShown] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const discRef = useRef<HTMLDivElement | null>(null);
+  const pullRef = useRef(0);
   const refreshRef = useRef(onRefresh);
   useLayoutEffect(() => {
     refreshRef.current = onRefresh;
   });
 
+  // Written to the disc directly, not through state (see above).
+  const paint = useCallback((pull: number) => {
+    pullRef.current = pull;
+    const disc = discRef.current;
+    if (!disc) return;
+    disc.style.setProperty("--pull", `${pull}px`);
+    disc.style.setProperty("--pull-turn", `${(pull / PULL_REFRESH_THRESHOLD) * 270}deg`);
+    disc.classList.toggle("is-ready", pull >= PULL_REFRESH_THRESHOLD);
+  }, []);
+
+  // The disc mounts on the first frame of a pull; give it the pull so far.
+  useLayoutEffect(() => {
+    if (shown) paint(pullRef.current);
+  }, [shown, paint]);
+
   useEffect(() => {
     if (!root || !enabled || refreshing) return;
     let start: { x: number; y: number } | null = null;
-    let current = 0;
-    let frame = 0;
-    const show = (value: number) => {
-      current = value;
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => setPull(value));
+    const move = (pull: number) => {
+      paint(pull);
+      setShown(pull > 0);
     };
     const onStart = (event: TouchEvent) => {
       start = root.scrollTop <= 0 && event.touches.length === 1
@@ -656,26 +680,27 @@ export function usePullToRefresh(
       const dx = event.touches[0].clientX - start.x;
       const dy = event.touches[0].clientY - start.y;
       if (root.scrollTop > 0 || dy <= 0 || Math.abs(dx) > dy) {
-        if (current) show(0);
+        if (pullRef.current) move(0);
         if (root.scrollTop > 0 || Math.abs(dx) > Math.abs(dy)) start = null;
         return;
       }
       // Half the finger's travel: a pull should feel heavier than a scroll.
-      show(Math.min(PULL_REFRESH_MAX, dy / 2));
+      move(Math.min(PULL_REFRESH_MAX, dy / 2));
     };
     const onEnd = () => {
       if (!start) return;
       start = null;
-      if (current < PULL_REFRESH_THRESHOLD) {
-        show(0);
+      if (pullRef.current < PULL_REFRESH_THRESHOLD) {
+        move(0);
         return;
       }
-      show(PULL_REFRESH_THRESHOLD);
+      paint(PULL_REFRESH_THRESHOLD);
       setRefreshing(true);
       const minimum = new Promise((resolve) => setTimeout(resolve, PULL_REFRESH_MIN_MS));
       Promise.allSettled([refreshRef.current(), minimum]).then(() => {
+        pullRef.current = 0;
         setRefreshing(false);
-        setPull(0);
+        setShown(false);
       });
     };
     root.addEventListener("touchstart", onStart, { passive: true });
@@ -683,34 +708,22 @@ export function usePullToRefresh(
     root.addEventListener("touchend", onEnd, { passive: true });
     root.addEventListener("touchcancel", onEnd, { passive: true });
     return () => {
-      cancelAnimationFrame(frame);
       root.removeEventListener("touchstart", onStart);
       root.removeEventListener("touchmove", onMove);
       root.removeEventListener("touchend", onEnd);
       root.removeEventListener("touchcancel", onEnd);
     };
-  }, [root, enabled, refreshing]);
+  }, [root, enabled, refreshing, paint]);
 
-  return { pull, refreshing };
-}
-
-/**
- * The pull-to-refresh indicator: a disc under the topbar that follows the
- * finger down, turns as it goes, and spins while the reload runs. It fills in
- * once the pull is far enough that letting go will refresh.
- */
-export function PullRefreshIndicator({ pull, refreshing }: { pull: number; refreshing: boolean }) {
-  if (!pull && !refreshing) return null;
-  const ready = pull >= PULL_REFRESH_THRESHOLD;
+  if (!shown && !refreshing) return null;
   return (
     <div
-      className={`pull-refresh${ready ? " is-ready" : ""}${refreshing ? " is-refreshing" : ""}`}
-      style={{ "--pull": `${pull}px`, "--pull-turn": `${(pull / PULL_REFRESH_THRESHOLD) * 270}deg` } as React.CSSProperties}
+      ref={discRef}
+      className={`pull-refresh${refreshing ? " is-refreshing is-ready" : ""}`}
       role="status"
-      aria-label={refreshing ? "กำลังโหลดข้อมูลใหม่" : ready ? "ปล่อยเพื่อโหลดใหม่" : "ดึงลงเพื่อโหลดใหม่"}
+      aria-label={refreshing ? "กำลังโหลดข้อมูลใหม่" : "ดึงลงเพื่อโหลดใหม่"}
     >
       <RefreshCw size={18} strokeWidth={2.5} aria-hidden="true" />
     </div>
   );
 }
-

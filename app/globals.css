@@ -268,9 +268,12 @@
   box-sizing: border-box;
 }
 
+/* The document itself never scrolls -- .phone does -- so it has nothing to
+   rubber-band. Set on html too: that is the element iOS bounces. */
 html, body {
   padding: 0;
   margin: 0;
+  overscroll-behavior-y: none;
 }
 
 body {
@@ -280,7 +283,6 @@ body {
   font-size: var(--fs-body);
   line-height: var(--lh-body);
   -webkit-font-smoothing: antialiased;
-  overscroll-behavior-y: none;
   /* Every list here is mostly money: tabular figures keep a column of
      amounts lining up digit-for-digit instead of drifting with each
      row's width, wherever the font itself supports it. */
@@ -472,6 +474,10 @@ a:focus-visible {
   box-shadow: none;
   overflow-x: hidden;
   overflow-y: auto;
+  /* A drag past the top or bottom bounces .phone itself and stops there,
+     rather than chaining out to the document -- which moved the whole app,
+     topbar and nav included, and set off the pan correction in page.tsx. */
+  overscroll-behavior-y: contain;
   scroll-behavior: smooth;
   padding-bottom: var(--nav-clearance);
   scroll-padding-top: 82px;
@@ -6272,7 +6278,7 @@ input[type="checkbox"], input[type="radio"] {
 }
 
 /* -------------------------------------------------------------------------
-   Pull to refresh (usePullToRefresh / PullRefreshIndicator, primitives.tsx)
+   Pull to refresh (PullToRefresh, components/primitives.tsx)
    -- a disc that hangs just under the topbar and follows the finger down,
    turning as it goes. Outline while the pull is short of the threshold,
    filled white once letting go will refresh, spinning while it does.
@@ -6291,12 +6297,12 @@ input[type="checkbox"], input[type="radio"] {
   background: var(--surface-2);
   color: var(--ink-2);
   box-shadow: var(--sh-2);
-  transform: translate(-50%, var(--pull));
+  transform: translate(-50%, var(--pull, 0px));
   pointer-events: none;
 }
 
 .pull-refresh svg {
-  transform: rotate(var(--pull-turn));
+  transform: rotate(var(--pull-turn, 0deg));
 }
 
 .pull-refresh.is-ready {
