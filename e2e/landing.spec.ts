@@ -31,23 +31,29 @@ test.describe("landing", () => {
   test("turns one whole screen per wheel gesture on a desktop", async ({ page, isMobile }) => {
     test.skip(isMobile, "a wheel is a mouse or trackpad; touch keeps native snapping");
     await openLanding(page);
-    const scroller = page.locator(".landing");
-    const offsetOf = (id: string) => page.locator(`#${id}`).evaluate((el) => (el as HTMLElement).offsetTop);
-    const scrollTop = () => scroller.evaluate((el) => el.scrollTop);
+    await expect(page.locator(".landing.is-paged")).toHaveCount(1);
+    const current = page.locator('.landing-dots button[aria-current="true"]');
+    // A screen counts as showing once it has slid fully into the window.
+    const settledOn = async (id: string) => {
+      await expect(current).toHaveAttribute("aria-label", { "landing-about": "รู้จักแอพ", "landing-install": "ติดตั้ง", "landing-signin": "เข้าสู่ระบบ" }[id]!);
+      await expect.poll(() => page.locator(`#${id}`).evaluate((el) => Math.round(el.getBoundingClientRect().top))).toBe(0);
+    };
 
     await page.mouse.move(200, 300);
-    // Several events close together are one gesture (a trackpad flick):
-    // one page, not three.
-    for (let i = 0; i < 3; i++) await page.mouse.wheel(0, 60);
-    await expect.poll(scrollTop).toBe(await offsetOf("landing-install"));
+    // Several events close together, each smaller than the last, are one
+    // gesture (a trackpad flick and its inertia): one page, not three.
+    for (const delta of [60, 40, 20]) await page.mouse.wheel(0, delta);
+    await settledOn("landing-install");
 
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(300);
     await page.mouse.wheel(0, 60);
-    await expect.poll(scrollTop).toBe(await offsetOf("landing-signin"));
+    await settledOn("landing-signin");
 
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(300);
     await page.keyboard.press("PageUp");
-    await expect.poll(scrollTop).toBe(await offsetOf("landing-install"));
+    await settledOn("landing-install");
+    await page.keyboard.press("Home");
+    await settledOn("landing-about");
   });
 
   test("keeps sign-in shut until the privacy policy is acknowledged", async ({ page}) => {

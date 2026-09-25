@@ -252,6 +252,9 @@
   --t-2: 160ms;
   --t-3: 240ms;
   --t-4: 380ms;
+  /* One page turn of the landing on a desktop (LANDING_PAGE_MS in
+     components/landing.tsx waits the same time before taking more input). */
+  --t-page: 560ms;
   --t-press: 70ms;
   /* one step of the list/section entrance ladder -- see the .view > * rules
      in the Motion section for why it stops after four steps */
@@ -7003,11 +7006,32 @@ input[type="checkbox"], input[type="radio"] {
   scroll-snap-type: y mandatory;
 }
 
-/* A mouse or trackpad pages by script instead (Landing's wheel effect):
-   snapping under a wheel nudged and dragged back on every notch. */
-@media (hover: hover) and (pointer: fine) {
-  .landing {
-    scroll-snap-type: none;
+/* Paged mode (a mouse or trackpad -- Landing sets .is-paged): the scroller
+   stops scrolling and the track slides one screen per turn by a transform,
+   which the compositor animates on its own; snapping under a wheel nudged
+   and dragged back on every notch. Each screen is exactly the window and
+   scrolls inside itself when it is taller. */
+.landing.is-paged {
+  overflow: hidden;
+  scroll-snap-type: none;
+}
+
+.landing.is-paged .landing-track {
+  height: 100%;
+  transform: translate3d(0, calc(var(--landing-page, 0) * -100%), 0);
+  transition: transform var(--t-page) var(--e-out);
+  will-change: transform;
+}
+
+.landing.is-paged .landing-section {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing.is-paged .landing-track {
+    transition: none;
   }
 }
 

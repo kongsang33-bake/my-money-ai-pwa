@@ -42,13 +42,14 @@ const SECURITY_POINTS = [
   },
 ] as const;
 
-// Paging on a desktop (see the wheel effect in Landing): how long one page
-// turn takes, how far a wheel gesture travels before it counts, and the quiet
+// Paged mode (a mouse or trackpad, see Landing): how long one page turn
+// takes -- keep it in step with --t-page in globals.css, which runs the
+// slide -- how far a wheel gesture travels before it counts, and the quiet
 // gap between wheel events that ends a gesture (a trackpad keeps sending
 // inertia events for a while after the fingers lift).
-const LANDING_PAGE_MS = 700;
-const WHEEL_PAGE_THRESHOLD = 24;
-const WHEEL_GESTURE_GAP_MS = 220;
+const LANDING_PAGE_MS = 560;
+const WHEEL_PAGE_THRESHOLD = 12;
+const WHEEL_GESTURE_GAP_MS = 180;
 
 type Platform = "ios" | "android";
 
@@ -69,6 +70,18 @@ const INSTALL_STEPS: Record<Platform, { icon: typeof Share; text: string }[]> = 
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
 const noopSubscribe = () => () => {};
+
+const PAGED_QUERY = "(hover: hover) and (pointer: fine)";
+
+function readPagedMode() {
+  return typeof window !== "undefined" && window.matchMedia(PAGED_QUERY).matches;
+}
+
+function subscribePagedMode(listener: () => void) {
+  const query = window.matchMedia(PAGED_QUERY);
+  query.addEventListener("change", listener);
+  return () => query.removeEventListener("change", listener);
+}
 
 function detectPlatform(): Platform {
   const ua = navigator.userAgent;
@@ -124,95 +137,100 @@ export function Landing() {
     };
   }, []);
 
-  // Which screen is showing, for the dots on the right.
+  // Two ways to move between the screens. Touch keeps the browser's own
+  // scroll with snapping, which a finger drives well. A mouse or trackpad
+  // gets "paged" mode instead: the screens sit on a track that slides by a
+  // CSS transform (composited, so it stays smooth even while the page is
+  // busy), one screen per wheel gesture or key press. Snapping under a wheel
+  // nudged the page a notch and dragged it back, and animating scrollTop
+  // from script was still tied to the main thread.
+  const paged = useSyncExternalStore(subscribePagedMode, readPagedMode, () => false);
+  // The showing screen, kept in a ref as well for the input handlers, which
+  // are bound once per mode and must not read a stale render's value.
+  const activeSectionRef = useRef(0);
+  const turningUntilRef = useRef(0);
+  const showSection = useCallback((index: number) => {
+    activeSectionRef.current = index;
+    setActiveSection(index);
+  }, []);
+
+  // Which screen is showing, for the dots on the right. Paged mode sets it
+  // directly; in scroll mode the observer reads it off the scroll.
   useEffect(() => {
     const scroller = scrollerRef.current;
-    if (!scroller || typeof IntersectionObserver === "undefined") return;
+    if (paged || !scroller || typeof IntersectionObserver === "undefined") return;
     const observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
         const index = SECTIONS.findIndex((section) => section.id === entry.target.id);
-        if (index >= 0) setActiveSection(index);
+        if (index >= 0) showSection(index);
       }
     }, { root: scroller, threshold: 0.6 });
     scroller.querySelectorAll(".landing-section").forEach((section) => observer.observe(section));
     return () => observer.disconnect();
-  }, []);
+  }, [paged, showSection]);
 
-  // Scrolls the landing to a screen with our own easing, so a dot, a "next"
-  // button, the wheel and the keyboard all move the same way and take the
-  // same time. Reduced motion jumps straight there.
-  const animatingRef = useRef(false);
-  const goTo = useCallback((index: number) => {
-    const scroller = scrollerRef.current;
-    const target = document.getElementById(SECTIONS[index]?.id ?? "");
-    if (!scroller || !target) return;
-    const from = scroller.scrollTop;
-    const to = target.offsetTop;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce || Math.abs(to - from) < 2) {
-      scroller.scrollTop = to;
-      return;
-    }
-    const start = performance.now();
-    animatingRef.current = true;
-    const step = (now: number) => {
-      const t = Math.min(1, (now - start) / LANDING_PAGE_MS);
-      const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-      scroller.scrollTop = from + (to - from) * eased;
-      if (t < 1) requestAnimationFrame(step);
-      else animatingRef.current = false;
-    };
-    requestAnimationFrame(step);
-  }, []);
-
-  // On a mouse or trackpad, CSS snapping fights the wheel: every notch nudges
-  // the page a little and snap drags it back, which read as stiff. There the
-  // snap is off (globals.css, pointer: fine) and one wheel gesture turns one
-  // page instead. A screen taller than the window still scrolls natively
-  // until its edge, and a trackpad's inertia after a page turn is swallowed
-  // until the gesture ends (a gap between wheel events), so one flick never
-  // turns two pages. The keyboard gets the same paging.
+  // Switching modes (a window dragged to a touch screen, say) keeps the same
+  // screen in view: the track is reset in scroll mode, so scroll to it.
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
-    const sections = () => Array.from(scroller.querySelectorAll<HTMLElement>(".landing-section"));
-    const currentIndex = () => {
-      const top = scroller.scrollTop + 2;
-      let index = 0;
-      sections().forEach((section, i) => { if (section.offsetTop <= top) index = i; });
-      return index;
-    };
-    // Whether a move in `dir` should stay native: still inside a tall screen.
-    const insideTallSection = (dir: number) => {
-      const section = sections()[currentIndex()];
+    if (paged) scroller.scrollTop = 0;
+    else document.getElementById(SECTIONS[activeSectionRef.current].id)?.scrollIntoView({ block: "start" });
+  }, [paged]);
+
+  const goTo = useCallback((index: number) => {
+    const next = Math.max(0, Math.min(SECTIONS.length - 1, index));
+    if (readPagedMode()) {
+      if (next === activeSectionRef.current) return;
+      turningUntilRef.current = performance.now() + LANDING_PAGE_MS;
+      showSection(next);
+      return;
+    }
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.getElementById(SECTIONS[next].id)?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }, [showSection]);
+
+  // Paged mode's input. A screen taller than the window scrolls inside
+  // itself first and only turns the page at its edge. One wheel gesture
+  // turns one page: the trackpad's inertia afterwards is swallowed, but a
+  // fresh flick during that inertia (its deltas grow again, where inertia
+  // only ever decays) turns the next page straight away rather than waiting
+  // for the old gesture to die out.
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!paged || !scroller) return;
+    const currentSection = () => scroller.querySelectorAll<HTMLElement>(".landing-section")[activeSectionRef.current];
+    const canScrollInside = (dir: number) => {
+      const section = currentSection();
       if (!section) return false;
-      const viewTop = scroller.scrollTop;
-      const viewBottom = viewTop + scroller.clientHeight;
-      return dir > 0 ? viewBottom < section.offsetTop + section.offsetHeight - 2 : viewTop > section.offsetTop + 2;
+      return dir > 0
+        ? section.scrollTop + section.clientHeight < section.scrollHeight - 1
+        : section.scrollTop > 0;
     };
-    const page = (dir: number) => {
-      const next = currentIndex() + dir;
-      if (next < 0 || next >= SECTIONS.length) return;
-      goTo(next);
-    };
+    const turning = () => performance.now() < turningUntilRef.current;
+    const page = (dir: number) => goTo(activeSectionRef.current + dir);
 
     let lastWheel = 0;
+    let lastAbs = 0;
     let consumed = false;
     let travel = 0;
     const onWheel = (event: WheelEvent) => {
       if (event.ctrlKey || Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
+      const dir = Math.sign(event.deltaY);
+      if (!dir) return;
       const now = performance.now();
-      if (now - lastWheel > WHEEL_GESTURE_GAP_MS) {
+      const abs = Math.abs(event.deltaY);
+      const newGesture = now - lastWheel > WHEEL_GESTURE_GAP_MS || (!turning() && abs > lastAbs * 1.4 + 4);
+      lastWheel = now;
+      lastAbs = abs;
+      if (newGesture) {
         consumed = false;
         travel = 0;
       }
-      lastWheel = now;
-      const dir = Math.sign(event.deltaY);
-      if (!dir) return;
-      if (!consumed && !animatingRef.current && insideTallSection(dir)) return;
+      if (!consumed && !turning() && canScrollInside(dir)) return;
       event.preventDefault();
-      if (consumed || animatingRef.current) return;
+      if (consumed || turning()) return;
       travel += event.deltaY;
       if (Math.abs(travel) < WHEEL_PAGE_THRESHOLD) return;
       consumed = true;
@@ -227,19 +245,36 @@ export function Landing() {
       if (event.key === " " && target?.closest("button, a, summary")) return;
       const dir = event.key === "ArrowDown" || event.key === "PageDown" || (event.key === " " && !event.shiftKey) ? 1
         : event.key === "ArrowUp" || event.key === "PageUp" || (event.key === " " && event.shiftKey) ? -1
-          : 0;
-      if (!dir || insideTallSection(dir)) return;
+          : event.key === "Home" ? -SECTIONS.length
+            : event.key === "End" ? SECTIONS.length
+              : 0;
+      if (!dir || (Math.abs(dir) === 1 && canScrollInside(dir))) return;
       event.preventDefault();
-      if (!animatingRef.current) page(dir);
+      if (!turning()) page(dir);
     };
 
+    // Tabbing into a screen that is off the track brings that screen in; the
+    // scroller itself never scrolls in this mode (the browser would try, to
+    // reveal the focused element, and knock the track out of line).
+    const onFocus = (event: FocusEvent) => {
+      const section = (event.target as HTMLElement | null)?.closest<HTMLElement>(".landing-section");
+      const index = SECTIONS.findIndex((item) => item.id === section?.id);
+      scroller.scrollTop = 0;
+      if (index >= 0 && index !== activeSectionRef.current) goTo(index);
+    };
+    const onScroll = () => { if (scroller.scrollTop !== 0) scroller.scrollTop = 0; };
+
     scroller.addEventListener("wheel", onWheel, { passive: false });
+    scroller.addEventListener("focusin", onFocus);
+    scroller.addEventListener("scroll", onScroll);
     window.addEventListener("keydown", onKey);
     return () => {
       scroller.removeEventListener("wheel", onWheel);
+      scroller.removeEventListener("focusin", onFocus);
+      scroller.removeEventListener("scroll", onScroll);
       window.removeEventListener("keydown", onKey);
     };
-  }, [goTo]);
+  }, [paged, goTo]);
 
   async function install() {
     if (!installPrompt) return;
@@ -276,82 +311,87 @@ export function Landing() {
         ))}
       </nav>
 
-      <div className="landing" ref={scrollerRef}>
-        <section id="landing-about" className="landing-section landing-lit">
-          <div className="landing-body">
-            <div className="landing-head">
-              <p className="eyebrow">แอพจดรายรับรายจ่ายด้วย AI</p>
-              <h1>พิมพ์เหมือนแชท<br />แล้วให้ Nub-Mon นับให้</h1>
-              <p>
-                &ldquo;ข้าวมันไก่ 50&rdquo; ก็พอ AI แยกหมวด เลือกกระเป๋า และรวมยอดให้เอง
-                ดูได้ว่าเงินไปไหน บิลไหนใกล้ถึง และใครยังติดเงินคุณอยู่
-              </p>
+      <div className={`landing ${paged ? "is-paged" : ""}`} ref={scrollerRef}>
+        <div
+          className="landing-track"
+          style={paged ? ({ "--landing-page": activeSection } as React.CSSProperties) : undefined}
+        >
+          <section id="landing-about" className="landing-section landing-lit">
+            <div className="landing-body">
+              <div className="landing-head">
+                <p className="eyebrow">แอพจดรายรับรายจ่ายด้วย AI</p>
+                <h1>พิมพ์เหมือนแชท<br />แล้วให้ Nub-Mon นับให้</h1>
+                <p>
+                  &ldquo;ข้าวมันไก่ 50&rdquo; ก็พอ AI แยกหมวด เลือกกระเป๋า และรวมยอดให้เอง
+                  ดูได้ว่าเงินไปไหน บิลไหนใกล้ถึง และใครยังติดเงินคุณอยู่
+                </p>
+              </div>
+              <ul className="landing-points">
+                {SECURITY_POINTS.map(({ icon: Icon, title, detail }) => (
+                  <li key={title}>
+                    <span className="landing-point-icon"><Icon size={20} strokeWidth={2.25} aria-hidden="true" /></span>
+                    <span>
+                      <b>{title}</b>
+                      <small>{detail}</small>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <a className="landing-policy-link" href="/privacy">อ่านนโยบายความเป็นส่วนตัวฉบับเต็ม</a>
             </div>
-            <ul className="landing-points">
-              {SECURITY_POINTS.map(({ icon: Icon, title, detail }) => (
-                <li key={title}>
-                  <span className="landing-point-icon"><Icon size={20} strokeWidth={2.25} aria-hidden="true" /></span>
-                  <span>
-                    <b>{title}</b>
-                    <small>{detail}</small>
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <a className="landing-policy-link" href="/privacy">อ่านนโยบายความเป็นส่วนตัวฉบับเต็ม</a>
-          </div>
-          <button type="button" className="landing-next" onClick={() => goTo(1)}>
-            ติดตั้งบนมือถือ
-            <ChevronDown size={18} strokeWidth={2.25} aria-hidden="true" />
-          </button>
-        </section>
+            <button type="button" className="landing-next" onClick={() => goTo(1)}>
+              ติดตั้งบนมือถือ
+              <ChevronDown size={18} strokeWidth={2.25} aria-hidden="true" />
+            </button>
+          </section>
 
-        <section id="landing-install" className="landing-section">
-          <div className="landing-body">
-            <div className="landing-head">
-              <p className="eyebrow">ติดตั้งเป็นแอพ</p>
-              <h2>อยู่บนหน้าจอโฮม<br />เปิดได้ในแตะเดียว</h2>
-              <p>ไม่ต้องโหลดจาก App Store หรือ Play Store เพิ่มจากเบราว์เซอร์ได้เลย เปิดแล้วเต็มจอเหมือนแอพทั่วไป</p>
-            </div>
-            <div className="add-mode-tabs landing-tabs" role="tablist" aria-label="เลือกเครื่อง">
-              {(["ios", "android"] as const).map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  role="tab"
-                  aria-selected={platform === key}
-                  className={platform === key ? "active" : ""}
-                  onClick={() => setPickedPlatform(key)}
-                >
-                  {key === "ios" ? "iPhone / iPad" : "Android"}
+          <section id="landing-install" className="landing-section">
+            <div className="landing-body">
+              <div className="landing-head">
+                <p className="eyebrow">ติดตั้งเป็นแอพ</p>
+                <h2>อยู่บนหน้าจอโฮม<br />เปิดได้ในแตะเดียว</h2>
+                <p>ไม่ต้องโหลดจาก App Store หรือ Play Store เพิ่มจากเบราว์เซอร์ได้เลย เปิดแล้วเต็มจอเหมือนแอพทั่วไป</p>
+              </div>
+              <div className="add-mode-tabs landing-tabs" role="tablist" aria-label="เลือกเครื่อง">
+                {(["ios", "android"] as const).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={platform === key}
+                    className={platform === key ? "active" : ""}
+                    onClick={() => setPickedPlatform(key)}
+                  >
+                    {key === "ios" ? "iPhone / iPad" : "Android"}
+                  </button>
+                ))}
+              </div>
+              <ol className="landing-steps" role="tabpanel">
+                {steps.map(({ icon: Icon, text }, index) => (
+                  <li key={text}>
+                    <span className="landing-step-number">{index + 1}</span>
+                    <span className="landing-step-text">{text}</span>
+                    <span className="landing-point-icon"><Icon size={18} strokeWidth={2.25} aria-hidden="true" /></span>
+                  </li>
+                ))}
+              </ol>
+              {installPrompt && (
+                <button type="button" className="primary" onClick={install}>
+                  <Download size={18} strokeWidth={2.25} aria-hidden="true" />
+                  ติดตั้งเลย
                 </button>
-              ))}
+              )}
             </div>
-            <ol className="landing-steps" role="tabpanel">
-              {steps.map(({ icon: Icon, text }, index) => (
-                <li key={text}>
-                  <span className="landing-step-number">{index + 1}</span>
-                  <span className="landing-step-text">{text}</span>
-                  <span className="landing-point-icon"><Icon size={18} strokeWidth={2.25} aria-hidden="true" /></span>
-                </li>
-              ))}
-            </ol>
-            {installPrompt && (
-              <button type="button" className="primary" onClick={install}>
-                <Download size={18} strokeWidth={2.25} aria-hidden="true" />
-                ติดตั้งเลย
-              </button>
-            )}
-          </div>
-          <button type="button" className="landing-next" onClick={() => goTo(2)}>
-            เริ่มใช้งาน
-            <ChevronDown size={18} strokeWidth={2.25} aria-hidden="true" />
-          </button>
-        </section>
+            <button type="button" className="landing-next" onClick={() => goTo(2)}>
+              เริ่มใช้งาน
+              <ChevronDown size={18} strokeWidth={2.25} aria-hidden="true" />
+            </button>
+          </section>
 
-        <section id="landing-signin" className="landing-section landing-lit">
-          <SignInPanel acknowledged={acknowledged} onReadPolicy={() => setPolicyOpen(true)} />
-        </section>
+          <section id="landing-signin" className="landing-section landing-lit">
+            <SignInPanel acknowledged={acknowledged} onReadPolicy={() => setPolicyOpen(true)} />
+          </section>
+        </div>
       </div>
 
       {policyDismiss.mounted && (
