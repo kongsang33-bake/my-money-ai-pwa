@@ -78,7 +78,7 @@ describe("buildPromptPayPayload", () => {
   it("survives a round trip through a real QR encoder and decoder", () => {
     const payload = buildPromptPayPayload("0812345678")!;
     assert.equal(decodeModules(encodeQr(payload)), payload);
-    assert.equal(describeScannedQr(payload), "พร้อมเพย์");
+    assert.equal(describeScannedQr(payload), "พร้อมเพย์ เบอร์โทร");
   });
 });
 
@@ -90,6 +90,23 @@ describe("encodeQr", () => {
 });
 
 describe("describeScannedQr", () => {
+  it("names the account a PromptPay QR pays, not just that it is PromptPay", () => {
+    assert.equal(describeScannedQr(buildPromptPayPayload("1234567890123")!), "พร้อมเพย์ เลขบัตรประชาชน");
+    // TrueMoney's receive-money QR: an e-wallet ID under its provider code 140.
+    assert.equal(describeScannedQr(buildPromptPayPayload("140000812345678")!), "TrueMoney Wallet");
+    assert.equal(describeScannedQr(buildPromptPayPayload("999000812345678")!), "พร้อมเพย์ e-Wallet");
+  });
+
+  it("accepts a checksum written in lowercase hex", () => {
+    const payload = buildPromptPayPayload("140000812345678")!;
+    assert.equal(describeScannedQr(payload.slice(0, -4) + payload.slice(-4).toLowerCase()), "TrueMoney Wallet");
+  });
+
+  it("names a shop QR by the merchant name it carries", () => {
+    const body = "000201" + "010211" + "3027" + "0016A000000677010112" + "0103ABC" + "5303764" + "5802TH" + "5909Baan Cafe" + "6304";
+    assert.equal(describeScannedQr(body + crc16(body)), "QR ร้านค้า Baan Cafe");
+  });
+
   it("does not call arbitrary text a payment QR", () => {
     assert.equal(describeScannedQr("https://line.me/ti/p/abc"), null);
   });

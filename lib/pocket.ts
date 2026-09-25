@@ -212,14 +212,40 @@ export function readEmvTags(payload: string): Map<string, string> | null {
   return tags.size ? tags : null;
 }
 
-/** "พร้อมเพย์" / "QR ร้านค้า" / null for a QR that is not a Thai payment one. */
+// An e-wallet's PromptPay ID opens with its provider's three-digit code.
+// Only the ones known for certain are named; any other reads as an e-wallet.
+const EWALLET_PROVIDERS: Record<string, string> = {
+  "140": "TrueMoney Wallet",
+};
+
+/** The provider an e-wallet PromptPay ID belongs to, when it is one we know. */
+export function ewalletProvider(id: string): string | null {
+  const digits = digitsOnly(id);
+  return digits.length === 15 ? EWALLET_PROVIDERS[digits.slice(0, 3)] ?? null : null;
+}
+
+/**
+ * What a scanned QR pays, in words, or null for a QR that is not a Thai
+ * payment one. A TrueMoney, or any e-wallet's, "receive money" QR runs on
+ * PromptPay too, so stopping at "it is PromptPay" named a TrueMoney card
+ * "พร้อมเพย์"; tag 29's own sub-tag says which kind of account it pays.
+ */
 export function describeScannedQr(payload: string): string | null {
   const tags = readEmvTags(payload);
   if (!tags || tags.get("00") !== "01") return null;
-  const crcOk = payload.endsWith(crc16(payload.slice(0, -4)));
+  // Some wallets (TrueMoney's own variant) write the checksum in lowercase.
+  const crcOk = payload.slice(-4).toUpperCase() === crc16(payload.slice(0, -4));
   if (!crcOk) return null;
-  if (tags.get("29")?.includes(PROMPTPAY_AID)) return "พร้อมเพย์";
-  if (tags.has("30")) return "QR ร้านค้า";
+  const promptPay = tags.get("29");
+  if (promptPay?.includes(PROMPTPAY_AID)) {
+    const proxy = readEmvTags(promptPay);
+    if (proxy?.has("03")) return ewalletProvider(proxy.get("03")!) ?? "พร้อมเพย์ e-Wallet";
+    if (proxy?.has("02")) return "พร้อมเพย์ เลขบัตรประชาชน";
+    if (proxy?.has("01")) return "พร้อมเพย์ เบอร์โทร";
+    return "พร้อมเพย์";
+  }
+  const merchant = tags.get("59")?.trim();
+  if (tags.has("30")) return merchant ? `QR ร้านค้า ${merchant}` : "QR ร้านค้า";
   return "QR ชำระเงิน";
 }
 
@@ -249,7 +275,7 @@ export function formatAccountNumber(value: string) {
 /** The one line under a card's code saying what it is, in words. */
 export function pocketCardCaption(card: PocketCard) {
   const parts: string[] = [];
-  if (card.kind === "promptpay") parts.push(`พร้อมเพย์ ${formatPromptPayNumber(card.value)}`);
+  if (card.kind === "promptpay") parts.push(`${ewalletProvider(card.value) ?? "พร้อมเพย์"} ${formatPromptPayNumber(card.value)}`);
   else if (card.kind === "account") parts.push(card.bank ?? "บัญชีธนาคาร");
   else if (card.kind === "qr") parts.push(describeScannedQr(card.value) ?? "QR");
   else parts.push(card.bank ?? "บาร์โค้ด");
