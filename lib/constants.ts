@@ -17,6 +17,14 @@ export const BRAND_SLOGANS = [
   "Nub-Mon: นับเงินง่าย สนุกได้ทุกวัน",
 ] as const;
 
+// The privacy policy (components/privacy.tsx) is dated by this string, and
+// signing in waits until the policy has been read and acknowledged on this
+// device (the landing page's last screen). Change it whenever the policy's
+// substance changes: an acknowledgement of an older version no longer counts,
+// so everyone is asked to read it again before their next sign-in.
+export const PRIVACY_POLICY_VERSION = "2026-09-25";
+export const PRIVACY_ACK_STORAGE_KEY = "nubmon-privacy-ack";
+
 export const MS_PER_DAY = 86_400_000;
 
 // Used to put a weekly bill on the same footing as a monthly one ("what does

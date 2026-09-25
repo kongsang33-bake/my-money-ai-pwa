@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import NextImage from "next/image";
 import type { User } from "@supabase/supabase-js";
-import { ChevronDown, Delete, Lock, ScanFace } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Delete, Lock, ScanFace, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { APP_NAME, BRAND_SLOGANS } from "@/lib/constants";
 import { clampInteger } from "@/lib/format";
@@ -370,13 +370,17 @@ export function SecurityView({
   );
 }
 
-export function Auth() {
+// The sign-in form, as the landing page's last screen (components/landing.tsx
+// owns the page around it). Both ways in stay shut until the privacy policy
+// has been read and acknowledged -- the only way to acknowledge it is the
+// button at the end of the policy itself, so "read" is not just a checkbox.
+export function SignInPanel({ acknowledged, onReadPolicy }: { acknowledged: boolean; onReadPolicy: () => void }) {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
   async function signInWithGoogle() {
-    if (!supabase) return;
+    if (!supabase || !acknowledged) return;
     setBusy(true);
     setMessage("");
 
@@ -399,49 +403,53 @@ export function Auth() {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (!supabase || !acknowledged) return;
     setBusy(true);
-    const { error } = await supabase!.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
     setMessage(error ? error.message : "ส่งลิงก์เข้าใช้งานแล้ว กรุณาตรวจอีเมลของคุณ");
     setBusy(false);
   }
 
-  // The same shape as PinGate -- the mark in the corner, one bare centred
-  // column, no card -- so signing in and unlocking read as the same door.
+  const locked = busy || !acknowledged;
+
   return (
-    <main className="shell">
-      <section className="phone auth-screen login-screen">
-        <header className="pin-brand">
-          <i className="brand-mark" aria-hidden="true" />
-          <b className="brand-name">{APP_NAME}</b>
-        </header>
-        <div className="login-content">
-          <div className="login-intro">
-            <i className="brand-mark login-mark" aria-hidden="true" />
-            <p className="eyebrow">{BRAND_SLOGANS[0]}</p>
-            <h1>เข้าสู่ระบบ</h1>
-            <p className="auth-copy">ใช้บัญชี Google เพื่อซิงก์ข้อมูลรายรับรายจ่ายทุกเครื่อง</p>
-          </div>
-          <button className="primary google-button" onClick={signInWithGoogle} disabled={busy}>
-            <GoogleIcon />
-            {busy ? "กำลังพาไป Google..." : "ดำเนินการต่อด้วย Google"}
+    <div className="login-content">
+      <div className="login-intro">
+        <i className="brand-mark login-mark" aria-hidden="true" />
+        <p className="eyebrow">{BRAND_SLOGANS[0]}</p>
+        <h1>เข้าสู่ระบบ</h1>
+        <p className="auth-copy">ใช้บัญชี Google เพื่อซิงก์ข้อมูลรายรับรายจ่ายทุกเครื่อง</p>
+      </div>
+      <button
+        type="button"
+        className={`privacy-ack ${acknowledged ? "done" : ""}`}
+        onClick={onReadPolicy}
+      >
+        <span className="privacy-ack-icon">
+          {acknowledged ? <Check size={18} strokeWidth={2.5} aria-hidden="true" /> : <ShieldCheck size={18} strokeWidth={2.25} aria-hidden="true" />}
+        </span>
+        <span className="privacy-ack-text">
+          {acknowledged ? "รับทราบนโยบายความเป็นส่วนตัวแล้ว" : "อ่านนโยบายความเป็นส่วนตัว"}
+          <small>{acknowledged ? "แตะเพื่ออ่านอีกครั้ง" : "ต้องอ่านและกดรับทราบก่อนเข้าสู่ระบบ"}</small>
+        </span>
+        <ChevronRight size={18} aria-hidden="true" />
+      </button>
+      <button className="primary google-button" onClick={signInWithGoogle} disabled={locked}>
+        <GoogleIcon />
+        {busy ? "กำลังพาไป Google..." : "ดำเนินการต่อด้วย Google"}
+      </button>
+      <details className="email-fallback">
+        <summary>หรือเข้าใช้งานด้วยอีเมล<ChevronDown size={16} strokeWidth={2.25} aria-hidden="true" /></summary>
+        <form onSubmit={submit}>
+          <label htmlFor="email">อีเมล</label>
+          <input id="email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" />
+          <button className="side-ghost auth-email-submit" disabled={locked}>
+            {busy ? "กำลังส่ง..." : "ส่งลิงก์เข้าใช้งาน"}
           </button>
-          <details className="email-fallback">
-            <summary>หรือเข้าใช้งานด้วยอีเมล<ChevronDown size={16} strokeWidth={2.25} aria-hidden="true" /></summary>
-            <form onSubmit={submit}>
-              <label htmlFor="email">อีเมล</label>
-              <input id="email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" />
-              <button className="side-ghost auth-email-submit" disabled={busy}>
-                {busy ? "กำลังส่ง..." : "ส่งลิงก์เข้าใช้งาน"}
-              </button>
-            </form>
-          </details>
-          {message && <p className="auth-message" role="status">{message}</p>}
-          <small className="login-terms">
-            การเข้าสู่ระบบถือว่าคุณยอมรับข้อกำหนดและนโยบายความเป็นส่วนตัว
-          </small>
-        </div>
-      </section>
-    </main>
+        </form>
+      </details>
+      {message && <p className="auth-message" role="status">{message}</p>}
+    </div>
   );
 }
 

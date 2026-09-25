@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { test, expect, buildEmptySeed, buildSeed, navigate, openApp, openPinGate, openSetup, seedDraft, waitForApp } from "./fixture.ts";
+import { test, expect, buildEmptySeed, buildSeed, navigate, openApp, openLanding, openPinGate, openSetup, seedDraft, waitForApp } from "./fixture.ts";
 import { auditScreen, type Finding, type ScreenAudit } from "./audit.ts";
 
 // The objective half of a design review, run on every screen, at all three
@@ -56,6 +56,19 @@ test("meets contrast, target size and overflow limits", async ({ page }) => {
   page.on("pageerror", (error) => errors.push(error.message));
 
   const audits: ScreenAudit[] = [];
+
+  // Signed out: the landing page's three screens and the privacy sheet the
+  // last one opens before anyone can sign in.
+  await openLanding(page);
+  audits.push(await auditScreen(page, "landing-about"));
+  for (const [index, screen] of [[1, "landing-install"], [2, "landing-signin"]] as const) {
+    await page.locator(".landing-dots button").nth(index).click();
+    await page.waitForTimeout(900);
+    audits.push(await auditScreen(page, screen));
+  }
+  await page.locator(".privacy-ack").click();
+  await expect(page.locator(".privacy-sheet")).toBeVisible();
+  audits.push(await auditScreen(page, "privacy-sheet"));
 
   // The PIN gate, both ways it opens: a returning user, and one choosing a
   // PIN for the first time.

@@ -14,6 +14,7 @@ import {
   Lightbulb,
   LineChart,
   Lock,
+  ShieldCheck,
   LogOut,
   PiggyBank,
   Receipt,
@@ -508,6 +509,11 @@ export function MoreView({
           </span>
           <ChevronRight size={18} aria-hidden="true" />
         </button>
+        <a className="me-row" href="/privacy">
+          <span className="me-row-icon"><ShieldCheck size={18} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span className="me-row-text">นโยบายความเป็นส่วนตัว</span>
+          <ChevronRight size={18} aria-hidden="true" />
+        </a>
         <button className="me-row me-logout" onClick={onLogout}>
           <span className="me-row-icon"><LogOut size={18} strokeWidth={2.25} aria-hidden="true" /></span>
           <span className="me-row-text">ออกจากระบบ</span>

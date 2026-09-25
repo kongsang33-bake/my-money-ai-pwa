@@ -5589,7 +5589,7 @@ button.entry-main {
 }
 
 .edit-sheet label input, .edit-sheet label select,
-.edit-sheet label textarea, .auth-screen form input, .budget-row input,
+.edit-sheet label textarea, .login-content form input, .budget-row input,
 .manual-entry-form label input, .manual-entry-form label select, .manual-entry-form label textarea,
 .draft label input, .draft label select, .setup-amount input {
   width: 100%;
@@ -5607,13 +5607,13 @@ button.entry-main {
 }
 
 .edit-sheet label ::placeholder, .manual-entry-form label ::placeholder,
-.draft label ::placeholder, .auth-screen form ::placeholder, .ai-input-wrap ::placeholder {
+.draft label ::placeholder, .login-content form ::placeholder, .ai-input-wrap ::placeholder {
   color: var(--ink-3);
   font-weight: var(--fw-regular);
 }
 
 .edit-sheet label input:focus, .edit-sheet label select:focus,
-.edit-sheet label textarea:focus, .auth-screen form input:focus, .budget-row input:focus,
+.edit-sheet label textarea:focus, .login-content form input:focus, .budget-row input:focus,
 .manual-entry-form label input:focus, .manual-entry-form label select:focus, .manual-entry-form label textarea:focus,
 .draft label input:focus, .draft label select:focus, .setup-amount input:focus {
   /* Netflix's sign-in field: the edge turns white. No emerald (that is the
@@ -6124,6 +6124,8 @@ input[type="checkbox"], input[type="radio"] {
   border-bottom: 1px solid var(--line);
   text-align: left;
   color: var(--ink-4);
+  /* One row (the privacy policy) is a link to its own page. */
+  text-decoration: none;
 }
 
 .me-row-icon {
@@ -6814,7 +6816,7 @@ input[type="checkbox"], input[type="radio"] {
   display: none;
 }
 
-.auth-screen form label {
+.login-content form label {
   display: block;
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
@@ -6827,30 +6829,6 @@ input[type="checkbox"], input[type="radio"] {
   text-align: center;
   color: var(--ink-2);
   margin-top: var(--s-3);
-}
-
-/* The sign-in page (Auth), laid out like the PIN gate it leads to: the mark
-   in the corner (.pin-brand), then one bare column -- no card, the page's own
-   ground is the surface -- lit by the same glow Home's billboard sits in.
-   .auth-screen/.auth-card above stay for the error boundary's card. */
-.login-screen {
-  position: relative;
-  flex-direction: row;
-  align-items: stretch;
-  padding: calc(var(--topbar-block) + var(--s-4)) var(--s-5) calc(var(--s-6) + env(safe-area-inset-bottom));
-  background:
-    radial-gradient(ellipse 120% 480px at 50% 0, color-mix(in srgb, var(--hero-glow) 55%, transparent), transparent 80%) no-repeat,
-    var(--bg);
-}
-
-/* Narrower glow once .phone is a clamped column, so it fades out before
-   .phone's edge -- the same fix .phone.tab-home needs. */
-@media (min-width: 600px) {
-  .login-screen {
-    background:
-      radial-gradient(ellipse 48% 480px at 50% 0, color-mix(in srgb, var(--hero-glow) 50%, transparent), transparent 85%) no-repeat,
-      var(--bg);
-  }
 }
 
 /* Centred by auto margins for the same reason .pin-content is: a short
@@ -6890,11 +6868,11 @@ input[type="checkbox"], input[type="radio"] {
   line-height: var(--lh-body);
 }
 
-.login-screen .email-fallback {
+.login-content .email-fallback {
   margin-top: 0;
 }
 
-.login-screen .email-fallback summary {
+.login-content .email-fallback summary {
   min-height: 44px;
   display: flex;
   align-items: center;
@@ -6903,22 +6881,22 @@ input[type="checkbox"], input[type="radio"] {
   cursor: pointer;
 }
 
-.login-screen .email-fallback summary svg {
+.login-content .email-fallback summary svg {
   transition: transform var(--t-2) var(--e-out);
 }
 
-.login-screen .email-fallback[open] summary svg {
+.login-content .email-fallback[open] summary svg {
   transform: rotate(180deg);
 }
 
-.login-screen .email-fallback form {
+.login-content .email-fallback form {
   display: grid;
   gap: var(--s-3);
   padding-top: var(--s-2);
 }
 
-.login-screen .email-fallback form label,
-.login-screen .email-fallback input {
+.login-content .email-fallback form label,
+.login-content .email-fallback input {
   margin: 0;
 }
 
@@ -6930,13 +6908,364 @@ input[type="checkbox"], input[type="radio"] {
   color: var(--ink);
 }
 
-.login-terms {
+/* The privacy acknowledgement on the sign-in screen: one boxed row that
+   opens the policy. Google and the email link stay disabled until the
+   policy's own "รับทราบ" button has been pressed; done, the row keeps its
+   place with a check so the policy stays one tap away. */
+.privacy-ack {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: 60px;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--ink-3);
+  text-align: left;
+}
+
+.privacy-ack-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--ink-2);
+}
+
+.privacy-ack.done .privacy-ack-icon {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.privacy-ack-text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+}
+
+.privacy-ack-text small {
   display: block;
-  margin-top: var(--s-2);
-  text-align: center;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-regular);
+  color: var(--ink-3);
+}
+
+/* -------------------------------------------------------------------------
+   Landing (components/landing.tsx) -- what a signed-out visitor sees every
+   time: three full-height screens that snap one at a time, the last of them
+   the sign-in form. Bare tier throughout; the only boxes are the ones the
+   sign-in form already had.
+   ------------------------------------------------------------------------- */
+.landing-shell {
+  position: relative;
+  height: var(--vvh, 100dvh);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.landing-brand {
+  z-index: var(--z-nav);
+}
+
+/* The scroller. `mandatory` so a flick lands on a whole screen; a screen
+   taller than the window (a small phone) still scrolls inside itself. */
+.landing {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scroll-snap-type: y mandatory;
+}
+
+.landing-section {
+  position: relative;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-5);
+  padding: calc(var(--topbar-block) + var(--s-4)) var(--s-5) calc(var(--s-5) + env(safe-area-inset-bottom));
+  scroll-snap-align: start;
+}
+
+/* Room on the right for the dots below 600px, where the column runs the
+   phone's full width and a step's icon would sit under them. */
+@media (max-width: 599px) {
+  .landing-section {
+    padding-right: var(--s-8);
+  }
+}
+
+/* The same glow Home's billboard sits in, on the first and last screens. */
+.landing-lit {
+  background: radial-gradient(ellipse 120% 480px at 50% 0, color-mix(in srgb, var(--hero-glow) 55%, transparent), transparent 80%) no-repeat;
+}
+
+@media (min-width: 600px) {
+  .landing-lit {
+    background: radial-gradient(ellipse 60% 480px at 50% 0, color-mix(in srgb, var(--hero-glow) 50%, transparent), transparent 85%) no-repeat;
+  }
+}
+
+/* Centred by auto margins, as .pin-content is, so a short window scrolls
+   rather than pushing the top under the corner mark. */
+.landing-body {
+  margin-block: auto;
+  width: 100%;
+  max-width: 440px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-5);
+}
+
+.landing-head {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.landing-head h1, .landing-head h2 {
+  font-size: var(--fs-value);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-tight);
+  line-height: var(--lh-tight);
+}
+
+.landing-head p:not(.eyebrow) {
+  font-size: var(--fs-body);
+  color: var(--ink-3);
+  line-height: var(--lh-body);
+}
+
+.landing-points {
+  display: grid;
+  gap: var(--s-4);
+}
+
+.landing-points li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+}
+
+.landing-points b {
+  display: block;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+}
+
+.landing-points small {
+  display: block;
+  margin-top: 2px;
   font-size: var(--fs-caption);
   color: var(--ink-3);
   line-height: var(--lh-snug);
+}
+
+/* The icon in the tinted square จดเร็ว uses, never blown up. */
+.landing-point-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.landing-policy-link {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+}
+
+.landing-tabs {
+  margin-bottom: 0;
+}
+
+.landing-steps {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.landing-steps li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.landing-step-number {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-xs);
+  background: var(--surface-3);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-bold);
+}
+
+.landing-step-text {
+  font-size: var(--fs-body-sm);
+  color: var(--ink-2);
+  line-height: var(--lh-snug);
+}
+
+.landing-next {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: 44px;
+  padding: 0 var(--s-3);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-3);
+}
+
+/* Where you are, down the right edge. Each dot is a 24px target around an
+   8px mark; the current one is a taller bar in the brand's ink. */
+.landing-dots {
+  position: absolute;
+  top: 50%;
+  right: var(--s-2);
+  z-index: var(--z-nav);
+  display: flex;
+  flex-direction: column;
+  transform: translateY(-50%);
+}
+
+.landing-dots button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 28px;
+}
+
+.landing-dots button::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--ink-4);
+  transition: height var(--t-2) var(--e-out), background var(--t-2) var(--e-out);
+}
+
+.landing-dots button.active::before {
+  height: 18px;
+  background: var(--accent);
+}
+
+/* -------------------------------------------------------------------------
+   Privacy policy (components/privacy.tsx): in the landing's sheet and on
+   /privacy (app/privacy/page.tsx).
+   ------------------------------------------------------------------------- */
+.privacy-policy {
+  display: grid;
+  gap: var(--s-5);
+  font-size: var(--fs-body-sm);
+  color: var(--ink-2);
+  line-height: var(--lh-body);
+}
+
+.privacy-policy h2 {
+  margin-bottom: var(--s-2);
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+}
+
+.privacy-policy li {
+  position: relative;
+  padding-left: var(--s-4);
+}
+
+.privacy-policy li + li {
+  margin-top: var(--s-2);
+}
+
+.privacy-policy li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.7em;
+  width: 5px;
+  height: 5px;
+  border-radius: var(--r-full);
+  background: var(--ink-4);
+}
+
+.privacy-policy b {
+  color: var(--ink);
+  font-weight: var(--fw-semibold);
+}
+
+.privacy-policy section > p {
+  margin-top: var(--s-2);
+}
+
+.privacy-updated {
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+}
+
+.privacy-accept {
+  margin-top: var(--s-6);
+}
+
+/* /privacy is a plain document page: it scrolls the document, and the boot
+   splash from layout.tsx is hidden because the app code that removes it
+   never runs on this route. */
+body:has(.privacy-page) #app-splash {
+  display: none;
+}
+
+.privacy-page {
+  padding: 0 var(--s-5) calc(var(--s-8) + env(safe-area-inset-bottom));
+}
+
+.privacy-page-column {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.privacy-page-head {
+  display: flex;
+  align-items: center;
+  min-height: var(--topbar-block);
+  padding-top: env(safe-area-inset-top);
+}
+
+.privacy-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 44px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.privacy-back b {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-bold);
+}
+
+.privacy-page h1 {
+  margin: var(--s-4) 0 var(--s-5);
+  font-size: var(--fs-h1);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-tight);
 }
 
 /* -------------------------------------------------------------------------

@@ -39,6 +39,12 @@ self.addEventListener("fetch", (event) => {
   // network-dependent and must never be served from cache.
   if (url.pathname.startsWith("/api/")) return;
 
+  // Only the app itself is the shell. Any other page (/privacy) goes straight
+  // to the network: answering it from the cached shell would open the app in
+  // its place, and caching its response as the shell would do the reverse on
+  // the next launch.
+  if (request.mode === "navigate" && url.pathname !== SHELL_URL) return;
+
   if (request.mode === "navigate") {
     // Network first, but not network at any cost. On a slow mobile
     // connection, waiting for the page itself kept the app on its splash for

@@ -232,6 +232,16 @@ export async function openPinGate(page: Page, mode: "locked" | "setup" = "locked
   await waitForSplash(page);
 }
 
+/**
+ * Opens signed out: no seed, so the app lands where every visitor who is not
+ * signed in does -- the landing page, whose last screen is the sign-in form.
+ */
+export async function openLanding(page: Page) {
+  await page.goto("/");
+  await expect(page.locator(".landing-shell")).toBeVisible({ timeout: 15000 });
+  await waitForSplash(page);
+}
+
 async function injectSeed(page: Page, seed: PreviewSeed) {
   await page.addInitScript((injected) => {
     (window as unknown as { __NUBTANG_PREVIEW__: unknown }).__NUBTANG_PREVIEW__ = injected;

@@ -105,10 +105,22 @@ top-left, "ยินดีต้อนรับกลับ", your face as a lar
 dots that fill in `--accent`, and a bare keypad. It is centred with auto
 margins, not `align-items`, so a short window scrolls it instead of pushing
 its top out of reach, and it tightens under 800px tall so a laptop sees the
-whole thing. The sign-in page (`Auth`, same file) is the same door: the brand in the
-corner (`.pin-brand`), one bare column under Home's glow, the logo at a
-welcome's size, and Google as the one white `.primary` -- no card (`.auth-card`
-is the error boundary's now). The e2e suite reaches it through the seed's `pinMode`
+whole thing. Signed out, the app is **`Landing`** (components/landing.tsx), every time:
+three full-height screens that snap one at a time -- what the app is and how
+its data is kept, how to install it as a PWA (iPhone/Android tabs, plus
+Chrome's own install prompt when it offers one), then `SignInPanel`
+(components/auth.tsx), the only sign-in there is. It is the PIN gate's shape:
+the brand in the corner (`.pin-brand`), one bare column under Home's glow,
+Google as the one white `.primary`, no card (`.auth-card` is the error
+boundary's). Both ways in stay disabled until the privacy policy has been
+acknowledged, and the only way to acknowledge it is the button at the end of
+the policy's own sheet; the acknowledgement is kept per device against
+`PRIVACY_POLICY_VERSION`, so bump that when the policy's substance changes.
+The policy is written once (`PrivacyPolicyContent`, components/privacy.tsx)
+and also served at `/privacy` -- every claim in it is something the code does,
+so check it when the data handling changes. `/privacy` is the only route
+besides `/`: the service worker leaves other navigations to the network, and
+CSS hides the boot splash there. The e2e suite reaches it through the seed's `pinMode`
 (`openPinGate` in e2e/fixture.ts) and the a11y audit measures both modes.
 Wallets (`WalletsView`) is a bare total -- the billboard's kicker, a display
 figure, the spendable/set-aside split as one bar -- over `.wallet-tiles`:

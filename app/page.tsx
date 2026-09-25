@@ -124,7 +124,8 @@ import {
   SuccessPulse,
 } from "@/components/home";
 import { HistoryFilterBar } from "@/components/history";
-import { Auth, PinGate, SecurityView } from "@/components/auth";
+import { PinGate, SecurityView } from "@/components/auth";
+import { Landing } from "@/components/landing";
 import type { WalletInput, RecurringExpenseInput } from "@/components/wallets-recurring";
 import type { DebtorInput } from "@/components/debtors";
 import dynamic from "next/dynamic";
@@ -2952,7 +2953,7 @@ export default function Home() {
 
   if (!ready) return null;
 
-  if (!user) return <Auth />;
+  if (!user) return <Landing />;
   if (pinMode !== "unlocked") {
     return (
       <PinGate
