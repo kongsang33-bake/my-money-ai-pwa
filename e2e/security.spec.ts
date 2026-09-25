@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { test, expect, buildSeed, openApp } from "./fixture.ts";
+import { test, expect, buildSeed, openApp, openMe } from "./fixture.ts";
 
 // The security screen. Enabling, changing and disabling a PIN all write to
 // Supabase, which the suite has no credentials for (see the note at the top of
@@ -13,7 +13,7 @@ const lockDelayKey = "money-ai-lock-delay:preview-user";
 async function openSecurity(page: Page) {
   const seed = buildSeed();
   await openApp(page, { ...seed, profile: { ...seed.profile, pin_hash: "x", pin_salt: "y" } });
-  await page.locator(".home-identity").click();
+  await openMe(page);
   await page.locator(".me-list .me-row", { hasText: "รหัส PIN" }).click();
 }
 

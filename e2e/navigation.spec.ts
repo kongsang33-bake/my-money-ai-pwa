@@ -1,4 +1,4 @@
-import { test, expect, navigate, scrollAppTo } from "./fixture.ts";
+import { test, expect, hasSideNav, navigate, openMe, scrollAppTo } from "./fixture.ts";
 
 const scrollTop = (page: Parameters<typeof navigate>[0]) =>
   page.evaluate(() => document.querySelector(".phone")!.scrollTop);
@@ -50,11 +50,12 @@ test.describe("navigation", () => {
     await expect(app.locator(".upcoming-view")).toBeVisible();
   });
 
-  test("opens ของฉัน from the topbar identity", async ({ app }) => {
-    // There is no drawer any more: your own name and face in the topbar lead
-    // to "ของฉัน", the one hub the account hangs off -- a screen, not an
-    // overlay -- rather than straight into the profile form.
-    await app.locator(".home-identity").click();
+  test("opens ของฉัน from your own name and face", async ({ app }) => {
+    // There is no drawer any more: your own name and face -- in the topbar
+    // on a phone, at the foot of the side nav on a desk -- lead to "ของฉัน",
+    // the one hub the account hangs off -- a screen, not an overlay --
+    // rather than straight into the profile form.
+    await openMe(app);
     await expect(app.locator(".more-view .add-title h2")).toHaveText("ของฉัน");
     await expect(app.locator(".sheet-backdrop")).toHaveCount(0);
     await expect(app.locator(".me-head")).toBeVisible();
@@ -80,7 +81,7 @@ test.describe("navigation", () => {
 
   async function openMenuScreen(app: Parameters<typeof navigate>[0], label: string, from: "more" | "account") {
     if (from === "account") {
-      await app.locator(".home-identity").click();
+      await openMe(app);
       await app.locator(".me-list .me-row", { hasText: label }).click();
       return;
     }
@@ -170,10 +171,13 @@ test.describe("navigation", () => {
       const phone = document.querySelector(".phone") as HTMLElement;
       const composer = document.querySelector(".ask-ai-composer") as HTMLElement;
       const nav = document.querySelector(".bottom-nav") as HTMLElement;
+      // On a desk there is no bottom bar (the side nav replaces it), so the
+      // composer's floor is the window's own foot.
+      const navShown = getComputedStyle(nav).display !== "none";
       return {
         overflow: phone.scrollHeight - phone.clientHeight,
         composerBottom: composer.getBoundingClientRect().bottom,
-        navTop: nav.getBoundingClientRect().top,
+        navTop: navShown ? nav.getBoundingClientRect().top : phone.getBoundingClientRect().bottom,
       };
     });
     // The composer holds the bottom edge above the nav instead of being
@@ -234,10 +238,12 @@ test.describe("navigation", () => {
     await expect(label.or(app.locator(".heatmap-panel"))).toBeVisible();
   });
 
-  test("keeps the bottom nav reachable on every tab", async ({ app }) => {
+  test("keeps the nav reachable on every tab", async ({ app }) => {
+    // The bottom bar on a phone, the side nav on a desk.
+    const nav = (await hasSideNav(app)) ? ".side-nav" : ".bottom-nav";
     for (const tab of ["home", "history", "add", "upcoming", "wallets"] as const) {
       await navigate(app, tab);
-      await expect(app.locator(".bottom-nav")).toBeVisible();
+      await expect(app.locator(nav)).toBeVisible();
     }
   });
 
@@ -251,6 +257,7 @@ test.describe("navigation", () => {
   // bar -50%-centred over the 560px column from 600px, a floating bar from
   // 900px).
   test("parks the sliding pill on the active tab", async ({ app }) => {
+    test.skip(await hasSideNav(app), "a desk has the side nav, not the bottom bar and its pill");
     const geometry = () => app.evaluate(() => {
       const pill = document.querySelector(".nav-indicator") as HTMLElement;
       const item = document.querySelector(".bottom-nav button.active .nav-item") as HTMLElement | null;

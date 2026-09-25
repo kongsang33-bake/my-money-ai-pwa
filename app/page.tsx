@@ -104,7 +104,8 @@ import {
 import { WalletAvatarGlyph } from "@/components/shared";
 import { BottomNav } from "@/components/bottom-nav";
 import { UpcomingView } from "@/components/upcoming";
-import { ConfirmDialog, CountUpMoney, ElapsedSeconds, EmptyNote, ErrorActions, PullToRefresh, Rail, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useStableHandler } from "@/components/primitives";
+import { SideNav, type SideNavKey } from "@/components/side-nav";
+import { ConfirmDialog, CountUpMoney, ElapsedSeconds, EmptyNote, ErrorActions, PullToRefresh, Rail, SheetClose, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useMediaQuery, useStableHandler } from "@/components/primitives";
 import { AiComposer, DraftImpact, DraftRow, EditSheet, EntryList, ManualEntryForm, QuickAddStrip } from "@/components/add";
 import {
   CalendarHeatmap,
@@ -331,8 +332,12 @@ export default function Home() {
   // between the two of them keeps the origin rather than pointing back at
   // each other.
   const [accountBack, setAccountBack] = useState<Tab>("home");
+  // Where จดรายการ was opened from, for the desk's close button and Esc: on
+  // a desk it reads as a panel over the app rather than a tab of its own.
+  const [addBack, setAddBack] = useState<Tab>("home");
   if (tab !== lastTab) {
     setLastTab(tab);
+    if (tab === "add") setAddBack(lastTab);
     if (MORE_SECTION_TABS.includes(tab)) setMoreSectionBack(lastTab === "more" ? "more" : "home");
     if ((tab === "profile" || tab === "security") && lastTab !== "profile" && lastTab !== "security") {
       setAccountBack(lastTab === "more" ? "more" : "home");
@@ -3001,6 +3006,52 @@ export default function Home() {
   const homeShortcuts = useMemo(() => quickShortcuts.slice(0, 4), [quickShortcuts]);
   const addFromShortcut = useCallback((shortcut: QuickShortcut) => openAddTab("manual", shortcut), [openAddTab]);
   const openAddTabDefault = useCallback(() => openAddTab(), [openAddTab]);
+  // Home's two-column desk layout (see home-view) from this width.
+  const homeDesk = useMediaQuery("(min-width: 1200px)");
+
+  // The desktop side nav marks the screen itself, not the phone nav's
+  // section: every money tool has its own row there.
+  const sideNavActive: SideNavKey | null =
+    tab === "profile" || tab === "security" || tab === "more" ? "more"
+      : tab === "add" ? null
+        : tab;
+  const selectSideNav = useCallback((key: SideNavKey) => {
+    if (key === "debtors") setSelectedDebtor(null);
+    setTab(key);
+  }, []);
+
+  // "N" opens จดรายการ from anywhere on a desktop, the shortcut the side
+  // nav's button advertises. Not while typing, not over a sheet, and not on
+  // a touch screen, which has no keyboard to press it on.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "n" && event.key !== "N") return;
+      if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (overlayOpen || tab === "add" || !window.matchMedia("(min-width: 900px)").matches) return;
+      event.preventDefault();
+      openAddTab();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [overlayOpen, tab, openAddTab]);
+
+  // Esc closes the จดรายการ panel on a desk, back to where it was opened --
+  // unless a sheet is open over it (that Esc is the sheet's) or the key was
+  // pressed in a field, where it would throw away what was being typed.
+  useEffect(() => {
+    if (tab !== "add") return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || overlayOpen) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select")) return;
+      if (!window.matchMedia("(min-width: 900px)").matches) return;
+      setTab(addBack);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tab, overlayOpen, addBack]);
   const openGoalSheet = useCallback(() => setGoalSheetOpen(true), []);
   const openRecurringTab = useCallback(() => setTab("recurring"), []);
   const openBudgetsTab = useCallback(() => setTab("budgets"), []);
@@ -3075,8 +3126,87 @@ export default function Home() {
     );
   }
 
+  // Home's sections below the billboard, built once so the phone and the
+  // desk can lay the same pieces out differently (the home-view below).
+  const homeQuickAdd = <QuickAddStrip shortcuts={homeShortcuts} onSelect={addFromShortcut} onMore={openAddTabDefault} />;
+  const homeAsk = hasEnoughForInsights ? <AskPrompt onOpen={() => setTab("ask")} /> : null;
+  const homeDueSoon = dueSoonRecurring.length > 0 || unpaidCards.length > 0 ? (
+    <DueSoonRail
+      items={dueSoonRecurring}
+      unpaid={unpaidCards}
+      onManage={openRecurringTab}
+      onLogNow={logRecurringNowHandler}
+      onOpenDebts={openCardDebts}
+    />
+  ) : null;
+  // Every card in this rail reads as analysis, and analysis of two entries
+  // is a row of confident zeros -- which is what an empty account used to
+  // open on. Held back until there is something to analyse; the checklist
+  // says so.
+  const homeHealth = hasEnoughForInsights ? (
+    <Rail title="สุขภาพการเงิน" size="compact">
+      <HomeInsightGrid
+        netWorth={netWorth}
+        netWorthDelta={netWorthDelta}
+        netWorthFormula={netWorthDisplay.formula}
+        hideNetWorthCard={netWorthDisplay.hideCard}
+        savingsRate={savingsRate}
+        monthlyIncome={monthlyIncome}
+        monthlyObligationTotal={monthlyObligationTotal}
+        payableTotal={payableTotal}
+      />
+    </Rail>
+  ) : null;
+  const homeGoals = goals.length || budgetGlance.totalBudget > 0 ? (
+    <GoalsBudgetsRail
+      goals={goals}
+      budgetGlance={budgetGlance}
+      onOpenGoals={openGoalsTab}
+      onOpenBudgets={openBudgetsTab}
+      onAddGoal={openGoalSheet}
+    />
+  ) : null;
+  const homeTopCategories = hasEnoughForInsights ? <TopCategoriesRail items={monthlyCategorySpend} onSelect={openHistoryForCategory} /> : null;
+  const homeOverview = hasEnoughForInsights ? (
+    <Rail title="ภาพรวมเดือนนี้">
+      <CashFlowTrendCard summary={cashFlowSummary} />
+      <CyclePaceCard pace={cyclePace} />
+    </Rail>
+  ) : null;
+  const homeWallets = secondaryWallets.length ? (
+    <section className="rail">
+      <div className="rail-head"><h2>กระเป๋าของคุณ</h2><button onClick={() => setTab("wallets")}>จัดการ</button></div>
+      {/* Its own scroller, not routed through .rail-track: the fixed 160px
+          card width here is deliberate and older than the rail pattern. */}
+      <div className="wallet-carousel">
+        {secondaryWallets.map((wallet) => (
+          <button className={`wallet-carousel-card ${secondaryWalletTags.find((entry) => entry.tag === wallet.tag)?.className ?? ""}`} key={wallet.id} onClick={() => setTab("wallets")}>
+            <i className="debtor-avatar sm" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>
+              <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} size={16} />
+            </i>
+            <span>{wallet.name}</span>
+            <strong><CountUpMoney value={wallet.display_balance} /></strong>
+          </button>
+        ))}
+      </div>
+    </section>
+  ) : null;
+  const homeRecent = <RecentRail entries={entries} onOpen={openEntryDetail} onSeeAll={openHistoryTab} />;
+
   return (
     <main className="shell">
+      {/* The desktop nav (from 900px; hidden below, where BottomNav and the
+          topbar do its job). */}
+      <SideNav
+        active={sideNavActive}
+        inert={overlayOpen}
+        displayName={displayName}
+        displayIcon={displayIcon}
+        displayIconImage={displayIconImage}
+        upcomingCount={dueSoonRecurring.length + unpaidCards.length}
+        onSelect={selectSideNav}
+        onAdd={openAddTabDefault}
+      />
       {/* Off on Ask AI, whose chat has its own scroller -- a pull there
           belongs to the conversation, not to the page. */}
       <PullToRefresh root={scrollRootEl} onRefresh={refreshUserData} enabled={!overlayOpen && !dataLoading && tab !== "ask"} />
@@ -3151,85 +3281,45 @@ export default function Home() {
                   onHide={hideStartChecklist}
                 />
               )}
-              {/* Everything below here is a rail: a named row of cards that
-                  scrolls on its own, rather than a stack of full-width blocks
-                  or a CSS grid -- see the "Rails" section of globals.css and
-                  the Rail component in primitives.tsx. Bills, goals, budgets,
-                  categories and recent entries are posters and tiles built
-                  for a rail (components/home.tsx); the stat and cash-flow
-                  cards are still the older wide cards at a rail width. */}
-              <QuickAddStrip shortcuts={homeShortcuts} onSelect={addFromShortcut} onMore={openAddTabDefault} />
-              {hasEnoughForInsights && <AskPrompt onOpen={() => setTab("ask")} />}
-              {(dueSoonRecurring.length > 0 || unpaidCards.length > 0) && (
-                <DueSoonRail
-                  items={dueSoonRecurring}
-                  unpaid={unpaidCards}
-                  onManage={openRecurringTab}
-                  onLogNow={logRecurringNowHandler}
-                  onOpenDebts={openCardDebts}
-                />
-              )}
-              {/* Every card in this rail reads as analysis, and analysis of
-                  two entries is a row of confident zeros -- which is what an
-                  empty account used to open on. Held back until there is
-                  something to analyse; the checklist above says so. It used
-                  to be a tall bento block straight under the hero, which
-                  took most of the first screen; as a rail it is one row. */}
-              {hasEnoughForInsights && (
-                <Rail title="สุขภาพการเงิน" size="compact">
-                  <HomeInsightGrid
-                    netWorth={netWorth}
-                    netWorthDelta={netWorthDelta}
-                    netWorthFormula={netWorthDisplay.formula}
-                    hideNetWorthCard={netWorthDisplay.hideCard}
-                    savingsRate={savingsRate}
-                    monthlyIncome={monthlyIncome}
-                    monthlyObligationTotal={monthlyObligationTotal}
-                    payableTotal={payableTotal}
-                  />
-                </Rail>
-              )}
-              {(!!goals.length || budgetGlance.totalBudget > 0) && (
-                <GoalsBudgetsRail
-                  goals={goals}
-                  budgetGlance={budgetGlance}
-                  onOpenGoals={openGoalsTab}
-                  onOpenBudgets={openBudgetsTab}
-                  onAddGoal={openGoalSheet}
-                />
-              )}
-              {hasEnoughForInsights && <TopCategoriesRail items={monthlyCategorySpend} onSelect={openHistoryForCategory} />}
-              {hasEnoughForInsights && (
-                <Rail title="ภาพรวมเดือนนี้">
-                  <CashFlowTrendCard summary={cashFlowSummary} />
-                  <CyclePaceCard pace={cyclePace} />
-                </Rail>
+              {/* Below the billboard every section is a rail: a named row of
+                  cards that scrolls on its own (the "Rails" section of
+                  globals.css, the Rail component in primitives.tsx). On a
+                  desk from 1200px the same sections sit in two columns
+                  instead -- the ones you act on down the left, the reading
+                  on the right -- with the rails wrapped into grids, since a
+                  desk has the width to show every card at once. The phone
+                  keeps its one column in its own order. */}
+              {homeDesk ? (
+                <div className="home-dashboard">
+                  <div className="home-main">
+                    {homeQuickAdd}
+                    {homeAsk}
+                    {homeDueSoon}
+                    {homeTopCategories}
+                    {homeWallets}
+                    {homeRecent}
+                  </div>
+                  <div className="home-side">
+                    {homeHealth}
+                    {homeGoals}
+                    {homeOverview}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {homeQuickAdd}
+                  {homeAsk}
+                  {homeDueSoon}
+                  {homeHealth}
+                  {homeGoals}
+                  {homeTopCategories}
+                  {homeOverview}
+                  {homeWallets}
+                  {homeRecent}
+                </>
               )}
             </>
           )}
-
-          {!dataLoading && !!secondaryWallets.length && (
-            <section className="rail">
-              <div className="rail-head"><h2>กระเป๋าของคุณ</h2><button onClick={() => setTab("wallets")}>จัดการ</button></div>
-              {/* Its own scroller, not routed through .rail-track: the
-                  fixed 160px card width here is deliberate and older than
-                  the rail pattern, and .rail-track's wider default would
-                  just be a second, uncoordinated width rule fighting it. */}
-              <div className="wallet-carousel">
-                {secondaryWallets.map((wallet) => (
-                  <button className={`wallet-carousel-card ${secondaryWalletTags.find((entry) => entry.tag === wallet.tag)?.className ?? ""}`} key={wallet.id} onClick={() => setTab("wallets")}>
-                    <i className="debtor-avatar sm" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>
-                      <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} size={16} />
-                    </i>
-                    <span>{wallet.name}</span>
-                    <strong><CountUpMoney value={wallet.display_balance} /></strong>
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {!dataLoading && <RecentRail entries={entries} onOpen={openEntryDetail} onSeeAll={openHistoryTab} />}
 
           {error && <ErrorActions onRetry={retrySync} onDismiss={() => setError("")} />}
           {error && <StateCard tone="error" title="มีบางอย่างไม่สำเร็จ" detail={error} />}
@@ -3245,6 +3335,9 @@ export default function Home() {
               <div>
                 <h2>{addMode === "manual" ? "กรอกรายการด้วยตัวเอง" : busy ? "กำลังอ่านให้แบบตั้งใจสุด ๆ" : drafts.length ? "แยกข้อมูลให้แล้ว ลองตรวจอีกนิด" : "วันนี้มีรายการอะไรบ้าง?"}</h2>
               </div>
+              {/* Desk only (globals.css): there it is a panel, closed back to
+                  the screen it was opened from; on a phone the nav does that. */}
+              <span className="add-close"><SheetClose onClick={() => setTab(addBack)} /></span>
             </div>
 
             {/* Tabs, not a second segmented control: the manual form's own

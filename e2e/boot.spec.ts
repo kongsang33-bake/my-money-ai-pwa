@@ -7,7 +7,8 @@ test.describe("boot", () => {
     // way forward. waitForApp asserting it is gone is the whole point of this
     // spec; the rest is proof the app behind it actually has the data.
     await expect(app.locator(".hero-wallet")).toBeVisible();
-    await expect(app.getByText("พรีวิว")).toBeVisible();
+    // The account's name: in the topbar on a phone, the side nav on a desk.
+    await expect(app.locator(".topbar:visible, .side-nav:visible").getByText("พรีวิว")).toBeVisible();
   });
 
   test("shows every Home section the fixture has data for", async ({ app }) => {
@@ -66,7 +67,7 @@ test.describe("boot", () => {
   test("recovers once the crashing data is gone", async ({ app }) => {
     // The crash above is per-test state, so simply booting with the normal
     // fixture proves the error screen was not sticky.
-    await expect(app.locator(".bottom-nav")).toBeVisible();
+    await expect(app.locator(".bottom-nav:visible, .side-nav:visible").first()).toBeVisible();
     await expect(app.getByText("แอพสะดุดไปชั่วขณะ")).toHaveCount(0);
   });
 });

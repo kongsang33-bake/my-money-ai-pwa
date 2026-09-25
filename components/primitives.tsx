@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, CalendarDays, Check, ChevronLeft, Info, RefreshCw, X } from "lucide-react";
 import { KEYBOARD_SETTLE_MAX_MS, KEYBOARD_SETTLE_QUIET_MS, PULL_REFRESH_MAX, PULL_REFRESH_MIN_MS, PULL_REFRESH_THRESHOLD } from "@/lib/constants";
@@ -410,6 +410,21 @@ export function useStableHandler<A extends unknown[], R>(fn: (...args: A) => R):
     latest.current = fn;
   });
   return useCallback((...args: A) => latest.current(...args), []);
+}
+
+/**
+ * Whether a media query matches, kept in step as the window changes. Server
+ * render and the first client render say `false`, so a layout that differs
+ * by width renders the phone's first and switches in an effect-free re-render
+ * -- never a hydration mismatch.
+ */
+export function useMediaQuery(query: string) {
+  const subscribe = useCallback((listener: () => void) => {
+    const list = window.matchMedia(query);
+    list.addEventListener("change", listener);
+    return () => list.removeEventListener("change", listener);
+  }, [query]);
+  return useSyncExternalStore(subscribe, () => window.matchMedia(query).matches, () => false);
 }
 
 /**

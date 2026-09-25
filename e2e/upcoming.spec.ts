@@ -1,4 +1,4 @@
-import { test, expect, navigate } from "./fixture.ts";
+import { test, expect, hasSideNav, navigate } from "./fixture.ts";
 
 // The "กำลังจะมา" tab: a window counted from today, not from the cycle. The
 // fixture's bills are dated relative to today (billsOn in fixture.ts):
@@ -42,6 +42,12 @@ test.describe("upcoming", () => {
   test("keeps Wallets one tap away under อื่น ๆ, with a way back", async ({ app }) => {
     await navigate(app, "wallets");
     await expect(app.locator(".phone > .view.wallets-view")).not.toHaveClass(/\bis-parked\b/);
+    // On a desk Wallets is a row of its own in the side nav, one click from
+    // anywhere; the rest of this is the phone's way through ของฉัน.
+    if (await hasSideNav(app)) {
+      await expect(app.locator('.side-nav [data-nav="wallets"]')).toHaveClass(/\bactive\b/);
+      return;
+    }
     await expect(app.locator(".bottom-nav > button").nth(4)).toHaveClass(/\bactive\b/);
     await app.locator(".view:not(.is-parked) .add-title > button:first-child").click();
     await expect(app.locator(".more-grid")).toBeVisible();

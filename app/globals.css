@@ -164,6 +164,9 @@
   --nav-add-col: 80px;
   --nav-pill-max: 92px;
   --topbar-height: 58px;
+  /* How wide a screen's content runs on a desk, centred in the space right
+     of the side nav: about 1240px of content inside the view's padding. */
+  --desk-column: 1320px;
   /* What the bar leaves under its tabs: the home indicator's inset where
      there is one (layout.tsx sets viewport-fit=cover, without which iOS
      reports it as 0 and the tabs sat on the screen's bottom edge), less a
@@ -458,6 +461,19 @@ a:focus-visible {
 .shell {
   min-height: var(--vvh, 100dvh);
   background: var(--bg);
+}
+
+/* จดรายการ's close button: a desk only (see .add-view there), where the
+   add screen is a panel; on a phone the nav is the way out. */
+.add-close {
+  display: none;
+}
+
+/* The desktop nav (SideNav, components/side-nav.tsx). A phone has the
+   bottom bar and the topbar instead; it only exists from 900px (the
+   Responsive section below). */
+.side-nav {
+  display: none;
 }
 
 .phone {
@@ -5551,7 +5567,7 @@ button.entry-main {
   margin-top: 2px;
 }
 
-.sheet-head button {
+.sheet-head button, .add-close button {
   width: 36px;
   height: 36px;
   border-radius: var(--r-full);
@@ -8082,6 +8098,16 @@ body:has(.login-page) #app-splash {
 }
 
 
+@keyframes drawer-in {
+  from { opacity: 0.4; transform: translateX(32px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes drawer-out {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(32px); }
+}
+
 @keyframes pop-in {
   from { opacity: 0; transform: scale(0.94) translateY(6px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
@@ -8229,29 +8255,190 @@ body:has(.login-page) #app-splash {
     background: var(--bg);
   }
 
-  /* The window, edge to edge, the way Netflix's web app is: Home's
-     billboard runs under the topbar to both edges (below). Every other
-     screen is a form or a list, not a billboard, so it keeps a centred
-     reading column instead. */
+  /* A program's layout, not a phone's: the nav down the left edge
+     (SideNav), the page beside it, and neither the phone's bottom bar nor
+     its topbar -- the side nav carries the brand, the way in to add, every
+     place in the app and the account. Each screen's content sits in a
+     centred column of the space right of the nav, so a wide window leaves
+     even room either side rather than a gulf on the right. */
+  .shell {
+    display: flex;
+  }
+
   .phone {
-    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+    flex: 1;
+    min-width: 0;
+    padding-bottom: calc(var(--s-8) + env(safe-area-inset-bottom));
     overflow-x: hidden;
     overflow-y: auto;
   }
 
-  .phone > .view:not(.home-view) {
-    max-width: 1180px;
+  .topbar, .topbar-scrim, .bottom-nav {
+    display: none;
+  }
+
+  .phone > .view {
+    max-width: var(--desk-column);
     margin-inline: auto;
   }
 
-  /* ...and off Home the topbar's mark and face line up with that column's
-     edges rather than the window's. */
-  .phone:not(.tab-home) .topbar {
-    padding-inline: max(var(--s-7), calc((100% - 1180px) / 2 + var(--s-7)));
+  .side-nav {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-nav);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-4);
+    flex-shrink: 0;
+    width: 248px;
+    height: var(--vvh, 100dvh);
+    padding: var(--s-5) var(--s-4);
+    box-sizing: border-box;
+    overflow-y: auto;
+    border-right: 1px solid var(--line);
+    background: var(--bg);
   }
 
-  .topbar {
-    padding-inline: var(--s-7);
+  .side-nav-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    padding: var(--s-1) var(--s-2);
+  }
+
+  .side-nav-brand b {
+    font-size: var(--fs-h3);
+    font-weight: var(--fw-bold);
+  }
+
+  /* The one white button on the page's chrome: the phone's green + becomes
+     the add button a desktop program would put at the top of its nav. */
+  .side-nav-add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s-2);
+    min-height: 44px;
+    border-radius: var(--r-sm);
+    background: var(--primary);
+    color: var(--primary-text);
+    font-size: var(--fs-body);
+    font-weight: var(--fw-semibold);
+    transition: background var(--t-2) var(--e-out);
+  }
+
+  .side-nav-add:hover {
+    background: var(--primary-hover);
+  }
+
+  .side-nav-add kbd {
+    padding: 0 var(--s-1);
+    border: 1px solid color-mix(in srgb, var(--primary-text) 25%, transparent);
+    border-radius: var(--r-xs);
+    font-family: inherit;
+    font-size: var(--fs-micro);
+    color: color-mix(in srgb, var(--primary-text) 70%, transparent);
+  }
+
+  .side-nav-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .side-nav-heading {
+    padding: var(--s-2) var(--s-3) var(--s-1);
+    font-size: var(--fs-micro);
+    font-weight: var(--fw-semibold);
+    letter-spacing: 0.08em;
+    color: var(--ink-3);
+  }
+
+  .side-nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    width: 100%;
+    min-height: 40px;
+    padding: 0 var(--s-3);
+    border-radius: var(--r-sm);
+    color: var(--ink-2);
+    font-size: var(--fs-body-sm);
+    font-weight: var(--fw-medium);
+    text-align: left;
+    transition: background var(--t-2) var(--e-out), color var(--t-2) var(--e-out);
+  }
+
+  .side-nav-item svg {
+    flex-shrink: 0;
+    color: var(--ink-3);
+  }
+
+  .side-nav-item:hover {
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  /* Where you are: the row lifted, and its icon in the brand's ink -- the
+     same "this is highlighted" mark the phone nav's active tab uses. */
+  .side-nav-item.active {
+    background: var(--surface-2);
+    color: var(--ink);
+    font-weight: var(--fw-semibold);
+  }
+
+  .side-nav-item.active svg {
+    color: var(--accent);
+  }
+
+  .side-nav-count {
+    margin-left: auto;
+    padding: 0 var(--s-2);
+    border-radius: var(--r-xs);
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    font-size: var(--fs-caption);
+    font-weight: var(--fw-semibold);
+  }
+
+  .side-nav-account {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    margin-top: auto;
+    min-height: 56px;
+    padding: var(--s-3) var(--s-2) 0;
+    border-top: 1px solid var(--line);
+    text-align: left;
+  }
+
+  .side-nav-account .home-profile-icon {
+    flex-shrink: 0;
+  }
+
+  .side-nav-account-text {
+    min-width: 0;
+  }
+
+  .side-nav-account-text b {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-body-sm);
+    font-weight: var(--fw-semibold);
+  }
+
+  .side-nav-account-text small {
+    display: block;
+    font-size: var(--fs-caption);
+    color: var(--ink-3);
+  }
+
+  .side-nav-account.active .side-nav-account-text small,
+  .side-nav-account:hover .side-nav-account-text small {
+    color: var(--ink-2);
   }
 
   /* Four across on a desk: two columns of 540px cards read as a form, not
@@ -8268,30 +8455,23 @@ body:has(.login-page) #app-splash {
   .rank .poster { width: 136px; }
 
   /* Landscape billboard, the way Netflix's web one reads: words on the left
-     over the page's own ground, the art lit on the right and fading into
-     it -- so the billboard's edge disappears into the page rather than
-     showing as a box inside .phone's clamped width. */
+     over the page's own ground, the art lit on the right. On a desk it is
+     the head of a dashboard, not a screen of its own, so it is a box as
+     tall as its words need, at the top of the centred column -- full-bleed
+     and three-quarters of the window, it left the rest of Home below the
+     fold and half of the billboard itself empty. */
   .home-view > .single-wallet {
-    margin: calc(-1 * var(--topbar-block)) calc(-1 * var(--s-7)) var(--s-6);
+    margin: 0 0 var(--s-6);
   }
 
-  /* Full-bleed: no box, no corner, and a fade into the page along the
-     bottom as well as the left, so the rails below start on the same
-     ground the billboard ends on. */
   .hero-wallet {
-    min-height: min(76vh, 680px);
+    min-height: 272px;
     justify-content: center;
-    padding-top: var(--topbar-block);
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
-    background:
-      linear-gradient(180deg, transparent 72%, var(--bg) 100%),
-      linear-gradient(100deg, var(--bg) 0%, var(--hero-bg) 42%, var(--hero-glow) 100%);
+    background: linear-gradient(100deg, var(--bg) 0%, var(--hero-bg) 42%, var(--hero-glow) 100%);
   }
 
   .hero-wallet.is-bare {
-    min-height: min(52vh, 460px);
+    min-height: 220px;
   }
 
   .billboard-art {
@@ -8305,12 +8485,12 @@ body:has(.login-page) #app-splash {
   }
 
   .billboard-caption {
-    top: calc(var(--topbar-block) + var(--s-3));
+    top: var(--s-5);
     right: var(--s-7);
   }
 
   .billboard-slogan {
-    top: calc(var(--topbar-block) + var(--s-3));
+    top: var(--s-5);
     left: var(--s-7);
     right: auto;
     font-size: var(--fs-body);
@@ -8318,7 +8498,7 @@ body:has(.login-page) #app-splash {
 
   .billboard-body {
     max-width: 540px;
-    padding: var(--s-8) var(--s-7);
+    padding: var(--s-9) var(--s-7) var(--s-7);
     text-align: left;
   }
 
@@ -8336,12 +8516,12 @@ body:has(.login-page) #app-splash {
 
 
   .view {
-    padding: 0 var(--s-7) calc(var(--s-8) + 80px);
+    padding: var(--s-7) var(--s-8) var(--s-8);
   }
 
-  /* The nav floats --s-7 off the bottom here, so that is the room left. */
+  /* No bottom bar on a desk: Ask AI's chat runs to the window's foot. */
   .phone.tab-ask {
-    padding-bottom: calc(var(--nav-height) + var(--s-7) + var(--s-3));
+    padding-bottom: var(--s-3);
   }
 
   .review-savebar {
@@ -8356,15 +8536,6 @@ body:has(.login-page) #app-splash {
     width: 100%;
   }
 
-  /* Home used to switch to a 2-column masonry dashboard here, with most
-     cards spanning both columns and a handful (quick-add, goals, the cash-
-     flow pair) sitting side by side as the only things that actually used
-     the second column. Now that every one of those is a full-width rail
-     that scrolls its own cards horizontally (see the "Rails" section
-     above), a second column has nothing left to hold -- .home-view is a
-     single stack of full-width sections at every width, same as mobile,
-     which is also what a Netflix web homepage does (one column of rails,
-     each one scrolling on its own). */
 
   .history-view {
     display: grid;
@@ -8398,9 +8569,21 @@ body:has(.login-page) #app-splash {
     grid-column: 1 / -1;
   }
 
-  .add-view {
-    width: min(720px, 100%);
-    margin: 0 auto;
+  /* จดรายการ on a desk is a panel over the page's ground -- framed, with
+     its own close button (and Esc) back to where it was opened -- rather
+     than a bare screen, which at this width read as a page gone missing. */
+  .phone > .add-view {
+    width: min(760px, 100%);
+    margin: var(--s-7) auto;
+    padding: var(--s-6) var(--s-7) var(--s-7);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    background: var(--surface);
+  }
+
+  .add-close {
+    display: block;
+    margin-left: auto;
   }
 
   .debtor-view {
@@ -8418,9 +8601,25 @@ body:has(.login-page) #app-splash {
     border-radius: var(--r-xl);
   }
 
+  /* An entry's detail opens as a panel down the right edge, the way a mail
+     program shows a message beside its list, instead of a sheet in the
+     middle of the window. */
+  .sheet-backdrop:has(> .entry-detail-sheet) {
+    justify-content: flex-end;
+    align-items: stretch;
+    padding: 0;
+  }
+
   .sheet-backdrop > .entry-detail-sheet {
-    width: min(560px, calc(100vw - 48px));
-    border-radius: var(--r-lg);
+    width: 440px;
+    max-height: none;
+    border-left: 1px solid var(--line);
+    border-radius: 0;
+    animation: drawer-in var(--t-3) var(--e-out) both;
+  }
+
+  .sheet-backdrop > .entry-detail-sheet.closing {
+    animation: drawer-out var(--t-3) var(--e-out) both;
   }
 
   .sheet-backdrop, .dialog-backdrop {
@@ -8429,39 +8628,99 @@ body:has(.login-page) #app-splash {
   }
 
 
-  .bottom-nav {
-    position: fixed;
-    left: 50%;
-    right: auto;
-    top: auto;
-    bottom: var(--s-7);
-    width: min(560px, calc(100vw - 128px));
-    height: var(--nav-height);
-    padding-bottom: 0;
-    /* Floating clear of the screen's edge, so nothing to lift over -- and the
-       active-tab pill subtracts this, so it has to say zero, not just be
-       padded as zero. */
-    --nav-lift: 0px;
-    /* Floating again on a desk -- a bar pinned across a 1440px window's
-       bottom edge is a long way from where anything else on the page is. */
-    border: var(--card-border);
-    border-radius: var(--r-lg);
-    background: var(--surface-2);
-    box-shadow: var(--sh-2);
-    grid-template-columns: 1fr 1fr var(--nav-add-col) 1fr 1fr;
-    --nav-center: -50%;
-  }
-
-  .bottom-nav button {
-    min-height: 0;
-    border-radius: 0;
-  }
-
   .toast-host {
     left: auto;
     right: var(--s-6);
     bottom: var(--s-6);
     align-items: flex-end;
+  }
+}
+
+/* Home as a dashboard (the home-dashboard page.tsx renders from this width):
+   what you act on down the left -- quick add, bills due, where the money
+   went, recent entries -- and the reading down a narrower right column.
+   The rails stop scrolling sideways here: a desk has the width, so every
+   card shows, wrapped into rows on the left and stacked on the right. */
+@media (min-width: 1200px) {
+  .home-dashboard {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+    gap: var(--s-7);
+    align-items: start;
+  }
+
+  .home-main, .home-side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    min-width: 0;
+  }
+
+  .home-main .rail-track, .home-main .wallet-carousel {
+    flex-wrap: wrap;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+
+  .home-side .rail-track {
+    flex-direction: column;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+
+  /* The right column ends at the window's edge, so an explanation opened in
+     it grows leftwards, the way the later stat tiles' do everywhere. */
+  .home-side .info-hint > span {
+    left: auto;
+    right: 0;
+  }
+
+  /* As specific as the rail sizes above (.rail.is-* .rail-track > *), and
+     later, so the column's width wins over each rail's card width. */
+  .home-side .rail .rail-track > * {
+    width: auto;
+  }
+}
+
+/* A narrower desk: the side nav folds to its icons (their names are the
+   buttons' titles), leaving the page the room. */
+@media (min-width: 900px) and (max-width: 1199px) {
+  .side-nav {
+    width: 72px;
+    align-items: center;
+    padding-inline: var(--s-3);
+  }
+
+  .side-nav-label {
+    display: none;
+  }
+
+  .side-nav-brand, .side-nav-item, .side-nav-add {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .side-nav-add, .side-nav-item {
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .side-nav-group + .side-nav-group {
+    padding-top: var(--s-3);
+    border-top: 1px solid var(--line);
+  }
+
+  .side-nav-count {
+    position: absolute;
+    top: 2px;
+    right: 0;
+    padding: 0 var(--s-1);
+    font-size: var(--fs-micro);
+  }
+
+  .side-nav-account {
+    justify-content: center;
+    padding-inline: 0;
   }
 }
 

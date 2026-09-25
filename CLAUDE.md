@@ -64,8 +64,9 @@ cards share the rails' flat surface: the 7-day pace, and `CyclePaceCard`
 number of days*, never against its whole total. It replaced a "top category"
 card that only repeated rank #1 of the categories rail; don't bring that
 back. The bottom nav is a full-width solid
-bar with a square emerald + level with the tabs below 900px, and floats as a
-bar on desktop. A tap on an entry (Home's "เพิ่งจด", a History row) opens
+bar with a square emerald + level with the tabs below 900px; from 900px it
+and the topbar are gone and the **side nav** replaces both (see "The desk"
+below). A tap on an entry (Home's "เพิ่งจด", a History row) opens
 **`EntryDetailSheet`** — the mock's title page: category art, type, name,
 amount, date/category/wallet, then "แก้ไข" and "ลบ", then "รายการคล้ายกัน"
 (`similarEntries`: same title, then same category, never another leg of the
@@ -145,10 +146,27 @@ network, and CSS hides the boot splash on both. The e2e suite reaches it through
 Wallets (`WalletsView`) is a bare total -- the billboard's kicker, a display
 figure, the spendable/set-aside split as one bar -- over `.wallet-tiles`:
 each wallet a tile in its own `--hue` with its share of the total as a meter
-(not `.wallet-grid`, which is the older wrapper around Home's billboard). From
-900px up the app is the whole window: Home's billboard runs edge to edge
-under the topbar and fades into the page at the bottom, and every other
-screen keeps a centred 1180px column with the topbar lined up to it.
+(not `.wallet-grid`, which is the older wrapper around Home's billboard).
+
+**The desk (from 900px) is laid out like a program, not a phone.** The phone
+never changes for it: everything is ≥900px CSS, or `homeDesk`
+(`useMediaQuery`, ≥1200px). `SideNav` (components/side-nav.tsx) runs down the
+left: the brand, a white "+ จดรายการ" (also the `N` key), หน้าหลัก / รายการ /
+กำลังจะมา, then every money tool "ของฉัน" lists on a phone as a row of its own
+(same names and icons as MoreView's tiles), and the account at the foot (it
+opens "ของฉัน"). Below 1200px it folds to icons. The bottom bar, topbar and
+scrim are `display: none` there. Every view is a column of `--desk-column`
+centred in the space right of the nav -- not left-aligned with a gulf on the
+right. Home from 1200px is a dashboard: the billboard as a boxed head
+(~272px, not the phone's full-bleed poster), then `home-main` (quick add,
+Ask AI, bills due, categories, wallets, recent) and a narrower `home-side`
+(health, goals/budgets, the month's overview) -- the same section elements
+as the phone, placed by page.tsx, with rails wrapping into grids on the left
+and stacking on the right instead of scrolling sideways. จดรายการ is a framed
+panel with its own close button and Esc back to `addBack`; an entry's detail
+opens as a drawer down the right edge; the composer sends on Ctrl/⌘+Enter.
+The e2e fixture's `navigate` and `openMe` go through the side nav when it is
+showing (`hasSideNav`).
 History ("รายการ") is list-first: a bare search field (no card around it),
 held under the topbar while the month scrolls, with one row of type chips
 under it (`QUICK_TYPES` in components/history.tsx, the same `filters.type`
@@ -347,9 +365,8 @@ the product name -- leave them.
   centered on a differently-colored backdrop any more; that read as a
   component showcase, not an app, on anything wider than a literal phone.
   The 600–899px layout clamps `.phone` to a centred 560px column; from
-  900px `.phone` is the full window and the *views* clamp themselves (1180px,
-  all but Home, whose billboard is deliberately full-bleed). Neither
-  reintroduces a card chrome. Don't add `border-radius`/`box-shadow` back onto `.shell`/`.phone`
+  900px `.phone` is the space right of the side nav and the *views* clamp
+  themselves (`--desk-column`, centred). Neither reintroduces a card chrome. Don't add `border-radius`/`box-shadow` back onto `.shell`/`.phone`
   as a "polish" pass.
 
 ### What actually counts as a redesign

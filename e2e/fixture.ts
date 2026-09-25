@@ -162,6 +162,20 @@ export const WALLETS_TILE = { selector: ".more-grid button", text: "กระเ
  * "อื่น ๆ" and its tile, the way a user now gets there.
  */
 export async function navigate(page: Page, tab: keyof typeof NAV | "wallets") {
+  // From 900px the side nav replaces the bottom bar, and every place --
+  // Wallets included -- is one of its rows (data-nav).
+  const viaSideNav = await page.evaluate((key) => {
+    const side = document.querySelector<HTMLElement>(".side-nav");
+    if (!side || getComputedStyle(side).display === "none") return false;
+    const button = side.querySelector<HTMLButtonElement>(`[data-nav="${key}"]`);
+    if (!button) throw new Error(`no side-nav item ${key}`);
+    button.click();
+    return true;
+  }, tab);
+  if (viaSideNav) {
+    await page.waitForTimeout(400);
+    return;
+  }
   if (tab === "wallets") {
     await navigate(page, "more");
     // MoreView is code-split, so its grid can arrive a moment after the tab.
@@ -182,9 +196,29 @@ export async function navigate(page: Page, tab: keyof typeof NAV | "wallets") {
   await page.waitForTimeout(400);
 }
 
+/** Whether this width shows the desktop side nav (from 900px) rather than the phone's bottom bar and topbar. */
+export async function hasSideNav(page: Page) {
+  return page.evaluate(() => {
+    const side = document.querySelector<HTMLElement>(".side-nav");
+    return !!side && getComputedStyle(side).display !== "none";
+  });
+}
+
+/**
+ * Opens "ของฉัน" the way the account is reached at this width: your name and
+ * face in the topbar on a phone, the account row at the foot of the side nav
+ * on a desk.
+ */
+export async function openMe(page: Page) {
+  if (await hasSideNav(page)) await page.locator(".side-nav-account").click();
+  else await page.locator(".home-identity").click();
+}
+
 /** Waits for the boot splash to finish and get out of the way. */
 export async function waitForApp(page: Page) {
-  await expect(page.locator(".bottom-nav")).toBeVisible({ timeout: 15000 });
+  // The bottom bar on a phone, the side nav from 900px: whichever this
+  // width shows.
+  await expect(page.locator(".bottom-nav:visible, .side-nav:visible").first()).toBeVisible({ timeout: 15000 });
   await waitForSplash(page);
 }
 

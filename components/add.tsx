@@ -149,6 +149,15 @@ export function AiComposer({
           value={text}
           onChange={(event) => setText(event.target.value)}
           onFocus={(event) => revealAboveKeyboard(event.currentTarget.closest<HTMLElement>(".ai-input-wrap"))}
+          onKeyDown={(event) => {
+            // Ctrl/⌘ + Enter sends, the way a chat box on a computer does;
+            // plain Enter stays a new line, since one message can list
+            // several entries.
+            if (event.key !== "Enter" || !(event.ctrlKey || event.metaKey)) return;
+            if (busy || disabled || (!text.trim() && !slipImages.length)) return;
+            event.preventDefault();
+            onAnalyze(text, slipImages);
+          }}
           placeholder="เช่น กินข้าว 120 บาท, ออกให้เพื่อนเอก่อน 500, เพื่อนเอโอนคืน 200"
         />
 
