@@ -117,4 +117,30 @@ test.describe("keyboard", () => {
     expect(typing.opacity).toBe(1);
     expect(Math.round(typing.top)).toBe(Math.round(before.top));
   });
+
+  test("brings a field low in a sheet up above the keyboard, the way iOS shows it", async ({ app }, info) => {
+    test.skip(info.project.name !== "mobile", "only a touch screen has an on-screen keyboard");
+    // iOS lays the keyboard over the page without resizing it -- only the
+    // visual viewport (--vvh, page.tsx) shrinks. Shrinking the window instead,
+    // as the tests above do, also shrinks every position:fixed box, which is
+    // exactly the thing that did not happen on an iPad: the sheet kept
+    // reaching the window's foot and its lower fields stayed under the keys.
+    await app.getByRole("button", { name: "เปิดกระเป๋าการ์ด" }).click();
+    await app.getByRole("button", { name: "จัดการการ์ด" }).click();
+    await app.getByRole("button", { name: "เพิ่มการ์ด" }).click();
+    const field = app.getByRole("textbox", { name: /ชื่อเจ้าของ/ });
+    await expect(field).toBeAttached();
+    await app.waitForTimeout(400);
+
+    const height = app.viewportSize()!.height;
+    const keyboardTop = Math.round(height * 0.55);
+    await field.focus();
+    await app.evaluate((top) => document.documentElement.style.setProperty("--vvh", `${top}px`), keyboardTop);
+    await app.waitForTimeout(1200);
+
+    const box = (await field.boundingBox())!;
+    expect(box.y + box.height, "the field should end above the keyboard").toBeLessThanOrEqual(keyboardTop);
+    expect(box.y, "and not have gone off the top").toBeGreaterThanOrEqual(0);
+    expect(await app.evaluate(() => window.scrollY)).toBe(0);
+  });
 });

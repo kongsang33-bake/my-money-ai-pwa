@@ -384,6 +384,14 @@ the product name -- leave them.
   (components/primitives.tsx) on focus: once the keyboard has finished
   opening it brings the whole `.ai-input-wrap`, send button included, up to
   the visible bottom. Use it for any box whose action sits under its field.
+  Sheets and dialogs follow the same rule: `.sheet-backdrop`/`.dialog-backdrop`
+  are `--vvh` tall (not `inset: 0`) and a sheet's max-height is a share of
+  `--vvh`, so a sheet ends where the keyboard starts, and `SheetFrame` calls
+  `revealAboveKeyboard` for whatever field gets focus inside it. Reaching
+  the window's foot, a sheet kept its lower fields under an iPad's keyboard
+  with no way to scroll to them. A keyboard spec has to shrink `--vvh` alone,
+  not the window: shrinking the window also shrinks every fixed box, which
+  is the one thing iOS does not do.
 - **`.phone` is the real, edge-to-edge app root at every width — not a
   device mockup.** There is no rounded-card-with-drop-shadow "phone frame"
   centered on a differently-colored backdrop any more; that read as a

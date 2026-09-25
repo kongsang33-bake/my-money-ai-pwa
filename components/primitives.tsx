@@ -234,6 +234,15 @@ export function ToastHost({ toasts, closingIds, onDismiss }: { toasts: Toast[]; 
 export function SheetFrame({ children, onClose, className = "edit-sheet", closing = false }: { children: React.ReactNode; onClose: () => void; className?: string; closing?: boolean }) {
   useEscapeToClose(onClose);
   const dialogRef = useFocusTrap<HTMLElement>(!closing);
+  // A field focused in a sheet is brought up above the keyboard with its
+  // label, once the keyboard has finished opening -- the browser alone only
+  // shows the caret, and on iOS not even that (see .sheet-backdrop).
+  const onFocus = (event: React.FocusEvent<HTMLElement>) => {
+    const field = event.target;
+    if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement)) return;
+    if (field instanceof HTMLInputElement && ["checkbox", "radio", "file", "button", "submit", "range", "color"].includes(field.type)) return;
+    revealAboveKeyboard(field.closest<HTMLElement>("label, .sheet-field") ?? field);
+  };
 
   return (
     <div className={`sheet-backdrop ${closing ? "closing" : ""}`} onMouseDown={onClose}>
@@ -244,6 +253,7 @@ export function SheetFrame({ children, onClose, className = "edit-sheet", closin
         tabIndex={-1}
         className={`${className} ${closing ? "closing" : ""}`}
         onMouseDown={(event) => event.stopPropagation()}
+        onFocus={onFocus}
       >
         {children}
       </section>
@@ -439,12 +449,14 @@ export function useMediaQuery(query: string) {
  * topbar. Nothing moves when the box already fits, as on a desktop.
  */
 export function revealAboveKeyboard(target: HTMLElement | null) {
-  const scroller = target?.closest<HTMLElement>(".phone");
+  // Inside a sheet the sheet is what scrolls, and nothing sits over its top.
+  const sheet = target?.closest<HTMLElement>(".sheet-backdrop > *, .dialog-backdrop > *");
+  const scroller = sheet ?? target?.closest<HTMLElement>(".phone");
   if (!target || !scroller) return;
   const settle = () => {
     const box = target.getBoundingClientRect();
     const view = scroller.getBoundingClientRect();
-    const topbar = document.querySelector(".topbar")?.getBoundingClientRect().bottom ?? view.top;
+    const topbar = sheet ? view.top : document.querySelector(".topbar")?.getBoundingClientRect().bottom ?? view.top;
     const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--s-3")) || 0;
     const delta = Math.min(box.bottom + gap - view.bottom, box.top - gap - topbar);
     if (delta < 1) return;

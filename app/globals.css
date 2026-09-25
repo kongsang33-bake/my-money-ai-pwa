@@ -5645,7 +5645,14 @@ button.entry-main {
    scroll-and-open budget nobody could see. */
 .sheet-backdrop, .dialog-backdrop {
   position: fixed;
-  inset: 0;
+  /* As tall as what is visible (--vvh, page.tsx), not as the window: iOS lays
+     the keyboard over the page without shrinking it, and page.tsx undoes the
+     pan iOS would use to show a field, so a sheet reaching the window's foot
+     kept its lower fields under the keyboard with no way to scroll to them.
+     Ending where the keyboard starts, the sheet can scroll every field into
+     view (SheetFrame's revealAboveKeyboard). */
+  inset: 0 0 auto 0;
+  height: var(--vvh, 100dvh);
   background: var(--overlay-scrim);
   display: flex;
   align-items: flex-end;
@@ -5683,7 +5690,7 @@ button.entry-main {
 }
 
 .sheet-backdrop > .edit-sheet {
-  max-height: min(86vh, 760px);
+  max-height: min(calc(var(--vvh, 100dvh) * 0.86), 760px);
   background: var(--surface);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   padding: var(--s-6) var(--s-5) max(var(--s-7), env(safe-area-inset-bottom));
@@ -9157,7 +9164,7 @@ body:has(.login-page) #app-splash {
 
   .sheet-backdrop > .edit-sheet {
     width: min(560px, calc(100vw - 48px));
-    max-height: min(84vh, 780px);
+    max-height: min(calc(var(--vvh, 100dvh) * 0.84), 780px);
     border-radius: var(--r-xl);
   }
 
