@@ -114,8 +114,14 @@ the brand in the corner (`.pin-brand`), one bare column under Home's glow,
 Google as the one white `.primary`, no card (`.auth-card` is the error
 boundary's). Both ways in stay disabled until the privacy policy has been
 acknowledged, and the only way to acknowledge it is the button at the end of
-the policy's own sheet; the acknowledgement is kept per device against
-`PRIVACY_POLICY_VERSION`, so bump that when the policy's substance changes.
+the policy's own sheet. Given there, it can only live on the device
+(`PRIVACY_ACK_STORAGE_KEY`); after sign-in `ensurePrivacyAck` (page.tsx)
+copies it to `privacy_acknowledgements`, the append-only record kept as
+evidence (select/insert only, one row per user per version, time from the
+database -- lib/privacy.ts). A signed-in user with neither is held at
+`PrivacyGate` before the PIN gate; a failed *read* lets them through and
+tries again next launch. Bump `PRIVACY_POLICY_VERSION` when the policy's
+substance changes: everyone is asked again, and gets a new row.
 The policy is written once (`PrivacyPolicyContent`, components/privacy.tsx)
 and also served at `/privacy` -- every claim in it is something the code does,
 so check it when the data handling changes. `/privacy` is the only route

@@ -7268,6 +7268,21 @@ body:has(.privacy-page) #app-splash {
   letter-spacing: var(--ls-tight);
 }
 
+.privacy-gate-copy {
+  margin: calc(var(--s-3) * -1) 0 var(--s-5);
+  font-size: var(--fs-body);
+  color: var(--ink-3);
+}
+
+.privacy-gate-error {
+  margin-top: var(--s-5);
+}
+
+.privacy-gate-logout {
+  display: block;
+  margin: var(--s-3) auto 0;
+}
+
 /* -------------------------------------------------------------------------
    PIN lock
    ------------------------------------------------------------------------- */

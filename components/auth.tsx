@@ -10,6 +10,7 @@ import { clampInteger } from "@/lib/format";
 import { isPlatformAuthenticatorAvailable, isSixDigitPin, lockDelayOptions, pinLength, pinMaxAttempts, type LockDelayKey } from "@/lib/pin";
 import type { PinMode, Profile } from "@/lib/types";
 import { PageFrame } from "@/components/primitives";
+import { PrivacyPolicyContent } from "@/components/privacy";
 
 export function PinGate({
   mode,
@@ -450,6 +451,32 @@ export function SignInPanel({ acknowledged, onReadPolicy }: { acknowledged: bool
       </details>
       {message && <p className="auth-message" role="status">{message}</p>}
     </div>
+  );
+}
+
+// For a signed-in user with no acknowledgement of the current policy on
+// record: someone signed in before the policy existed, or before it last
+// changed. Nothing else opens until "รับทราบ" is written (page.tsx).
+export function PrivacyGate({ busy, error, onAccept, onLogout }: { busy: boolean; error: string; onAccept: () => void; onLogout: () => void }) {
+  return (
+    <main className="shell privacy-page privacy-gate">
+      <div className="privacy-page-column">
+        <header className="privacy-page-head">
+          <span className="privacy-back">
+            <i className="brand-mark" aria-hidden="true" />
+            <b className="brand-name">{APP_NAME}</b>
+          </span>
+        </header>
+        <h1>นโยบายความเป็นส่วนตัว</h1>
+        <p className="privacy-gate-copy">ก่อนใช้งานต่อ กรุณาอ่านนโยบายนี้และกดรับทราบที่ท้ายหน้า</p>
+        <PrivacyPolicyContent />
+        {error && <p className="pin-error privacy-gate-error" role="alert">{error}</p>}
+        <button type="button" className="primary privacy-accept" onClick={onAccept} disabled={busy}>
+          {busy ? "กำลังบันทึก..." : "อ่านแล้ว รับทราบ"}
+        </button>
+        <button type="button" className="pin-link-button privacy-gate-logout" onClick={onLogout} disabled={busy}>ออกจากระบบ</button>
+      </div>
+    </main>
   );
 }
 

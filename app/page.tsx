@@ -124,7 +124,8 @@ import {
   SuccessPulse,
 } from "@/components/home";
 import { HistoryFilterBar } from "@/components/history";
-import { PinGate, SecurityView } from "@/components/auth";
+import { PinGate, PrivacyGate, SecurityView } from "@/components/auth";
+import { fetchPrivacyAck, readLocalPrivacyAck, recordPrivacyAck, writeLocalPrivacyAck } from "@/lib/privacy";
 import { Landing } from "@/components/landing";
 import type { WalletInput, RecurringExpenseInput } from "@/components/wallets-recurring";
 import type { DebtorInput } from "@/components/debtors";
@@ -403,6 +404,11 @@ export default function Home() {
   const [savePulse, setSavePulse] = useState(0);
   const [pinMode, setPinMode] = useState<PinMode>("checking");
   const [pinError, setPinError] = useState("");
+  // Signed in without an acknowledgement of the current privacy policy on
+  // record (and none given on this device's landing page to copy there):
+  // the app waits behind PrivacyGate until it is given.
+  const [privacyNeeded, setPrivacyNeeded] = useState(false);
+  const [privacyError, setPrivacyError] = useState("");
   const scrollRootRef = useRef<HTMLElement | null>(null);
   // The same element as state, for the one consumer that has to know when it
   // appears (PullToRefresh attaches its listeners to it).
@@ -832,11 +838,36 @@ export default function Home() {
     setDataLoading(false);
   }, []);
 
+  // Makes sure the privacy acknowledgement is on record before anything else
+  // opens. One given on the landing page before sign-in only exists on this
+  // device, so it is written to the account here. A read that fails lets the
+  // user through rather than walling off their money over a network blip --
+  // the next launch reads again, and still finds nothing if nothing was
+  // recorded, so the record catches up rather than being skipped.
+  const ensurePrivacyAck = useCallback(async (userId: string) => {
+    if (!supabase) return true;
+    const onRecord = await fetchPrivacyAck(supabase, userId);
+    if (onRecord) {
+      writeLocalPrivacyAck();
+      return true;
+    }
+    if (readLocalPrivacyAck()) {
+      await recordPrivacyAck(supabase, userId, "landing");
+      return true;
+    }
+    return onRecord === null;
+  }, []);
+
   const preparePinGate = useCallback(async (userId: string) => {
     setPinMode("checking");
     setPinError("");
     loadedUserIdRef.current = null;
     clearPrivateState();
+    if (!(await ensurePrivacyAck(userId))) {
+      setPrivacyNeeded(true);
+      return;
+    }
+    setPrivacyNeeded(false);
     const nextProfile = await loadProfile();
     if (nextProfile?.pin_hash && nextProfile.pin_salt) {
       setPinMode("locked");
@@ -844,7 +875,7 @@ export default function Home() {
       setPinMode("unlocked");
       await loadUserData(userId);
     }
-  }, [clearPrivateState, loadProfile, loadUserData]);
+  }, [clearPrivateState, ensurePrivacyAck, loadProfile, loadUserData]);
 
   const applyAuthUser = useCallback((nextUser: User | null) => {
     setUser(nextUser);
@@ -860,6 +891,7 @@ export default function Home() {
       void preparePinGate(nextUser.id);
     } else {
       setProfile(null);
+      setPrivacyNeeded(false);
       setPinMode("checking");
       setPinError("");
       clearPrivateState();
@@ -2305,6 +2337,20 @@ export default function Home() {
     return true;
   }
 
+  async function acceptPrivacyPolicy() {
+    if (!supabase || !user) return;
+    setBusy(true);
+    setPrivacyError("");
+    const error = await recordPrivacyAck(supabase, user.id, "in_app");
+    setBusy(false);
+    if (error) {
+      setPrivacyError(error.message);
+      return;
+    }
+    writeLocalPrivacyAck();
+    void preparePinGate(user.id);
+  }
+
   async function resetPinAndSignOut() {
     if (!supabase || !user) return;
     setBusy(true);
@@ -2954,6 +3000,16 @@ export default function Home() {
   if (!ready) return null;
 
   if (!user) return <Landing />;
+  if (privacyNeeded) {
+    return (
+      <PrivacyGate
+        busy={busy}
+        error={privacyError}
+        onAccept={acceptPrivacyPolicy}
+        onLogout={() => supabase?.auth.signOut()}
+      />
+    );
+  }
   if (pinMode !== "unlocked") {
     return (
       <PinGate

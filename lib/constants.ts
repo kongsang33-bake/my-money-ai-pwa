@@ -24,6 +24,8 @@ export const BRAND_SLOGANS = [
 // so everyone is asked to read it again before their next sign-in.
 export const PRIVACY_POLICY_VERSION = "2026-09-25";
 export const PRIVACY_ACK_STORAGE_KEY = "nubmon-privacy-ack";
+// Where the policy tells people to write to have their account deleted.
+export const PRIVACY_CONTACT_EMAIL = "kongsang33@gmail.com";
 
 export const MS_PER_DAY = 86_400_000;
 
@@ -115,6 +117,7 @@ export const TABLES = {
   aiChatMessages: "ai_chat_messages",
   budgets: "budgets",
   moneyGoals: "money_goals",
+  privacyAcknowledgements: "privacy_acknowledgements",
 } as const;
 
 // Every entries.select(...) in app/page.tsx pulls this same column list —

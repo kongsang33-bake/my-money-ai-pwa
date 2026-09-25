@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronDown, Download, KeyRound, Lock, MessageSquareText, MoreVertical, PlusSquare, Share, ShieldCheck } from "lucide-react";
-import { APP_NAME, PRIVACY_ACK_STORAGE_KEY, PRIVACY_POLICY_VERSION } from "@/lib/constants";
+import { APP_NAME } from "@/lib/constants";
+import { readLocalPrivacyAck, writeLocalPrivacyAck } from "@/lib/privacy";
 import { SignInPanel } from "@/components/auth";
 import { PrivacyPolicyContent } from "@/components/privacy";
 import { SheetClose, SheetFrame, useDismiss } from "@/components/primitives";
@@ -68,27 +69,15 @@ function detectPlatform(): Platform {
   return ios ? "ios" : "android";
 }
 
-// The acknowledgement lives in this device's storage, keyed by the policy's
-// version. Read through useSyncExternalStore so the server render (nothing
+// Before sign-in the acknowledgement can only live in this device's storage
+// (lib/privacy.ts); page.tsx copies it to the server record once signed in.
+// Read through useSyncExternalStore so the server render (nothing
 // acknowledged) and the first client render agree, and so a write here is
 // picked up without a second source of truth in state.
 const ackListeners = new Set<() => void>();
 
-function readAck() {
-  try {
-    return window.localStorage.getItem(PRIVACY_ACK_STORAGE_KEY) === PRIVACY_POLICY_VERSION;
-  } catch {
-    return false;
-  }
-}
-
 function writeAck() {
-  try {
-    window.localStorage.setItem(PRIVACY_ACK_STORAGE_KEY, PRIVACY_POLICY_VERSION);
-  } catch {
-    // Private mode or blocked storage: the acknowledgement below still holds
-    // for this visit, it just is not remembered for the next one.
-  }
+  writeLocalPrivacyAck();
   ackListeners.forEach((listener) => listener());
 }
 
@@ -100,7 +89,7 @@ function subscribeAck(listener: () => void) {
 export function Landing() {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [activeSection, setActiveSection] = useState(0);
-  const storedAck = useSyncExternalStore(subscribeAck, readAck, () => false);
+  const storedAck = useSyncExternalStore(subscribeAck, readLocalPrivacyAck, () => false);
   // Covers storage that refuses the write: acknowledged for this visit anyway.
   const [ackThisVisit, setAckThisVisit] = useState(false);
   const acknowledged = storedAck || ackThisVisit;
