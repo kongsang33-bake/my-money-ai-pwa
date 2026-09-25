@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useId, useMemo, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, CreditCard, Info, Lightbulb, Pencil, Plus, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet as WalletIcon, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, CreditCard, Info, Lightbulb, Pencil, Plus, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet as WalletIcon, WalletCards, X } from "lucide-react";
 import { BRAND_SLOGANS, DETAIL_SIMILAR_LIMIT, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
 import { formatChatTime, formatDateTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, moneySign, toMoneyAmount } from "@/lib/format";
 import { entryDisplayImpact } from "@/lib/money";
@@ -187,6 +187,7 @@ export const HeroWalletCard = memo(function HeroWalletCard({
   streak,
   onAddEntry,
   onViewDetails,
+  onOpenPocket,
 }: {
   balance: number;
   history: number[];
@@ -194,13 +195,15 @@ export const HeroWalletCard = memo(function HeroWalletCard({
   streak: number;
   onAddEntry: () => void;
   onViewDetails: () => void;
+  /** Turns the billboard over to the card pocket (components/pocket.tsx). */
+  onOpenPocket?: () => void;
 }) {
   return (
     // With no history there is no art to fill the billboard's top half, and a
     // new account opened on a tall box of empty green over "฿ 0". Bare, it
     // keeps the slogan and the figure and gives the height back to the
     // checklist underneath, which is what a new account needs to see.
-    <div className={`hero-wallet hero-${insight.tone}${history.length > 1 ? "" : " is-bare"}`}>
+    <div className={`hero-wallet hero-${insight.tone}${history.length > 1 ? "" : " is-bare"}${onOpenPocket ? " has-pocket" : ""}`}>
       <div className="billboard-art" aria-hidden="true">
         {history.length > 1 && (
           <>
@@ -210,6 +213,14 @@ export const HeroWalletCard = memo(function HeroWalletCard({
         )}
       </div>
       <BillboardSlogan />
+      {/* A button, not a tap anywhere on the billboard: the box already holds
+          three things to press, and a miss beside จดรายการ turning the card
+          over would be the commonest accident on the screen. */}
+      {onOpenPocket && (
+        <button type="button" className="pocket-icon-button billboard-flip-button" onClick={onOpenPocket} aria-label="เปิดกระเป๋าการ์ด">
+          <WalletCards size={18} strokeWidth={2.25} aria-hidden="true" />
+        </button>
+      )}
       <div className="billboard-body">
         {/* The hint is a sibling of the label, not inside it, so nothing the
             label's own styling does (letter-spacing, the brand colour) leaks

@@ -83,6 +83,12 @@
   --hero-amount: #f1f3f2;
   --hero-border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
   --hero-shadow: none;
+  /* The card pocket's codes: black on white whatever the theme, because a
+     light-on-dark QR is one many camera apps will not read. The one white
+     panel in a dark app, so it gets its own names rather than borrowing
+     --primary, which means "the button". */
+  --qr-paper: #ffffff;
+  --qr-ink: #000000;
 
   /* text on a saturated semantic-color fill (danger red, a random avatar
      chip color, …) that doesn't itself flip with theme */
@@ -1754,6 +1760,514 @@ a:focus-visible {
     left: auto;
     right: 0;
   }
+}
+
+/* -------------------------------------------------------------------------
+   The billboard's flip and its back, the card pocket (components/pocket.tsx).
+   Both faces sit in one grid cell, so the box is as tall as the taller one
+   and neither face moves the page when it turns. The turned-away face is
+   inert in the markup; here it is only hidden from sight.
+   ------------------------------------------------------------------------- */
+.billboard-flip {
+  display: grid;
+  /* minmax(0, ...): the pocket's track is four cards wide inside, and an
+     auto column would grow to fit it instead of scrolling it. */
+  grid-template-columns: minmax(0, 1fr);
+  perspective: 1600px;
+}
+
+.billboard-face {
+  grid-area: 1 / 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transition: transform var(--t-4) var(--e-in-out), opacity var(--t-4) var(--e-in-out);
+}
+
+.billboard-face.is-back {
+  transform: rotateY(-180deg);
+}
+
+.billboard-flip.is-flipped .billboard-face.is-front {
+  transform: rotateY(180deg);
+}
+
+.billboard-flip.is-flipped .billboard-face.is-back {
+  transform: rotateY(0deg);
+}
+
+/* Reduced motion: a cross-fade in place of the turn. */
+@media (prefers-reduced-motion: reduce) {
+  .billboard-face, .billboard-flip.is-flipped .billboard-face.is-front, .billboard-face.is-back {
+    transform: none;
+  }
+  .billboard-flip .billboard-face.is-back, .billboard-flip.is-flipped .billboard-face.is-front {
+    opacity: 0;
+  }
+  .billboard-flip.is-flipped .billboard-face.is-back {
+    opacity: 1;
+  }
+}
+
+/* The small square buttons in the billboard's corners, both faces. */
+.pocket-icon-button {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
+  background: var(--cta-secondary);
+  color: var(--cta-secondary-text);
+  transition: transform var(--t-press) var(--e-out);
+}
+
+.pocket-icon-button:active {
+  transform: scale(0.94);
+}
+
+.pocket-icon-button:disabled {
+  opacity: 0.35;
+}
+
+/* On the front it takes the top-right corner, and "30 วันล่าสุด" steps left
+   of it. */
+.hero-wallet > .billboard-flip-button {
+  position: absolute;
+  top: var(--s-3);
+  right: var(--s-3);
+}
+
+.hero-wallet.has-pocket .billboard-caption {
+  right: calc(var(--s-3) + 36px + var(--s-3));
+  top: calc(var(--s-3) + 11px);
+}
+
+.hero-wallet.has-pocket .billboard-slogan {
+  right: calc(34% + 36px);
+}
+
+/* The back: the same box as the front (height, corner, border), lit by the
+   current card's --hue instead of the brand's glow. */
+.pocket-face {
+  --hue: var(--accent);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: clamp(420px, 118vw, 520px);
+  padding: var(--s-3) var(--s-5) var(--s-5);
+  border-radius: var(--r-lg);
+  border: var(--hero-border);
+  background: linear-gradient(160deg, color-mix(in oklab, var(--hue) 34%, var(--bg)) 0%, color-mix(in oklab, var(--hue) 12%, var(--bg)) 55%, var(--surface) 100%);
+  color: var(--hero-text);
+  transition: background var(--t-3) var(--e-out);
+}
+
+.pocket-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.pocket-head .info-hint {
+  margin-left: 0;
+  color: var(--ink-2);
+}
+
+.pocket-head .info-hint > span {
+  text-align: left;
+}
+
+.pocket-head > b {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.pocket-count {
+  margin-right: auto;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.pocket-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+}
+
+.pocket-stage {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  margin: var(--s-3) calc(-1 * var(--s-5)) 0;
+}
+
+/* One card per screenful, native scroll-snap: a swipe is the browser's own
+   gesture, with its own momentum, not one written here. */
+.pocket-track {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.pocket-track::-webkit-scrollbar {
+  display: none;
+}
+
+.pocket-track:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+  border-radius: var(--r-md);
+}
+
+.pocket-slide {
+  flex: 0 0 100%;
+  scroll-snap-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-4);
+  padding: 0 var(--s-5);
+}
+
+.pocket-code {
+  display: grid;
+  place-items: center;
+  width: 100%;
+}
+
+.pocket-qr {
+  display: block;
+  width: min(62vw, 232px);
+  aspect-ratio: 1;
+  border-radius: var(--r-md);
+}
+
+.pocket-paper {
+  fill: var(--qr-paper);
+}
+
+.pocket-ink {
+  fill: var(--qr-ink);
+}
+
+.pocket-barcode {
+  width: min(100%, 320px);
+  margin: 0;
+  padding: var(--s-4) var(--s-4) var(--s-2);
+  border-radius: var(--r-md);
+  background: var(--qr-paper);
+  color: var(--qr-ink);
+  text-align: center;
+}
+
+.pocket-barcode svg {
+  display: block;
+  width: 100%;
+  height: 96px;
+}
+
+.pocket-barcode figcaption {
+  margin-top: var(--s-1);
+  font-size: var(--fs-body-sm);
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* An account with no QR: the number is the code, set as large as the
+   billboard's own figure. */
+.pocket-number {
+  display: grid;
+  gap: var(--s-1);
+  text-align: center;
+}
+
+.pocket-number span {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--hue);
+}
+
+.pocket-number b {
+  font-size: var(--fs-value);
+  font-weight: var(--fw-bold);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.pocket-words {
+  display: grid;
+  gap: var(--s-1);
+  text-align: center;
+}
+
+.pocket-words strong {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+}
+
+.pocket-words span {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+/* Arrows for a mouse, which cannot swipe; a finger has the swipe. */
+.pocket-arrow {
+  position: absolute;
+  top: 50%;
+  display: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-top: -18px;
+  border-radius: var(--r-full);
+  background: var(--cta-secondary);
+  color: var(--cta-secondary-text);
+}
+
+.pocket-arrow.is-prev { left: var(--s-2); }
+.pocket-arrow.is-next { right: var(--s-2); }
+
+.pocket-arrow:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pocket-arrow {
+    display: grid;
+  }
+}
+
+.pocket-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: var(--s-3) 0 var(--s-4);
+}
+
+.pocket-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--ink) 28%, transparent);
+  transition: width var(--t-2) var(--e-out), background var(--t-2) var(--e-out);
+}
+
+.pocket-dots i.is-on {
+  width: 18px;
+  background: var(--ink);
+}
+
+.pocket-face > .billboard-actions {
+  margin-top: auto;
+}
+
+.pocket-dots + .billboard-actions {
+  margin-top: 0;
+}
+
+/* The pocket's sheets */
+.pocket-share-options {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.pocket-share-options button {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 60px;
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  border: var(--card-border);
+  background: var(--surface-2);
+  color: var(--ink);
+  text-align: left;
+}
+
+.pocket-share-options button span {
+  display: grid;
+  gap: 2px;
+}
+
+.pocket-share-options b {
+  font-weight: var(--fw-semibold);
+}
+
+.pocket-share-options small {
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+}
+
+.pocket-detail-code {
+  display: grid;
+  place-items: center;
+  padding: var(--s-5);
+  border-radius: var(--r-lg);
+  background: linear-gradient(160deg, color-mix(in oklab, var(--hue) 30%, var(--bg)), var(--surface-2));
+}
+
+.pocket-detail-code .pocket-qr {
+  width: min(78vw, 320px);
+}
+
+.pocket-facts {
+  display: grid;
+  margin: var(--s-4) 0 var(--s-5);
+}
+
+.pocket-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: var(--fs-body-sm);
+}
+
+.pocket-facts dt {
+  color: var(--ink-3);
+}
+
+.pocket-facts dd {
+  margin: 0;
+  color: var(--ink);
+  font-weight: var(--fw-semibold);
+  text-align: right;
+}
+
+.pocket-fact-number {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.pocket-manage-list {
+  display: grid;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-5);
+  padding: 0;
+  list-style: none;
+}
+
+.pocket-manage-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.pocket-manage-row {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 56px;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  border: var(--card-border);
+  background: var(--surface-2);
+  color: var(--ink);
+  text-align: left;
+}
+
+.pocket-manage-words {
+  display: grid;
+  min-width: 0;
+}
+
+.pocket-manage-words b {
+  font-weight: var(--fw-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pocket-manage-words small {
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pocket-manage-list .pocket-icon-button {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.pocket-kind-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+  margin-top: 6px;
+}
+
+.pocket-kind-tiles button {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 48px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+  text-align: left;
+}
+
+.pocket-kind-tiles button.active {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.pocket-hues {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: var(--s-2);
+  margin-top: 6px;
+}
+
+.pocket-hues button {
+  aspect-ratio: 1;
+  min-width: 28px;
+  border-radius: var(--r-xs);
+  background: var(--hue);
+}
+
+.pocket-hues button.active {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.pocket-form-note {
+  margin: var(--s-1) 0 var(--s-3);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-regular);
+  color: var(--ink-3);
+}
+
+.pocket-form-error {
+  font-size: var(--fs-caption);
+  color: var(--danger);
+}
+
+.pocket-form-delete {
+  width: 100%;
+  margin-top: var(--s-2);
 }
 
 /* Home's page ground picks up the billboard's glow at the top, and the
@@ -8512,6 +9026,41 @@ body:has(.login-page) #app-splash {
 
   .billboard-cta, .billboard-cta-2 {
     padding: 0 var(--s-6);
+  }
+
+  /* The back on a desk: as short as the front's boxed head, so the code sits
+     beside its words rather than above them. */
+  .pocket-face {
+    min-height: 272px;
+    padding: var(--s-4) var(--s-7) var(--s-5);
+  }
+
+  .pocket-slide {
+    flex-direction: row;
+    justify-content: center;
+    gap: var(--s-7);
+    padding: 0 var(--s-9);
+  }
+
+  .pocket-code {
+    width: auto;
+  }
+
+  .pocket-qr {
+    width: 168px;
+  }
+
+  .pocket-words {
+    text-align: left;
+    max-width: 280px;
+  }
+
+  .pocket-barcode {
+    width: 300px;
+  }
+
+  .pocket-face > .billboard-actions {
+    justify-content: center;
   }
 
 

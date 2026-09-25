@@ -5,6 +5,7 @@
 // instead of being added here -- Tab is the main example, since only
 // app/page.tsx's own routing state needs it.
 import type { BillingIntervalUnit, EntryKind, TransactionType, WalletTag } from "./taxonomy.ts";
+import type { PocketCard } from "./pocket.ts";
 
 export type { EntryKind };
 
@@ -305,6 +306,10 @@ export type PreviewSeed = {
   // Supabase read), so the gate simply stays put -- which is all a layout or
   // an accessibility check needs.
   pinMode?: Extract<PinMode, "locked" | "setup">;
+  // The billboard's card pocket. Optional: the pocket has no table yet, so
+  // this is the only way it holds anything outside the session it was
+  // filled in.
+  pocketCards?: PocketCard[];
 };
 
 export type MoneyGoal = { id: string; name: string; target: number; saved: number; deadline: string };

@@ -125,6 +125,8 @@ import {
   CyclePaceCard,
   SuccessPulse,
 } from "@/components/home";
+import { FlipBillboard, PocketCardForm, PocketDetailSheet, PocketFace, PocketManageSheet, PocketShareSheet } from "@/components/pocket";
+import type { PocketCard } from "@/lib/pocket";
 import { HistoryFilterBar } from "@/components/history";
 import { PinGate, PrivacyGate, SecurityView } from "@/components/auth";
 import { fetchPrivacyAck, readLocalPrivacyAck, recordPrivacyAck, writeLocalPrivacyAck } from "@/lib/privacy";
@@ -181,6 +183,13 @@ const InvestmentAiSheet = dynamic(() => import("@/components/portfolio").then((m
 type Tab =
   | "home" | "add" | "history" | "debtors" | "wallets" | "recurring" | "goals" | "portfolio"
   | "budgets" | "ask" | "report" | "profile" | "security" | "more" | "upcoming";
+
+// Which of the card pocket's sheets is open, and on which card.
+type PocketSheet =
+  | { kind: "manage" }
+  | { kind: "form"; card: PocketCard | null }
+  | { kind: "detail"; card: PocketCard }
+  | { kind: "share"; card: PocketCard };
 
 // The screens listed on "อื่น ๆ". While one is open the nav keeps "อื่น ๆ"
 // selected, because that is the section the user is in and the tab that
@@ -405,6 +414,11 @@ export default function Home() {
   const [selectedDay, setSelectedDay] = useState(() => new Date().toDateString());
   const [historyFilters, setHistoryFilters] = useState<HistoryFilters>({ query: "", category: "", type: "all", minAmount: "", maxAmount: "" });
   const [budgets, setBudgets] = useState<Record<string, number>>({});
+  // The billboard's card pocket (components/pocket.tsx). MOCKUP: local state
+  // only -- there is no table behind it yet, so what is added here lasts as
+  // long as the tab does. The preview seed is what fills it.
+  const [pocketCards, setPocketCards] = useState<PocketCard[]>([]);
+  const [pocketSheet, setPocketSheet] = useState<PocketSheet | null>(null);
   const [goals, setGoals] = useState<MoneyGoal[]>([]);
   const [goalSheetOpen, setGoalSheetOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
@@ -497,6 +511,7 @@ export default function Home() {
     setGoals(seed.goals);
     setBudgets(seed.budgets);
     if (seed.drafts) setDrafts(seed.drafts);
+    if (seed.pocketCards) setPocketCards(seed.pocketCards);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
@@ -943,6 +958,7 @@ export default function Home() {
 
   const overlayOpen =
     !!editing ||
+    !!pocketSheet ||
     !!viewing ||
     !!debtorSheetMode ||
     !!walletSheetMode ||
@@ -3067,6 +3083,30 @@ export default function Home() {
   const openCardDebts = useCallback(() => { setSelectedDebtor(null); setTab("debtors"); }, []);
   const logRecurringNowHandler = useStableHandler(logRecurringNow);
   const goalSheetDismiss = useDismiss(goalSheetOpen, () => setGoalSheetOpen(false));
+  const pocketDismiss = useDismiss(!!pocketSheet, () => setPocketSheet(null));
+
+  // MOCKUP: the pocket writes to local state only (see pocketCards).
+  const savePocketCard = (card: PocketCard) => {
+    setPocketCards((cards) => (cards.some((item) => item.id === card.id) ? cards.map((item) => (item.id === card.id ? card : item)) : [...cards, card]));
+    notify({ tone: "success", title: "บันทึกการ์ดแล้ว", detail: card.label });
+    setPocketSheet({ kind: "manage" });
+  };
+  const deletePocketCard = async (card: PocketCard) => {
+    const confirmed = await requestConfirm({ title: "ลบการ์ดนี้?", detail: card.label, confirmLabel: "ลบการ์ด", tone: "danger" });
+    if (!confirmed) return;
+    setPocketCards((cards) => cards.filter((item) => item.id !== card.id));
+    pocketDismiss.requestClose();
+  };
+  const movePocketCard = (id: string, delta: -1 | 1) => {
+    setPocketCards((cards) => {
+      const from = cards.findIndex((item) => item.id === id);
+      const to = from + delta;
+      if (from < 0 || to < 0 || to >= cards.length) return cards;
+      const next = [...cards];
+      [next[from], next[to]] = [next[to], next[from]];
+      return next;
+    });
+  };
   const recapDismiss = useDismiss(recapOpen, () => setRecapOpen(false));
   const deleteAccountDismiss = useDismiss(deleteAccountOpen, () => setDeleteAccountOpen(false));
   const logoutDismiss = useDismiss<[boolean]>(logoutOpen, (confirmed) => { setLogoutOpen(false); if (confirmed) void supabase?.auth.signOut(); });
@@ -3260,13 +3300,28 @@ export default function Home() {
                   job the coral hero used to do, now carrying its own two
                   actions instead of the whole card being one tap target. */}
               <section className="wallet-grid single-wallet">
-                <HeroWalletCard
-                  balance={mainWallet}
-                  history={mainWalletHistory}
-                  insight={walletInsight}
-                  streak={streak}
-                  onAddEntry={openAddTabDefault}
-                  onViewDetails={() => setTab("wallets")}
+                <FlipBillboard
+                  front={(flip) => (
+                    <HeroWalletCard
+                      balance={mainWallet}
+                      history={mainWalletHistory}
+                      insight={walletInsight}
+                      streak={streak}
+                      onAddEntry={openAddTabDefault}
+                      onViewDetails={() => setTab("wallets")}
+                      onOpenPocket={flip}
+                    />
+                  )}
+                  back={(flip) => (
+                    <PocketFace
+                      cards={pocketCards}
+                      onFlip={flip}
+                      onManage={() => setPocketSheet({ kind: "manage" })}
+                      onAdd={() => setPocketSheet({ kind: "form", card: null })}
+                      onShare={(card) => setPocketSheet({ kind: "share", card })}
+                      onDetails={(card) => setPocketSheet({ kind: "detail", card })}
+                    />
+                  )}
                 />
               </section>
               {!wallets.length && !!entries.length && (
@@ -3806,6 +3861,44 @@ export default function Home() {
             onAnalyze={analyzeInvestmentText}
             onSave={(input) => createPendingInvestmentPurchase(input)}
             closing={investmentAiDismiss.closing}
+          />
+        )}
+        {pocketDismiss.mounted && pocketSheet?.kind === "manage" && (
+          <PocketManageSheet
+            cards={pocketCards}
+            onClose={pocketDismiss.requestClose}
+            onAdd={() => setPocketSheet({ kind: "form", card: null })}
+            onEdit={(card) => setPocketSheet({ kind: "form", card })}
+            onMove={movePocketCard}
+            closing={pocketDismiss.closing}
+          />
+        )}
+        {pocketDismiss.mounted && pocketSheet?.kind === "form" && (
+          <PocketCardForm
+            key={pocketSheet.card?.id ?? "new"}
+            card={pocketSheet.card}
+            onClose={pocketDismiss.requestClose}
+            onSave={savePocketCard}
+            onDelete={deletePocketCard}
+            closing={pocketDismiss.closing}
+          />
+        )}
+        {pocketDismiss.mounted && pocketSheet?.kind === "detail" && (
+          <PocketDetailSheet
+            card={pocketSheet.card}
+            onClose={pocketDismiss.requestClose}
+            onShare={(card) => setPocketSheet({ kind: "share", card })}
+            onEdit={(card) => setPocketSheet({ kind: "form", card })}
+            onDelete={deletePocketCard}
+            closing={pocketDismiss.closing}
+          />
+        )}
+        {pocketDismiss.mounted && pocketSheet?.kind === "share" && (
+          <PocketShareSheet
+            card={pocketSheet.card}
+            onClose={pocketDismiss.requestClose}
+            onNotify={(title, tone = "success") => notify({ tone, title })}
+            closing={pocketDismiss.closing}
           />
         )}
         {goalSheetDismiss.mounted && (

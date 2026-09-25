@@ -1,6 +1,7 @@
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import { normalizeEntry } from "../lib/money.ts";
 import { localDateInput } from "../lib/format.ts";
+import { buildPromptPayPayload } from "../lib/pocket.ts";
 import type { Draft, Entry, PreviewSeed } from "../lib/types.ts";
 
 // The seeded state every spec runs against, and the helpers for getting into
@@ -103,6 +104,15 @@ export function buildSeed(now = Date.now()): PreviewSeed {
       { id: "preview-g1", name: "เที่ยวญี่ปุ่น", target: 80000, saved: 32000, deadline: new Date(now + 120 * 86400000).toISOString().slice(0, 10) },
     ],
     budgets: { "อาหาร": 6000, "บันเทิง": 2000, "เดินทาง": 3000 },
+    // One of each kind the billboard's back can hold. The "qr" one stands in
+    // for a QR read out of a bank app's screenshot, so it is a real payment
+    // payload rather than text that only looks like one.
+    pocketCards: [
+      { id: "preview-p1", kind: "promptpay", label: "พร้อมเพย์ส่วนตัว", holder: "เบค ส.", bank: null, value: "0812345678", hue: "--cat-bills" },
+      { id: "preview-p2", kind: "qr", label: "K+ ร้านกาแฟ", holder: "ร้านบ้านเบค", bank: "กสิกรไทย", value: buildPromptPayPayload("1234567890123")!, hue: "--cat-travel" },
+      { id: "preview-p3", kind: "account", label: "บัญชีเงินเดือน", holder: "เบค ส.", bank: "ไทยพาณิชย์", value: "4071234567", hue: "--cat-goods" },
+      { id: "preview-p4", kind: "barcode", label: "The 1", holder: null, bank: "Central", value: "7001234567890123", hue: "--cat-entertainment" },
+    ],
   };
 }
 
