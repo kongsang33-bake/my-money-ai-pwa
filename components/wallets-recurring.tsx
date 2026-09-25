@@ -8,8 +8,8 @@ import { recurringTotals } from "@/lib/money";
 import { BILLING_CYCLE_PRESETS, billingIntervalUnitLabels, describeBillingCycle, walletTagHints, walletTagLabels, type BillingIntervalUnit, type WalletTag } from "@/lib/taxonomy";
 import { nameColor, recurringIconOptions } from "@/lib/category";
 import type { Debtor, Entry, RecurringExpense, Wallet, WalletDisplay } from "@/lib/types";
-import { FundingSelect, IconColorPicker, RecurringAvatarGlyph, WalletAvatarGlyph } from "@/components/shared";
-import { AmountInput, CountUpMoney, DateField, EmptyNote, InfoHint, SheetFrame, SkeletonList, StateCard, decimalInputPattern, SheetClose } from "@/components/primitives";
+import { FundingSelect, IconColorPicker, RecurringAvatarGlyph, WalletGlyph } from "@/components/shared";
+import { AmountInput, CountUpMoney, DateField, EmptyNote, IconChip, IconPattern, InfoHint, SheetFrame, SkeletonList, StateCard, decimalInputPattern, SheetClose } from "@/components/primitives";
 
 export function WalletsView({
   wallets,
@@ -103,8 +103,9 @@ export function WalletsView({
         )}
       </section>
       {/* Tiles, not rows: each wallet is a thing with its own colour, the way
-          the rails' posters are -- its --hue mixed into the ground, its icon
-          large and faint. The bar along the bottom is its share of the total. */}
+          the rails' posters are -- its --hue mixed into the ground and its
+          icon printed across it (IconPattern). The bar along the bottom is its
+          share of the total. */}
       <div className="wallet-tiles">
         {wallets.map((wallet) => {
           const share = total > 0 ? Math.max(0, Math.min(100, (wallet.display_balance / total) * 100)) : 0;
@@ -115,6 +116,7 @@ export function WalletsView({
               key={wallet.id}
               style={{ "--hue": wallet.icon_color ?? nameColor(wallet.name) } as React.CSSProperties}
             >
+              <IconPattern renderGlyph={(size) => <WalletGlyph wallet={wallet} size={size} />} />
               {wallet.is_default && <span className="poster-ribbon">กระเป๋าหลัก</span>}
               <button
                 className="wallet-tile-main"
@@ -124,9 +126,7 @@ export function WalletsView({
                   requestAnimationFrame(() => statementRef.current?.scrollIntoView({ block: "nearest" }));
                 }}
               >
-                <span className="wallet-tile-glyph" aria-hidden="true">
-                  <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} size={64} />
-                </span>
+                <IconChip><WalletGlyph wallet={wallet} size={18} /></IconChip>
                 <small>{walletTagLabels[wallet.tag]}</small>
                 <span className="wallet-tile-name">{wallet.name}</span>
                 <strong>{moneySign}{formatMoney(wallet.display_balance)}</strong>

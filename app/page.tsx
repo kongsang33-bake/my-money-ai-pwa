@@ -103,7 +103,7 @@ import {
 import { WalletAvatarGlyph } from "@/components/shared";
 import { BottomNav } from "@/components/bottom-nav";
 import { UpcomingView } from "@/components/upcoming";
-import { ConfirmDialog, CountUpMoney, ElapsedSeconds, ErrorActions, Rail, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useStableHandler } from "@/components/primitives";
+import { ConfirmDialog, CountUpMoney, ElapsedSeconds, EmptyNote, ErrorActions, PullRefreshIndicator, Rail, usePullToRefresh, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useStableHandler } from "@/components/primitives";
 import { AiComposer, DraftImpact, DraftRow, EditSheet, EntryList, ManualEntryForm, QuickAddStrip } from "@/components/add";
 import {
   CalendarHeatmap,
@@ -118,6 +118,7 @@ import {
   TopCategoriesRail,
   HomeInsightGrid,
   HomeStartChecklist,
+  AskPrompt,
   MissingWalletNotice,
   CyclePaceCard,
   SuccessPulse,
@@ -402,6 +403,9 @@ export default function Home() {
   const [pinMode, setPinMode] = useState<PinMode>("checking");
   const [pinError, setPinError] = useState("");
   const scrollRootRef = useRef<HTMLElement | null>(null);
+  // The same element as state, for the one consumer that has to know when it
+  // appears (usePullToRefresh attaches its listeners to it).
+  const [scrollRootEl, setScrollRootEl] = useState<HTMLElement | null>(null);
   const backgroundedAtRef = useRef<number | null>(null);
   const authUserIdRef = useRef<string | null | undefined>(undefined);
   // The user whose data has finished loading at least once -- see loadUserData
@@ -802,6 +806,14 @@ export default function Home() {
     }
   }, [migrateLocalDataIfNeeded, loadDebtors, loadEntries, loadWallets, loadRecurringExpenses, loadInvestments, loadInvestmentPrices, loadBudgets, loadGoals]);
 
+  // Pull-to-refresh's reload: the same reads as loadUserData, but without
+  // dataLoading, which swaps every screen for its skeleton -- a pull should
+  // update the numbers in place, not blank the page the user is looking at.
+  const refreshUserData = useCallback(async () => {
+    if (!user) return;
+    await Promise.all([loadEntries(), loadDebtors(), loadWallets(), loadRecurringExpenses(), loadInvestments(), loadInvestmentPrices(), loadBudgets(), loadGoals()]);
+  }, [user, loadDebtors, loadEntries, loadWallets, loadRecurringExpenses, loadInvestments, loadInvestmentPrices, loadBudgets, loadGoals]);
+
   const clearPrivateState = useCallback(() => {
     setEntries([]);
     setDebtors([]);
@@ -902,6 +914,10 @@ export default function Home() {
     goalSheetOpen ||
     recapOpen ||
     logoutOpen;
+
+  // Ask AI fills the viewport with its own chat scroller, so a pull there
+  // belongs to the conversation, not to the page.
+  const pullRefresh = usePullToRefresh(scrollRootEl, refreshUserData, !overlayOpen && !dataLoading && tab !== "ask");
   // Scroll-lock behind an open sheet. This has to target .phone, not <body>:
   // .phone is the app's real scroll container (height: 100dvh; overflow-y:
   // auto), so the document itself never scrolls -- the old body-level
@@ -957,6 +973,7 @@ export default function Home() {
   // mounts only after auth and the PIN gate resolve.
   const attachScrollRoot = useCallback((node: HTMLElement | null) => {
     scrollRootRef.current = node;
+    setScrollRootEl(node);
     if (!node) return;
     const update = () => node.toggleAttribute("data-scrolled", node.scrollTop > 8);
     update();
@@ -964,6 +981,7 @@ export default function Home() {
     return () => {
       node.removeEventListener("scroll", update);
       if (scrollRootRef.current === node) scrollRootRef.current = null;
+      setScrollRootEl((current) => (current === node ? null : current));
     };
   }, []);
 
@@ -2952,6 +2970,7 @@ export default function Home() {
 
   return (
     <main className="shell">
+      <PullRefreshIndicator pull={pullRefresh.pull} refreshing={pullRefresh.refreshing} />
       <section className={`phone tab-${tab}`} ref={attachScrollRoot}>
         {/* The topbar is a floating pill, so the page scrolls through the gap
             above and beside it -- a hero balance sliding past the header used
@@ -3031,6 +3050,7 @@ export default function Home() {
                   for a rail (components/home.tsx); the stat and cash-flow
                   cards are still the older wide cards at a rail width. */}
               <QuickAddStrip shortcuts={homeShortcuts} onSelect={addFromShortcut} onMore={openAddTabDefault} />
+              {hasEnoughForInsights && <AskPrompt onOpen={() => setTab("ask")} />}
               {(dueSoonRecurring.length > 0 || unpaidCards.length > 0) && (
                 <DueSoonRail
                   items={dueSoonRecurring}
@@ -3134,6 +3154,7 @@ export default function Home() {
                   initialText={composerInitialText}
                   showPrimer={!entries.length}
                   noWallet={!wallets.length}
+                  onCreateWallet={openWalletCreateSheet}
                   entryDate={entryDate}
                   maxDate={todayDateInput()}
                   onChangeEntryDate={setEntryDate}
@@ -3233,31 +3254,44 @@ export default function Home() {
               <div>
                 <h2>รายการทั้งหมด</h2>
               </div>
-              <button className="header-add-button" onClick={() => setRecapOpen(true)}>สรุปเดือนนี้</button>
+              {!!entries.length && <button className="header-add-button" onClick={() => setRecapOpen(true)}>สรุปเดือนนี้</button>}
             </div>
-            <HistoryFilterBar
-              filters={historyFilters}
-              onChange={setHistoryFilters}
-              onClear={() => setHistoryFilters({ query: "", category: "", type: "all", minAmount: "", maxAmount: "" })}
-            />
-            {searchActive ? (
-              <>
-                <p className="history-search-summary">
-                  {searchResults.length >= SEARCH_RESULT_LIMIT
-                    ? `แสดง ${SEARCH_RESULT_LIMIT} รายการแรกจากทุกเดือน · ลองใส่ตัวกรองเพิ่มเพื่อจำกัดผลลัพธ์`
-                    : `พบ ${searchResults.length} รายการจากทุกเดือน`}
-                </p>
-                <EntryList entries={searchResults} onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
-              </>
+            {/* An account with nothing in it has nothing to search, filter,
+                put on a calendar or sum up -- so it gets none of that, only
+                what this tab will hold and the way to put something in it.
+                It used to open on a full month of blank calendar squares with
+                the empty note underneath. */}
+            {!dataLoading && !entries.length ? (
+              <EmptyNote glyph="▣" action={addWithAiAction}>
+                ยังไม่มีรายการ · ทุกอย่างที่จดจะเรียงเป็นรายวันที่นี่ ค้นหาและกรองได้
+              </EmptyNote>
             ) : (
               <>
-                {/* History is where an entry is found: the calendar (which
-                    carries the month switcher) and then the whole month as one
-                    statement, newest day first, each day with its own totals.
-                    A tap on a day jumps the list to it rather than hiding the
-                    rest; the month's charts live in "สรุปเดือนนี้". */}
-                <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedMonth={selectedMonth} onChangeMonth={selectHistoryMonth} selectedDay={selectedDay} defaultDay={defaultHistoryDay} onSelectDay={selectHistoryDay} />
-                <EntryList entries={monthlyEntries} selectedDay={selectedDay} dayTotals onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+                <HistoryFilterBar
+                  filters={historyFilters}
+                  onChange={setHistoryFilters}
+                  onClear={() => setHistoryFilters({ query: "", category: "", type: "all", minAmount: "", maxAmount: "" })}
+                />
+                {searchActive ? (
+                  <>
+                    <p className="history-search-summary">
+                      {searchResults.length >= SEARCH_RESULT_LIMIT
+                        ? `แสดง ${SEARCH_RESULT_LIMIT} รายการแรกจากทุกเดือน · ลองใส่ตัวกรองเพิ่มเพื่อจำกัดผลลัพธ์`
+                        : `พบ ${searchResults.length} รายการจากทุกเดือน`}
+                    </p>
+                    <EntryList entries={searchResults} onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+                  </>
+                ) : (
+                  <>
+                    {/* History is where an entry is found: the calendar (which
+                        carries the month switcher) and then the whole month as one
+                        statement, newest day first, each day with its own totals.
+                        A tap on a day jumps the list to it rather than hiding the
+                        rest; the month's charts live in "สรุปเดือนนี้". */}
+                    <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedMonth={selectedMonth} onChangeMonth={selectHistoryMonth} selectedDay={selectedDay} defaultDay={defaultHistoryDay} onSelectDay={selectHistoryDay} />
+                    <EntryList entries={monthlyEntries} selectedDay={selectedDay} dayTotals onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+                  </>
+                )}
               </>
             )}
           </div>
@@ -3303,6 +3337,7 @@ export default function Home() {
             budgets={budgetWatch}
             wallets={wallets}
             windowDays={UPCOMING_WINDOW_DAYS}
+            billCount={recurringExpenses.length}
             onLogNow={logRecurringNowHandler}
             onManageBills={openRecurringTab}
             onOpenDebts={openCardDebts}
@@ -3399,7 +3434,6 @@ export default function Home() {
             button in the far corner. */}
         {tab === "more" && (
           <MoreView
-            onBack={() => setTab("home")}
             displayName={displayName}
             displayIcon={displayIcon}
             displayIconImage={displayIconImage}

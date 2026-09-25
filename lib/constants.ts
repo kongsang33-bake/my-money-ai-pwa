@@ -277,3 +277,12 @@ export const SAVE_TIMEOUT_MS = 15_000;
 // before the row decides the gesture is a swipe rather than a scroll or a tap.
 export const ENTRY_SWIPE_ACTIONS_WIDTH = 152;
 export const ENTRY_SWIPE_SLOP = 8;
+
+// Pull-to-refresh (usePullToRefresh, components/primitives.tsx). How far the
+// finger has to travel, after the page's own resistance, before letting go
+// refreshes; how far the indicator can be dragged at most; and the shortest
+// time the spinner shows, so a fast network does not read as nothing having
+// happened.
+export const PULL_REFRESH_THRESHOLD = 64;
+export const PULL_REFRESH_MAX = 96;
+export const PULL_REFRESH_MIN_MS = 600;

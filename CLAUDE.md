@@ -49,10 +49,12 @@ colour handed in as `--hue` — a `--cat-*` slot, or a colour the user picked
 or an emoji to fill that slot. A poster's art is the figure it is about, set
 large (`hero`: days until a bill, a card's minimum, a category's share of the
 cycle's spending), over its own icon printed small as a repeating pattern
-(`PosterPattern`) that fades out before the words, with the icon itself in
-the same tinted square จดเร็ว uses. A lucide icon is never drawn larger than
-it is meant to be read: blown up to most of the poster and cropped, it read
-as clip-art. How wide
+(`IconPattern`) that fades out before the words, with the icon itself in
+the same tinted square จดเร็ว uses (`IconChip`). Every card without a picture
+draws its art that way -- posters, goal/budget and "เพิ่งจด" tiles, the
+upcoming timeline's rows, the wallet tiles, the entry sheet's header -- and
+a lucide icon is never drawn larger than it is meant to be read: blown up to
+most of a card and cropped, it read as clip-art. How wide
 items are is the rail's `size` prop (`.rail.is-*`), never the card's. The
 "สุขภาพการเงิน" stat tiles (`HomeInsightGrid`) are one quiet shape — colour
 lives in the figure and a thin `StatMeter` along the bottom, the same 3px bar
@@ -84,7 +86,9 @@ Wallets moved off the nav to make room: it is the first tile under "อื่น
 (`MORE_SECTION_TABS`, so it has a back button and the nav shows "อื่น ๆ"),
 still parked like Home and History, still one tap from Home's billboard and
 wallet rail. The e2e fixture's `navigate(page, "wallets")` goes through that
-tile. The nav's fifth slot is **"ของฉัน"** (`MoreView`, still the `more` tab):
+tile. The nav's fifth slot is **"ของฉัน"** (`MoreView`, still the `more` tab,
+with no back chevron, since it is a tab like History and not a screen drilled
+into):
 you at the top as one compact row (`.me-head`, the only way into the
 profile form -- it was a large centred portrait plus a second "บัญชีและโปรไฟล์"
 row, three doors into one screen counting the topbar, and the portrait pushed
@@ -263,6 +267,14 @@ the product name -- leave them.
   overlay layer. Don't reintroduce a drawer to hold a setting — a new one
   belongs on the account screen, or under "ของฉัน" (formerly "อื่น ๆ") if it
   is about money rather than about the account.
+- **Pull down to refresh is the app's own** (`usePullToRefresh`,
+  components/primitives.tsx). The document never scrolls -- `.phone` does --
+  so neither iOS nor Android offers theirs. It listens on `.phone` with
+  passive touch listeners, counts only from the very top and only a mostly
+  vertical drag, and reloads through `refreshUserData`, which is
+  `loadUserData` without `dataLoading`: a pull updates the numbers in place
+  instead of swapping the screen for skeletons. It is off while a sheet is
+  open and on Ask AI, whose chat has its own scroller.
 - **The bottom nav is pinned to the viewport below 900px, at every width.**
   It is rendered inside `.phone`, which is the scroll container, so with
   `position: absolute` it scrolls away with the content — which it did from

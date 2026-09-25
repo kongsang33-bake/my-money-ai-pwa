@@ -5,7 +5,7 @@ import { ArrowDown, ArrowLeftRight, ArrowUp, ChevronDown, ImagePlus, Lightbulb, 
 import { reviewDraft } from "@/lib/draft-review";
 import { CATEGORY_DOT_TINT_ALPHA, ENTRY_SWIPE_ACTIONS_WIDTH, ENTRY_SWIPE_SLOP, MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE } from "@/lib/constants";
 import { compressSlipImage } from "@/lib/image";
-import { formatDateTime, formatMoney, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
+import { formatMoney, formatTime, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
 import { dayLabel, todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
 import { CARD_FUNDABLE_TYPES, SHARED_EXPENSE_TYPES, defaultWalletId, draftTotals, draftSplitPins, entryDisplayImpact, isFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, retypedTo, splitDebtorNames, splitPinMismatch, splitSharesBetween, unnamedDebtor } from "@/lib/money";
 import { DEBT_TYPES, TYPES_USER_OWES, isFormOnlyDerivedType, transactionKind, transactionTypeLabels, transactionTypeOptions, type TransactionType } from "@/lib/taxonomy";
@@ -34,6 +34,7 @@ export function AiComposer({
   initialText = "",
   showPrimer = false,
   noWallet = false,
+  onCreateWallet,
   entryDate,
   maxDate,
   onChangeEntryDate,
@@ -57,6 +58,7 @@ export function AiComposer({
   // account has no entries yet, so it teaches once instead of nagging.
   showPrimer?: boolean;
   noWallet?: boolean;
+  onCreateWallet?: () => void;
   entryDate: string;
   maxDate: string;
   onChangeEntryDate: (value: string) => void;
@@ -113,9 +115,10 @@ export function AiComposer({
         </p>
       )}
       {noWallet && (
-        <p className="composer-primer warn">
-          ยังไม่มีกระเป๋าเงิน — จดได้ตามปกติ แต่ยอดเงินบนหน้าแรกจะยังไม่ขยับจนกว่าจะสร้างกระเป๋า
-        </p>
+        <div className="composer-wallet-note">
+          <span>จดได้เลย แต่ยอดเงินจะเริ่มนับเมื่อมีกระเป๋า</span>
+          {onCreateWallet && <button type="button" onClick={onCreateWallet}>สร้างกระเป๋า</button>}
+        </div>
       )}
 
       <div className="ai-suggestions">
@@ -651,7 +654,10 @@ export const EntryList = memo(function EntryList({
                   <div>
                     <b>{entry.title}</b>
                     <small>
-                      {transactionTypeLabels[entry.transaction_type]} · {entry.category} · {formatDateTime(entry.occurred_at)}
+                      {/* Time only: every row sits under its day's heading
+                          (groupEntriesByDay), and the full date repeated on
+                          each one pushed the line past its width. */}
+                      {transactionTypeLabels[entry.transaction_type]} · {entry.category} · {formatTime(entry.occurred_at)}
                       {entry.debt_impact !== 0 ? ` · ${entry.debtor_name}` : ""}
                     </small>
                     {entry.note && <small className="entry-note" title={entry.note}>{entry.note}</small>}

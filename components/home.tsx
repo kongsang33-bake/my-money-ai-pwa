@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useId, useMemo, useState } from "react";
-import { Check, ChevronLeft, CreditCard, Info, Pencil, Plus, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet as WalletIcon, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, CreditCard, Info, Lightbulb, Pencil, Plus, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet as WalletIcon, X } from "lucide-react";
 import { BRAND_SLOGANS, DETAIL_SIMILAR_LIMIT, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
 import { formatChatTime, formatDateTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, moneySign, toMoneyAmount } from "@/lib/format";
 import { entryDisplayImpact } from "@/lib/money";
@@ -11,7 +11,7 @@ import { transactionTypeLabels } from "@/lib/taxonomy";
 import { categoryColor, nameColor } from "@/lib/category";
 import type { Entry, MoneyGoal, NetWorthDebtFormula, RecurringExpense, Wallet } from "@/lib/types";
 import { CategoryIcon, RecurringAvatarGlyph } from "@/components/shared";
-import { CountUpMoney, DateField, EmptyNote, InfoHint, MonthField, Rail, SheetFrame, SkeletonList, decimalInputPattern, SheetClose } from "@/components/primitives";
+import { CountUpMoney, DateField, EmptyNote, IconChip, IconPattern, InfoHint, MonthField, Rail, SheetFrame, SkeletonList, decimalInputPattern, SheetClose } from "@/components/primitives";
 
 export const CalendarHeatmap = memo(function CalendarHeatmap({
   start,
@@ -196,7 +196,11 @@ export const HeroWalletCard = memo(function HeroWalletCard({
   onViewDetails: () => void;
 }) {
   return (
-    <div className={`hero-wallet hero-${insight.tone}`}>
+    // With no history there is no art to fill the billboard's top half, and a
+    // new account opened on a tall box of empty green over "฿ 0". Bare, it
+    // keeps the slogan and the figure and gives the height back to the
+    // checklist underneath, which is what a new account needs to see.
+    <div className={`hero-wallet hero-${insight.tone}${history.length > 1 ? "" : " is-bare"}`}>
       <div className="billboard-art" aria-hidden="true">
         {history.length > 1 && (
           <>
@@ -335,7 +339,7 @@ export const HomeInsightGrid = memo(function HomeInsightGrid({
  * from. There are no pictures in a money app, so the "key art" is two things:
  * the figure the poster is about, set large (`hero` -- days until a bill, a
  * card's minimum, a category's share), and the item's own icon printed small
- * and repeated across its colour as a pattern (PosterPattern).
+ * and repeated across its colour as a pattern (IconPattern).
  *
  * The icon used to be the art on its own, one lucide glyph blown up to most of
  * the poster and cropped off the edge. Those glyphs are drawn for 16-24px: at
@@ -377,8 +381,8 @@ function Poster({
 }) {
   const content = (
     <>
-      <PosterPattern renderGlyph={renderGlyph} />
-      <span className="poster-chip" aria-hidden="true">{renderGlyph(18)}</span>
+      <IconPattern renderGlyph={renderGlyph} />
+      <IconChip>{renderGlyph(18)}</IconChip>
       {hero && (
         <span className={`poster-hero is-${hero.size ?? "display"}${hero.warn ? " warn" : ""}`}>
           <b>{hero.value}</b>
@@ -400,41 +404,6 @@ function Poster({
     : <div className={`poster ${className}`} style={style}>{content}</div>;
 }
 
-// The pattern's repeat, in px: two icons per tile on a diagonal, so the rows
-// interlock like a printed wrapper instead of lining up as a grid.
-const POSTER_PATTERN_TILE = 56;
-const POSTER_PATTERN_ICON = 18;
-
-/**
- * The poster's icon, printed small and repeated across its ground. An SVG
- * <pattern> rather than a grid of elements, so a rail of ten posters is ten
- * small SVGs and not two hundred. The icon is rendered at lucide's own 24px
- * and scaled down into each slot, which also thins its stroke to roughly
- * 1.7px -- a pattern is texture, and the full-weight line read as clutter.
- * How strongly it shows, and where it fades out so the words stay readable,
- * is .poster-pattern's business.
- */
-function PosterPattern({ renderGlyph }: { renderGlyph: (size: number) => React.ReactNode }) {
-  // useId's characters are not all valid in a url(#...) reference.
-  const id = `poster-pattern-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
-  const slot = (offset: number) => (
-    <svg x={offset} y={offset} width={POSTER_PATTERN_ICON} height={POSTER_PATTERN_ICON} viewBox="0 0 24 24" overflow="visible">
-      {renderGlyph(24)}
-    </svg>
-  );
-  return (
-    <svg className="poster-pattern" aria-hidden="true" focusable="false">
-      <defs>
-        <pattern id={id} width={POSTER_PATTERN_TILE} height={POSTER_PATTERN_TILE} patternUnits="userSpaceOnUse">
-          {slot(6)}
-          {slot(6 + POSTER_PATTERN_TILE / 2)}
-        </pattern>
-      </defs>
-      <rect width="100%" height="100%" fill={`url(#${id})`} />
-    </svg>
-  );
-}
-
 /**
  * A 16:9 tile with a progress bar under its art -- the mock's "continue
  * watching" row, used for anything with a way still to go: a goal, a budget.
@@ -443,7 +412,7 @@ function PosterPattern({ renderGlyph }: { renderGlyph: (size: number) => React.R
  */
 function ProgressTile({
   hue,
-  glyph,
+  renderGlyph,
   title,
   percent,
   over = false,
@@ -453,7 +422,7 @@ function ProgressTile({
   className = "",
 }: {
   hue: string;
-  glyph: React.ReactNode;
+  renderGlyph: (size: number) => React.ReactNode;
   title: string;
   percent: number;
   over?: boolean;
@@ -465,7 +434,8 @@ function ProgressTile({
   return (
     <button className={`tile ${className}`} style={{ "--hue": hue } as React.CSSProperties} onClick={onClick}>
       <span className="tile-art">
-        <span className="tile-glyph" aria-hidden="true">{glyph}</span>
+        <IconPattern renderGlyph={renderGlyph} />
+        <IconChip>{renderGlyph(18)}</IconChip>
         <span className="tile-title">{title}</span>
       </span>
       <span className={`tile-bar${over ? " over" : ""}`} aria-hidden="true">
@@ -560,7 +530,7 @@ export const GoalsBudgetsRail = memo(function GoalsBudgetsRail({
           key={goal.id}
           className="goal-tile"
           hue="var(--accent)"
-          glyph={<Target size={40} strokeWidth={2} />}
+          renderGlyph={(size) => <Target size={size} strokeWidth={2.25} />}
           title={goal.name}
           percent={goalProgress(goal)}
           meta="เป้าหมาย"
@@ -575,7 +545,7 @@ export const GoalsBudgetsRail = memo(function GoalsBudgetsRail({
             key={item.category}
             className="budget-tile"
             hue={categoryColor(item.category)}
-            glyph={<CategoryIcon category={item.category} size={40} />}
+            renderGlyph={(size) => <CategoryIcon category={item.category} size={size} />}
             title={`งบ${item.category}`}
             percent={item.percent}
             over={item.percent > 100}
@@ -652,7 +622,8 @@ export const RecentRail = memo(function RecentRail({
         return (
           <button className="recent-tile" key={entry.id} style={{ "--hue": categoryColor(entry.category) } as React.CSSProperties} onClick={() => onOpen(entry)}>
             <span className="tile-art">
-              <span className="tile-glyph" aria-hidden="true"><CategoryIcon category={entry.category} size={40} /></span>
+              <IconPattern renderGlyph={(size) => <CategoryIcon category={entry.category} size={size} />} />
+              <IconChip><CategoryIcon category={entry.category} size={18} /></IconChip>
             </span>
             <span className="recent-body">
               <b>{entry.title}</b>
@@ -858,8 +829,8 @@ export const CyclePaceCard = memo(function CyclePaceCard({ pace }: { pace: Cycle
 
 /**
  * What a new account sees where a seasoned one sees its numbers: the four
- * things that still need doing, in order, with the next one as the only
- * button that looks like a button.
+ * things that still need doing, in order, with the next one's button as the
+ * only white one.
  *
  * It replaced FirstRunHomeState, which offered the same three jobs as three
  * equal buttons at the very bottom of Home -- under every analysis card, so
@@ -895,25 +866,49 @@ export const HomeStartChecklist = memo(function HomeStartChecklist({
       <div className="start-checklist-progress" role="progressbar" aria-valuenow={done} aria-valuemin={0} aria-valuemax={steps.length}>
         <i style={{ width: `${(done / steps.length) * 100}%` }} />
       </div>
+      {/* Numbered, because the order is the point: a wallet before the first
+          entry, so the entry has somewhere to count. Every step not yet done
+          has its button in its own row; the next one's is the white primary,
+          the rest are quiet tiles. It used to put the next step's button at
+          the card's foot instead, which left that one row the only one with
+          nothing beside it. */}
       <ol className="start-checklist-steps">
-        {steps.map((step) => (
-          <li key={step.key} className={step.done ? "done" : ""}>
-            <span className="start-checklist-mark" aria-hidden="true">{step.done ? "✓" : "○"}</span>
+        {steps.map((step, index) => (
+          <li key={step.key} className={step.done ? "done" : step.key === next?.key ? "is-next" : ""}>
+            <span className="start-checklist-mark" aria-hidden="true">{step.done ? "✓" : index + 1}</span>
             <span>
               <b>{step.label}</b>
               <small>{step.detail}</small>
             </span>
-            {!step.done && step.key !== next?.key && (
-              <button className="text-button" onClick={() => onStep(step.key)}>{step.action}</button>
+            {!step.done && (
+              <button className={step.key === next?.key ? "is-next" : ""} onClick={() => onStep(step.key)}>{step.action}</button>
             )}
           </li>
         ))}
       </ol>
-      {next && <button className="save" onClick={() => onStep(next.key)}>{next.action}</button>}
       {waitingForInsights && (
         <p className="start-checklist-note">จดสัก 3 รายการ แล้วการ์ดวิเคราะห์ (อัตราเงินเหลือ ภาระหนี้ กราฟใช้จ่าย) จะขึ้นให้เอง</p>
       )}
     </section>
+  );
+});
+
+/**
+ * The way into "ถาม AI" from Home. Asking about your own money is one of the
+ * things this app does that a spreadsheet cannot, and it was reachable only
+ * as the seventh tile under "ของฉัน", where a new user would never look.
+ * Shown once there is enough history for an answer to say something.
+ */
+export const AskPrompt = memo(function AskPrompt({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button className="ask-prompt" style={{ "--hue": "var(--accent)" } as React.CSSProperties} onClick={onOpen}>
+      <IconChip><Lightbulb size={18} strokeWidth={2.25} /></IconChip>
+      <span>
+        <b>ถาม AI เรื่องเงินของคุณ</b>
+        <small>เช่น เดือนนี้ใช้อะไรเยอะสุด หรือเหลือพอถึงสิ้นเดือนไหม</small>
+      </span>
+      <ChevronRight size={18} strokeWidth={2.25} aria-hidden="true" />
+    </button>
   );
 });
 
@@ -987,7 +982,8 @@ export function EntryDetailSheet({
   return (
     <SheetFrame onClose={onClose} className="entry-detail-sheet" closing={closing}>
       <div className="detail-hero" style={{ "--hue": hue } as React.CSSProperties} aria-hidden="true">
-        <span className="detail-glyph"><CategoryIcon category={entry.category} size={120} /></span>
+        <IconPattern renderGlyph={(size) => <CategoryIcon category={entry.category} size={size} />} />
+        <IconChip><CategoryIcon category={entry.category} size={18} /></IconChip>
       </div>
       <button className="detail-close" onClick={onClose} aria-label="ปิด">
         <X size={20} strokeWidth={2.25} aria-hidden="true" />

@@ -26,7 +26,7 @@ import {
   Wallet as WalletIcon,
   type LucideIcon,
 } from "lucide-react";
-import { CATEGORIES } from "./taxonomy.ts";
+import { CATEGORIES, type WalletTag } from "./taxonomy.ts";
 
 export const categories: string[] = [...CATEGORIES];
 
@@ -85,6 +85,14 @@ export const walletIconOptions: { key: string; label: string; Icon: LucideIcon }
   { key: "more-horizontal", label: "อื่น ๆ", Icon: MoreHorizontal },
 ];
 export const walletIconMap: Record<string, LucideIcon> = Object.fromEntries(walletIconOptions.map((option) => [option.key, option.Icon]));
+
+// What a wallet shows where a picture has to be an icon -- the printed
+// pattern on its tile -- when its owner never picked one. The avatar can fall
+// back to the name's first letter; a pattern cannot, since it repeats an SVG.
+const walletTagIcon: Record<WalletTag, LucideIcon> = { cash: Banknote, savings: PiggyBank, petty: WalletIcon, other: WalletIcon };
+export function walletIcon(wallet: { icon: string | null; tag: WalletTag }): LucideIcon {
+  return (wallet.icon && walletIconMap[wallet.icon]) || walletTagIcon[wallet.tag] || WalletIcon;
+}
 
 export const recurringIconOptions: { key: string; label: string; Icon: LucideIcon }[] = [
   { key: "tv", label: "สตรีมมิง", Icon: Tv },

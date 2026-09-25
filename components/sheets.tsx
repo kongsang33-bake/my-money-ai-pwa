@@ -7,7 +7,6 @@ import {
   ArrowUp,
   Bell,
   Check,
-  ChevronLeft,
   ChevronRight,
   Copy,
   Download,
@@ -352,7 +351,6 @@ export function ReportSummaryTiles({ income, outflow, balance, count }: { income
  * other tab in the nav is undone by tapping the next one.
  */
 export function MoreView({
-  onBack,
   displayName,
   displayIcon,
   displayIconImage,
@@ -378,7 +376,6 @@ export function MoreView({
   portfolioTotal,
   budgetTotal,
 }: {
-  onBack: () => void;
   displayName: string;
   displayIcon: string;
   displayIconImage: string;
@@ -415,8 +412,10 @@ export function MoreView({
           poster -- it used to be a large centred portrait plus a second
           "บัญชีและโปรไฟล์" row further down, three doors into one screen, and
           the portrait pushed the money tools below the first screenful. */}
+      {/* No back chevron, for the reason History has none: this is a tab of
+          the bottom nav, a peer of Home, not a screen drilled into. It had
+          one that went to Home, which the nav's first tab already is. */}
       <div className="add-title">
-        <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
         <div>
           <h2>ของฉัน</h2>
         </div>

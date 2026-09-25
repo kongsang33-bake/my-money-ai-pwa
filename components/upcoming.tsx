@@ -8,7 +8,7 @@ import { describeBillingCycle } from "@/lib/taxonomy";
 import { categoryColor, nameColor } from "@/lib/category";
 import type { RecurringExpense, Wallet } from "@/lib/types";
 import { CategoryIcon, RecurringAvatarGlyph } from "@/components/shared";
-import { EmptyNote } from "@/components/primitives";
+import { EmptyNote, IconChip, IconPattern } from "@/components/primitives";
 import { goalProgress } from "@/components/home";
 
 type Filter = "all" | "bills" | "debts" | "goals";
@@ -35,6 +35,7 @@ export const UpcomingView = memo(function UpcomingView({
   budgets,
   wallets,
   windowDays,
+  billCount,
   onLogNow,
   onManageBills,
   onOpenDebts,
@@ -46,6 +47,8 @@ export const UpcomingView = memo(function UpcomingView({
   budgets: BudgetWatch[];
   wallets: Wallet[];
   windowDays: number;
+  /** Every recurring bill the account has, due soon or not -- zero means nobody has set one up yet. */
+  billCount: number;
   onLogNow: (item: RecurringExpense, billingDate: Date) => void;
   onManageBills: () => void;
   onOpenDebts: () => void;
@@ -79,15 +82,31 @@ export const UpcomingView = memo(function UpcomingView({
       </div>
 
       {/* Only the kinds that have something in them get a chip: a filter that
-          can only ever show an empty list is a dead end. */}
-      <div className="upcoming-chips" role="group" aria-label="กรองรายการ">
-        <button className={filter === "all" ? "active" : ""} aria-pressed={filter === "all"} onClick={() => setFilter("all")}>ทั้งหมด</button>
-        {chips.filter((chip) => chip.count > 0).map((chip) => (
-          <button key={chip.key} className={filter === chip.key ? "active" : ""} aria-pressed={filter === chip.key} onClick={() => setFilter(chip.key)}>
-            {chip.label}
-          </button>
-        ))}
-      </div>
+          can only ever show an empty list is a dead end -- and "ทั้งหมด" on
+          its own filters nothing, so with no other chip there is no row. */}
+      {chips.some((chip) => chip.count > 0) && (
+        <div className="upcoming-chips" role="group" aria-label="กรองรายการ">
+          <button className={filter === "all" ? "active" : ""} aria-pressed={filter === "all"} onClick={() => setFilter("all")}>ทั้งหมด</button>
+          {chips.filter((chip) => chip.count > 0).map((chip) => (
+            <button key={chip.key} className={filter === chip.key ? "active" : ""} aria-pressed={filter === chip.key} onClick={() => setFilter(chip.key)}>
+              {chip.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* A new account's timeline holds nothing but the next cycle, which
+          says nothing about what this tab is for. The bills are what fill
+          it, so it asks for them, the one thing it cannot find out itself. */}
+      {billCount === 0 && (
+        <section className="upcoming-starter">
+          <div>
+            <b>ให้แอปเตือนก่อนถึงวันจ่าย</b>
+            <small>เพิ่มบิลที่จ่ายเป็นรอบ เช่น ค่าเน็ต ค่าโทรศัพท์ หรือ Netflix แล้วจะขึ้นที่นี่ก่อนถึงวันตัดเงิน</small>
+          </div>
+          <button type="button" onClick={onManageBills}>เพิ่มบิลประจำ</button>
+        </section>
+      )}
 
       {nowCount > 0 && (
         <section className="upcoming-group" aria-label="ต้องจัดการตอนนี้">
@@ -95,7 +114,7 @@ export const UpcomingView = memo(function UpcomingView({
             <UpcomingRow
               key={`debt:${debt.name}`}
               hue={nameColor(debt.name)}
-              glyph={<CreditCard size={40} strokeWidth={2} />}
+              renderGlyph={(size) => <CreditCard size={size} strokeWidth={2.25} />}
               name={debt.name}
               kicker="ยังไม่จ่ายรอบนี้"
               tone="warn"
@@ -110,7 +129,7 @@ export const UpcomingView = memo(function UpcomingView({
               <UpcomingRow
                 key={`budget:${budget.category}`}
                 hue={categoryColor(budget.category)}
-                glyph={<CategoryIcon category={budget.category} size={40} />}
+                renderGlyph={(size) => <CategoryIcon category={budget.category} size={size} />}
                 name={`งบ${budget.category}`}
                 kicker={over ? "เกินงบแล้ว" : "ใกล้เต็ม"}
                 tone={over ? "warn" : "brand"}
@@ -136,7 +155,7 @@ export const UpcomingView = memo(function UpcomingView({
                   key={item.key}
                   date={item.date}
                   hue={item.bill.icon_color ?? nameColor(item.bill.name)}
-                  glyph={<RecurringAvatarGlyph iconKey={item.bill.icon} fallbackName={item.bill.name} size={40} />}
+                  renderGlyph={(size) => <RecurringAvatarGlyph iconKey={item.bill.icon} fallbackName={item.bill.name} size={size} />}
                   name={item.bill.name}
                   kicker={describeDaysUntil(item.daysUntil)}
                   tone="brand"
@@ -160,7 +179,7 @@ export const UpcomingView = memo(function UpcomingView({
                   key={item.key}
                   date={item.date}
                   hue="var(--accent)"
-                  glyph={<Target size={40} strokeWidth={2} />}
+                  renderGlyph={(size) => <Target size={size} strokeWidth={2.25} />}
                   name={item.goal.name}
                   kicker={`กำหนดเป้าหมาย · ${describeDaysUntil(item.daysUntil)}`}
                   tone="brand"
@@ -175,7 +194,7 @@ export const UpcomingView = memo(function UpcomingView({
                 key={item.key}
                 date={item.date}
                 hue="var(--cat-other)"
-                glyph={<CalendarClock size={40} strokeWidth={2} />}
+                renderGlyph={(size) => <CalendarClock size={size} strokeWidth={2.25} />}
                 name="รอบเดือนใหม่"
                 kicker={describeDaysUntil(item.daysUntil)}
                 tone="brand"
@@ -197,12 +216,12 @@ export const UpcomingView = memo(function UpcomingView({
 
 /**
  * One row of the timeline: the date down the left ("ตอนนี้" when there is
- * none), then a banner in the item's colour and the words under it.
+ * none), then a card in the item's colour carrying the words.
  */
 function UpcomingRow({
   date,
   hue,
-  glyph,
+  renderGlyph,
   name,
   kicker,
   tone,
@@ -212,7 +231,7 @@ function UpcomingRow({
 }: {
   date?: Date;
   hue: string;
-  glyph: React.ReactNode;
+  renderGlyph: (size: number) => React.ReactNode;
   name: string;
   kicker: string;
   tone: "brand" | "warn";
@@ -233,21 +252,24 @@ function UpcomingRow({
           <small>ตอนนี้</small>
         )}
       </div>
+      {/* One card in the item's colour, its icon printed across the right
+          as a pattern and once at reading size beside the kicker. It used to
+          be an empty banner of colour with one large faint icon on it, above
+          the words -- a band of art that said nothing. */}
       <div className="upcoming-card">
-        <span className="tile-art upcoming-art" aria-hidden="true">
-          <span className="tile-glyph">{glyph}</span>
-        </span>
-        <div className="upcoming-body">
+        <IconPattern renderGlyph={renderGlyph} />
+        <div className="upcoming-top">
+          <IconChip>{renderGlyph(18)}</IconChip>
           <span className={`upcoming-kicker ${tone}`}>{kicker}</span>
-          <div className="upcoming-line">
-            <div>
-              <h3>{name}</h3>
-              {figure && <strong>{figure}</strong>}
-            </div>
-            {actions && <div className="upcoming-actions">{actions}</div>}
-          </div>
-          <p>{detail}</p>
         </div>
+        <div className="upcoming-line">
+          <div>
+            <h3>{name}</h3>
+            {figure && <strong>{figure}</strong>}
+          </div>
+          {actions && <div className="upcoming-actions">{actions}</div>}
+        </div>
+        <p>{detail}</p>
       </div>
     </article>
   );

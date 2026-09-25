@@ -1,8 +1,9 @@
 "use client";
 
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, CalendarDays, Check, ChevronLeft, Info, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, ChevronLeft, Info, RefreshCw, X } from "lucide-react";
+import { PULL_REFRESH_MAX, PULL_REFRESH_MIN_MS, PULL_REFRESH_THRESHOLD } from "@/lib/constants";
 import { formatDateInputValue, formatMonthInputValue, formatMoney, moneySign } from "@/lib/format";
 import type { ConfirmDialogState, EmptyAction, Toast } from "@/lib/types";
 
@@ -135,6 +136,54 @@ export function Rail({
       <div className="rail-track">{children}</div>
     </section>
   );
+}
+
+// The pattern's repeat, in px: two icons per tile on a diagonal, so the rows
+// interlock like a printed wrapper instead of lining up as a grid.
+const ICON_PATTERN_TILE = 56;
+const ICON_PATTERN_ICON = 18;
+
+/**
+ * An item's icon, printed small and repeated across the ground of the card
+ * it sits on -- the "art" of Home's posters and tiles, the upcoming timeline
+ * and the wallet tiles, which have no pictures to show. An SVG <pattern>
+ * rather than a grid of elements, so a rail of ten cards is ten small SVGs and
+ * not two hundred. The icon is rendered at lucide's own 24px and scaled down
+ * into each slot, which also thins its stroke to roughly 1.7px: a pattern is
+ * texture, and the full-weight line read as clutter.
+ *
+ * It fills its positioned parent. How strongly it shows and where it fades
+ * out, so the words on the card always read against plain ground, is the
+ * card's own CSS (the mask on `.icon-pattern` under each card's selector).
+ *
+ * This replaced the other way these cards used to draw art: one glyph blown
+ * up to most of the card and cropped. Lucide glyphs are drawn for 16-24px; at
+ * a hundred they read as clip-art.
+ */
+export function IconPattern({ renderGlyph }: { renderGlyph: (size: number) => React.ReactNode }) {
+  // useId's characters are not all valid in a url(#...) reference.
+  const id = `icon-pattern-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const slot = (offset: number) => (
+    <svg x={offset} y={offset} width={ICON_PATTERN_ICON} height={ICON_PATTERN_ICON} viewBox="0 0 24 24" overflow="visible">
+      {renderGlyph(24)}
+    </svg>
+  );
+  return (
+    <svg className="icon-pattern" aria-hidden="true" focusable="false">
+      <defs>
+        <pattern id={id} width={ICON_PATTERN_TILE} height={ICON_PATTERN_TILE} patternUnits="userSpaceOnUse">
+          {slot(6)}
+          {slot(6 + ICON_PATTERN_TILE / 2)}
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill={`url(#${id})`} />
+    </svg>
+  );
+}
+
+/** The icon itself at reading size, in a square tinted with its card's --hue -- the one จดเร็ว uses. */
+export function IconChip({ children }: { children: React.ReactNode }) {
+  return <span className="icon-chip" aria-hidden="true">{children}</span>;
 }
 
 export function EmptyNote({ glyph, children, action }: { glyph: string; children: React.ReactNode; action?: EmptyAction }) {
@@ -557,6 +606,110 @@ export function ErrorActions({ onRetry, onDismiss }: { onRetry: () => void; onDi
     <div className="error-actions">
       <button onClick={onRetry}>ลองซิงค์อีกครั้ง</button>
       <button onClick={onDismiss}>ปิดข้อความ</button>
+    </div>
+  );
+}
+
+/**
+ * Pull down from the top of the page to reload it. The app scrolls inside
+ * `.phone`, not the document, so neither iOS nor Android offers their own
+ * pull-to-refresh here -- this listens on that one scroll container instead.
+ *
+ * The listeners are passive and never cancel the touch: the page scrolls and
+ * rubber-bands exactly as it would without this, and the gesture only counts
+ * while the container is at its very top and the finger is moving down more
+ * than sideways (so a horizontal rail swipe near the top is left alone).
+ * `enabled` is false while a sheet is open or on a screen that fills the
+ * viewport itself. `root` is the element itself rather than a ref, so the
+ * listeners attach when `.phone` mounts -- behind the PIN or setup gate that
+ * is later than this hook's first run.
+ */
+export function usePullToRefresh(
+  root: HTMLElement | null,
+  onRefresh: () => Promise<unknown>,
+  enabled: boolean,
+) {
+  const [pull, setPull] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshRef = useRef(onRefresh);
+  useLayoutEffect(() => {
+    refreshRef.current = onRefresh;
+  });
+
+  useEffect(() => {
+    if (!root || !enabled || refreshing) return;
+    let start: { x: number; y: number } | null = null;
+    let current = 0;
+    let frame = 0;
+    const show = (value: number) => {
+      current = value;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setPull(value));
+    };
+    const onStart = (event: TouchEvent) => {
+      start = root.scrollTop <= 0 && event.touches.length === 1
+        ? { x: event.touches[0].clientX, y: event.touches[0].clientY }
+        : null;
+    };
+    const onMove = (event: TouchEvent) => {
+      if (!start) return;
+      const dx = event.touches[0].clientX - start.x;
+      const dy = event.touches[0].clientY - start.y;
+      if (root.scrollTop > 0 || dy <= 0 || Math.abs(dx) > dy) {
+        if (current) show(0);
+        if (root.scrollTop > 0 || Math.abs(dx) > Math.abs(dy)) start = null;
+        return;
+      }
+      // Half the finger's travel: a pull should feel heavier than a scroll.
+      show(Math.min(PULL_REFRESH_MAX, dy / 2));
+    };
+    const onEnd = () => {
+      if (!start) return;
+      start = null;
+      if (current < PULL_REFRESH_THRESHOLD) {
+        show(0);
+        return;
+      }
+      show(PULL_REFRESH_THRESHOLD);
+      setRefreshing(true);
+      const minimum = new Promise((resolve) => setTimeout(resolve, PULL_REFRESH_MIN_MS));
+      Promise.allSettled([refreshRef.current(), minimum]).then(() => {
+        setRefreshing(false);
+        setPull(0);
+      });
+    };
+    root.addEventListener("touchstart", onStart, { passive: true });
+    root.addEventListener("touchmove", onMove, { passive: true });
+    root.addEventListener("touchend", onEnd, { passive: true });
+    root.addEventListener("touchcancel", onEnd, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      root.removeEventListener("touchstart", onStart);
+      root.removeEventListener("touchmove", onMove);
+      root.removeEventListener("touchend", onEnd);
+      root.removeEventListener("touchcancel", onEnd);
+    };
+  }, [root, enabled, refreshing]);
+
+  return { pull, refreshing };
+}
+
+/**
+ * The pull-to-refresh indicator: a disc under the topbar that follows the
+ * finger down, turns as it goes, and spins while the reload runs. It fills in
+ * once the pull is far enough that letting go will refresh.
+ */
+export function PullRefreshIndicator({ pull, refreshing }: { pull: number; refreshing: boolean }) {
+  if (!pull && !refreshing) return null;
+  const ready = pull >= PULL_REFRESH_THRESHOLD;
+  return (
+    <div
+      className={`pull-refresh${ready ? " is-ready" : ""}${refreshing ? " is-refreshing" : ""}`}
+      style={{ "--pull": `${pull}px`, "--pull-turn": `${(pull / PULL_REFRESH_THRESHOLD) * 270}deg` } as React.CSSProperties}
+      role="status"
+      aria-label={refreshing ? "กำลังโหลดข้อมูลใหม่" : ready ? "ปล่อยเพื่อโหลดใหม่" : "ดึงลงเพื่อโหลดใหม่"}
+    >
+      <RefreshCw size={18} strokeWidth={2.5} aria-hidden="true" />
     </div>
   );
 }

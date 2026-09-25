@@ -15,6 +15,8 @@ export const monthKey = (date: Date) => localDateInput(date).slice(0, 7);
 export const formatMoney = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 export const formatSignedMoney = (value: number) => `${value >= 0 ? "+" : "−"}${moneySign}${formatMoney(Math.abs(value))}`;
 export const formatDateTime = (value: string) => new Date(value).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+// Clock time alone, for a row that already sits under its day's heading.
+export const formatTime = (value: string) => new Date(value).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
 export const formatUnits = (value: number) => value.toLocaleString("th-TH", { maximumFractionDigits: 4 });
 export const formatPercent = (value: number, digits = 0) => `${digits === 0 ? Math.round(value) : value.toFixed(digits)}%`;
 export const formatSignedPercent = (value: number, digits = 1) => `${value >= 0 ? "+" : ""}${value.toFixed(digits)}%`;

@@ -1,5 +1,6 @@
 "use client";
 
+import { createElement } from "react";
 import { ChevronDown, MoreHorizontal, type LucideIcon } from "lucide-react";
 import {
   categories,
@@ -11,9 +12,11 @@ import {
   nameColor,
   nameInitial,
   recurringIconMap,
+  walletIcon,
   walletIconMap,
   walletIconOptions,
 } from "@/lib/category";
+import type { WalletTag } from "@/lib/taxonomy";
 import { defaultWalletId, sameDebtorName } from "@/lib/money";
 import { formatMoney, moneySign } from "@/lib/format";
 import type { Debtor, Wallet } from "@/lib/types";
@@ -48,6 +51,17 @@ export function WalletAvatarGlyph({ iconKey, fallbackName, size = 18 }: { iconKe
   const Icon = (iconKey && walletIconMap[iconKey]) || null;
   if (!Icon) return <>{nameInitial(fallbackName)}</>;
   return <Icon size={size} strokeWidth={2.25} aria-hidden="true" />;
+}
+
+/**
+ * A wallet as an icon, always -- its own if it has one, else its tag's. For
+ * the places a letter cannot stand in (IconPattern repeats an SVG); the
+ * avatar keeps WalletAvatarGlyph's initial.
+ */
+export function WalletGlyph({ wallet, size = 18 }: { wallet: { icon: string | null; tag: WalletTag }; size?: number }) {
+  // createElement rather than <Icon />: the lookup returns an existing
+  // component, but the linter cannot tell that from a component made here.
+  return createElement(walletIcon(wallet), { size, strokeWidth: 2.25, "aria-hidden": true });
 }
 
 export function RecurringAvatarGlyph({ iconKey, fallbackName, size = 18 }: { iconKey: string | null; fallbackName: string; size?: number }) {

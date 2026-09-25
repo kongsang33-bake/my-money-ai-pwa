@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Banknote, Landmark, PiggyBank, Sparkles } from "lucide-react";
+import { Banknote, Landmark, PiggyBank } from "lucide-react";
 import type { WalletTag } from "@/lib/taxonomy";
 import { AmountInput, StateCard } from "@/components/primitives";
 import type { WalletInput } from "@/components/wallets-recurring";
@@ -84,7 +84,10 @@ export function SetupFlow({
         {step === 0 && (
           <div className="setup-step">
             <div className="setup-hero">
-              <span className="setup-hero-mark" aria-hidden="true">฿</span>
+              {/* The brand's own N, not a baht sign in a box: this is the
+                  first screen anyone sees, and the one place the mark
+                  introduces itself. */}
+              <i className="brand-mark setup-hero-mark" aria-hidden="true" />
               <p className="eyebrow">ยินดีต้อนรับ</p>
               <h1>สวัสดี {displayName}</h1>
               <p>ตั้งค่า 2 อย่างสั้น ๆ แล้วเริ่มใช้ได้เลย</p>
@@ -153,7 +156,7 @@ export function SetupFlow({
               </p>
             </div>
             <div className="setup-examples">
-              <span className="setup-examples-label"><Sparkles size={14} strokeWidth={2.25} aria-hidden="true" />พิมพ์แบบนี้ได้เลย</span>
+              <span className="setup-examples-label">พิมพ์แบบนี้ได้เลย</span>
               {composerExamples.map((example) => (
                 <button key={example} onClick={() => onFinish(example)}>
                   <span>{example}</span>

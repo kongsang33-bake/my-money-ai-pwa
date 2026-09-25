@@ -647,19 +647,8 @@ a:focus-visible {
   text-align: left;
 }
 
-.wallet-tile-glyph {
-  position: absolute;
-  right: var(--s-2);
-  bottom: var(--s-5);
-  display: grid;
-  place-items: center;
-  width: 64px;
-  height: 64px;
-  color: var(--hue);
-  opacity: 0.35;
-  font-size: var(--fs-value);
-  font-weight: var(--fw-bold);
-  pointer-events: none;
+.wallet-tile-main .icon-chip {
+  margin-bottom: var(--s-2);
 }
 
 .wallet-tile-main small {
@@ -1568,6 +1557,12 @@ a:focus-visible {
 /* The art gets its own clipped layer so the billboard itself does not have
    to clip: the kicker's InfoHint opens a popover that must be free to hang
    outside the box. */
+/* No history yet (see HeroWalletCard): no art, so no need for the height
+   the art is given. */
+.hero-wallet.is-bare {
+  min-height: clamp(280px, 76vw, 340px);
+}
+
 .billboard-art {
   position: absolute;
   inset: 0;
@@ -1956,6 +1951,40 @@ a:focus-visible {
 }
 
 /* -------------------------------------------------------------------------
+   Card art: IconPattern and IconChip (components/primitives.tsx). A card with
+   no picture -- a poster, a tile, an upcoming row, a wallet -- shows its own
+   icon printed small across its --hue ground, plus the icon once at reading
+   size in a tinted square. The pattern is strongest in the top-right corner
+   and gone well before the bottom-left, so the words always sit on plain
+   ground; a card whose words are placed differently re-aims the mask. Kept
+   faint for the same reason: it is texture.
+   ------------------------------------------------------------------------- */
+.icon-pattern {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--hue);
+  opacity: 0.3;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(215deg, var(--bg) 0%, transparent 62%);
+  mask-image: linear-gradient(215deg, var(--bg) 0%, transparent 62%);
+}
+
+.icon-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--hue) 24%, var(--bg));
+  color: var(--hue);
+}
+
+/* -------------------------------------------------------------------------
    Posters (2:3) -- see Poster in components/home.tsx. The ground is the
    item's own colour, handed in as --hue (a --cat-* slot, or a colour the user
    picked for a bill), mixed down into the page's ground and printed with its
@@ -1983,33 +2012,11 @@ button.poster:active {
   transform: scale(0.97);
 }
 
-/* The printed pattern. Strongest in the top-right corner and gone by the
-   lower third, so it sits behind the icon and the edge of the figure but
-   never behind the title, the amount or the button -- the words always read
-   against the plain ground. Kept faint for the same reason: it is texture. */
-.poster-pattern {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  color: var(--hue);
-  opacity: 0.3;
-  pointer-events: none;
+/* Posters keep their figure on the left and their words at the foot, so the
+   pattern leans a little further into the top-right than the default. */
+.poster .icon-pattern {
   -webkit-mask-image: linear-gradient(205deg, var(--bg) 0%, transparent 62%);
   mask-image: linear-gradient(205deg, var(--bg) 0%, transparent 62%);
-}
-
-.poster-chip {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--r-md);
-  background: color-mix(in oklab, var(--hue) 24%, var(--bg));
-  color: var(--hue);
 }
 
 /* The figure the poster is about. Its size follows what it holds (see the
@@ -2150,7 +2157,8 @@ button.poster:active {
 
 /* -------------------------------------------------------------------------
    Tiles (16:9) -- ProgressTile and RecentRail in components/home.tsx. Same
-   --hue art as a poster, landscape, with the words under it instead of on it.
+   --hue art as a poster (IconPattern and IconChip), landscape, with the words
+   under it instead of on it.
    ------------------------------------------------------------------------- */
 .tile, .recent-tile {
   display: flex;
@@ -2182,19 +2190,10 @@ button.poster:active {
   overflow: hidden;
 }
 
-.tile-glyph {
+.tile-art .icon-chip {
   position: absolute;
-  top: var(--s-3);
-  right: var(--s-3);
-  width: 40px;
-  height: 40px;
-  color: var(--hue);
-  opacity: 0.7;
-}
-
-.tile-glyph svg {
-  width: 100%;
-  height: 100%;
+  top: var(--s-2);
+  left: var(--s-2);
 }
 
 .tile-title {
@@ -2341,8 +2340,9 @@ button.poster:active {
 }
 
 .home-focus-head button, .start-checklist-steps button {
-  padding: 8px 12px;
-  border-radius: var(--r-full);
+  min-height: 36px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-sm);
   background: var(--surface-2);
   border: 1px solid var(--line);
   color: var(--ink-2);
@@ -2351,6 +2351,45 @@ button.poster:active {
   white-space: nowrap;
 }
 
+
+/* Home's way into "ถาม AI" (AskPrompt): one flat row under จดเร็ว -- the
+   rails' surface, not a card competing with the billboard. */
+.ask-prompt {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  margin-bottom: var(--s-5);
+  padding: var(--s-3);
+  border: var(--card-border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+}
+
+.ask-prompt > span:not(.icon-chip) {
+  flex: 1;
+  min-width: 0;
+}
+
+.ask-prompt b {
+  display: block;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+}
+
+.ask-prompt small {
+  display: block;
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+  color: var(--ink-3);
+}
+
+.ask-prompt > svg {
+  flex-shrink: 0;
+  color: var(--ink-3);
+}
 
 /* Home's start checklist — the tint-tier card a new account gets under the
    hero, in place of the analysis cards it has no data for yet. */
@@ -2405,10 +2444,16 @@ button.poster:active {
   color: var(--ink-3);
 }
 
+.start-checklist-steps button.is-next {
+  border-color: transparent;
+  background: var(--primary);
+  color: var(--primary-text);
+}
+
 .start-checklist-mark {
   width: 24px;
   height: 24px;
-  border-radius: var(--r-full);
+  border-radius: var(--r-xs);
   display: grid;
   place-items: center;
   font-size: var(--fs-caption);
@@ -2420,6 +2465,12 @@ button.poster:active {
    is a deep green in light and a bright acid in dark, so no single text
    colour sits on it in both themes. --income-soft is the tint made to carry
    --income as text, and a quieter tick suits a finished step anyway. */
+.start-checklist-steps li.is-next .start-checklist-mark {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: var(--fw-bold);
+}
+
 .start-checklist-steps li.done .start-checklist-mark {
   background: var(--income-soft);
   color: var(--income);
@@ -2655,16 +2706,37 @@ button.poster:active {
    its own competing with it. */
 .composer-primer {
   margin-bottom: var(--s-3);
-  padding-left: var(--s-3);
-  border-left: 2px solid var(--accent);
   font-size: var(--fs-caption);
   line-height: var(--lh-snug);
   color: var(--ink-3);
 }
 
-.composer-primer.warn {
-  border-left-color: var(--expense);
-  color: var(--expense);
+/* No wallet yet. Not a warning -- jotting works, the balance just has
+   nowhere to count it -- so it is a quiet row that carries the fix, not coral
+   text that reads like an error. */
+.composer-wallet-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+  color: var(--ink-2);
+}
+
+.composer-wallet-note button {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--primary);
+  color: var(--primary-text);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
 }
 
 .ai-suggestions {
@@ -4219,7 +4291,10 @@ button.poster:active {
   display: none;
 }
 
-.history-type-chips button {
+/* One chip shape for both filter rows -- History's type chips and the
+   upcoming tab's -- so the same control does not look like a pill on one
+   screen and a tile on the next. */
+.history-type-chips button, .upcoming-chips button {
   flex-shrink: 0;
   min-height: 36px;
   padding: 0 var(--s-3);
@@ -4232,7 +4307,7 @@ button.poster:active {
   white-space: nowrap;
 }
 
-.history-type-chips button.active {
+.history-type-chips button.active, .upcoming-chips button.active {
   background: var(--primary);
   border-color: var(--primary);
   color: var(--primary-text);
@@ -5100,9 +5175,8 @@ button.entry-main {
 
 /* -------------------------------------------------------------------------
    "กำลังจะมา" tab (UpcomingView in components/upcoming.tsx) -- the mock's
-   "New & Hot": a timeline with the date down the left, each row a banner in
-   the item's own --hue (the same .tile-art the rails use) and the words and
-   actions under it.
+   "New & Hot": a timeline with the date down the left, each row a card in
+   the item's own --hue carrying its words and actions.
    ------------------------------------------------------------------------- */
 .upcoming-head {
   margin: var(--s-2) 0 var(--s-4);
@@ -5129,23 +5203,6 @@ button.entry-main {
 
 .upcoming-chips::-webkit-scrollbar {
   display: none;
-}
-
-.upcoming-chips button {
-  flex: 0 0 auto;
-  min-height: 32px;
-  padding: 0 var(--s-4);
-  border: 1px solid color-mix(in srgb, var(--ink) 35%, transparent);
-  border-radius: var(--r-full);
-  font-size: var(--fs-body-sm);
-  font-weight: var(--fw-medium);
-  color: var(--ink);
-}
-
-.upcoming-chips button.active {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--ink-inverse);
 }
 
 .upcoming-group {
@@ -5179,23 +5236,73 @@ button.entry-main {
   line-height: var(--lh-tight);
 }
 
-/* A banner of a fixed-ish height, not an aspect ratio: at the width of a
-   desktop column a 16:6 banner was 400px of colour per row. */
-.upcoming-art {
-  aspect-ratio: auto;
-  height: clamp(72px, 20vw, 112px);
-  border-radius: var(--r-sm);
+/* The row's card: its --hue mixed into the ground the way a poster's is,
+   the icon printed across its right side (IconPattern), and the words on
+   the left, where the pattern has faded out. */
+.upcoming-card {
+  position: relative;
   overflow: hidden;
+  padding: var(--s-3);
+  border: 1px solid color-mix(in oklab, var(--hue) 22%, var(--bg));
+  border-radius: var(--r-sm);
+  background: linear-gradient(110deg, color-mix(in oklab, var(--hue) 8%, var(--bg)) 0%, color-mix(in oklab, var(--hue) 28%, var(--bg)) 100%);
+}
+
+.upcoming-card .icon-pattern {
+  -webkit-mask-image: linear-gradient(255deg, var(--bg) 0%, transparent 55%);
+  mask-image: linear-gradient(255deg, var(--bg) 0%, transparent 55%);
+}
+
+.upcoming-top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-bottom: var(--s-2);
+}
+
+/* The starter card a new account sees instead of an empty timeline. */
+.upcoming-starter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-5);
+  padding: var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.upcoming-starter b {
+  display: block;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+}
+
+.upcoming-starter small {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+  color: var(--ink-3);
+}
+
+.upcoming-starter button {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--primary);
+  color: var(--primary-text);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
 }
 
 /* A timeline reads down, not across: past a phone's width the rows keep a
    reading measure rather than stretching to the page. */
 .upcoming-view > * {
   max-width: 720px;
-}
-
-.upcoming-body {
-  padding-top: var(--s-2);
 }
 
 .upcoming-kicker {
@@ -5214,6 +5321,7 @@ button.entry-main {
 }
 
 .upcoming-line {
+  position: relative;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -5270,7 +5378,8 @@ button.entry-main {
   white-space: nowrap;
 }
 
-.upcoming-body p {
+.upcoming-card p {
+  position: relative;
   font-size: var(--fs-body-sm);
   color: var(--ink-2);
   line-height: var(--lh-snug);
@@ -5313,19 +5422,10 @@ button.entry-main {
   background: linear-gradient(180deg, transparent 40%, var(--surface) 100%);
 }
 
-.detail-glyph {
+.detail-hero .icon-chip {
   position: absolute;
-  top: var(--s-5);
-  right: var(--s-6);
-  width: 34%;
-  aspect-ratio: 1;
-  color: var(--hue);
-  opacity: 0.45;
-}
-
-.detail-glyph svg {
-  width: 100%;
-  height: 100%;
+  top: var(--s-4);
+  left: var(--s-4);
 }
 
 .detail-close {
@@ -6172,6 +6272,54 @@ input[type="checkbox"], input[type="radio"] {
 }
 
 /* -------------------------------------------------------------------------
+   Pull to refresh (usePullToRefresh / PullRefreshIndicator, primitives.tsx)
+   -- a disc that hangs just under the topbar and follows the finger down,
+   turning as it goes. Outline while the pull is short of the threshold,
+   filled white once letting go will refresh, spinning while it does.
+   ------------------------------------------------------------------------- */
+.pull-refresh {
+  position: fixed;
+  top: calc(var(--topbar-block) - var(--s-6));
+  left: 50%;
+  z-index: var(--z-nav);
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  box-shadow: var(--sh-2);
+  transform: translate(-50%, var(--pull));
+  pointer-events: none;
+}
+
+.pull-refresh svg {
+  transform: rotate(var(--pull-turn));
+}
+
+.pull-refresh.is-ready {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-text);
+}
+
+.pull-refresh.is-refreshing svg {
+  animation: pull-refresh-spin 0.8s linear infinite;
+}
+
+@keyframes pull-refresh-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pull-refresh.is-refreshing svg {
+    animation-duration: 2.4s;
+  }
+}
+
+/* -------------------------------------------------------------------------
    Toast
    ------------------------------------------------------------------------- */
 /* Anchored above the bottom nav rather than below the topbar: a toast up
@@ -6273,8 +6421,9 @@ input[type="checkbox"], input[type="radio"] {
 }
 
 .empty-note button, .error-actions button, .success-pulse button {
-  padding: 9px 16px;
-  border-radius: var(--r-full);
+  min-height: 40px;
+  padding: 0 var(--s-4);
+  border-radius: var(--r-sm);
   background: var(--primary);
   color: var(--primary-text);
   font-weight: var(--fw-semibold);
@@ -6744,16 +6893,12 @@ input[type="checkbox"], input[type="radio"] {
   text-align: center;
 }
 
+/* The brand mark (.brand-mark draws the image), at a welcome's size. */
 .setup-hero-mark {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 56px;
   height: 56px;
   margin: 0 auto var(--s-4);
-  border-radius: var(--r-lg);
-  background: var(--overlay-on-primary-strong);
-  font-size: var(--fs-h2);
-  font-weight: var(--fw-bold);
 }
 
 .setup-hero .eyebrow {
@@ -7362,6 +7507,10 @@ input[type="checkbox"], input[type="radio"] {
     background:
       linear-gradient(180deg, transparent 72%, var(--bg) 100%),
       linear-gradient(100deg, var(--bg) 0%, var(--hero-bg) 42%, var(--hero-glow) 100%);
+  }
+
+  .hero-wallet.is-bare {
+    min-height: min(52vh, 460px);
   }
 
   .billboard-art {
