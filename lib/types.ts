@@ -306,9 +306,8 @@ export type PreviewSeed = {
   // Supabase read), so the gate simply stays put -- which is all a layout or
   // an accessibility check needs.
   pinMode?: Extract<PinMode, "locked" | "setup">;
-  // The billboard's card pocket. Optional: the pocket has no table yet, so
-  // this is the only way it holds anything outside the session it was
-  // filled in.
+  // The billboard's card pocket (pocket_cards). Optional so a spec that does
+  // not care about it can leave it out and get an empty pocket.
   pocketCards?: PocketCard[];
 };
 

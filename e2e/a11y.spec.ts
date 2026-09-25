@@ -111,6 +111,26 @@ test("meets contrast, target size and overflow limits", async ({ page }) => {
   await page.waitForTimeout(500);
   audits.push(await auditScreen(page, "home"));
 
+  // The billboard turned over to the card pocket, and each of its sheets.
+  await page.getByRole("button", { name: "เปิดกระเป๋าการ์ด" }).click();
+  await page.waitForTimeout(600);
+  audits.push(await auditScreen(page, "home-pocket"));
+  await page.locator(".billboard-face.is-back").getByRole("button", { name: "รายละเอียด" }).click();
+  await page.waitForTimeout(500);
+  audits.push(await auditScreen(page, "pocket-detail"));
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(400);
+  await page.getByRole("button", { name: "จัดการการ์ด" }).click();
+  await page.waitForTimeout(500);
+  audits.push(await auditScreen(page, "pocket-manage"));
+  await page.getByRole("button", { name: "เพิ่มการ์ด" }).click();
+  await page.waitForTimeout(500);
+  audits.push(await auditScreen(page, "pocket-form"));
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(400);
+  await page.getByRole("button", { name: "กลับไปที่ยอดเงิน" }).click();
+  await page.waitForTimeout(600);
+
   for (const tab of ["history", "add", "upcoming", "wallets"] as const) {
     await navigate(page, tab);
     audits.push(await auditScreen(page, tab));

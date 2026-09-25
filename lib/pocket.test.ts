@@ -1,6 +1,5 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import qrcode from "qrcode-generator";
 import jsQR from "jsqr";
 import {
   CODE128_PATTERN_TABLE,
@@ -9,11 +8,40 @@ import {
   code128Widths,
   crc16,
   describeScannedQr,
+  encodeQr,
   formatAccountNumber,
+  movePocketCard,
+  pocketCardRow,
+  pocketDraftProblem,
+  toPocketCard,
   formatPromptPayNumber,
   promptPayTarget,
   readEmvTags,
+  type PocketCard,
 } from "./pocket.ts";
+
+/** Paints encodeQr's modules into RGBA pixels and asks a real decoder to read them. */
+function decodeModules(modules: boolean[][]) {
+  const scale = 4;
+  const quiet = 4;
+  const count = modules.length;
+  const size = (count + quiet * 2) * scale;
+  const pixels = new Uint8ClampedArray(size * size * 4).fill(255);
+  modules.forEach((cells, row) => cells.forEach((dark, col) => {
+    if (!dark) return;
+    for (let dy = 0; dy < scale; dy++) {
+      for (let dx = 0; dx < scale; dx++) {
+        const at = (((row + quiet) * scale + dy) * size + (col + quiet) * scale + dx) * 4;
+        pixels[at] = pixels[at + 1] = pixels[at + 2] = 0;
+      }
+    }
+  }));
+  return jsQR(pixels, size, size)?.data;
+}
+
+const card = (patch: Partial<PocketCard> = {}): PocketCard => ({
+  id: "c1", kind: "promptpay", label: "พร้อมเพย์", holder: null, bank: null, value: "0812345678", hue: "--cat-bills", ...patch,
+});
 
 describe("crc16", () => {
   it("matches CRC-16/CCITT-FALSE's published check value", () => {
@@ -49,26 +77,15 @@ describe("buildPromptPayPayload", () => {
 
   it("survives a round trip through a real QR encoder and decoder", () => {
     const payload = buildPromptPayPayload("0812345678")!;
-    const qr = qrcode(0, "M");
-    qr.addData(payload);
-    qr.make();
-    const scale = 4;
-    const quiet = 4;
-    const size = (qr.getModuleCount() + quiet * 2) * scale;
-    const pixels = new Uint8ClampedArray(size * size * 4).fill(255);
-    for (let row = 0; row < qr.getModuleCount(); row++) {
-      for (let col = 0; col < qr.getModuleCount(); col++) {
-        if (!qr.isDark(row, col)) continue;
-        for (let dy = 0; dy < scale; dy++) {
-          for (let dx = 0; dx < scale; dx++) {
-            const at = (((row + quiet) * scale + dy) * size + (col + quiet) * scale + dx) * 4;
-            pixels[at] = pixels[at + 1] = pixels[at + 2] = 0;
-          }
-        }
-      }
-    }
-    assert.equal(jsQR(pixels, size, size)?.data, payload);
+    assert.equal(decodeModules(encodeQr(payload)), payload);
     assert.equal(describeScannedQr(payload), "พร้อมเพย์");
+  });
+});
+
+describe("encodeQr", () => {
+  it("keeps Thai text intact rather than only each character's low byte", () => {
+    const text = "ร้านบ้านเบค 0812345678";
+    assert.equal(decodeModules(encodeQr(text)), text);
   });
 });
 
@@ -118,5 +135,72 @@ describe("code128", () => {
 
   it("encodes nothing it cannot", () => {
     assert.deepEqual(code128Symbols("บัตร"), []);
+  });
+});
+
+describe("toPocketCard", () => {
+  it("reads a row, emptying blank text to null", () => {
+    assert.deepEqual(
+      toPocketCard({ id: "a", kind: "account", label: "เงินเดือน", holder: " ", bank: "กรุงไทย", value: "1234567890", hue: "--cat-goods", sort_order: 0 }),
+      { id: "a", kind: "account", label: "เงินเดือน", holder: null, bank: "กรุงไทย", value: "1234567890", hue: "--cat-goods" },
+    );
+  });
+
+  it("drops a kind this build cannot draw and repairs an unknown hue", () => {
+    assert.equal(toPocketCard({ id: "a", kind: "nfc", label: "x", value: "1", hue: "--cat-bills" }), null);
+    assert.equal(toPocketCard({ id: "a", kind: "barcode", label: "x", value: "1", hue: "#ff0000" })?.hue, "--cat-bills");
+  });
+});
+
+describe("pocketCardRow", () => {
+  it("keeps only digits for numbers and drops a bank the kind does not ask for", () => {
+    const row = pocketCardRow(card({ value: "081-234-5678", bank: "กสิกรไทย", holder: "  เบค  ", label: " ส่วนตัว " }));
+    assert.equal(row.value, "0812345678");
+    assert.equal(row.bank, null);
+    assert.equal(row.holder, "เบค");
+    assert.equal(row.label, "ส่วนตัว");
+  });
+
+  it("stores a scanned QR's text exactly as read", () => {
+    const text = " 0002 01 ";
+    assert.equal(pocketCardRow(card({ kind: "qr", value: text })).value, text);
+  });
+});
+
+describe("movePocketCard", () => {
+  const cards = [card({ id: "a" }), card({ id: "b" }), card({ id: "c" })];
+
+  it("swaps with the neighbour and writes only the rows whose number changed", () => {
+    const plan = movePocketCard(cards, "c", -1, new Map([["a", 0], ["b", 1], ["c", 2]]))!;
+    assert.deepEqual(plan.cards.map((item) => item.id), ["a", "c", "b"]);
+    assert.deepEqual(plan.updates, [{ id: "c", sort_order: 1 }, { id: "b", sort_order: 2 }]);
+  });
+
+  it("straightens out an order that had drifted", () => {
+    const plan = movePocketCard(cards, "a", 1, new Map([["a", 0], ["b", 0], ["c", 7]]))!;
+    assert.deepEqual(plan.updates, [{ id: "a", sort_order: 1 }, { id: "c", sort_order: 2 }]);
+  });
+
+  it("goes nowhere past either end", () => {
+    assert.equal(movePocketCard(cards, "a", -1, new Map()), null);
+    assert.equal(movePocketCard(cards, "c", 1, new Map()), null);
+    assert.equal(movePocketCard(cards, "zz", 1, new Map()), null);
+  });
+});
+
+describe("pocketDraftProblem", () => {
+  it("accepts a complete card of each kind", () => {
+    assert.equal(pocketDraftProblem(card()), null);
+    assert.equal(pocketDraftProblem(card({ kind: "account", value: "1234567890" })), null);
+    assert.equal(pocketDraftProblem(card({ kind: "barcode", value: "7001234567890123" })), null);
+    assert.equal(pocketDraftProblem(card({ kind: "qr", value: buildPromptPayPayload("0812345678")! })), null);
+  });
+
+  it("names what is missing", () => {
+    assert.match(pocketDraftProblem(card({ label: "  " }))!, /ชื่อ/);
+    assert.match(pocketDraftProblem(card({ value: "12345" }))!, /10 หลัก/);
+    assert.match(pocketDraftProblem(card({ kind: "qr", value: "" }))!, /QR/);
+    assert.match(pocketDraftProblem(card({ kind: "barcode", value: "บัตร" }))!, /บาร์โค้ด/);
+    assert.match(pocketDraftProblem(card({ kind: "account", value: "123" }))!, /10-15/);
   });
 });

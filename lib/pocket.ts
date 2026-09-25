@@ -8,6 +8,14 @@
 // once and kept as text, and a barcode is its digits -- the app draws each one
 // itself, so a stored card is a few short strings, never an image.
 
+import qrcode from "qrcode-generator";
+import {
+  POCKET_BANK_MAX_LENGTH,
+  POCKET_HOLDER_MAX_LENGTH,
+  POCKET_LABEL_MAX_LENGTH,
+  POCKET_VALUE_MAX_LENGTH,
+} from "./constants.ts";
+
 export type PocketCardKind = "promptpay" | "qr" | "barcode" | "account";
 
 export type PocketCard = {
@@ -49,6 +57,82 @@ export const POCKET_HUES = [
 export const POCKET_BANKS = ["กสิกรไทย", "ไทยพาณิชย์", "กรุงเทพ", "กรุงไทย", "กรุงศรี", "ทีทีบี", "ออมสิน", "ธ.ก.ส.", "ยูโอบี", "ซีไอเอ็มบี", "เกียรตินาคินภัทร", "อื่น ๆ"];
 
 export const digitsOnly = (value: string) => value.replace(/\D/g, "");
+
+const POCKET_KIND_SET = new Set<string>(Object.keys(POCKET_KIND_LABELS));
+const POCKET_HUE_SET = new Set<string>(POCKET_HUES);
+
+/**
+ * A pocket_cards row as the app holds it, or null for a row this version
+ * cannot draw (a kind added by a newer build). An unknown hue falls back to
+ * the first slot rather than dropping the card.
+ */
+export function toPocketCard(row: Record<string, unknown>): PocketCard | null {
+  const kind = String(row.kind ?? "");
+  const value = String(row.value ?? "");
+  if (!POCKET_KIND_SET.has(kind) || !value) return null;
+  const text = (field: unknown) => (typeof field === "string" && field.trim() ? field : null);
+  const hue = String(row.hue ?? "");
+  return {
+    id: String(row.id),
+    kind: kind as PocketCardKind,
+    label: String(row.label ?? ""),
+    holder: text(row.holder),
+    bank: text(row.bank),
+    value,
+    hue: POCKET_HUE_SET.has(hue) ? hue : POCKET_HUES[0],
+  };
+}
+
+/** What gets written for a card: the form's values, trimmed, emptied to null. */
+export function pocketCardRow(card: PocketCard) {
+  const optional = (field: string | null) => (field && field.trim() ? field.trim() : null);
+  return {
+    kind: card.kind,
+    label: card.label.trim(),
+    holder: optional(card.holder),
+    // Only the kinds whose form asks for it keep a bank: switching a card from
+    // "account" to "promptpay" hides the field, and a hidden value that still
+    // saved would turn up again with nothing on screen to change it.
+    bank: card.kind === "account" || card.kind === "barcode" ? optional(card.bank) : null,
+    value: card.kind === "qr" || card.kind === "barcode" ? card.value : digitsOnly(card.value),
+    hue: card.hue,
+  };
+}
+
+/**
+ * Moves one card a step up or down. Returns the new order and the rows whose
+ * sort_order changed -- every card is renumbered to its index, so an order
+ * that drifted (two cards on the same number, a gap left by a delete) is
+ * straightened out by the first move rather than carried forever. Null when
+ * the move goes nowhere.
+ */
+export function movePocketCard(cards: PocketCard[], id: string, delta: -1 | 1, currentOrder: Map<string, number>) {
+  const from = cards.findIndex((card) => card.id === id);
+  const to = from + delta;
+  if (from < 0 || to < 0 || to >= cards.length) return null;
+  const next = [...cards];
+  [next[from], next[to]] = [next[to], next[from]];
+  const updates = next
+    .map((card, index) => ({ id: card.id, sort_order: index }))
+    .filter((row) => currentOrder.get(row.id) !== row.sort_order);
+  return { cards: next, updates };
+}
+
+/** Why a card cannot be saved yet, in words, or null when it can. */
+export function pocketDraftProblem(draft: PocketCard): string | null {
+  const label = draft.label.trim();
+  if (!label) return "ตั้งชื่อการ์ด";
+  if (label.length > POCKET_LABEL_MAX_LENGTH) return `ชื่อการ์ดยาวได้ไม่เกิน ${POCKET_LABEL_MAX_LENGTH} ตัวอักษร`;
+  if ((draft.holder ?? "").trim().length > POCKET_HOLDER_MAX_LENGTH) return `ชื่อเจ้าของยาวได้ไม่เกิน ${POCKET_HOLDER_MAX_LENGTH} ตัวอักษร`;
+  if ((draft.bank ?? "").trim().length > POCKET_BANK_MAX_LENGTH) return `ชื่อธนาคารหรือร้านยาวได้ไม่เกิน ${POCKET_BANK_MAX_LENGTH} ตัวอักษร`;
+  if (draft.kind === "promptpay" && !promptPayTarget(draft.value)) return "ใส่เบอร์ 10 หลัก หรือเลขบัตรประชาชน 13 หลัก";
+  if (draft.kind === "qr" && !draft.value) return "เลือกรูป QR จากแอปธนาคาร";
+  if (draft.kind === "qr" && draft.value.length > POCKET_VALUE_MAX_LENGTH) return "QR นี้มีข้อมูลยาวเกินกว่าจะเก็บได้";
+  if (draft.kind === "barcode" && !canEncodeCode128(draft.value)) return "ใส่เลขบาร์โค้ด (ตัวเลขหรือตัวอักษรภาษาอังกฤษ)";
+  if (draft.kind === "barcode" && draft.value.length > 80) return "เลขบาร์โค้ดยาวเกินไป";
+  if (draft.kind === "account" && (digitsOnly(draft.value).length < 10 || digitsOnly(draft.value).length > 15)) return "เลขบัญชีต้องมี 10-15 หลัก";
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // PromptPay (Thai QR Payment, EMVCo merchant-presented, static)
@@ -186,6 +270,27 @@ export function pocketQrPayload(card: PocketCard): string | null {
   if (card.kind === "promptpay") return buildPromptPayPayload(card.value);
   if (card.kind === "qr") return card.value;
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// QR modules
+// ---------------------------------------------------------------------------
+
+/**
+ * A QR's dark modules, row by row. The text goes in as UTF-8 bytes: the
+ * library's own default keeps only the low byte of each character, which
+ * turned any Thai in a scanned QR (an EMV merchant name in tag 64, say) into
+ * different text the moment it was redrawn.
+ */
+export function encodeQr(payload: string): boolean[][] {
+  const qr = qrcode(0, "M");
+  const bytes = Array.from(new TextEncoder().encode(payload));
+  // addData takes a string and runs it through stringToBytes; handing it one
+  // character per byte makes that round trip exact.
+  qr.addData(String.fromCharCode(...bytes), "Byte");
+  qr.make();
+  const count = qr.getModuleCount();
+  return Array.from({ length: count }, (_, row) => Array.from({ length: count }, (_, col) => qr.isDark(row, col)));
 }
 
 // ---------------------------------------------------------------------------

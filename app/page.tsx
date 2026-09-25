@@ -95,6 +95,7 @@ import {
   SAVE_TIMEOUT_MS,
   SEARCH_RESULT_LIMIT,
   SPLASH_MIN_VISIBLE_MS,
+  POCKET_CARD_COLUMNS,
   RPC,
   TABLES,
   TRANSACTION_COLUMNS,
@@ -126,7 +127,7 @@ import {
   SuccessPulse,
 } from "@/components/home";
 import { FlipBillboard, PocketCardForm, PocketDetailSheet, PocketFace, PocketManageSheet, PocketShareSheet } from "@/components/pocket";
-import type { PocketCard } from "@/lib/pocket";
+import { movePocketCard as planPocketMove, pocketCardRow, toPocketCard, type PocketCard } from "@/lib/pocket";
 import { HistoryFilterBar } from "@/components/history";
 import { PinGate, PrivacyGate, SecurityView } from "@/components/auth";
 import { fetchPrivacyAck, readLocalPrivacyAck, recordPrivacyAck, writeLocalPrivacyAck } from "@/lib/privacy";
@@ -414,11 +415,13 @@ export default function Home() {
   const [selectedDay, setSelectedDay] = useState(() => new Date().toDateString());
   const [historyFilters, setHistoryFilters] = useState<HistoryFilters>({ query: "", category: "", type: "all", minAmount: "", maxAmount: "" });
   const [budgets, setBudgets] = useState<Record<string, number>>({});
-  // The billboard's card pocket (components/pocket.tsx). MOCKUP: local state
-  // only -- there is no table behind it yet, so what is added here lasts as
-  // long as the tab does. The preview seed is what fills it.
+  // The billboard's card pocket (components/pocket.tsx, pocket_cards).
+  // pocketOrderRef is each card's sort_order as last written, so a move only
+  // updates the rows whose number actually changed (movePocketCard).
   const [pocketCards, setPocketCards] = useState<PocketCard[]>([]);
   const [pocketSheet, setPocketSheet] = useState<PocketSheet | null>(null);
+  const [pocketError, setPocketError] = useState("");
+  const pocketOrderRef = useRef(new Map<string, number>());
   const [goals, setGoals] = useState<MoneyGoal[]>([]);
   const [goalSheetOpen, setGoalSheetOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
@@ -511,7 +514,10 @@ export default function Home() {
     setGoals(seed.goals);
     setBudgets(seed.budgets);
     if (seed.drafts) setDrafts(seed.drafts);
-    if (seed.pocketCards) setPocketCards(seed.pocketCards);
+    if (seed.pocketCards) {
+      setPocketCards(seed.pocketCards);
+      pocketOrderRef.current = new Map(seed.pocketCards.map((card, index) => [card.id, index]));
+    }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
@@ -777,6 +783,32 @@ export default function Home() {
     })) as MoneyGoal[]);
   }, []);
 
+  const loadPocketCards = useCallback(async () => {
+    if (!supabase) return;
+
+    const { data, error } = await supabase
+      .from(TABLES.pocketCards)
+      .select(POCKET_CARD_COLUMNS)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+    if (error) {
+      // A project that has not had the pocket_cards migration applied yet
+      // answers "no such table" (PGRST205 from the API, 42P01 from Postgres).
+      // That is an empty pocket, not a failure worth an error card over the
+      // user's money.
+      if (error.code === "PGRST205" || error.code === "42P01") {
+        setPocketCards([]);
+        return;
+      }
+      setError(error.message);
+      return;
+    }
+    const rows = (data ?? []) as Record<string, unknown>[];
+    const cards = rows.map(toPocketCard).filter((card): card is PocketCard => !!card);
+    pocketOrderRef.current = new Map(rows.map((row) => [String(row.id), Number(row.sort_order) || 0]));
+    setPocketCards(cards);
+  }, []);
+
   // One-time import for a returning user whose budgets/goals/net-worth
   // display setting still only exist in this browser's localStorage from
   // before those moved to Supabase. Guarded by a per-user flag so it runs
@@ -826,7 +858,7 @@ export default function Home() {
     setError("");
     try {
       await migrateLocalDataIfNeeded(userId);
-      await Promise.all([loadEntries(), loadDebtors(), loadWallets(), loadRecurringExpenses(), loadInvestments(), loadInvestmentPrices(), loadBudgets(), loadGoals()]);
+      await Promise.all([loadEntries(), loadDebtors(), loadWallets(), loadRecurringExpenses(), loadInvestments(), loadInvestmentPrices(), loadBudgets(), loadGoals(), loadPocketCards()]);
       // "This account really is empty" is only true once its rows have
       // actually been fetched. Without this the setup gate could be offered
       // to an existing user in the frame between unlocking and the first
@@ -835,15 +867,15 @@ export default function Home() {
     } finally {
       setDataLoading(false);
     }
-  }, [migrateLocalDataIfNeeded, loadDebtors, loadEntries, loadWallets, loadRecurringExpenses, loadInvestments, loadInvestmentPrices, loadBudgets, loadGoals]);
+  }, [migrateLocalDataIfNeeded, loadDebtors, loadEntries, loadWallets, loadRecurringExpenses, loadInvestments, loadInvestmentPrices, loadBudgets, loadGoals, loadPocketCards]);
 
   // Pull-to-refresh's reload: the same reads as loadUserData, but without
   // dataLoading, which swaps every screen for its skeleton -- a pull should
   // update the numbers in place, not blank the page the user is looking at.
   const refreshUserData = useCallback(async () => {
     if (!user) return;
-    await Promise.all([loadEntries(), loadDebtors(), loadWallets(), loadRecurringExpenses(), loadInvestments(), loadInvestmentPrices(), loadBudgets(), loadGoals()]);
-  }, [user, loadDebtors, loadEntries, loadWallets, loadRecurringExpenses, loadInvestments, loadInvestmentPrices, loadBudgets, loadGoals]);
+    await Promise.all([loadEntries(), loadDebtors(), loadWallets(), loadRecurringExpenses(), loadInvestments(), loadInvestmentPrices(), loadBudgets(), loadGoals(), loadPocketCards()]);
+  }, [user, loadDebtors, loadEntries, loadWallets, loadRecurringExpenses, loadInvestments, loadInvestmentPrices, loadBudgets, loadGoals, loadPocketCards]);
 
   const clearPrivateState = useCallback(() => {
     setEntries([]);
@@ -854,6 +886,9 @@ export default function Home() {
     setInvestmentPrices([]);
     setBudgets({});
     setGoals([]);
+    setPocketCards([]);
+    pocketOrderRef.current = new Map();
+    setPocketSheet(null);
     setDrafts([]);
     setReceiptTotal(0);
     setComposerInitialText("");
@@ -3085,28 +3120,75 @@ export default function Home() {
   const goalSheetDismiss = useDismiss(goalSheetOpen, () => setGoalSheetOpen(false));
   const pocketDismiss = useDismiss(!!pocketSheet, () => setPocketSheet(null));
 
-  // MOCKUP: the pocket writes to local state only (see pocketCards).
-  const savePocketCard = (card: PocketCard) => {
-    setPocketCards((cards) => (cards.some((item) => item.id === card.id) ? cards.map((item) => (item.id === card.id ? card : item)) : [...cards, card]));
-    notify({ tone: "success", title: "บันทึกการ์ดแล้ว", detail: card.label });
-    setPocketSheet({ kind: "manage" });
-  };
-  const deletePocketCard = async (card: PocketCard) => {
+  // Every way into a pocket sheet goes through here, so a save that failed
+  // last time does not greet the next form with its error.
+  const openPocketSheet = useCallback((sheet: PocketSheet) => {
+    setPocketError("");
+    setPocketSheet(sheet);
+  }, []);
+
+  async function savePocketCard(card: PocketCard) {
+    if (!supabase || !user) return;
+    setBusy(true);
+    setPocketError("");
+    const row = pocketCardRow(card);
+    try {
+      if (card.id) {
+        const { error } = await supabase.from(TABLES.pocketCards).update({ ...row, updated_at: new Date().toISOString() }).eq("id", card.id);
+        if (error) throw error;
+        setPocketCards((cards) => cards.map((item) => (item.id === card.id ? { ...item, ...row } : item)));
+      } else {
+        const id = crypto.randomUUID();
+        const sortOrder = Math.max(-1, ...pocketOrderRef.current.values()) + 1;
+        const { error } = await supabase.from(TABLES.pocketCards).insert({ id, user_id: user.id, sort_order: sortOrder, ...row });
+        if (error) throw error;
+        pocketOrderRef.current.set(id, sortOrder);
+        setPocketCards((cards) => [...cards, { ...card, ...row, id }]);
+      }
+      notify({ tone: "success", title: card.id ? "บันทึกการ์ดแล้ว" : "เพิ่มการ์ดลงกระเป๋าแล้ว", detail: row.label });
+      pocketDismiss.requestClose();
+    } catch (error) {
+      setPocketError((error as { message?: string }).message ?? "บันทึกการ์ดไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deletePocketCard(card: PocketCard) {
     const confirmed = await requestConfirm({ title: "ลบการ์ดนี้?", detail: card.label, confirmLabel: "ลบการ์ด", tone: "danger" });
-    if (!confirmed) return;
+    if (!confirmed || !supabase) return;
+    const { error } = await supabase.from(TABLES.pocketCards).delete().eq("id", card.id);
+    if (error) {
+      notify({ tone: "error", title: "ลบการ์ดไม่สำเร็จ", detail: error.message });
+      return;
+    }
+    pocketOrderRef.current.delete(card.id);
     setPocketCards((cards) => cards.filter((item) => item.id !== card.id));
+    notify({ tone: "info", title: "ลบการ์ดแล้ว", detail: card.label });
     pocketDismiss.requestClose();
-  };
-  const movePocketCard = (id: string, delta: -1 | 1) => {
-    setPocketCards((cards) => {
-      const from = cards.findIndex((item) => item.id === id);
-      const to = from + delta;
-      if (from < 0 || to < 0 || to >= cards.length) return cards;
-      const next = [...cards];
-      [next[from], next[to]] = [next[to], next[from]];
-      return next;
-    });
-  };
+  }
+
+  // Moves on screen at once and writes behind it; a failed write puts the
+  // previous order back rather than leaving the screen and the table apart.
+  async function movePocketCard(id: string, delta: -1 | 1) {
+    if (!supabase) return;
+    const previous = pocketCards;
+    const previousOrder = new Map(pocketOrderRef.current);
+    const plan = planPocketMove(pocketCards, id, delta, pocketOrderRef.current);
+    if (!plan) return;
+    setPocketCards(plan.cards);
+    plan.updates.forEach((row) => pocketOrderRef.current.set(row.id, row.sort_order));
+    const results = await Promise.all(
+      plan.updates.map((row) => supabase!.from(TABLES.pocketCards).update({ sort_order: row.sort_order }).eq("id", row.id)),
+    );
+    const failed = results.find((result) => result.error);
+    if (failed) {
+      setPocketCards(previous);
+      pocketOrderRef.current = previousOrder;
+      notify({ tone: "error", title: "เรียงการ์ดไม่สำเร็จ", detail: failed.error!.message });
+    }
+  }
+
   const recapDismiss = useDismiss(recapOpen, () => setRecapOpen(false));
   const deleteAccountDismiss = useDismiss(deleteAccountOpen, () => setDeleteAccountOpen(false));
   const logoutDismiss = useDismiss<[boolean]>(logoutOpen, (confirmed) => { setLogoutOpen(false); if (confirmed) void supabase?.auth.signOut(); });
@@ -3316,10 +3398,10 @@ export default function Home() {
                     <PocketFace
                       cards={pocketCards}
                       onFlip={flip}
-                      onManage={() => setPocketSheet({ kind: "manage" })}
-                      onAdd={() => setPocketSheet({ kind: "form", card: null })}
-                      onShare={(card) => setPocketSheet({ kind: "share", card })}
-                      onDetails={(card) => setPocketSheet({ kind: "detail", card })}
+                      onManage={() => openPocketSheet({ kind: "manage" })}
+                      onAdd={() => openPocketSheet({ kind: "form", card: null })}
+                      onShare={(card) => openPocketSheet({ kind: "share", card })}
+                      onDetails={(card) => openPocketSheet({ kind: "detail", card })}
                     />
                   )}
                 />
@@ -3867,8 +3949,8 @@ export default function Home() {
           <PocketManageSheet
             cards={pocketCards}
             onClose={pocketDismiss.requestClose}
-            onAdd={() => setPocketSheet({ kind: "form", card: null })}
-            onEdit={(card) => setPocketSheet({ kind: "form", card })}
+            onAdd={() => openPocketSheet({ kind: "form", card: null })}
+            onEdit={(card) => openPocketSheet({ kind: "form", card })}
             onMove={movePocketCard}
             closing={pocketDismiss.closing}
           />
@@ -3877,6 +3959,8 @@ export default function Home() {
           <PocketCardForm
             key={pocketSheet.card?.id ?? "new"}
             card={pocketSheet.card}
+            busy={busy}
+            error={pocketError}
             onClose={pocketDismiss.requestClose}
             onSave={savePocketCard}
             onDelete={deletePocketCard}
@@ -3887,8 +3971,8 @@ export default function Home() {
           <PocketDetailSheet
             card={pocketSheet.card}
             onClose={pocketDismiss.requestClose}
-            onShare={(card) => setPocketSheet({ kind: "share", card })}
-            onEdit={(card) => setPocketSheet({ kind: "form", card })}
+            onShare={(card) => openPocketSheet({ kind: "share", card })}
+            onEdit={(card) => openPocketSheet({ kind: "form", card })}
             onDelete={deletePocketCard}
             closing={pocketDismiss.closing}
           />

@@ -109,7 +109,7 @@ export function buildSeed(now = Date.now()): PreviewSeed {
     // payload rather than text that only looks like one.
     pocketCards: [
       { id: "preview-p1", kind: "promptpay", label: "พร้อมเพย์ส่วนตัว", holder: "เบค ส.", bank: null, value: "0812345678", hue: "--cat-bills" },
-      { id: "preview-p2", kind: "qr", label: "K+ ร้านกาแฟ", holder: "ร้านบ้านเบค", bank: "กสิกรไทย", value: buildPromptPayPayload("1234567890123")!, hue: "--cat-travel" },
+      { id: "preview-p2", kind: "qr", label: "K+ ร้านกาแฟ", holder: "ร้านบ้านเบค", bank: null, value: buildPromptPayPayload("1234567890123")!, hue: "--cat-travel" },
       { id: "preview-p3", kind: "account", label: "บัญชีเงินเดือน", holder: "เบค ส.", bank: "ไทยพาณิชย์", value: "4071234567", hue: "--cat-goods" },
       { id: "preview-p4", kind: "barcode", label: "The 1", holder: null, bank: "Central", value: "7001234567890123", hue: "--cat-entertainment" },
     ],

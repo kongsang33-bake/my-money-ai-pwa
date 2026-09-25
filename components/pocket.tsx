@@ -10,21 +10,21 @@
 // the card's jobs instead: แชร์ and รายละเอียด.
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import qrcode from "qrcode-generator";
 import { ArrowDown, ArrowUp, Barcode as BarcodeIcon, ChevronDown, ChevronLeft, ChevronRight, Copy, ImageUp, Info, Landmark, Menu, Pencil, Plus, QrCode as QrCodeIcon, RotateCcw, ScanQrCode, Share2, Trash2, WalletCards } from "lucide-react";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, POCKET_BANK_MAX_LENGTH, POCKET_CARD_LIMIT, POCKET_HOLDER_MAX_LENGTH, POCKET_LABEL_MAX_LENGTH } from "@/lib/constants";
 import {
   POCKET_BANKS,
   POCKET_HUES,
   POCKET_KIND_LABELS,
-  canEncodeCode128,
   code128Widths,
   describeScannedQr,
   digitsOnly,
+  encodeQr,
   formatAccountNumber,
   formatPromptPayNumber,
   pocketCardCaption,
   pocketCopyValue,
+  pocketDraftProblem,
   pocketQrPayload,
   promptPayTarget,
   type PocketCard,
@@ -45,13 +45,6 @@ export const POCKET_KIND_ICONS: Record<PocketCardKind, typeof QrCodeIcon> = {
 // Codes
 // ---------------------------------------------------------------------------
 
-function qrModules(payload: string) {
-  const qr = qrcode(0, "M");
-  qr.addData(payload, "Byte");
-  qr.make();
-  return qr;
-}
-
 /**
  * A QR as one SVG path of its dark modules, black on the white paper every
  * scanner expects -- the app is dark, but a light-on-dark QR is one many
@@ -64,15 +57,12 @@ function qrModules(payload: string) {
 export const QrCode = memo(function QrCode({ payload, label }: { payload: string; label: string }) {
   const quiet = 3;
   const { path, size } = useMemo(() => {
-    const qr = qrModules(payload);
-    const count = qr.getModuleCount();
+    const modules = encodeQr(payload);
     let d = "";
-    for (let row = 0; row < count; row++) {
-      for (let col = 0; col < count; col++) {
-        if (qr.isDark(row, col)) d += `M${col + quiet} ${row + quiet}h1v1h-1z`;
-      }
-    }
-    return { path: d, size: count + quiet * 2 };
+    modules.forEach((cells, row) => cells.forEach((dark, col) => {
+      if (dark) d += `M${col + quiet} ${row + quiet}h1v1h-1z`;
+    }));
+    return { path: d, size: modules.length + quiet * 2 };
   }, [payload]);
   return (
     <svg className="pocket-qr" viewBox={`0 0 ${size} ${size}`} role="img" aria-label={label} shapeRendering="crispEdges">
@@ -339,16 +329,14 @@ export async function renderPocketCardImage(card: PocketCard): Promise<Blob> {
   ctx.fillStyle = qrInk;
   const payload = pocketQrPayload(card);
   if (payload) {
-    const qr = qrModules(payload);
-    const count = qr.getModuleCount();
+    const modules = encodeQr(payload);
+    const count = modules.length;
     const cell = Math.floor((panel - 80) / count);
     const offset = panelX + (panel - cell * count) / 2;
     const offsetY = panelY + (panel - cell * count) / 2;
-    for (let row = 0; row < count; row++) {
-      for (let col = 0; col < count; col++) {
-        if (qr.isDark(row, col)) ctx.fillRect(offset + col * cell, offsetY + row * cell, cell, cell);
-      }
-    }
+    modules.forEach((cells, row) => cells.forEach((dark, col) => {
+      if (dark) ctx.fillRect(offset + col * cell, offsetY + row * cell, cell, cell);
+    }));
   } else if (card.kind === "barcode") {
     const widths = code128Widths(card.value);
     const modules = widths.reduce((sum, value) => sum + value, 0);
@@ -360,32 +348,38 @@ export async function renderPocketCardImage(card: PocketCard): Promise<Blob> {
     });
     ctx.font = `500 36px ${font}`;
     ctx.textAlign = "center";
-    ctx.fillText(card.value, width / 2, panelY + 316);
+    ctx.fillText(card.value, width / 2, panelY + 316, panel - 80);
   } else {
     ctx.font = `600 34px ${font}`;
     ctx.textAlign = "center";
-    ctx.fillText(card.bank ?? "เลขบัญชี", width / 2, panelY + 130);
+    ctx.fillText(card.bank ?? "เลขบัญชี", width / 2, panelY + 130, panel - 80);
     ctx.font = `700 76px ${font}`;
-    ctx.fillText(formatAccountNumber(card.value), width / 2, panelY + 240);
+    ctx.fillText(formatAccountNumber(card.value), width / 2, panelY + 240, panel - 80);
   }
 
   const wordsY = card.kind === "barcode" || card.kind === "account" ? panelY + 480 : panelY + panel + 110;
   ctx.textAlign = "center";
   ctx.fillStyle = ink;
   ctx.font = `700 58px ${font}`;
-  ctx.fillText(card.label, width / 2, wordsY);
+  ctx.fillText(card.label, width / 2, wordsY, width - 200);
   ctx.fillStyle = ink2;
   ctx.font = `500 36px ${font}`;
-  ctx.fillText(pocketCardCaption(card), width / 2, wordsY + 64);
+  ctx.fillText(pocketCardCaption(card), width / 2, wordsY + 64, width - 200);
   ctx.font = `600 28px ${font}`;
   ctx.fillText(APP_NAME, width / 2, height - 110);
 
   return new Promise((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("toBlob"))), "image/png"));
 }
 
-async function shareCardImage(card: PocketCard) {
-  const blob = await renderPocketCardImage(card);
-  const file = new File([blob], `${card.label}.png`, { type: "image/png" });
+/**
+ * Hands the picture to the OS share sheet, or saves it where there is none
+ * (most desktops). Takes a blob that is already drawn: iOS only lets a tap
+ * open the share sheet if nothing slow happened in between, and drawing a
+ * 1080px card is slow enough to lose it.
+ */
+async function shareCardImage(card: PocketCard, blob: Blob) {
+  const name = `${card.label.replace(/[\\/:*?"<>|]/g, " ").trim() || APP_NAME}.png`;
+  const file = new File([blob], name, { type: "image/png" });
   if (navigator.canShare?.({ files: [file] })) {
     await navigator.share({ files: [file], title: card.label });
     return "shared" as const;
@@ -393,7 +387,7 @@ async function shareCardImage(card: PocketCard) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = file.name;
+  link.download = name;
   link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   return "downloaded" as const;
@@ -411,7 +405,25 @@ export function PocketShareSheet({
   closing?: boolean;
 }) {
   const copy = pocketCopyValue(card);
-  const [busy, setBusy] = useState(false);
+  const [image, setImage] = useState<Blob | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
+  const [sharing, setSharing] = useState(false);
+
+  // Drawn as soon as the sheet opens, so the tap on แชร์เป็นรูป goes straight
+  // to the share sheet (see shareCardImage). Fonts first: a canvas drawn
+  // before the webfont is ready falls back to a system face.
+  useEffect(() => {
+    let live = true;
+    document.fonts.ready
+      .then(() => renderPocketCardImage(card))
+      .then((blob) => { if (live) setImage(blob); })
+      .catch(() => { if (live) setImageFailed(true); });
+    return () => { live = false; };
+  }, [card]);
+
+  // National ID numbers stay masked on screen here too; the copy is whole.
+  const shownCopy = copy && card.kind === "promptpay" ? formatPromptPayNumber(card.value) : copy?.text;
+
   return (
     <SheetFrame onClose={onClose} closing={closing} className="edit-sheet pocket-sheet">
       <div className="sheet-head">
@@ -428,34 +440,38 @@ export function PocketShareSheet({
                 onNotify(`คัดลอก${copy.label}แล้ว`);
                 onClose();
               } catch {
-                onNotify("คัดลอกไม่ได้ ลองกดค้างที่ตัวเลขในรายละเอียดแทน", "error");
+                onNotify("คัดลอกไม่ได้ ลองอีกครั้ง หรือเปิดรายละเอียดแล้วกดค้างที่ตัวเลข", "error");
               }
             }}
           >
             <Copy size={20} strokeWidth={2.25} aria-hidden="true" />
-            <span><b>คัดลอก{copy.label}</b><small>{copy.text}</small></span>
+            <span><b>คัดลอก{copy.label}</b><small>{shownCopy}</small></span>
           </button>
         )}
         <button
           type="button"
-          disabled={busy}
+          disabled={!image || sharing}
           onClick={async () => {
-            setBusy(true);
+            if (!image) return;
+            setSharing(true);
             try {
-              const result = await shareCardImage(card);
+              const result = await shareCardImage(card, image);
               if (result === "downloaded") onNotify("บันทึกรูปการ์ดแล้ว");
               onClose();
             } catch (error) {
               // Closing the OS share sheet without picking anything rejects
               // with AbortError, which is not a failure.
-              if ((error as Error).name !== "AbortError") onNotify("สร้างรูปการ์ดไม่สำเร็จ", "error");
+              if ((error as Error).name !== "AbortError") onNotify("แชร์รูปการ์ดไม่สำเร็จ", "error");
             } finally {
-              setBusy(false);
+              setSharing(false);
             }
           }}
         >
           <ImageUp size={20} strokeWidth={2.25} aria-hidden="true" />
-          <span><b>{busy ? "กำลังสร้างรูป..." : "แชร์เป็นรูป"}</b><small>ส่งการ์ดทั้งใบให้คนอื่นสแกนได้</small></span>
+          <span>
+            <b>แชร์เป็นรูป</b>
+            <small>{imageFailed ? "สร้างรูปการ์ดไม่สำเร็จ" : image ? "ส่งการ์ดทั้งใบให้คนอื่นสแกนได้" : "กำลังเตรียมรูป..."}</small>
+          </span>
         </button>
       </div>
     </SheetFrame>
@@ -580,7 +596,8 @@ export function PocketManageSheet({
           })}
         </ol>
       )}
-      <button className="primary" onClick={onAdd}>
+      {cards.length >= POCKET_CARD_LIMIT && <p className="pocket-form-note">ครบ {POCKET_CARD_LIMIT} ใบแล้ว ลบใบที่ไม่ใช้ก่อนเพิ่มใบใหม่</p>}
+      <button className="primary" onClick={onAdd} disabled={cards.length >= POCKET_CARD_LIMIT}>
         <Plus size={20} strokeWidth={2.5} aria-hidden="true" />เพิ่มการ์ด
       </button>
     </SheetFrame>
@@ -608,31 +625,26 @@ async function decodeQrFromImage(file: File): Promise<string | null> {
   return jsQR(image.data, image.width, image.height)?.data ?? null;
 }
 
-/** Why a draft card cannot be saved yet, in words, or null when it can. */
-function pocketDraftProblem(draft: PocketCard) {
-  if (!draft.label.trim()) return "ตั้งชื่อการ์ด";
-  if (draft.kind === "promptpay" && !promptPayTarget(draft.value)) return "เบอร์ 10 หลัก หรือเลขบัตรประชาชน 13 หลัก";
-  if (draft.kind === "qr" && !draft.value) return "อัปโหลดรูป QR จากแอปธนาคาร";
-  if (draft.kind === "barcode" && !canEncodeCode128(draft.value)) return "ใส่เลขบาร์โค้ด (ตัวเลขหรือตัวอักษรอังกฤษ)";
-  if (draft.kind === "account" && digitsOnly(draft.value).length < 10) return "ใส่เลขบัญชีอย่างน้อย 10 หลัก";
-  return null;
-}
-
 export function PocketCardForm({
   card,
+  busy,
+  error,
   onClose,
   onSave,
   onDelete,
   closing,
 }: {
   card: PocketCard | null;
+  busy: boolean;
+  error: string;
   onClose: () => void;
+  /** A new card comes with an empty id; the page gives it one on insert. */
   onSave: (card: PocketCard) => void;
   onDelete: (card: PocketCard) => void;
   closing?: boolean;
 }) {
-  const [draft, setDraft] = useState<PocketCard>(() =>
-    card ?? { id: `pocket-${crypto.randomUUID()}`, kind: "promptpay", label: "", holder: null, bank: null, value: "", hue: POCKET_HUES[0] },
+  const [draft, setDraft] = useState<PocketCard>(
+    card ?? { id: "", kind: "promptpay", label: "", holder: null, bank: null, value: "", hue: POCKET_HUES[0] },
   );
   const [scanError, setScanError] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -671,7 +683,7 @@ export function PocketCardForm({
 
       <label>
         ชื่อการ์ด
-        <input value={draft.label} onChange={(event) => set({ label: event.target.value })} placeholder={draft.kind === "barcode" ? "เช่น The 1" : "เช่น พร้อมเพย์ส่วนตัว"} />
+        <input value={draft.label} maxLength={POCKET_LABEL_MAX_LENGTH} onChange={(event) => set({ label: event.target.value })} placeholder={draft.kind === "barcode" ? "เช่น The 1" : "เช่น พร้อมเพย์ส่วนตัว"} />
       </label>
 
       {draft.kind === "promptpay" && (
@@ -720,7 +732,7 @@ export function PocketCardForm({
       {draft.kind === "barcode" && (
         <label>
           เลขบาร์โค้ด
-          <input value={draft.value} onChange={(event) => set({ value: event.target.value.trim() })} placeholder="เลขที่พิมพ์ใต้บาร์โค้ดบนบัตร" />
+          <input value={draft.value} maxLength={80} autoCapitalize="characters" onChange={(event) => set({ value: event.target.value.trim() })} placeholder="เลขที่พิมพ์ใต้บาร์โค้ดบนบัตร" />
         </label>
       )}
 
@@ -743,14 +755,14 @@ export function PocketCardForm({
               <ChevronDown className="select-shell-chevron" aria-hidden="true" />
             </div>
           ) : (
-            <input value={draft.bank ?? ""} onChange={(event) => set({ bank: event.target.value || null })} placeholder="เช่น Central" />
+            <input value={draft.bank ?? ""} maxLength={POCKET_BANK_MAX_LENGTH} onChange={(event) => set({ bank: event.target.value || null })} placeholder="เช่น Central" />
           )}
         </label>
       )}
 
       <label>
         ชื่อเจ้าของ (ให้คนสแกนเห็น)
-        <input value={draft.holder ?? ""} onChange={(event) => set({ holder: event.target.value || null })} placeholder="เช่น สมชาย ใ." />
+        <input value={draft.holder ?? ""} maxLength={POCKET_HOLDER_MAX_LENGTH} onChange={(event) => set({ holder: event.target.value || null })} placeholder="เช่น สมชาย ใ." />
       </label>
 
       <div className="sheet-field">
@@ -772,11 +784,13 @@ export function PocketCardForm({
       </div>
 
       {problem && <p className="pocket-form-note">{problem}</p>}
-      <button className="save" disabled={!!problem} onClick={() => onSave({ ...draft, label: draft.label.trim() })}>
-        <WalletCards size={20} strokeWidth={2.25} aria-hidden="true" />{card ? "บันทึกการแก้ไข" : "เพิ่มลงกระเป๋า"}
+      {error && <p className="pocket-form-error" role="alert">{error}</p>}
+      <button className="save" disabled={!!problem || busy || scanning} onClick={() => onSave({ ...draft, label: draft.label.trim() })}>
+        <WalletCards size={20} strokeWidth={2.25} aria-hidden="true" />
+        {busy ? "กำลังบันทึก..." : card ? "บันทึกการแก้ไข" : "เพิ่มลงกระเป๋า"}
       </button>
       {card && (
-        <button className="detail-delete pocket-form-delete" onClick={() => onDelete(card)}>
+        <button className="detail-delete pocket-form-delete" disabled={busy} onClick={() => onDelete(card)}>
           <Trash2 size={18} strokeWidth={2.25} aria-hidden="true" />ลบการ์ดนี้
         </button>
       )}

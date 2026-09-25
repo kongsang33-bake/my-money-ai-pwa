@@ -22,7 +22,7 @@ export const BRAND_SLOGANS = [
 // device (the landing page's last screen). Change it whenever the policy's
 // substance changes: an acknowledgement of an older version no longer counts,
 // so everyone is asked to read it again before their next sign-in.
-export const PRIVACY_POLICY_VERSION = "2026-09-25";
+export const PRIVACY_POLICY_VERSION = "2026-09-26";
 export const PRIVACY_ACK_STORAGE_KEY = "nubmon-privacy-ack";
 // Where the policy tells people to write to have their account deleted.
 export const PRIVACY_CONTACT_EMAIL = "kongsang33@gmail.com";
@@ -126,6 +126,7 @@ export const TABLES = {
   budgets: "budgets",
   moneyGoals: "money_goals",
   privacyAcknowledgements: "privacy_acknowledgements",
+  pocketCards: "pocket_cards",
 } as const;
 
 // Postgres functions the app calls through supabase.rpc(...).
@@ -169,6 +170,20 @@ export const AI_CHAT_HISTORY_LIMIT = 50;
 export const BUDGET_COLUMNS = "category,amount";
 
 export const MONEY_GOAL_COLUMNS = "id,name,target,saved,deadline";
+
+export const POCKET_CARD_COLUMNS = "id,kind,label,holder,bank,value,hue,sort_order";
+
+// The card pocket's field lengths, the same numbers as the checks on
+// pocket_cards (supabase/migrations/20260926100000_add_pocket_cards.sql) so
+// the form refuses what the database would. A payment QR's text is ~100-300
+// characters; 1024 leaves room without accepting a whole page of text.
+export const POCKET_LABEL_MAX_LENGTH = 60;
+export const POCKET_HOLDER_MAX_LENGTH = 80;
+export const POCKET_BANK_MAX_LENGTH = 60;
+export const POCKET_VALUE_MAX_LENGTH = 1024;
+// A pocket, not a filing cabinet: past this many the dots stop meaning
+// anything and a swipe to the one you want takes longer than typing it.
+export const POCKET_CARD_LIMIT = 20;
 
 // Guards the one-time import of budgets/goals/net-worth-display settings
 // from localStorage into Supabase for a user who had them set before this

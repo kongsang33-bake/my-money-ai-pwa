@@ -76,7 +76,31 @@ and deletes nothing itself: "แก้ไข" hands the row to `EditSheet` and "
 fast path is the row itself (`SwipeEntry`, components/add.tsx): on touch it
 slides left to uncover "แก้ไข" and "ลบ" (`ENTRY_SWIPE_ACTIONS_WIDTH`), on a
 mouse the same two sit at the row's end as icons, and a keyboard focusing
-either opens the row -- so nothing is reachable only by gesture. The nav's fourth slot is
+either opens the row -- so nothing is reachable only by gesture. The billboard has a
+**back: the card pocket** (`FlipBillboard`/`PocketFace`, components/pocket.tsx;
+`pocket_cards`; the pure half in lib/pocket.ts). Home always opens on the
+balance; the `WalletCards` button in the billboard's corner turns it over --
+a button, never a tap anywhere on the box, because a miss beside จดรายการ
+would flip it -- and the same corner turns it back, with focus following the
+turn and the turned-away face `inert`. The back swipes one card at a time
+(native scroll-snap, arrows for a mouse, arrow keys) and each card shows its
+code at once: a PromptPay number drawn as its QR (`buildPromptPayPayload`,
+EMVCo + CRC16), a QR read out of a bank app's screenshot **on the device**
+(jsQR, lazy-loaded) and stored as its text, a Code 128 barcode, or a bank
+account's number set large. **No picture is ever stored** -- say so in the
+privacy policy if that changes. Codes are black on white (`--qr-paper`/
+`--qr-ink`) whatever the theme, because many scanners will not read a light
+QR on dark. QR text goes in as UTF-8 through `encodeQr`; the library's own
+default kept only each character's low byte. National ID numbers are masked
+on screen (`formatPromptPayNumber`) but copied whole. The back's two actions
+are แชร์ (copy the number, or the card as a PNG drawn on a canvas from the
+live tokens, pre-rendered when the sheet opens so iOS still counts the tap as
+the gesture that opens the share sheet) and รายละเอียด; ≡ opens the manage
+sheet (order, add, edit). A card's `hue` is read back through `toPocketCard`,
+which only allows the `POCKET_HUES` slots, because it ends up in a style.
+`QrCode` is memoised on its text: Home re-renders on every tab change, and
+re-encoding the pocket each time cost a tap to History its frame budget. The
+e2e seed carries one card of each kind (`pocketCards`). The nav's fourth slot is
 **"กำลังจะมา"** (`UpcomingView`, components/upcoming.tsx): a timeline, date
 down the left, of what `buildUpcoming` finds in the next
 `UPCOMING_WINDOW_DAYS` counted **from today, not from the cycle** — so on the
