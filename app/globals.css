@@ -6674,7 +6674,9 @@ input[type="checkbox"], input[type="radio"] {
   transition: opacity var(--t-3) ease-out;
   isolation: isolate;
 }
-#app-splash.app-splash-fade { opacity: 0; }
+/* Fading out, it no longer takes input: for the half-second before it is
+   removed it sat invisibly on top and swallowed the first scroll or tap. */
+#app-splash.app-splash-fade { opacity: 0; pointer-events: none; }
 
 #app-splash-inner {
   display: flex;
@@ -6994,10 +6996,19 @@ input[type="checkbox"], input[type="radio"] {
 /* The scroller. `mandatory` so a flick lands on a whole screen; a screen
    taller than the window (a small phone) still scrolls inside itself. */
 .landing {
+  position: relative;
   height: 100%;
   overflow-y: auto;
   overscroll-behavior-y: contain;
   scroll-snap-type: y mandatory;
+}
+
+/* A mouse or trackpad pages by script instead (Landing's wheel effect):
+   snapping under a wheel nudged and dragged back on every notch. */
+@media (hover: hover) and (pointer: fine) {
+  .landing {
+    scroll-snap-type: none;
+  }
 }
 
 .landing-section {

@@ -28,6 +28,28 @@ test.describe("landing", () => {
     await expect(page.locator(".google-button")).toBeInViewport();
   });
 
+  test("turns one whole screen per wheel gesture on a desktop", async ({ page, isMobile }) => {
+    test.skip(isMobile, "a wheel is a mouse or trackpad; touch keeps native snapping");
+    await openLanding(page);
+    const scroller = page.locator(".landing");
+    const offsetOf = (id: string) => page.locator(`#${id}`).evaluate((el) => (el as HTMLElement).offsetTop);
+    const scrollTop = () => scroller.evaluate((el) => el.scrollTop);
+
+    await page.mouse.move(200, 300);
+    // Several events close together are one gesture (a trackpad flick):
+    // one page, not three.
+    for (let i = 0; i < 3; i++) await page.mouse.wheel(0, 60);
+    await expect.poll(scrollTop).toBe(await offsetOf("landing-install"));
+
+    await page.waitForTimeout(400);
+    await page.mouse.wheel(0, 60);
+    await expect.poll(scrollTop).toBe(await offsetOf("landing-signin"));
+
+    await page.waitForTimeout(400);
+    await page.keyboard.press("PageUp");
+    await expect.poll(scrollTop).toBe(await offsetOf("landing-install"));
+  });
+
   test("keeps sign-in shut until the privacy policy is acknowledged", async ({ page}) => {
     await openLanding(page);
     const google = page.locator(".google-button");

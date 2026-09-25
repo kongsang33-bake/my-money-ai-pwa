@@ -42,6 +42,14 @@ const SECURITY_POINTS = [
   },
 ] as const;
 
+// Paging on a desktop (see the wheel effect in Landing): how long one page
+// turn takes, how far a wheel gesture travels before it counts, and the quiet
+// gap between wheel events that ends a gesture (a trackpad keeps sending
+// inertia events for a while after the fingers lift).
+const LANDING_PAGE_MS = 700;
+const WHEEL_PAGE_THRESHOLD = 24;
+const WHEEL_GESTURE_GAP_MS = 220;
+
 type Platform = "ios" | "android";
 
 const INSTALL_STEPS: Record<Platform, { icon: typeof Share; text: string }[]> = {
@@ -131,9 +139,107 @@ export function Landing() {
     return () => observer.disconnect();
   }, []);
 
+  // Scrolls the landing to a screen with our own easing, so a dot, a "next"
+  // button, the wheel and the keyboard all move the same way and take the
+  // same time. Reduced motion jumps straight there.
+  const animatingRef = useRef(false);
   const goTo = useCallback((index: number) => {
-    document.getElementById(SECTIONS[index].id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const scroller = scrollerRef.current;
+    const target = document.getElementById(SECTIONS[index]?.id ?? "");
+    if (!scroller || !target) return;
+    const from = scroller.scrollTop;
+    const to = target.offsetTop;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce || Math.abs(to - from) < 2) {
+      scroller.scrollTop = to;
+      return;
+    }
+    const start = performance.now();
+    animatingRef.current = true;
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / LANDING_PAGE_MS);
+      const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      scroller.scrollTop = from + (to - from) * eased;
+      if (t < 1) requestAnimationFrame(step);
+      else animatingRef.current = false;
+    };
+    requestAnimationFrame(step);
   }, []);
+
+  // On a mouse or trackpad, CSS snapping fights the wheel: every notch nudges
+  // the page a little and snap drags it back, which read as stiff. There the
+  // snap is off (globals.css, pointer: fine) and one wheel gesture turns one
+  // page instead. A screen taller than the window still scrolls natively
+  // until its edge, and a trackpad's inertia after a page turn is swallowed
+  // until the gesture ends (a gap between wheel events), so one flick never
+  // turns two pages. The keyboard gets the same paging.
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const sections = () => Array.from(scroller.querySelectorAll<HTMLElement>(".landing-section"));
+    const currentIndex = () => {
+      const top = scroller.scrollTop + 2;
+      let index = 0;
+      sections().forEach((section, i) => { if (section.offsetTop <= top) index = i; });
+      return index;
+    };
+    // Whether a move in `dir` should stay native: still inside a tall screen.
+    const insideTallSection = (dir: number) => {
+      const section = sections()[currentIndex()];
+      if (!section) return false;
+      const viewTop = scroller.scrollTop;
+      const viewBottom = viewTop + scroller.clientHeight;
+      return dir > 0 ? viewBottom < section.offsetTop + section.offsetHeight - 2 : viewTop > section.offsetTop + 2;
+    };
+    const page = (dir: number) => {
+      const next = currentIndex() + dir;
+      if (next < 0 || next >= SECTIONS.length) return;
+      goTo(next);
+    };
+
+    let lastWheel = 0;
+    let consumed = false;
+    let travel = 0;
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
+      const now = performance.now();
+      if (now - lastWheel > WHEEL_GESTURE_GAP_MS) {
+        consumed = false;
+        travel = 0;
+      }
+      lastWheel = now;
+      const dir = Math.sign(event.deltaY);
+      if (!dir) return;
+      if (!consumed && !animatingRef.current && insideTallSection(dir)) return;
+      event.preventDefault();
+      if (consumed || animatingRef.current) return;
+      travel += event.deltaY;
+      if (Math.abs(travel) < WHEEL_PAGE_THRESHOLD) return;
+      consumed = true;
+      page(dir);
+    };
+
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (target?.closest("input, textarea, select, [role='dialog'], [role='tablist']")) return;
+      // Space presses a focused button or link; it is not a page turn there.
+      if (event.key === " " && target?.closest("button, a, summary")) return;
+      const dir = event.key === "ArrowDown" || event.key === "PageDown" || (event.key === " " && !event.shiftKey) ? 1
+        : event.key === "ArrowUp" || event.key === "PageUp" || (event.key === " " && event.shiftKey) ? -1
+          : 0;
+      if (!dir || insideTallSection(dir)) return;
+      event.preventDefault();
+      if (!animatingRef.current) page(dir);
+    };
+
+    scroller.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("keydown", onKey);
+    return () => {
+      scroller.removeEventListener("wheel", onWheel);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [goTo]);
 
   async function install() {
     if (!installPrompt) return;

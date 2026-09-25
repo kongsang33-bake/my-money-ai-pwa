@@ -110,7 +110,10 @@ dots that fill in `--accent`, and a bare keypad. It is centred with auto
 margins, not `align-items`, so a short window scrolls it instead of pushing
 its top out of reach, and it tightens under 800px tall so a laptop sees the
 whole thing. Signed out, the app is **`Landing`** (components/landing.tsx), every time:
-three full-height screens that snap one at a time -- what the app is and how
+three full-height screens that turn one at a time (native snap on touch; on a
+mouse or trackpad the snap is off and one wheel gesture, or PageDown, turns
+one page with the landing's own easing, since snap under a wheel felt stiff)
+-- what the app is and how
 its data is kept, how to install it as a PWA (iPhone/Android tabs, plus
 Chrome's own install prompt when it offers one), then `SignInPanel`
 (components/auth.tsx), the only sign-in there is. It is the PIN gate's shape:
