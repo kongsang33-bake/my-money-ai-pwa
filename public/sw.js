@@ -39,7 +39,7 @@ self.addEventListener("fetch", (event) => {
   // network-dependent and must never be served from cache.
   if (url.pathname.startsWith("/api/")) return;
 
-  // Only the app itself is the shell. Any other page (/privacy) goes straight
+  // Only the app itself is the shell. Any other page (/login, /privacy) goes straight
   // to the network: answering it from the cached shell would open the app in
   // its place, and caching its response as the shell would do the reverse on
   // the next launch.

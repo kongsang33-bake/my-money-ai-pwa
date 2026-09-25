@@ -15,7 +15,7 @@ const test = base.extend<{ errors: string[] }>({
 });
 
 test.describe("landing", () => {
-  test("reads top to bottom, ending on the sign-in", async ({ page }) => {
+  test("reads top to bottom under a nav that stays put", async ({ page }) => {
     await openLanding(page);
     await expect(page.locator(".landing-hero h1")).toBeVisible();
     await expect(page.locator(".landing-features .rank")).toHaveCount(5);
@@ -26,10 +26,31 @@ test.describe("landing", () => {
     await page.getByRole("tab", { name: "Android" }).click();
     await expect(page.locator(".landing-steps")).toContainText("Chrome");
 
-    // The hero's one button leads to the one sign-in, at the foot.
+    // Scrolled down, the brand and the way in are still at the top, now on
+    // a solid ground; there is no sign-in on this page itself.
+    const nav = page.locator(".landing-nav");
+    await expect(nav).toHaveClass(/is-solid/);
+    await expect(nav.getByRole("link", { name: "เข้าสู่ระบบ" })).toBeInViewport();
+    expect(Math.round((await nav.boundingBox())!.y)).toBe(0);
+    await expect(page.locator(".google-button")).toHaveCount(0);
+
     await page.locator(".landing").evaluate((el) => el.scrollTo(0, 0));
-    await page.getByRole("button", { name: "เริ่มใช้งาน" }).click();
-    await expect(page.locator(".google-button")).toBeInViewport();
+    await expect(nav).not.toHaveClass(/is-solid/);
+  });
+
+  test("leads every way in to the sign-in page, and back", async ({ page }) => {
+    await openLanding(page);
+    await page.getByRole("link", { name: "เริ่มใช้งาน" }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.locator(".google-button")).toBeVisible();
+    await expect(page.locator("#app-splash")).toBeHidden();
+
+    await page.goBack();
+    await expect(page.locator(".landing-shell")).toBeVisible();
+    await page.locator(".landing-nav").getByRole("link", { name: "เข้าสู่ระบบ" }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    await page.locator(".login-page .landing-brand").click();
+    await expect(page.locator(".landing-shell")).toBeVisible();
   });
 
   test("opens an answer in the questions", async ({ page }) => {
@@ -41,8 +62,7 @@ test.describe("landing", () => {
   });
 
   test("keeps sign-in shut until the privacy policy is acknowledged", async ({ page}) => {
-    await openLanding(page);
-    await page.getByRole("button", { name: "เริ่มใช้งาน" }).click();
+    await page.goto("/login");
     const google = page.locator(".google-button");
     await expect(google).toBeDisabled();
     await page.locator(".email-fallback summary").click();
@@ -62,9 +82,8 @@ test.describe("landing", () => {
 
     // Remembered on this device for the same policy version -- but the landing
     // page itself still comes first.
-    await page.reload();
-    await expect(page.locator(".landing-shell")).toBeVisible();
-    await page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }).click();
+    await openLanding(page);
+    await page.locator(".landing-nav").getByRole("link", { name: "เข้าสู่ระบบ" }).click();
     await expect(page.locator(".privacy-ack.done")).toBeVisible();
     await expect(google).toBeEnabled();
   });

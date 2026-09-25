@@ -111,13 +111,17 @@ margins, not `align-items`, so a short window scrolls it instead of pushing
 its top out of reach, and it tightens under 800px tall so a laptop sees the
 whole thing. Signed out, the app is **`Landing`** (components/landing.tsx), every time:
 Netflix's own front page in the app's colours, one page that scrolls the
-ordinary way -- a hero over a tilted wall of the app's own `Poster`s (dimmed,
+ordinary way under a sticky nav (`.landing-nav`: the brand, and "เข้าสู่ระบบ",
+a shade over the hero and a solid ground once scrolled) -- a hero over a tilted wall of the app's own `Poster`s (dimmed,
 decorative) with one white "เริ่มใช้งาน", an emerald arc, a numbered `Rail`
 of what the app does (the `rank` shape Home's categories use), "ข้อมูลของคุณ
 ปลอดภัย" cards each in its own `--hue`, the install steps (iPhone/Android
-tabs, plus Chrome's install prompt when it offers one), an FAQ accordion, and
-at the foot `SignInPanel` (components/auth.tsx), the only sign-in there is --
-every "เริ่มใช้งาน" and the corner "เข้าสู่ระบบ" glide down to it. Every
+tabs, plus Chrome's install prompt when it offers one), an FAQ accordion and
+a footer. Sign-in is its own page, **`/login`** (`LoginScreen`,
+components/login.tsx), with `SignInPanel` (components/auth.tsx), the only
+sign-in there is -- every "เริ่มใช้งาน" and the nav's "เข้าสู่ระบบ" link
+there, and a signed-in visitor is sent on to "/". It sat at the foot of the
+landing for a while; a page of its own gives it a URL and a back button. Every
 earlier version turned one full screen at a time (snap, a scripted slide, a
 fade); on a mouse each read as a jolt, so don't bring paging back. The sign-in
 is the PIN gate's shape: one bare column under Home's glow,
@@ -134,9 +138,9 @@ tries again next launch. Bump `PRIVACY_POLICY_VERSION` when the policy's
 substance changes: everyone is asked again, and gets a new row.
 The policy is written once (`PrivacyPolicyContent`, components/privacy.tsx)
 and also served at `/privacy` -- every claim in it is something the code does,
-so check it when the data handling changes. `/privacy` is the only route
-besides `/`: the service worker leaves other navigations to the network, and
-CSS hides the boot splash there. The e2e suite reaches it through the seed's `pinMode`
+so check it when the data handling changes. `/login` and `/privacy` are the
+only routes besides `/`: the service worker leaves other navigations to the
+network, and CSS hides the boot splash on both. The e2e suite reaches it through the seed's `pinMode`
 (`openPinGate` in e2e/fixture.ts) and the a11y audit measures both modes.
 Wallets (`WalletsView`) is a bare total -- the billboard's kicker, a display
 figure, the spendable/set-aside split as one bar -- over `.wallet-tiles`:

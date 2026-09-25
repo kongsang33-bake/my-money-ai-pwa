@@ -67,9 +67,12 @@ test("meets contrast, target size and overflow limits", async ({ page }) => {
     await page.waitForTimeout(200);
     audits.push(await auditScreen(page, screen));
   }
-  await page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }).click();
-  await page.waitForTimeout(900);
-  audits.push(await auditScreen(page, "landing-signin"));
+  await page.locator(".landing").evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  await page.waitForTimeout(200);
+  audits.push(await auditScreen(page, "landing-foot"));
+  await page.goto("/login");
+  await expect(page.locator(".google-button")).toBeVisible();
+  audits.push(await auditScreen(page, "login"));
   await page.locator(".privacy-ack").click();
   await expect(page.locator(".privacy-sheet")).toBeVisible();
   audits.push(await auditScreen(page, "privacy-sheet"));

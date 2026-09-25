@@ -7009,6 +7009,9 @@ input[type="checkbox"], input[type="radio"] {
   display: flex;
   flex-direction: column;
   min-height: clamp(560px, 86vh, 760px);
+  /* Pulled up under the sticky nav, so the wall runs to the top edge. */
+  margin-top: calc(var(--topbar-block) * -1);
+  padding-top: var(--topbar-block);
   overflow: hidden;
   /* Faded out at the foot, not cut: a hard edge landing on a fractional
      pixel showed a hairline of the wall along it. */
@@ -7055,16 +7058,44 @@ input[type="checkbox"], input[type="radio"] {
     radial-gradient(ellipse 70% 60% at 50% 45%, color-mix(in srgb, var(--hero-glow) 30%, transparent), transparent 70%);
 }
 
-.landing-topbar {
+/* The nav, held at the top of the page wherever it is scrolled (sticky
+   inside the scroller): the brand on the left, "เข้าสู่ระบบ" on the right.
+   Over the hero it is only a shade, so the wall shows through the way
+   Netflix's does; once the page has scrolled (Landing sets .is-solid) a
+   solid ground fades in behind it so content passes under cleanly. The
+   ground is its own layer so the change is an opacity fade, which a
+   background swap could not be. */
+.landing-nav {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-nav);
+  isolation: isolate;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
-  padding: calc(env(safe-area-inset-top) + var(--s-4)) var(--s-5) 0;
+  min-height: var(--topbar-block);
+  padding: env(safe-area-inset-top) var(--s-5) 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 85%, transparent), transparent);
+}
+
+.landing-nav::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  opacity: 0;
+  transition: opacity var(--t-3) var(--e-out);
+}
+
+.landing-nav.is-solid::before {
+  opacity: 1;
 }
 
 @media (min-width: 900px) {
-  .landing-topbar {
+  .landing-nav {
     padding-inline: var(--s-8);
   }
 }
@@ -7073,6 +7104,9 @@ input[type="checkbox"], input[type="radio"] {
   display: flex;
   align-items: center;
   gap: var(--s-2);
+  min-height: 44px;
+  color: var(--ink);
+  text-decoration: none;
 }
 
 .landing-brand b {
@@ -7081,9 +7115,12 @@ input[type="checkbox"], input[type="radio"] {
 }
 
 /* Secondary on purpose: the hero's own "เริ่มใช้งาน" is the page's one white
-   button, and both lead to the same sign-in block. */
+   button, and both lead to the same sign-in page. */
 .landing-signin-link {
+  display: inline-flex;
+  align-items: center;
   min-height: 36px;
+  text-decoration: none;
   padding: 0 var(--s-4);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
@@ -7124,6 +7161,7 @@ input[type="checkbox"], input[type="radio"] {
 
 .landing-cta.primary {
   width: auto;
+  text-decoration: none;
   min-height: 56px;
   padding: 0 var(--s-7);
   font-size: var(--fs-h3);
@@ -7407,13 +7445,35 @@ input[type="checkbox"], input[type="radio"] {
   }
 }
 
-/* Sign-in again at the foot, lit by the same glow as Home's billboard. */
-.landing-final {
+/* The sign-in page, /login (components/login.tsx): the landing's nav,
+   solid, over one bare column lit by the glow Home's billboard sits in. */
+.login-page {
+  display: flex;
+  flex-direction: column;
+  height: var(--vvh, 100dvh);
+  overflow-y: auto;
+  background:
+    radial-gradient(ellipse 120% 480px at 50% 0, color-mix(in srgb, var(--hero-glow) 55%, transparent), transparent 80%) no-repeat,
+    var(--bg);
+}
+
+@media (min-width: 600px) {
+  .login-page {
+    background:
+      radial-gradient(ellipse 60% 480px at 50% 0, color-mix(in srgb, var(--hero-glow) 50%, transparent), transparent 85%) no-repeat,
+      var(--bg);
+  }
+}
+
+.login-page .landing-nav::before {
+  background: transparent;
+}
+
+.login-page-body {
+  flex: 1;
   display: flex;
   justify-content: center;
-  padding: var(--s-8) 0;
-  scroll-margin-top: var(--s-4);
-  background: radial-gradient(ellipse 60% 60% at 50% 35%, color-mix(in srgb, var(--hero-glow) 45%, transparent), transparent 75%);
+  padding: var(--s-5) var(--s-5) calc(var(--s-8) + env(safe-area-inset-bottom));
 }
 
 .landing-footer {
@@ -7494,7 +7554,8 @@ input[type="checkbox"], input[type="radio"] {
 /* /privacy is a plain document page: it scrolls the document, and the boot
    splash from layout.tsx is hidden because the app code that removes it
    never runs on this route. */
-body:has(.privacy-page) #app-splash {
+body:has(.privacy-page) #app-splash,
+body:has(.login-page) #app-splash {
   display: none;
 }
 

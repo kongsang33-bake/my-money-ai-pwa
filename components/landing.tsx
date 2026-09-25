@@ -1,20 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Bus, ChevronRight, Coffee, Download, Film, HeartPulse, House, KeyRound, Lock, MessageSquareText, MoreVertical, Plane, Plus, PlusSquare, Receipt, Share, ShieldCheck, ShoppingBag, Split, Utensils, Wallet, CalendarClock, Camera } from "lucide-react";
 import { APP_NAME, PRIVACY_CONTACT_EMAIL } from "@/lib/constants";
-import { readLocalPrivacyAck, writeLocalPrivacyAck } from "@/lib/privacy";
-import { SignInPanel } from "@/components/auth";
-import { PrivacyPolicyContent } from "@/components/privacy";
-import { Rail, SheetClose, SheetFrame, useDismiss } from "@/components/primitives";
+import Link from "next/link";
+import { Rail } from "@/components/primitives";
 import { Poster } from "@/components/home";
 
 // What everyone who is not signed in sees, every time: one page that scrolls
 // the ordinary way, laid out like Netflix's own front page in the app's
 // colours -- a hero over a wall of posters, a glowing arc, a numbered rail of
-// what the app does, how the data is kept, how to install it, questions, and
-// sign-in again at the bottom. That last block is the only sign-in there is
-// (SignInPanel), so every "เริ่มใช้งาน" on the page leads to the same door.
+// what the app does, how the data is kept, how to install it, questions --
+// under a nav held at the top with the brand and "เข้าสู่ระบบ". Signing in is
+// its own page, /login (components/login.tsx); every way in leads there.
 
 const SECURITY_POINTS = [
   {
@@ -98,6 +96,10 @@ const FAQ: { q: string; a: string }[] = [
   },
 ];
 
+// How far the page scrolls before the nav takes a solid ground: about where
+// the hero's pitch starts to pass under it.
+const LANDING_NAV_SOLID_AFTER = 48;
+
 type Platform = "ios" | "android";
 
 const INSTALL_STEPS: Record<Platform, { icon: typeof Share; text: string }[]> = {
@@ -125,37 +127,17 @@ function detectPlatform(): Platform {
   return ios ? "ios" : "android";
 }
 
-// Before sign-in the acknowledgement can only live in this device's storage
-// (lib/privacy.ts); page.tsx copies it to the server record once signed in.
-// Read through useSyncExternalStore so the server render (nothing
-// acknowledged) and the first client render agree, and so a write here is
-// picked up without a second source of truth in state.
-const ackListeners = new Set<() => void>();
-
-function writeAck() {
-  writeLocalPrivacyAck();
-  ackListeners.forEach((listener) => listener());
-}
-
-function subscribeAck(listener: () => void) {
-  ackListeners.add(listener);
-  return () => ackListeners.delete(listener);
-}
-
 export function Landing() {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const storedAck = useSyncExternalStore(subscribeAck, readLocalPrivacyAck, () => false);
-  // Covers storage that refuses the write: acknowledged for this visit anyway.
-  const [ackThisVisit, setAckThisVisit] = useState(false);
-  const acknowledged = storedAck || ackThisVisit;
+  // The nav floats clear over the hero and takes a solid ground once the
+  // page has scrolled far enough for content to pass under it.
+  const [scrolled, setScrolled] = useState(false);
 
   const detected = useSyncExternalStore(noopSubscribe, detectPlatform, () => "ios" as Platform);
   const [pickedPlatform, setPickedPlatform] = useState<Platform | null>(null);
   const platform = pickedPlatform ?? detected;
 
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
-  const [policyOpen, setPolicyOpen] = useState(false);
-  const policyDismiss = useDismiss(policyOpen, () => setPolicyOpen(false));
 
   useEffect(() => {
     const onPrompt = (event: Event) => {
@@ -171,11 +153,13 @@ export function Landing() {
     };
   }, []);
 
-  // Every "เริ่มใช้งาน" and the corner "เข้าสู่ระบบ" lead to the one sign-in
-  // block at the bottom. The page scrolls natively; this only glides there.
-  const toSignIn = useCallback(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    document.getElementById("landing-signin")?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const onScroll = () => setScrolled(scroller.scrollTop > LANDING_NAV_SOLID_AFTER);
+    onScroll();
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => scroller.removeEventListener("scroll", onScroll);
   }, []);
 
   async function install() {
@@ -185,17 +169,21 @@ export function Landing() {
     setInstallPrompt(null);
   }
 
-  function acknowledge() {
-    setAckThisVisit(true);
-    writeAck();
-    policyDismiss.requestClose();
-  }
-
   const steps = INSTALL_STEPS[platform];
 
   return (
     <main className="landing-shell">
       <div className="landing" ref={scrollerRef}>
+        {/* Held at the top of the page wherever it is scrolled: the brand,
+            and the way in. */}
+        <nav className={`landing-nav ${scrolled ? "is-solid" : ""}`} aria-label={APP_NAME}>
+          <span className="landing-brand">
+            <i className="brand-mark" aria-hidden="true" />
+            <b className="brand-name">{APP_NAME}</b>
+          </span>
+          <Link className="landing-signin-link" href="/login">เข้าสู่ระบบ</Link>
+        </nav>
+
         <header className="landing-hero">
           <div className="landing-wall" aria-hidden="true">
             {Array.from({ length: WALL_SIZE }, (_, index) => {
@@ -213,22 +201,14 @@ export function Landing() {
             })}
           </div>
 
-          <div className="landing-topbar">
-            <span className="landing-brand">
-              <i className="brand-mark" aria-hidden="true" />
-              <b className="brand-name">{APP_NAME}</b>
-            </span>
-            <button type="button" className="landing-signin-link" onClick={toSignIn}>เข้าสู่ระบบ</button>
-          </div>
-
           <div className="landing-hero-body">
             <h1>จดรายรับรายจ่าย<br />แค่พิมพ์เหมือนแชท</h1>
             <p className="landing-lead">AI แยกหมวด เลือกกระเป๋า และรวมยอดให้เอง ข้อมูลของคุณเห็นได้แค่คุณ</p>
             <p className="landing-ready">พร้อมเริ่มนับเงินแล้วหรือยัง เข้าด้วยบัญชี Google ได้ในไม่กี่วินาที</p>
-            <button type="button" className="primary landing-cta" onClick={toSignIn}>
+            <Link className="primary landing-cta" href="/login">
               เริ่มใช้งาน
               <ChevronRight size={20} strokeWidth={2.5} aria-hidden="true" />
-            </button>
+            </Link>
           </div>
         </header>
 
@@ -317,10 +297,6 @@ export function Landing() {
             </div>
           </section>
 
-          <section id="landing-signin" className="landing-block landing-final">
-            <SignInPanel acknowledged={acknowledged} onReadPolicy={() => setPolicyOpen(true)} />
-          </section>
-
           <footer className="landing-footer">
             <a href="/privacy">นโยบายความเป็นส่วนตัว</a>
             <a href={`mailto:${PRIVACY_CONTACT_EMAIL}`}>ติดต่อผู้พัฒนา</a>
@@ -329,21 +305,6 @@ export function Landing() {
         </div>
       </div>
 
-      {policyDismiss.mounted && (
-        <SheetFrame className="edit-sheet privacy-sheet" onClose={policyDismiss.requestClose} closing={policyDismiss.closing}>
-          <div className="sheet-head">
-            <div>
-              <p className="eyebrow">{APP_NAME}</p>
-              <h2>นโยบายความเป็นส่วนตัว</h2>
-            </div>
-            <SheetClose onClick={policyDismiss.requestClose} />
-          </div>
-          <PrivacyPolicyContent />
-          <button type="button" className="primary privacy-accept" onClick={acknowledge}>
-            อ่านแล้ว รับทราบ
-          </button>
-        </SheetFrame>
-      )}
     </main>
   );
 }
