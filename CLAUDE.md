@@ -111,10 +111,11 @@ margins, not `align-items`, so a short window scrolls it instead of pushing
 its top out of reach, and it tightens under 800px tall so a laptop sees the
 whole thing. Signed out, the app is **`Landing`** (components/landing.tsx), every time:
 three full-height screens that turn one at a time (native snap on touch; on a
-mouse or trackpad, `.landing.is-paged`: the scroller stops scrolling and a
-track slides one screen per wheel gesture or key by a composited transform,
-`--t-page` -- snap under a wheel felt stiff, and scrollTop animated from
-script still juddered; a screen taller than the window scrolls inside itself)
+mouse or trackpad, `.landing.is-paged`: the screens stack in one place and
+one wheel gesture or key is one unhurried fade-through, `--t-page` -- the old
+screen fades out drifting the way the reader is going, then the new one fades
+up; snap under a wheel felt stiff, and scrolling or sliding a whole screen
+read as a jolt; a screen taller than the window scrolls inside itself)
 -- what the app is and how
 its data is kept, how to install it as a PWA (iPhone/Android tabs, plus
 Chrome's own install prompt when it offers one), then `SignInPanel`

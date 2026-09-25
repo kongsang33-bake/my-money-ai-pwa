@@ -44,10 +44,10 @@ const SECURITY_POINTS = [
 
 // Paged mode (a mouse or trackpad, see Landing): how long one page turn
 // takes -- keep it in step with --t-page in globals.css, which runs the
-// slide -- how far a wheel gesture travels before it counts, and the quiet
+// crossfade; input waits it out, so one scroll is one page -- how far a wheel gesture travels before it counts, and the quiet
 // gap between wheel events that ends a gesture (a trackpad keeps sending
 // inertia events for a while after the fingers lift).
-const LANDING_PAGE_MS = 560;
+const LANDING_PAGE_MS = 900;
 const WHEEL_PAGE_THRESHOLD = 12;
 const WHEEL_GESTURE_GAP_MS = 180;
 
@@ -139,11 +139,11 @@ export function Landing() {
 
   // Two ways to move between the screens. Touch keeps the browser's own
   // scroll with snapping, which a finger drives well. A mouse or trackpad
-  // gets "paged" mode instead: the screens sit on a track that slides by a
-  // CSS transform (composited, so it stays smooth even while the page is
-  // busy), one screen per wheel gesture or key press. Snapping under a wheel
-  // nudged the page a notch and dragged it back, and animating scrollTop
-  // from script was still tied to the main thread.
+  // gets "paged" mode instead: the screens are stacked in one place and one
+  // wheel gesture or key press crossfades to the next, unhurried, with a
+  // short drift in the direction of travel (globals.css, .is-paged). Snap
+  // under a wheel nudged and dragged back on every notch, and scrolling or
+  // sliding a whole screen by read as a jolt rather than a turn.
   const paged = useSyncExternalStore(subscribePagedMode, readPagedMode, () => false);
   // The showing screen, kept in a ref as well for the input handlers, which
   // are bound once per mode and must not read a stale render's value.
@@ -290,6 +290,12 @@ export function Landing() {
   }
 
   const steps = INSTALL_STEPS[platform];
+  // Paged mode stacks the screens and crossfades between them; each one is
+  // told whether it is showing, or waiting above or below the one that is,
+  // so it drifts in from (and out towards) the way the reader is going.
+  const placeOf = (index: number) => !paged ? ""
+    : index === activeSection ? "is-current"
+      : index < activeSection ? "is-before" : "is-after";
 
   return (
     <main className="landing-shell">
@@ -312,11 +318,8 @@ export function Landing() {
       </nav>
 
       <div className={`landing ${paged ? "is-paged" : ""}`} ref={scrollerRef}>
-        <div
-          className="landing-track"
-          style={paged ? ({ "--landing-page": activeSection } as React.CSSProperties) : undefined}
-        >
-          <section id="landing-about" className="landing-section landing-lit">
+        <div className="landing-track">
+          <section id="landing-about" className={`landing-section landing-lit ${placeOf(0)}`}>
             <div className="landing-body">
               <div className="landing-head">
                 <p className="eyebrow">แอพจดรายรับรายจ่ายด้วย AI</p>
@@ -345,7 +348,7 @@ export function Landing() {
             </button>
           </section>
 
-          <section id="landing-install" className="landing-section">
+          <section id="landing-install" className={`landing-section ${placeOf(1)}`}>
             <div className="landing-body">
               <div className="landing-head">
                 <p className="eyebrow">ติดตั้งเป็นแอพ</p>
@@ -388,7 +391,7 @@ export function Landing() {
             </button>
           </section>
 
-          <section id="landing-signin" className="landing-section landing-lit">
+          <section id="landing-signin" className={`landing-section landing-lit ${placeOf(2)}`}>
             <SignInPanel acknowledged={acknowledged} onReadPolicy={() => setPolicyOpen(true)} />
           </section>
         </div>

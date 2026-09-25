@@ -33,10 +33,12 @@ test.describe("landing", () => {
     await openLanding(page);
     await expect(page.locator(".landing.is-paged")).toHaveCount(1);
     const current = page.locator('.landing-dots button[aria-current="true"]');
-    // A screen counts as showing once it has slid fully into the window.
+    // A screen counts as showing once it has faded fully in, in place, and
+    // is the only one that can be seen.
     const settledOn = async (id: string) => {
       await expect(current).toHaveAttribute("aria-label", { "landing-about": "รู้จักแอพ", "landing-install": "ติดตั้ง", "landing-signin": "เข้าสู่ระบบ" }[id]!);
-      await expect.poll(() => page.locator(`#${id}`).evaluate((el) => Math.round(el.getBoundingClientRect().top))).toBe(0);
+      await expect.poll(() => page.locator(`#${id}`).evaluate((el) => `${getComputedStyle(el).opacity}@${Math.round(el.getBoundingClientRect().top)}`)).toBe("1@0");
+      await expect(page.locator(".landing-section:visible")).toHaveCount(1);
     };
 
     await page.mouse.move(200, 300);
@@ -45,7 +47,7 @@ test.describe("landing", () => {
     for (const delta of [60, 40, 20]) await page.mouse.wheel(0, delta);
     await settledOn("landing-install");
 
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(400);
     await page.mouse.wheel(0, 60);
     await settledOn("landing-signin");
 
@@ -58,6 +60,7 @@ test.describe("landing", () => {
 
   test("keeps sign-in shut until the privacy policy is acknowledged", async ({ page}) => {
     await openLanding(page);
+    await page.locator(".landing-dots button").nth(2).click();
     const google = page.locator(".google-button");
     await expect(google).toBeDisabled();
     await page.locator(".email-fallback summary").click();
@@ -79,6 +82,7 @@ test.describe("landing", () => {
     // page itself still comes first.
     await page.reload();
     await expect(page.locator(".landing-shell")).toBeVisible();
+    await page.locator(".landing-dots button").nth(2).click();
     await expect(page.locator(".privacy-ack.done")).toBeVisible();
     await expect(google).toBeEnabled();
   });

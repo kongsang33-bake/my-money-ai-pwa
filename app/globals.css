@@ -252,9 +252,10 @@
   --t-2: 160ms;
   --t-3: 240ms;
   --t-4: 380ms;
-  /* One page turn of the landing on a desktop (LANDING_PAGE_MS in
-     components/landing.tsx waits the same time before taking more input). */
-  --t-page: 560ms;
+  /* One page turn of the landing on a desktop, a slow crossfade
+     (LANDING_PAGE_MS in components/landing.tsx waits the same time before
+     taking more input). */
+  --t-page: 900ms;
   --t-press: 70ms;
   /* one step of the list/section entrance ladder -- see the .view > * rules
      in the Motion section for why it stops after four steps */
@@ -7007,9 +7008,14 @@ input[type="checkbox"], input[type="radio"] {
 }
 
 /* Paged mode (a mouse or trackpad -- Landing sets .is-paged): the scroller
-   stops scrolling and the track slides one screen per turn by a transform,
-   which the compositor animates on its own; snapping under a wheel nudged
-   and dragged back on every notch. Each screen is exactly the window and
+   stops scrolling and the screens are stacked in one place. A turn is a
+   fade-through, not a crossfade: the screen being left fades out first,
+   drifting a little the way the reader is going, and the next fades in
+   after it from a little the other side -- two screens of text both half
+   visible at once read as a smear. It is
+   opacity and transform only, which the compositor runs by itself. Snap
+   under a wheel nudged and dragged back on every notch, and a whole screen
+   sliding past read as a jolt. Each screen is exactly the window and
    scrolls inside itself when it is taller. */
 .landing.is-paged {
   overflow: hidden;
@@ -7017,21 +7023,58 @@ input[type="checkbox"], input[type="radio"] {
 }
 
 .landing.is-paged .landing-track {
+  position: relative;
   height: 100%;
-  transform: translate3d(0, calc(var(--landing-page, 0) * -100%), 0);
-  transition: transform var(--t-page) var(--e-out);
-  will-change: transform;
 }
 
 .landing.is-paged .landing-section {
+  position: absolute;
+  inset: 0;
   height: 100%;
   overflow-y: auto;
   overscroll-behavior-y: contain;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  /* Leaving: the first 40% of the turn. visibility waits for the fade to
+     finish before hiding the screen, so it can be seen leaving; it is also
+     what keeps a hidden screen's buttons out of the tab order. */
+  transition:
+    opacity calc(var(--t-page) * 0.4) var(--e-in-out),
+    transform calc(var(--t-page) * 0.4) var(--e-in-out),
+    visibility 0s linear calc(var(--t-page) * 0.4);
+  will-change: opacity, transform;
+}
+
+.landing.is-paged .landing-section.is-before {
+  transform: translate3d(0, calc(var(--s-6) * -1), 0);
+}
+
+.landing.is-paged .landing-section.is-after {
+  transform: translate3d(0, var(--s-6), 0);
+}
+
+.landing.is-paged .landing-section.is-current {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+  /* Arriving: starts as the old screen is nearly gone and takes the rest
+     of the turn, settling slowly. */
+  transition:
+    opacity calc(var(--t-page) * 0.65) var(--e-out) calc(var(--t-page) * 0.35),
+    transform calc(var(--t-page) * 0.65) var(--e-out) calc(var(--t-page) * 0.35),
+    visibility 0s;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing.is-paged .landing-track {
-    transition: none;
+  .landing.is-paged .landing-section {
+    transform: none;
+    transition: opacity var(--t-2) linear, visibility 0s linear var(--t-2);
+  }
+
+  .landing.is-paged .landing-section.is-current {
+    transition: opacity var(--t-2) linear, visibility 0s;
   }
 }
 
