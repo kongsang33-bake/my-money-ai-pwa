@@ -57,15 +57,19 @@ test("meets contrast, target size and overflow limits", async ({ page }) => {
 
   const audits: ScreenAudit[] = [];
 
-  // Signed out: the landing page's three screens and the privacy sheet the
-  // last one opens before anyone can sign in.
+  // Signed out: the landing page at its hero, part way down (with an answer
+  // open), at the sign-in, and the privacy sheet that has to be read first.
   await openLanding(page);
-  audits.push(await auditScreen(page, "landing-about"));
-  for (const [index, screen] of [[1, "landing-install"], [2, "landing-signin"]] as const) {
-    await page.locator(".landing-dots button").nth(index).click();
-    await page.waitForTimeout(900);
+  audits.push(await auditScreen(page, "landing-hero"));
+  await page.locator(".landing-faq summary").first().click();
+  for (const [selector, screen] of [["#landing-install", "landing-install"], [".landing-faq", "landing-faq"]] as const) {
+    await page.locator(selector).evaluate((el) => el.scrollIntoView({ block: "start" }));
+    await page.waitForTimeout(200);
     audits.push(await auditScreen(page, screen));
   }
+  await page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }).click();
+  await page.waitForTimeout(900);
+  audits.push(await auditScreen(page, "landing-signin"));
   await page.locator(".privacy-ack").click();
   await expect(page.locator(".privacy-sheet")).toBeVisible();
   audits.push(await auditScreen(page, "privacy-sheet"));

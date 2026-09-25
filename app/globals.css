@@ -252,10 +252,6 @@
   --t-2: 160ms;
   --t-3: 240ms;
   --t-4: 380ms;
-  /* One page turn of the landing on a desktop, a slow crossfade
-     (LANDING_PAGE_MS in components/landing.tsx waits the same time before
-     taking more input). */
-  --t-page: 900ms;
   --t-press: 70ms;
   /* one step of the list/section entrance ladder -- see the .view > * rules
      in the Motion section for why it stops after four steps */
@@ -6982,9 +6978,11 @@ input[type="checkbox"], input[type="radio"] {
 
 /* -------------------------------------------------------------------------
    Landing (components/landing.tsx) -- what a signed-out visitor sees every
-   time: three full-height screens that snap one at a time, the last of them
-   the sign-in form. Bare tier throughout; the only boxes are the ones the
-   sign-in form already had.
+   time. Netflix's front page in the app's colours, and like it one page that
+   scrolls the ordinary way: a hero over a wall of posters, a glowing arc,
+   then the blocks, then sign-in again at the foot. Earlier versions turned
+   one full screen at a time (snap, then a scripted slide, then a fade); on a
+   mouse every one of them read as a jolt.
    ------------------------------------------------------------------------- */
 .landing-shell {
   position: relative;
@@ -6993,194 +6991,311 @@ input[type="checkbox"], input[type="radio"] {
   background: var(--bg);
 }
 
-.landing-brand {
-  z-index: var(--z-nav);
-}
-
-/* The scroller. `mandatory` so a flick lands on a whole screen; a screen
-   taller than the window (a small phone) still scrolls inside itself. */
 .landing {
-  position: relative;
   height: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  scroll-snap-type: y mandatory;
 }
 
-/* Paged mode (a mouse or trackpad -- Landing sets .is-paged): the scroller
-   stops scrolling and the screens are stacked in one place. A turn is a
-   fade-through, not a crossfade: the screen being left fades out first,
-   drifting a little the way the reader is going, and the next fades in
-   after it from a little the other side -- two screens of text both half
-   visible at once read as a smear. It is
-   opacity and transform only, which the compositor runs by itself. Snap
-   under a wheel nudged and dragged back on every notch, and a whole screen
-   sliding past read as a jolt. Each screen is exactly the window and
-   scrolls inside itself when it is taller. */
-.landing.is-paged {
-  overflow: hidden;
-  scroll-snap-type: none;
-}
-
-.landing.is-paged .landing-track {
+/* The hero: a wall of the app's own posters, tilted and dimmed, with the
+   pitch and one button over it -- Netflix's wall of titles. */
+.landing-hero {
+  /* How much of the wall shows through behind the pitch: a phone's column
+     of text sits right over the posters, so it is veiled more there. */
+  --landing-veil: 88%;
   position: relative;
-  height: 100%;
-}
-
-.landing.is-paged .landing-section {
-  position: absolute;
-  inset: 0;
-  height: 100%;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  /* Leaving: the first 40% of the turn. visibility waits for the fade to
-     finish before hiding the screen, so it can be seen leaving; it is also
-     what keeps a hidden screen's buttons out of the tab order. */
-  transition:
-    opacity calc(var(--t-page) * 0.4) var(--e-in-out),
-    transform calc(var(--t-page) * 0.4) var(--e-in-out),
-    visibility 0s linear calc(var(--t-page) * 0.4);
-  will-change: opacity, transform;
-}
-
-.landing.is-paged .landing-section.is-before {
-  transform: translate3d(0, calc(var(--s-6) * -1), 0);
-}
-
-.landing.is-paged .landing-section.is-after {
-  transform: translate3d(0, var(--s-6), 0);
-}
-
-.landing.is-paged .landing-section.is-current {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: none;
-  /* Arriving: starts as the old screen is nearly gone and takes the rest
-     of the turn, settling slowly. */
-  transition:
-    opacity calc(var(--t-page) * 0.65) var(--e-out) calc(var(--t-page) * 0.35),
-    transform calc(var(--t-page) * 0.65) var(--e-out) calc(var(--t-page) * 0.35),
-    visibility 0s;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .landing.is-paged .landing-section {
-    transform: none;
-    transition: opacity var(--t-2) linear, visibility 0s linear var(--t-2);
-  }
-
-  .landing.is-paged .landing-section.is-current {
-    transition: opacity var(--t-2) linear, visibility 0s;
-  }
-}
-
-.landing-section {
-  position: relative;
-  min-height: 100%;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--s-5);
-  padding: calc(var(--topbar-block) + var(--s-4)) var(--s-5) calc(var(--s-5) + env(safe-area-inset-bottom));
-  scroll-snap-align: start;
+  min-height: clamp(560px, 86vh, 760px);
+  overflow: hidden;
+  /* Faded out at the foot, not cut: a hard edge landing on a fractional
+     pixel showed a hairline of the wall along it. */
+  -webkit-mask-image: linear-gradient(180deg, var(--bg) 90%, transparent 100%);
+  mask-image: linear-gradient(180deg, var(--bg) 90%, transparent 100%);
 }
 
-/* Room on the right for the dots below 600px, where the column runs the
-   phone's full width and a step's icon would sit under them. */
-@media (max-width: 599px) {
-  .landing-section {
-    padding-right: var(--s-8);
-  }
-}
-
-/* The same glow Home's billboard sits in, on the first and last screens. */
-.landing-lit {
-  background: radial-gradient(ellipse 120% 480px at 50% 0, color-mix(in srgb, var(--hero-glow) 55%, transparent), transparent 80%) no-repeat;
-}
-
-@media (min-width: 600px) {
-  .landing-lit {
-    background: radial-gradient(ellipse 60% 480px at 50% 0, color-mix(in srgb, var(--hero-glow) 50%, transparent), transparent 85%) no-repeat;
-  }
-}
-
-/* Centred by auto margins, as .pin-content is, so a short window scrolls
-   rather than pushing the top under the corner mark. */
-.landing-body {
-  margin-block: auto;
-  width: 100%;
-  max-width: 440px;
+.landing-wall {
+  position: absolute;
+  inset: -30% -20%;
+  z-index: -2;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-5);
-}
-
-.landing-head {
-  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-content: center;
   gap: var(--s-3);
+  transform: rotate(-8deg);
+  pointer-events: none;
 }
 
-.landing-head h1, .landing-head h2 {
+@media (min-width: 900px) {
+  .landing-hero {
+    --landing-veil: 74%;
+  }
+
+  .landing-wall {
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+  }
+}
+
+/* Dark enough over the wall that the pitch reads as plainly as on the bare
+   page: darkest at the top (under the corner bar) and at the foot, where it
+   meets the page, a lighter veil in between so the wall still shows. */
+.landing-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--bg) 92%, transparent) 0%,
+      color-mix(in srgb, var(--bg) var(--landing-veil), transparent) 30%,
+      color-mix(in srgb, var(--bg) var(--landing-veil), transparent) 70%,
+      var(--bg) 90%),
+    radial-gradient(ellipse 70% 60% at 50% 45%, color-mix(in srgb, var(--hero-glow) 30%, transparent), transparent 70%);
+}
+
+.landing-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: calc(env(safe-area-inset-top) + var(--s-4)) var(--s-5) 0;
+}
+
+@media (min-width: 900px) {
+  .landing-topbar {
+    padding-inline: var(--s-8);
+  }
+}
+
+.landing-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.landing-brand b {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-bold);
+}
+
+/* Secondary on purpose: the hero's own "เริ่มใช้งาน" is the page's one white
+   button, and both lead to the same sign-in block. */
+.landing-signin-link {
+  min-height: 36px;
+  padding: 0 var(--s-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+  color: var(--ink);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.landing-hero-body {
+  margin: auto;
+  width: 100%;
+  max-width: 760px;
+  display: grid;
+  justify-items: center;
+  gap: var(--s-4);
+  padding: var(--s-7) var(--s-5) var(--s-9);
+  text-align: center;
+}
+
+.landing-hero-body h1 {
   font-size: var(--fs-value);
   font-weight: var(--fw-bold);
-  letter-spacing: var(--ls-tight);
   line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
 }
 
-.landing-head p:not(.eyebrow) {
+.landing-lead {
+  font-size: var(--fs-h3);
+  color: var(--ink);
+  line-height: var(--lh-snug);
+}
+
+.landing-ready {
+  font-size: var(--fs-body);
+  color: var(--ink-2);
+}
+
+.landing-cta.primary {
+  width: auto;
+  min-height: 56px;
+  padding: 0 var(--s-7);
+  font-size: var(--fs-h3);
+}
+
+@media (min-width: 900px) {
+  .landing-hero-body h1 {
+    font-size: var(--fs-display);
+  }
+
+  .landing-lead {
+    font-size: var(--fs-h2);
+  }
+}
+
+/* The arc Netflix draws under its hero, in the brand's emerald: a wide,
+   shallow curve with a glow rising off it. */
+.landing-arc {
+  position: relative;
+  z-index: 1;
+  height: 72px;
+  margin-top: -40px;
+  overflow: hidden;
+  /* The glow spills past the box at the top and runs off the curve's ends
+     at the foot; fade both edges so it never stops in a straight line. */
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, var(--bg) 30%, var(--bg) 55%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0%, var(--bg) 30%, var(--bg) 55%, transparent 100%);
+}
+
+.landing-arc::before {
+  content: "";
+  position: absolute;
+  top: var(--s-6);
+  left: -30%;
+  right: -30%;
+  height: 400%;
+  border-top: 3px solid var(--accent);
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  background:
+    radial-gradient(ellipse 45% 48px at 50% 0, color-mix(in srgb, var(--accent) 28%, transparent), transparent),
+    var(--bg);
+  box-shadow: 0 -8px 36px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.landing-content {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--s-2) var(--s-5) var(--s-7);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-9);
+}
+
+@media (min-width: 900px) {
+  .landing-content {
+    padding-inline: var(--s-8);
+  }
+}
+
+.landing-block h2, .landing-features .rail-head h2 {
+  margin-bottom: var(--s-4);
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-bold);
+}
+
+@media (min-width: 900px) {
+  .landing-block h2, .landing-features .rail-head h2 {
+    font-size: var(--fs-h1);
+  }
+}
+
+.landing-features {
+  margin-bottom: 0;
+}
+
+@media (min-width: 900px) {
+  .landing-features .rank .poster {
+    width: 156px;
+  }
+}
+
+.landing-block-lead {
+  max-width: 640px;
+  margin: calc(var(--s-2) * -1) 0 var(--s-5);
   font-size: var(--fs-body);
   color: var(--ink-3);
   line-height: var(--lh-body);
 }
 
-.landing-points {
+/* "ข้อมูลของคุณปลอดภัย": Netflix's "more reasons to join" cards, each in its
+   own --hue fading into the ground, the icon in the corner at reading size. */
+.landing-reasons {
   display: grid;
-  gap: var(--s-4);
-}
-
-.landing-points li {
-  display: flex;
-  align-items: flex-start;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-3);
 }
 
-.landing-points b {
-  display: block;
-  font-size: var(--fs-body);
-  font-weight: var(--fw-semibold);
+@media (min-width: 600px) {
+  .landing-reasons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
-.landing-points small {
+@media (min-width: 600px) {
+  .landing-reasons li {
+    min-height: 188px;
+    padding: var(--s-5) var(--s-5) calc(var(--s-9) + var(--s-3));
+  }
+
+  .landing-reason-icon {
+    top: auto;
+    bottom: var(--s-4);
+  }
+}
+
+@media (min-width: 1100px) {
+  .landing-reasons {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* On a phone the icon sits beside the title, so a card is only as tall as
+   its words; from two across it moves to the corner under them, as Netflix
+   draws it. */
+.landing-reasons li {
+  position: relative;
+  padding: var(--s-5) calc(var(--s-9) + var(--s-5)) var(--s-5) var(--s-5);
+  border: 1px solid color-mix(in oklab, var(--hue) 22%, var(--bg));
+  border-radius: var(--r-lg);
+  background: linear-gradient(150deg, color-mix(in oklab, var(--hue) 24%, var(--bg)) 0%, color-mix(in oklab, var(--hue) 6%, var(--bg)) 75%);
+}
+
+.landing-reasons b {
   display: block;
-  margin-top: 2px;
-  font-size: var(--fs-caption);
-  color: var(--ink-3);
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-bold);
   line-height: var(--lh-snug);
 }
 
-/* The icon in the tinted square จดเร็ว uses, never blown up. */
-.landing-point-icon {
+.landing-reasons p {
+  margin-top: var(--s-2);
+  font-size: var(--fs-body-sm);
+  color: var(--ink-2);
+  line-height: var(--lh-body);
+}
+
+.landing-reason-icon {
+  position: absolute;
+  top: var(--s-4);
+  right: var(--s-4);
   display: grid;
-  flex-shrink: 0;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--r-sm);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: color-mix(in oklab, var(--hue) 26%, var(--bg));
+  color: var(--hue);
 }
 
 .landing-policy-link {
-  justify-self: start;
   display: inline-flex;
   align-items: center;
   min-height: 32px;
+  margin-top: var(--s-4);
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
+}
+
+.landing-install {
+  max-width: 640px;
+  display: grid;
+  gap: var(--s-4);
 }
 
 .landing-tabs {
@@ -7218,48 +7333,105 @@ input[type="checkbox"], input[type="radio"] {
   line-height: var(--lh-snug);
 }
 
-.landing-next {
-  display: inline-flex;
+/* The icon in the tinted square จดเร็ว uses, never blown up. */
+.landing-point-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+/* Netflix's FAQ: full-width bars, a plus that turns into a cross. */
+.landing-faq {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.landing-faq details {
+  background: var(--surface-2);
+}
+
+.landing-faq summary {
+  display: flex;
   align-items: center;
-  gap: var(--s-1);
-  min-height: 44px;
-  padding: 0 var(--s-3);
+  justify-content: space-between;
+  gap: var(--s-4);
+  min-height: 64px;
+  padding: var(--s-4) var(--s-5);
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-medium);
+  list-style: none;
+  cursor: pointer;
+  transition: background var(--t-2) var(--e-out);
+}
+
+.landing-faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.landing-faq summary:hover {
+  background: var(--surface-3);
+}
+
+.landing-faq summary svg {
+  flex-shrink: 0;
+  transition: transform var(--t-3) var(--e-out);
+}
+
+.landing-faq details[open] summary svg {
+  transform: rotate(45deg);
+}
+
+.landing-faq details p {
+  padding: var(--s-5);
+  border-top: 1px solid var(--bg);
+  font-size: var(--fs-body);
+  color: var(--ink-2);
+  line-height: var(--lh-body);
+}
+
+@media (min-width: 900px) {
+  .landing-faq summary {
+    min-height: 80px;
+    padding-inline: var(--s-6);
+    font-size: var(--fs-h2);
+  }
+
+  .landing-faq details p {
+    padding: var(--s-6);
+    font-size: var(--fs-h3);
+  }
+}
+
+/* Sign-in again at the foot, lit by the same glow as Home's billboard. */
+.landing-final {
+  display: flex;
+  justify-content: center;
+  padding: var(--s-8) 0;
+  scroll-margin-top: var(--s-4);
+  background: radial-gradient(ellipse 60% 60% at 50% 35%, color-mix(in srgb, var(--hero-glow) 45%, transparent), transparent 75%);
+}
+
+.landing-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-6);
+  padding-top: var(--s-6);
+  border-top: 1px solid var(--line);
   font-size: var(--fs-caption);
-  font-weight: var(--fw-semibold);
   color: var(--ink-3);
 }
 
-/* Where you are, down the right edge. Each dot is a 24px target around an
-   8px mark; the current one is a taller bar in the brand's ink. */
-.landing-dots {
-  position: absolute;
-  top: 50%;
-  right: var(--s-2);
-  z-index: var(--z-nav);
-  display: flex;
-  flex-direction: column;
-  transform: translateY(-50%);
-}
-
-.landing-dots button {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 28px;
-}
-
-.landing-dots button::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: var(--r-full);
-  background: var(--ink-4);
-  transition: height var(--t-2) var(--e-out), background var(--t-2) var(--e-out);
-}
-
-.landing-dots button.active::before {
-  height: 18px;
-  background: var(--accent);
+.landing-footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  color: var(--ink-3);
 }
 
 /* -------------------------------------------------------------------------

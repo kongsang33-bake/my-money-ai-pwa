@@ -110,17 +110,17 @@ dots that fill in `--accent`, and a bare keypad. It is centred with auto
 margins, not `align-items`, so a short window scrolls it instead of pushing
 its top out of reach, and it tightens under 800px tall so a laptop sees the
 whole thing. Signed out, the app is **`Landing`** (components/landing.tsx), every time:
-three full-height screens that turn one at a time (native snap on touch; on a
-mouse or trackpad, `.landing.is-paged`: the screens stack in one place and
-one wheel gesture or key is one unhurried fade-through, `--t-page` -- the old
-screen fades out drifting the way the reader is going, then the new one fades
-up; snap under a wheel felt stiff, and scrolling or sliding a whole screen
-read as a jolt; a screen taller than the window scrolls inside itself)
--- what the app is and how
-its data is kept, how to install it as a PWA (iPhone/Android tabs, plus
-Chrome's own install prompt when it offers one), then `SignInPanel`
-(components/auth.tsx), the only sign-in there is. It is the PIN gate's shape:
-the brand in the corner (`.pin-brand`), one bare column under Home's glow,
+Netflix's own front page in the app's colours, one page that scrolls the
+ordinary way -- a hero over a tilted wall of the app's own `Poster`s (dimmed,
+decorative) with one white "เริ่มใช้งาน", an emerald arc, a numbered `Rail`
+of what the app does (the `rank` shape Home's categories use), "ข้อมูลของคุณ
+ปลอดภัย" cards each in its own `--hue`, the install steps (iPhone/Android
+tabs, plus Chrome's install prompt when it offers one), an FAQ accordion, and
+at the foot `SignInPanel` (components/auth.tsx), the only sign-in there is --
+every "เริ่มใช้งาน" and the corner "เข้าสู่ระบบ" glide down to it. Every
+earlier version turned one full screen at a time (snap, a scripted slide, a
+fade); on a mouse each read as a jolt, so don't bring paging back. The sign-in
+is the PIN gate's shape: one bare column under Home's glow,
 Google as the one white `.primary`, no card (`.auth-card` is the error
 boundary's). Both ways in stay disabled until the privacy policy has been
 acknowledged, and the only way to acknowledge it is the button at the end of

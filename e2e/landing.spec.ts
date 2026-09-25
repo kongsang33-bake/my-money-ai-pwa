@@ -1,9 +1,10 @@
 import { test as base, expect } from "@playwright/test";
 import { navigate, openApp, buildSeed, openLanding } from "./fixture.ts";
 
-// Signed out, the app is the landing page, every time: what it is and how its
-// data is kept, how to install it, then sign-in -- which stays shut until the
-// privacy policy has been read and acknowledged in its own sheet.
+// Signed out, the app is the landing page, every time: one scrolling page of
+// what it is, how its data is kept, how to install it and questions, then
+// sign-in -- which stays shut until the privacy policy has been read and
+// acknowledged in its own sheet.
 const test = base.extend<{ errors: string[] }>({
   errors: [async ({ page }, use) => {
     const errors: string[] = [];
@@ -14,53 +15,34 @@ const test = base.extend<{ errors: string[] }>({
 });
 
 test.describe("landing", () => {
-  test("shows the three screens, the last one the sign-in form", async ({ page}) => {
+  test("reads top to bottom, ending on the sign-in", async ({ page }) => {
     await openLanding(page);
-    await expect(page.locator(".landing-section")).toHaveCount(3);
-    await expect(page.locator("#landing-about h1")).toBeVisible();
+    await expect(page.locator(".landing-hero h1")).toBeVisible();
+    await expect(page.locator(".landing-features .rank")).toHaveCount(5);
+    await expect(page.locator(".landing-reasons li")).toHaveCount(4);
 
-    await page.locator(".landing-dots button").nth(1).click();
+    await page.locator("#landing-install").scrollIntoViewIfNeeded();
     await expect(page.locator(".landing-steps li")).toHaveCount(3);
     await page.getByRole("tab", { name: "Android" }).click();
     await expect(page.locator(".landing-steps")).toContainText("Chrome");
 
-    await page.locator(".landing-dots button").nth(2).click();
+    // The hero's one button leads to the one sign-in, at the foot.
+    await page.locator(".landing").evaluate((el) => el.scrollTo(0, 0));
+    await page.getByRole("button", { name: "เริ่มใช้งาน" }).click();
     await expect(page.locator(".google-button")).toBeInViewport();
   });
 
-  test("turns one whole screen per wheel gesture on a desktop", async ({ page, isMobile }) => {
-    test.skip(isMobile, "a wheel is a mouse or trackpad; touch keeps native snapping");
+  test("opens an answer in the questions", async ({ page }) => {
     await openLanding(page);
-    await expect(page.locator(".landing.is-paged")).toHaveCount(1);
-    const current = page.locator('.landing-dots button[aria-current="true"]');
-    // A screen counts as showing once it has faded fully in, in place, and
-    // is the only one that can be seen.
-    const settledOn = async (id: string) => {
-      await expect(current).toHaveAttribute("aria-label", { "landing-about": "รู้จักแอพ", "landing-install": "ติดตั้ง", "landing-signin": "เข้าสู่ระบบ" }[id]!);
-      await expect.poll(() => page.locator(`#${id}`).evaluate((el) => `${getComputedStyle(el).opacity}@${Math.round(el.getBoundingClientRect().top)}`)).toBe("1@0");
-      await expect(page.locator(".landing-section:visible")).toHaveCount(1);
-    };
-
-    await page.mouse.move(200, 300);
-    // Several events close together, each smaller than the last, are one
-    // gesture (a trackpad flick and its inertia): one page, not three.
-    for (const delta of [60, 40, 20]) await page.mouse.wheel(0, delta);
-    await settledOn("landing-install");
-
-    await page.waitForTimeout(400);
-    await page.mouse.wheel(0, 60);
-    await settledOn("landing-signin");
-
-    await page.waitForTimeout(300);
-    await page.keyboard.press("PageUp");
-    await settledOn("landing-install");
-    await page.keyboard.press("Home");
-    await settledOn("landing-about");
+    const item = page.locator(".landing-faq details").filter({ hasText: "ลบบัญชีได้ไหม" });
+    await item.locator("summary").click();
+    await expect(item.locator("p")).toBeVisible();
+    await expect(item.locator("p")).toContainText("ของฉัน");
   });
 
   test("keeps sign-in shut until the privacy policy is acknowledged", async ({ page}) => {
     await openLanding(page);
-    await page.locator(".landing-dots button").nth(2).click();
+    await page.getByRole("button", { name: "เริ่มใช้งาน" }).click();
     const google = page.locator(".google-button");
     await expect(google).toBeDisabled();
     await page.locator(".email-fallback summary").click();
@@ -82,7 +64,7 @@ test.describe("landing", () => {
     // page itself still comes first.
     await page.reload();
     await expect(page.locator(".landing-shell")).toBeVisible();
-    await page.locator(".landing-dots button").nth(2).click();
+    await page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }).click();
     await expect(page.locator(".privacy-ack.done")).toBeVisible();
     await expect(google).toBeEnabled();
   });

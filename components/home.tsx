@@ -353,7 +353,7 @@ export const HomeInsightGrid = memo(function HomeInsightGrid({
  * is what lets `children` hold a button of its own (a bill's "บันทึกเลย")
  * without nesting one button inside another.
  */
-function Poster({
+export function Poster({
   hue,
   renderGlyph,
   hero,
