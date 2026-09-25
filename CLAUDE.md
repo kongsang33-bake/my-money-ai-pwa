@@ -337,7 +337,11 @@ the product name -- leave them.
   app/page.tsx: iOS does not shrink the page for the keyboard, it pans the
   document, and left panned after the keyboard closed. Anything that makes
   the document taller than `--vvh` (a `min-height` on `.phone`, say) gives
-  iOS something to pan again.
+  iOS something to pan again. The browser only scrolls a focused field far enough to
+  show the caret, so the add tab's AI composer calls `revealAboveKeyboard`
+  (components/primitives.tsx) on focus: once the keyboard has finished
+  opening it brings the whole `.ai-input-wrap`, send button included, up to
+  the visible bottom. Use it for any box whose action sits under its field.
 - **`.phone` is the real, edge-to-edge app root at every width — not a
   device mockup.** There is no rounded-card-with-drop-shadow "phone frame"
   centered on a differently-colored backdrop any more; that read as a
