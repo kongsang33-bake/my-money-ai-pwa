@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useId, useMemo, useState } from "react";
+import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, CreditCard, Eye, EyeOff, Info, Lightbulb, Pencil, Plus, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet as WalletIcon, WalletCards, X } from "lucide-react";
 import { BRAND_SLOGANS, DETAIL_SIMILAR_LIMIT, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
 import { MASKED_MONEY, formatChatTime, formatDateTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, maskMoneyInText, moneySign, toMoneyAmount } from "@/lib/format";
@@ -174,6 +174,40 @@ function BillboardSlogan() {
 }
 
 /**
+ * Keeps a one-line display figure inside its row: at its CSS size while it
+ * fits, scaled down to fit exactly once it would not -- measured, not
+ * estimated, since how wide a figure sets depends on the font the device
+ * actually drew. Left to wrap, a five-digit balance put "฿" on a line of its
+ * own. Re-measures when `content` changes and when the row is resized; the
+ * count-up only ever moves towards the final figure, so fitting the final
+ * one is enough.
+ */
+function useFitToRow<T extends HTMLElement>(content: string) {
+  const ref = useRef<T>(null);
+  useLayoutEffect(() => {
+    const node = ref.current;
+    const row = node?.parentElement;
+    if (!node || !row) return;
+    const fit = () => {
+      node.style.fontSize = "";
+      const siblings = [...row.children].filter((child) => child !== node) as HTMLElement[];
+      const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
+      // Less a hair, so the last glyph's overhang does not touch the eye.
+      const room = row.clientWidth - siblings.reduce((sum, child) => sum + child.offsetWidth + gap, 0) - 4;
+      const needed = node.scrollWidth;
+      if (needed > room && room > 0) {
+        node.style.fontSize = `${Math.floor(parseFloat(getComputedStyle(node).fontSize) * (room / needed) * 100) / 100}px`;
+      }
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [content]);
+  return ref;
+}
+
+/**
  * Home's billboard: the one full-bleed moment on the screen, the job the coral
  * hero used to do. Laid out the way docs/netflix-reference.html's .billboard
  * is -- art filling the box, then a kicker, the amount, a line of tags and the
@@ -199,6 +233,7 @@ export const HeroWalletCard = memo(function HeroWalletCard({
   onOpenPocket?: () => void;
 }) {
   const [amountShown, setAmountShown] = useState(false);
+  const amountRef = useFitToRow<HTMLElement>(`${amountShown}:${balance}`);
   return (
     // With no history there is no art to fill the billboard's top half, and a
     // new account opened on a tall box of empty green over "฿ 0". Bare, it
@@ -237,7 +272,7 @@ export const HeroWalletCard = memo(function HeroWalletCard({
             first screen is read by whoever is beside you. The eye sits after
             the figure and says which way it will turn. */}
         <div className="hero-amount-row">
-          <strong className="hero-amount" aria-live="polite">
+          <strong ref={amountRef} className="hero-amount" aria-live="polite">
             {amountShown ? (
               <>
                 {balance < 0 ? "−" : ""}

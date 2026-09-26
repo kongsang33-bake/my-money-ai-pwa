@@ -1,4 +1,4 @@
-import { expect, test } from "./fixture";
+import { buildSeed, expect, openApp, test } from "./fixture";
 
 // Home's balance is hidden until asked for, every time Home opens, with an
 // eye after the figure to show and hide it (HeroWalletCard).
@@ -22,4 +22,21 @@ test("it is hidden again the next time the app opens", async ({ app }) => {
   await app.getByRole("button", { name: "แสดงยอดเงิน" }).click();
   await app.reload();
   await expect(app.locator(".hero-amount")).toHaveText("฿ ••••••", { timeout: 15000 });
+});
+
+test("a long balance stays on one line and inside the card", async ({ page }) => {
+  // Left to wrap, "฿" broke onto a line of its own above a five-digit figure.
+  const seed = buildSeed();
+  await openApp(page, { ...seed, wallets: seed.wallets.map((wallet, index) => (index === 0 ? { ...wallet, balance: 98_765_432.1 } : wallet)) });
+  await page.getByRole("button", { name: "แสดงยอดเงิน" }).click();
+  const amount = page.locator(".hero-amount");
+  await expect(amount).toHaveText(/฿\s?98,/);
+  const fit = await amount.evaluate((node) => {
+    const row = node.parentElement!.getBoundingClientRect();
+    const box = node.getBoundingClientRect();
+    const lineHeight = parseFloat(getComputedStyle(node).fontSize) * 1.05;
+    return { oneLine: box.height < lineHeight * 1.5, inside: node.scrollWidth <= node.clientWidth + 1 && box.right <= row.right + 1 };
+  });
+  expect(fit).toEqual({ oneLine: true, inside: true });
+  await expect(page.getByRole("button", { name: "ซ่อนยอดเงิน" })).toBeInViewport();
 });

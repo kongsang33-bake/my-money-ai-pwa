@@ -39,7 +39,11 @@ balance's real last 30 days (`buildBalanceHistory`, which walks back from
 the ledger's own figure so it cannot end on a different number) -- and
 whose figure opens **hidden** (`MASKED_MONEY`) every time Home mounts, with an
 eye after it to show and hide it; the per-day line under it is masked with it
-(`maskMoneyInText`), since it gives the balance away; and every
+(`maskMoneyInText`), since it gives the balance away. The figure never wraps
+(left to, "฿" sat on a line of its own): `useFitToRow` measures it and scales
+a long one down to the room beside the eye -- measured, not estimated, since
+an em-count guess overlapped the eye in the font the device actually drew;
+and every
 Home section below it as a rail. The rails' items are built for a rail now
 (components/home.tsx): **posters** (2:3, `Poster`) for bills due and unpaid
 cards (`DueSoonRail`) and for the ranked categories with the mock's outlined

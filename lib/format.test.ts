@@ -177,3 +177,4 @@ describe("maskMoneyInText", () => {
     assert.doesNotMatch(MASKED_MONEY, /\d/);
   });
 });
+

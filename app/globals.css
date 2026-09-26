@@ -1707,6 +1707,10 @@ a:focus-visible {
   display: block;
   min-width: 0;
   color: var(--hero-amount);
+  /* One line, always. Left to wrap, "฿" broke onto a line of its own above
+     the number; a figure too long for the display size is scaled down to
+     the room beside the eye instead (useFitToRow, components/home.tsx). */
+  white-space: nowrap;
   font-size: var(--fs-display);
   font-weight: var(--fw-bold);
   letter-spacing: -0.035em;
