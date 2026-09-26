@@ -181,6 +181,11 @@ export const POCKET_LABEL_MAX_LENGTH = 60;
 export const POCKET_HOLDER_MAX_LENGTH = 80;
 export const POCKET_BANK_MAX_LENGTH = 60;
 export const POCKET_VALUE_MAX_LENGTH = 1024;
+// What the largest QR holds at the error-correction level encodeQr draws
+// (version 40, level M, byte mode). Counted in UTF-8 bytes, not characters:
+// Thai takes three bytes each, so 1024 Thai characters is ~3,000 bytes and
+// encoding it throws.
+export const POCKET_QR_MAX_BYTES = 2331;
 // A barcode's text, and each of a ticket's printed details (title, venue,
 // seat). The details column as a whole is capped at 2KB in the database.
 export const POCKET_BARCODE_MAX_LENGTH = 80;

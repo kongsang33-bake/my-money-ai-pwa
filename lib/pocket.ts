@@ -16,6 +16,7 @@ import {
   POCKET_DETAIL_MAX_LENGTH,
   POCKET_HOLDER_MAX_LENGTH,
   POCKET_LABEL_MAX_LENGTH,
+  POCKET_QR_MAX_BYTES,
   POCKET_PAST_GRACE_HOURS,
   POCKET_VALUE_MAX_LENGTH,
 } from "./constants.ts";
@@ -238,7 +239,7 @@ export function pocketDraftProblem(draft: PocketCard): string | null {
   if (draft.kind === "qr" && !draft.value) return "เลือกรูป QR รับเงินจากแอปธนาคารหรือวอลเล็ต";
   if (draft.kind === "account" && (digitsOnly(draft.value).length < 10 || digitsOnly(draft.value).length > 15)) return "เลขบัญชีต้องมี 10-15 หลัก";
   const code = pocketCodeFormat(draft);
-  if (code === "qr" && draft.value.length > POCKET_VALUE_MAX_LENGTH) return "QR นี้มีข้อมูลยาวเกินกว่าจะเก็บได้";
+  if (code === "qr" && (draft.value.length > POCKET_VALUE_MAX_LENGTH || !qrPayloadFits(draft.value))) return "QR นี้มีข้อมูลยาวเกินกว่าจะเก็บได้";
   if (isGeneralPocketKind(draft.kind)) {
     if (code === "qr" && !draft.value.trim()) return "เลือกรูปที่มี QR หรือพิมพ์ข้อความใน QR";
     if (code === "barcode" && !canEncodeCode128(draft.value)) return "ใส่เลขบาร์โค้ด (ตัวเลขหรือตัวอักษรภาษาอังกฤษ)";
@@ -506,10 +507,19 @@ export function pocketCopyValue(card: PocketCard): { label: string; text: string
   return null;
 }
 
-/** The text a card's QR carries, or null for a card that draws no QR. */
+/** Whether a QR can carry this text at all (POCKET_QR_MAX_BYTES). */
+export function qrPayloadFits(payload: string) {
+  return new TextEncoder().encode(payload).length <= POCKET_QR_MAX_BYTES;
+}
+
+/**
+ * The text a card's QR carries, or null for a card that draws no QR -- which
+ * includes one saved before the byte limit was checked whose text no QR can
+ * hold: encoding it threw, on Home, on every launch.
+ */
 export function pocketQrPayload(card: PocketCard): string | null {
   if (card.kind === "promptpay") return buildPromptPayPayload(card.value);
-  if (pocketCodeFormat(card) === "qr" && card.value) return card.value;
+  if (pocketCodeFormat(card) === "qr" && card.value && qrPayloadFits(card.value)) return card.value;
   return null;
 }
 

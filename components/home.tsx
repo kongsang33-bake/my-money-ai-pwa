@@ -178,9 +178,10 @@ function BillboardSlogan() {
  * fits, scaled down to fit exactly once it would not -- measured, not
  * estimated, since how wide a figure sets depends on the font the device
  * actually drew. Left to wrap, a five-digit balance put "฿" on a line of its
- * own. Re-measures when `content` changes and when the row is resized; the
- * count-up only ever moves towards the final figure, so fitting the final
- * one is enough.
+ * own. Re-measures when `content` changes, when the row is resized, when the
+ * figure's own text changes (the count-up draws the new balance over several
+ * frames after `content` has already changed, so measuring once fitted the
+ * old, narrower figure), and once the webfont has loaded.
  */
 function useFitToRow<T extends HTMLElement>(content: string) {
   const ref = useRef<T>(null);
@@ -202,7 +203,18 @@ function useFitToRow<T extends HTMLElement>(content: string) {
     fit();
     const observer = new ResizeObserver(fit);
     observer.observe(row);
-    return () => observer.disconnect();
+    // fit() only sets a style, never text, so this cannot feed itself.
+    const textObserver = new MutationObserver(fit);
+    textObserver.observe(node, { characterData: true, childList: true, subtree: true });
+    let live = true;
+    document.fonts?.ready.then(() => {
+      if (live) fit();
+    });
+    return () => {
+      live = false;
+      observer.disconnect();
+      textObserver.disconnect();
+    };
   }, [content]);
   return ref;
 }

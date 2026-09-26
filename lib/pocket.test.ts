@@ -12,6 +12,7 @@ import {
   formatAccountNumber,
   movePocketCard,
   pocketCardRow,
+  pocketQrPayload,
   applyTicketReading,
   isPocketPast,
   normalizeTicketReading,
@@ -320,5 +321,17 @@ describe("pocketDraftProblem", () => {
     assert.match(pocketDraftProblem(card({ kind: "membership", code: "barcode", value: "บัตร" }))!, /บาร์โค้ด/);
     assert.match(pocketDraftProblem(card({ kind: "ticket", code: "qr", value: " " }))!, /QR/);
     assert.match(pocketDraftProblem(card({ kind: "account", value: "123" }))!, /10-15/);
+  });
+
+  it("counts a QR's text in bytes, so Thai under the character limit that no QR holds is refused", () => {
+    const thai = "ก".repeat(800); // 800 characters, 2,400 UTF-8 bytes
+    assert.match(pocketDraftProblem(card({ kind: "ticket", code: "qr", value: thai }))!, /ยาวเกิน/);
+    assert.equal(pocketDraftProblem(card({ kind: "ticket", code: "qr", value: "ก".repeat(700) })), null);
+  });
+
+  it("draws no QR for a saved card whose text no QR can hold, rather than throwing", () => {
+    const saved = card({ kind: "ticket", code: "qr", value: "ก".repeat(1000) });
+    assert.equal(pocketQrPayload(saved), null);
+    assert.doesNotThrow(() => encodeQr("ก".repeat(777)));
   });
 });

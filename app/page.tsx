@@ -130,7 +130,7 @@ import { FlipBillboard, PocketCardForm, PocketDetailSheet, PocketFace, PocketMan
 import { movePocketCard as planPocketMove, pocketCardRow, toPocketCard, type PocketCard } from "@/lib/pocket";
 import { HistoryFilterBar } from "@/components/history";
 import { PinGate, PrivacyGate, SecurityView } from "@/components/auth";
-import { fetchPrivacyAck, readLocalPrivacyAck, recordPrivacyAck, writeLocalPrivacyAck } from "@/lib/privacy";
+import { clearLocalPrivacyAck, fetchPrivacyAck, readLocalPrivacyAck, recordPrivacyAck } from "@/lib/privacy";
 import { Landing } from "@/components/landing";
 import type { WalletInput, RecurringExpenseInput } from "@/components/wallets-recurring";
 import type { DebtorInput } from "@/components/debtors";
@@ -900,22 +900,23 @@ export default function Home() {
 
   // Makes sure the privacy acknowledgement is on record before anything else
   // opens. One given on the landing page before sign-in only exists on this
-  // device, so it is written to the account here. A read that fails lets the
-  // user through rather than walling off their money over a network blip --
-  // the next launch reads again, and still finds nothing if nothing was
-  // recorded, so the record catches up rather than being skipped.
+  // device, so it is written to the account here -- and then forgotten, since
+  // it belonged to whoever was at the landing page, not to an account: kept,
+  // the next person to sign in on a shared phone would inherit it. A read
+  // that fails lets the user through rather than walling off their money over
+  // a network blip -- the next launch reads again, and still finds nothing if
+  // nothing was recorded, so the record catches up rather than being skipped.
   const ensurePrivacyAck = useCallback(async (userId: string) => {
     if (!supabase) return true;
     const onRecord = await fetchPrivacyAck(supabase, userId);
-    if (onRecord) {
-      writeLocalPrivacyAck();
-      return true;
-    }
     if (readLocalPrivacyAck()) {
-      await recordPrivacyAck(supabase, userId, "landing");
+      // A second write for the same version is ignored (recordPrivacyAck), so
+      // writing it even when the read failed is safe.
+      const error = onRecord ? null : await recordPrivacyAck(supabase, userId, "landing");
+      if (!error) clearLocalPrivacyAck();
       return true;
     }
-    return onRecord === null;
+    return onRecord !== false;
   }, []);
 
   const preparePinGate = useCallback(async (userId: string) => {
@@ -2408,7 +2409,6 @@ export default function Home() {
       setPrivacyError(error.message);
       return;
     }
-    writeLocalPrivacyAck();
     void preparePinGate(user.id);
   }
 
@@ -3073,9 +3073,14 @@ export default function Home() {
   }, []);
 
   // "N" opens จดรายการ from anywhere on a desktop, the shortcut the side
-  // nav's button advertises. Not while typing, not over a sheet, and not on
-  // a touch screen, which has no keyboard to press it on.
+  // nav's button advertises. Not while typing, not over a sheet, not on
+  // a touch screen, which has no keyboard to press it on, and not behind any
+  // of the screens rendered in place of the app (the landing, the privacy
+  // and PIN gates, setup) -- pressed at the PIN gate, it quietly moved the
+  // app to จดรายการ, which is where it then opened on unlocking.
+  const appShowing = ready && Boolean(user) && !privacyNeeded && pinMode === "unlocked" && !showSetupGate;
   useEffect(() => {
+    if (!appShowing) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "n" && event.key !== "N") return;
       if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
@@ -3087,7 +3092,7 @@ export default function Home() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [overlayOpen, tab, openAddTab]);
+  }, [appShowing, overlayOpen, tab, openAddTab]);
 
   // Esc closes the จดรายการ panel on a desk, back to where it was opened --
   // unless a sheet is open over it (that Esc is the sheet's) or the key was

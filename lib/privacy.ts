@@ -26,6 +26,20 @@ export function writeLocalPrivacyAck() {
 }
 
 /**
+ * Forgets this device's acknowledgement. It was given by whoever was at the
+ * landing page, not by an account, so it is spent on the first sign-in that
+ * reads it -- left behind, the next person to sign in on a shared device
+ * would be recorded as having acknowledged a policy they never saw.
+ */
+export function clearLocalPrivacyAck() {
+  try {
+    window.localStorage.removeItem(PRIVACY_ACK_STORAGE_KEY);
+  } catch {
+    // Storage unavailable: there is nothing kept in it to forget.
+  }
+}
+
+/**
  * Reads whether this user has acknowledged the current version on record.
  * `null` when the read itself failed -- the caller decides what an unknown
  * means rather than this guessing "no" and walling off the app.
