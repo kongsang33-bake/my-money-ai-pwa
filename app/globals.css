@@ -2004,6 +2004,15 @@ a:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+/* A card with no code shows its name where the code would be: a heading,
+   not a figure, so it wraps and steps down a size. */
+.pocket-number.is-title b {
+  max-width: 18ch;
+  font-size: var(--fs-h1);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
 .pocket-words {
   display: grid;
   gap: var(--s-1);
@@ -2018,6 +2027,33 @@ a:focus-visible {
 .pocket-words span {
   font-size: var(--fs-caption);
   color: var(--ink-2);
+}
+
+.pocket-words .pocket-when {
+  color: var(--ink);
+  font-weight: var(--fw-semibold);
+}
+
+/* A ticket whose event is over: dimmed, labelled, and moved to the back of
+   the deck (orderPocketForDisplay). The label stays at full strength so it
+   reads as the one thing that changed. */
+.pocket-slide.is-past .pocket-code,
+.pocket-slide.is-past .pocket-words > :not(.pocket-past) {
+  opacity: 0.4;
+}
+
+.pocket-words .pocket-past {
+  justify-self: center;
+  padding: 2px var(--s-2);
+  border-radius: var(--r-xs);
+  background: var(--surface-3);
+  color: var(--ink);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+}
+
+.pocket-past-delete {
+  background: var(--surface);
 }
 
 /* Arrows for a mouse, which cannot swipe; a finger has the swipe. */
@@ -2207,18 +2243,15 @@ a:focus-visible {
   color: var(--ink);
 }
 
-.pocket-kind-tiles {
+.pocket-code-tiles {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--s-2);
   margin-top: 6px;
 }
 
-.pocket-kind-tiles button {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  min-height: 48px;
+.pocket-code-tiles button {
+  min-height: 44px;
   padding: 0 var(--s-3);
   border-radius: var(--r-sm);
   border: 1px solid var(--line);
@@ -2226,12 +2259,33 @@ a:focus-visible {
   color: var(--ink-2);
   font-size: var(--fs-body-sm);
   font-weight: var(--fw-semibold);
-  text-align: left;
 }
 
-.pocket-kind-tiles button.active {
+.pocket-code-tiles button.active {
   border-color: var(--ink);
   color: var(--ink);
+}
+
+/* The photo's two buttons side by side: pick it, then (cards and tickets
+   only) ask AI to read it. */
+.pocket-photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.pocket-ai-button:disabled {
+  opacity: 0.45;
+}
+
+.pocket-when-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--s-3);
+}
+
+.edit-sheet .pocket-when-fields > label {
+  margin: var(--s-4) 0 0;
 }
 
 .pocket-hues {

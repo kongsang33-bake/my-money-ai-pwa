@@ -12,6 +12,11 @@ import {
   formatAccountNumber,
   movePocketCard,
   pocketCardRow,
+  applyTicketReading,
+  isPocketPast,
+  normalizeTicketReading,
+  orderPocketForDisplay,
+  pocketCodeFormat,
   pocketDraftProblem,
   toPocketCard,
   formatPromptPayNumber,
@@ -40,7 +45,7 @@ function decodeModules(modules: boolean[][]) {
 }
 
 const card = (patch: Partial<PocketCard> = {}): PocketCard => ({
-  id: "c1", kind: "promptpay", label: "พร้อมเพย์", holder: null, bank: null, value: "0812345678", hue: "--cat-bills", ...patch,
+  id: "c1", kind: "promptpay", label: "พร้อมเพย์", holder: null, bank: null, value: "0812345678", code: "qr", details: {}, hue: "--cat-bills", ...patch,
 });
 
 describe("crc16", () => {
@@ -159,13 +164,33 @@ describe("toPocketCard", () => {
   it("reads a row, emptying blank text to null", () => {
     assert.deepEqual(
       toPocketCard({ id: "a", kind: "account", label: "เงินเดือน", holder: " ", bank: "กรุงไทย", value: "1234567890", hue: "--cat-goods", sort_order: 0 }),
-      { id: "a", kind: "account", label: "เงินเดือน", holder: null, bank: "กรุงไทย", value: "1234567890", hue: "--cat-goods" },
+      { id: "a", kind: "account", label: "เงินเดือน", holder: null, bank: "กรุงไทย", value: "1234567890", code: "none", details: {}, hue: "--cat-goods" },
     );
   });
 
   it("drops a kind this build cannot draw and repairs an unknown hue", () => {
     assert.equal(toPocketCard({ id: "a", kind: "nfc", label: "x", value: "1", hue: "--cat-bills" }), null);
-    assert.equal(toPocketCard({ id: "a", kind: "barcode", label: "x", value: "1", hue: "#ff0000" })?.hue, "--cat-bills");
+    assert.equal(toPocketCard({ id: "a", kind: "membership", label: "x", value: "1", hue: "#ff0000" })?.hue, "--cat-bills");
+  });
+
+  it("reads an older build's barcode card as a membership card with a barcode", () => {
+    const read = toPocketCard({ id: "a", kind: "barcode", label: "The 1", value: "7001", hue: "--cat-bills" })!;
+    assert.equal(read.kind, "membership");
+    assert.equal(read.code, "barcode");
+  });
+
+  it("keeps a ticket with no code, and only the details it knows, cleaned", () => {
+    const read = toPocketCard({
+      id: "t", kind: "ticket", label: "หนัง", value: "", code_format: "none", hue: "--cat-food",
+      details: { title: " Rain ", startsAt: "2026-10-01T19:30", seat: "", evil: "x", venue: 42 },
+    })!;
+    assert.deepEqual(read.details, { title: "Rain", startsAt: "2026-10-01T19:30" });
+    assert.equal(read.code, "none");
+    assert.equal(toPocketCard({ id: "p", kind: "promptpay", label: "x", value: "", hue: "--cat-bills" }), null);
+  });
+
+  it("drops a when that is not a real date", () => {
+    assert.deepEqual(toPocketCard({ id: "t", kind: "ticket", label: "x", value: "", details: { startsAt: "tomorrow" }, hue: "--cat-bills" })!.details, {});
   });
 });
 
@@ -181,6 +206,80 @@ describe("pocketCardRow", () => {
   it("stores a scanned QR's text exactly as read", () => {
     const text = " 0002 01 ";
     assert.equal(pocketCardRow(card({ kind: "qr", value: text })).value, text);
+  });
+
+  it("writes a general card's code format and details, and nothing for a payment card", () => {
+    const ticket = pocketCardRow(card({ kind: "ticket", code: "none", value: "left over", bank: " Major ", details: { title: "Rain", seat: "" } }));
+    assert.equal(ticket.code_format, "none");
+    assert.equal(ticket.value, "");
+    assert.equal(ticket.bank, "Major");
+    assert.deepEqual(ticket.details, { title: "Rain" });
+    const pay = pocketCardRow(card({ details: { title: "hidden" } }));
+    assert.equal(pay.code_format, null);
+    assert.equal(pay.details, null);
+  });
+});
+
+describe("pocketCodeFormat", () => {
+  it("is fixed for the payment kinds and the card's own otherwise", () => {
+    assert.equal(pocketCodeFormat(card({ kind: "promptpay", code: "none" })), "qr");
+    assert.equal(pocketCodeFormat(card({ kind: "account", code: "qr" })), "none");
+    assert.equal(pocketCodeFormat(card({ kind: "membership", code: "barcode" })), "barcode");
+  });
+});
+
+describe("past tickets", () => {
+  const at = (iso: string) => new Date(iso).getTime();
+  const ticket = (id: string, startsAt?: string) => card({ id, kind: "ticket", code: "none", value: "", details: startsAt ? { startsAt } : {} });
+
+  it("counts a ticket as passed a few hours after it starts, or after its day ends", () => {
+    const show = ticket("a", "2026-10-01T19:30");
+    assert.equal(isPocketPast(show, at("2026-10-01T22:00")), false);
+    assert.equal(isPocketPast(show, at("2026-10-02T02:00")), true);
+    const allDay = ticket("b", "2026-10-01");
+    assert.equal(isPocketPast(allDay, at("2026-10-01T23:00")), false);
+    assert.equal(isPocketPast(allDay, at("2026-10-02T00:30")), true);
+  });
+
+  it("never passes a ticket with no date, or a card that is not a ticket", () => {
+    assert.equal(isPocketPast(ticket("c"), at("2030-01-01T00:00")), false);
+    assert.equal(isPocketPast(card({ kind: "membership", details: { startsAt: "2020-01-01" } }), at("2030-01-01T00:00")), false);
+  });
+
+  it("moves passed tickets to the back, each group in its saved order", () => {
+    const cards = [ticket("old1", "2026-01-01"), card({ id: "pay" }), ticket("new", "2026-12-01"), ticket("old2", "2026-02-01")];
+    assert.deepEqual(orderPocketForDisplay(cards, at("2026-06-01T12:00")).map((item) => item.id), ["pay", "new", "old1", "old2"]);
+  });
+});
+
+describe("reading a ticket with AI", () => {
+  it("bounds every field and keeps only a printed code it could draw", () => {
+    const reading = normalizeTicketReading({
+      label: "  Midnight Rain  ", issuer: "Major", holder: "", title: "Midnight Rain", venue: "โรง 5",
+      starts_at: "2026-10-03T19:30", seat: "F12", code_text: "7001 2345",
+    });
+    assert.equal(reading.label, "Midnight Rain");
+    assert.equal(reading.codeText, "70012345");
+    assert.deepEqual(reading.details, { title: "Midnight Rain", venue: "โรง 5", startsAt: "2026-10-03T19:30", seat: "F12" });
+    assert.equal(normalizeTicketReading({ code_text: "บัตร", starts_at: "เสาร์นี้" }).codeText, "");
+    assert.deepEqual(normalizeTicketReading(null).details, {});
+  });
+
+  it("fills blanks and never overwrites what the user typed", () => {
+    const draft = card({ kind: "ticket", code: "qr", value: "", label: "ของฉัน", details: { seat: "A1" } });
+    const filled = applyTicketReading(draft, normalizeTicketReading({ label: "AI name", issuer: "SF", title: "Rain", seat: "Z9", code_text: "12345678" }));
+    assert.equal(filled.label, "ของฉัน");
+    assert.equal(filled.bank, "SF");
+    assert.deepEqual(filled.details, { title: "Rain", seat: "A1" });
+    assert.equal(filled.value, "12345678");
+    assert.equal(filled.code, "barcode");
+  });
+
+  it("keeps a code read from the picture over one the AI read off the print", () => {
+    const draft = card({ kind: "ticket", code: "qr", value: "QR-FROM-PHOTO" });
+    const filled = applyTicketReading(draft, normalizeTicketReading({ code_text: "12345678" }));
+    assert.equal(filled.value, "QR-FROM-PHOTO");
+    assert.equal(filled.code, "qr");
   });
 });
 
@@ -209,7 +308,8 @@ describe("pocketDraftProblem", () => {
   it("accepts a complete card of each kind", () => {
     assert.equal(pocketDraftProblem(card()), null);
     assert.equal(pocketDraftProblem(card({ kind: "account", value: "1234567890" })), null);
-    assert.equal(pocketDraftProblem(card({ kind: "barcode", value: "7001234567890123" })), null);
+    assert.equal(pocketDraftProblem(card({ kind: "membership", code: "barcode", value: "7001234567890123" })), null);
+    assert.equal(pocketDraftProblem(card({ kind: "ticket", code: "none", value: "" })), null);
     assert.equal(pocketDraftProblem(card({ kind: "qr", value: buildPromptPayPayload("0812345678")! })), null);
   });
 
@@ -217,7 +317,8 @@ describe("pocketDraftProblem", () => {
     assert.match(pocketDraftProblem(card({ label: "  " }))!, /ชื่อ/);
     assert.match(pocketDraftProblem(card({ value: "12345" }))!, /10 หลัก/);
     assert.match(pocketDraftProblem(card({ kind: "qr", value: "" }))!, /QR/);
-    assert.match(pocketDraftProblem(card({ kind: "barcode", value: "บัตร" }))!, /บาร์โค้ด/);
+    assert.match(pocketDraftProblem(card({ kind: "membership", code: "barcode", value: "บัตร" }))!, /บาร์โค้ด/);
+    assert.match(pocketDraftProblem(card({ kind: "ticket", code: "qr", value: " " }))!, /QR/);
     assert.match(pocketDraftProblem(card({ kind: "account", value: "123" }))!, /10-15/);
   });
 });

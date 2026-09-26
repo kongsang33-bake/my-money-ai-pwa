@@ -1,6 +1,7 @@
-// The billboard's back: a pocket of the user's own payment cards -- a
-// PromptPay number, a QR lifted out of a bank app's screenshot, a membership
-// barcode, a plain bank account. Everything here is pure so it can be tested
+// The billboard's back: a pocket of the user's own cards -- ways to be paid
+// (a PromptPay number, a QR lifted out of a bank or wallet app, a bank
+// account) and cards and tickets of any kind (a membership barcode, a film
+// ticket's QR). Everything here is pure so it can be tested
 // on its own; drawing and sharing live in components/pocket.tsx.
 //
 // Nothing here stores a picture. A PromptPay QR is text built from the number
@@ -11,12 +12,35 @@
 import qrcode from "qrcode-generator";
 import {
   POCKET_BANK_MAX_LENGTH,
+  POCKET_BARCODE_MAX_LENGTH,
+  POCKET_DETAIL_MAX_LENGTH,
   POCKET_HOLDER_MAX_LENGTH,
   POCKET_LABEL_MAX_LENGTH,
+  POCKET_PAST_GRACE_HOURS,
   POCKET_VALUE_MAX_LENGTH,
 } from "./constants.ts";
 
-export type PocketCardKind = "promptpay" | "qr" | "barcode" | "account";
+/**
+ * What a card is. The first three are ways to be paid; the rest are cards and
+ * tickets of any kind. "barcode" is a kind older builds wrote -- it is read as
+ * a membership card carrying a barcode (toPocketCard) and never written.
+ */
+export type PocketCardKind = "promptpay" | "qr" | "account" | "membership" | "ticket" | "other";
+
+/** What code a card carries, decided apart from what the card is. */
+export type PocketCodeFormat = "qr" | "barcode" | "none";
+
+/**
+ * What is printed on a ticket or card beyond its code. `startsAt` is the
+ * wall-clock time on the ticket, "YYYY-MM-DDTHH:mm", or just "YYYY-MM-DD"
+ * when it gives a day and no time.
+ */
+export type PocketDetails = {
+  title?: string;
+  venue?: string;
+  startsAt?: string;
+  seat?: string;
+};
 
 export type PocketCard = {
   id: string;
@@ -25,23 +49,68 @@ export type PocketCard = {
   label: string;
   /** Whose it is, shown under the code so the person scanning can check. */
   holder: string | null;
-  /** The bank or issuer, for "account" and optional elsewhere. */
+  /** The bank for an account; the issuer, shop or organiser for a card. */
   bank: string | null;
   /**
-   * promptpay: the phone or ID digits; qr: the decoded QR text; barcode: the
-   * code; account: the account number digits.
+   * promptpay: the phone or ID digits; qr: the decoded QR text; account: the
+   * account number digits; a general card: its QR text or barcode, or "".
    */
   value: string;
+  /** A general card's code format; the payment kinds' is fixed (pocketCodeFormat). */
+  code: PocketCodeFormat;
+  details: PocketDetails;
   /** A --cat-* slot, the card's own --hue (never a colour picked ad hoc). */
   hue: string;
 };
 
 export const POCKET_KIND_LABELS: Record<PocketCardKind, string> = {
   promptpay: "พร้อมเพย์",
-  qr: "QR จากแอปธนาคาร",
-  barcode: "บาร์โค้ด",
+  qr: "QR รับเงิน",
   account: "บัญชีธนาคาร",
+  membership: "บัตรสมาชิก",
+  ticket: "ตั๋ว",
+  other: "บัตรอื่น ๆ",
 };
+
+/**
+ * The kind picker's groups, in order. A new kind is one more entry here and in
+ * POCKET_KIND_LABELS (plus the database's kind check).
+ */
+export const POCKET_KIND_GROUPS: { label: string; kinds: { kind: PocketCardKind; label: string }[] }[] = [
+  {
+    label: "รับเงิน",
+    kinds: [
+      { kind: "promptpay", label: "พร้อมเพย์ (เบอร์/เลขบัตรประชาชน)" },
+      { kind: "qr", label: "QR รับเงิน (แอปธนาคาร/วอลเล็ต)" },
+      { kind: "account", label: "บัญชีธนาคาร" },
+    ],
+  },
+  {
+    label: "บัตรและตั๋ว",
+    kinds: [
+      { kind: "membership", label: "บัตรสมาชิก/สะสมแต้ม" },
+      { kind: "ticket", label: "ตั๋วหนัง/คอนเสิร์ต/อีเวนต์" },
+      { kind: "other", label: "บัตรอื่น ๆ ที่มี QR หรือบาร์โค้ด" },
+    ],
+  },
+];
+
+/** Cards and tickets, as opposed to ways to be paid: the only ones AI may read. */
+const GENERAL_KINDS = new Set<PocketCardKind>(["membership", "ticket", "other"]);
+export const isGeneralPocketKind = (kind: PocketCardKind) => GENERAL_KINDS.has(kind);
+
+export const POCKET_CODE_LABELS: Record<PocketCodeFormat, string> = {
+  qr: "QR",
+  barcode: "บาร์โค้ด",
+  none: "ไม่มีโค้ด",
+};
+
+/** The code a card shows: fixed for the payment kinds, the card's own otherwise. */
+export function pocketCodeFormat(card: Pick<PocketCard, "kind" | "code">): PocketCodeFormat {
+  if (card.kind === "promptpay" || card.kind === "qr") return "qr";
+  if (card.kind === "account") return "none";
+  return card.code;
+}
 
 export const POCKET_HUES = [
   "--cat-bills",
@@ -60,6 +129,23 @@ export const digitsOnly = (value: string) => value.replace(/\D/g, "");
 
 const POCKET_KIND_SET = new Set<string>(Object.keys(POCKET_KIND_LABELS));
 const POCKET_HUE_SET = new Set<string>(POCKET_HUES);
+const POCKET_CODE_SET = new Set<string>(Object.keys(POCKET_CODE_LABELS));
+const STARTS_AT_PATTERN = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/;
+const DETAIL_KEYS = ["title", "venue", "startsAt", "seat"] as const;
+
+/** Keeps only the known, non-empty detail strings, each cut to its limit. */
+export function cleanPocketDetails(raw: unknown): PocketDetails {
+  if (!raw || typeof raw !== "object") return {};
+  const source = raw as Record<string, unknown>;
+  const details: PocketDetails = {};
+  for (const key of DETAIL_KEYS) {
+    const value = typeof source[key] === "string" ? (source[key] as string).trim().slice(0, POCKET_DETAIL_MAX_LENGTH) : "";
+    if (!value) continue;
+    if (key === "startsAt" && !STARTS_AT_PATTERN.test(value)) continue;
+    details[key] = value;
+  }
+  return details;
+}
 
 /**
  * A pocket_cards row as the app holds it, or null for a row this version
@@ -67,34 +153,57 @@ const POCKET_HUE_SET = new Set<string>(POCKET_HUES);
  * the first slot rather than dropping the card.
  */
 export function toPocketCard(row: Record<string, unknown>): PocketCard | null {
-  const kind = String(row.kind ?? "");
+  let kind = String(row.kind ?? "");
+  let code = String(row.code_format ?? "");
+  if (kind === "barcode") {
+    kind = "membership";
+    code = "barcode";
+  }
+  if (!POCKET_KIND_SET.has(kind)) return null;
   const value = String(row.value ?? "");
-  if (!POCKET_KIND_SET.has(kind) || !value) return null;
   const text = (field: unknown) => (typeof field === "string" && field.trim() ? field : null);
   const hue = String(row.hue ?? "");
-  return {
+  const card: PocketCard = {
     id: String(row.id),
     kind: kind as PocketCardKind,
     label: String(row.label ?? ""),
     holder: text(row.holder),
     bank: text(row.bank),
     value,
+    // A payment card's code follows from what it is; a general card's is its
+    // own, and a row with none recorded draws what its value can be.
+    code: !GENERAL_KINDS.has(kind as PocketCardKind)
+      ? pocketCodeFormat({ kind: kind as PocketCardKind, code: "none" })
+      : POCKET_CODE_SET.has(code) ? (code as PocketCodeFormat) : value ? "qr" : "none",
+    details: cleanPocketDetails(row.details),
     hue: POCKET_HUE_SET.has(hue) ? hue : POCKET_HUES[0],
   };
+  // A payment card without its number cannot draw anything.
+  if (!isGeneralPocketKind(card.kind) && !value) return null;
+  return card;
 }
 
 /** What gets written for a card: the form's values, trimmed, emptied to null. */
 export function pocketCardRow(card: PocketCard) {
   const optional = (field: string | null) => (field && field.trim() ? field.trim() : null);
+  const general = isGeneralPocketKind(card.kind);
+  const code = pocketCodeFormat(card);
+  const details = general ? cleanPocketDetails(card.details) : {};
+  let value: string;
+  if (card.kind === "promptpay" || card.kind === "account") value = digitsOnly(card.value);
+  else if (general && code === "none") value = "";
+  else value = card.value;
   return {
     kind: card.kind,
     label: card.label.trim(),
     holder: optional(card.holder),
-    // Only the kinds whose form asks for it keep a bank: switching a card from
-    // "account" to "promptpay" hides the field, and a hidden value that still
+    // Only the kinds whose form asks for it keep a bank or issuer: switching
+    // a card to "promptpay" hides the field, and a hidden value that still
     // saved would turn up again with nothing on screen to change it.
-    bank: card.kind === "account" || card.kind === "barcode" ? optional(card.bank) : null,
-    value: card.kind === "qr" || card.kind === "barcode" ? card.value : digitsOnly(card.value),
+    bank: card.kind === "account" || general ? optional(card.bank) : null,
+    value,
+    code_format: general ? code : null,
+    details: Object.keys(details).length ? details : null,
     hue: card.hue,
   };
 }
@@ -124,14 +233,120 @@ export function pocketDraftProblem(draft: PocketCard): string | null {
   if (!label) return "ตั้งชื่อการ์ด";
   if (label.length > POCKET_LABEL_MAX_LENGTH) return `ชื่อการ์ดยาวได้ไม่เกิน ${POCKET_LABEL_MAX_LENGTH} ตัวอักษร`;
   if ((draft.holder ?? "").trim().length > POCKET_HOLDER_MAX_LENGTH) return `ชื่อเจ้าของยาวได้ไม่เกิน ${POCKET_HOLDER_MAX_LENGTH} ตัวอักษร`;
-  if ((draft.bank ?? "").trim().length > POCKET_BANK_MAX_LENGTH) return `ชื่อธนาคารหรือร้านยาวได้ไม่เกิน ${POCKET_BANK_MAX_LENGTH} ตัวอักษร`;
+  if ((draft.bank ?? "").trim().length > POCKET_BANK_MAX_LENGTH) return `ชื่อธนาคารหรือผู้ออกบัตรยาวได้ไม่เกิน ${POCKET_BANK_MAX_LENGTH} ตัวอักษร`;
   if (draft.kind === "promptpay" && !promptPayTarget(draft.value)) return "ใส่เบอร์ 10 หลัก หรือเลขบัตรประชาชน 13 หลัก";
-  if (draft.kind === "qr" && !draft.value) return "เลือกรูป QR จากแอปธนาคาร";
-  if (draft.kind === "qr" && draft.value.length > POCKET_VALUE_MAX_LENGTH) return "QR นี้มีข้อมูลยาวเกินกว่าจะเก็บได้";
-  if (draft.kind === "barcode" && !canEncodeCode128(draft.value)) return "ใส่เลขบาร์โค้ด (ตัวเลขหรือตัวอักษรภาษาอังกฤษ)";
-  if (draft.kind === "barcode" && draft.value.length > 80) return "เลขบาร์โค้ดยาวเกินไป";
+  if (draft.kind === "qr" && !draft.value) return "เลือกรูป QR รับเงินจากแอปธนาคารหรือวอลเล็ต";
   if (draft.kind === "account" && (digitsOnly(draft.value).length < 10 || digitsOnly(draft.value).length > 15)) return "เลขบัญชีต้องมี 10-15 หลัก";
+  const code = pocketCodeFormat(draft);
+  if (code === "qr" && draft.value.length > POCKET_VALUE_MAX_LENGTH) return "QR นี้มีข้อมูลยาวเกินกว่าจะเก็บได้";
+  if (isGeneralPocketKind(draft.kind)) {
+    if (code === "qr" && !draft.value.trim()) return "เลือกรูปที่มี QR หรือพิมพ์ข้อความใน QR";
+    if (code === "barcode" && !canEncodeCode128(draft.value)) return "ใส่เลขบาร์โค้ด (ตัวเลขหรือตัวอักษรภาษาอังกฤษ)";
+    if (code === "barcode" && draft.value.length > POCKET_BARCODE_MAX_LENGTH) return "เลขบาร์โค้ดยาวเกินไป";
+    if (draft.details.startsAt && !STARTS_AT_PATTERN.test(draft.details.startsAt)) return "วันเวลาไม่ถูกต้อง";
+  }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Tickets: when, and whether it has passed
+// ---------------------------------------------------------------------------
+
+/**
+ * When a ticket's event is, as a Date in the device's own time, or null.
+ * A day with no time counts as the end of that day.
+ */
+export function pocketEventTime(details: PocketDetails): Date | null {
+  const at = details.startsAt;
+  if (!at || !STARTS_AT_PATTERN.test(at)) return null;
+  const date = new Date(at.length === 10 ? `${at}T23:59` : at);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * A ticket whose event is over: POCKET_PAST_GRACE_HOURS after it started, so
+ * a ticket is still up front while its film is still running.
+ */
+export function isPocketPast(card: PocketCard, now: number): boolean {
+  if (card.kind !== "ticket") return false;
+  const at = pocketEventTime(card.details);
+  if (!at) return false;
+  const grace = (card.details.startsAt?.length ?? 0) > 10 ? POCKET_PAST_GRACE_HOURS * 3_600_000 : 0;
+  return now > at.getTime() + grace;
+}
+
+/** The order the billboard's back swipes through: past tickets go last, each group in its saved order. */
+export function orderPocketForDisplay(cards: PocketCard[], now: number): PocketCard[] {
+  return [...cards.filter((card) => !isPocketPast(card, now)), ...cards.filter((card) => isPocketPast(card, now))];
+}
+
+const WHEN_FORMAT = new Intl.DateTimeFormat("th-TH", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const DAY_FORMAT = new Intl.DateTimeFormat("th-TH", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+
+/** "ส. 27 ก.ย. 19:30" -- a ticket's when, in words. */
+export function formatPocketWhen(details: PocketDetails): string | null {
+  const at = pocketEventTime(details);
+  if (!at) return null;
+  return (details.startsAt?.length ?? 0) > 10 ? WHEN_FORMAT.format(at) : DAY_FORMAT.format(at);
+}
+
+/** The line under a ticket's name: when, and the seat. */
+export function pocketDetailLine(card: PocketCard): string | null {
+  if (!isGeneralPocketKind(card.kind)) return null;
+  const parts = [formatPocketWhen(card.details), card.details.seat ? `ที่นั่ง ${card.details.seat}` : null].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+// ---------------------------------------------------------------------------
+// Reading a ticket with AI (/api/analyze-ticket)
+// ---------------------------------------------------------------------------
+
+/** What the AI read off a ticket, every field already cleaned. */
+export type PocketTicketReading = {
+  label: string;
+  issuer: string;
+  holder: string;
+  codeText: string;
+  details: PocketDetails;
+};
+
+/**
+ * Bounds and validates the model's answer before it touches a form: every
+ * field trimmed to its column's limit, a when that is not a real date dropped,
+ * and a printed code kept only if it could be drawn as a barcode.
+ */
+export function normalizeTicketReading(raw: unknown): PocketTicketReading {
+  const source = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const text = (key: string, max: number) => (typeof source[key] === "string" ? (source[key] as string).trim().slice(0, max) : "");
+  const code = text("code_text", POCKET_BARCODE_MAX_LENGTH).replace(/\s+/g, "");
+  return {
+    label: text("label", POCKET_LABEL_MAX_LENGTH),
+    issuer: text("issuer", POCKET_BANK_MAX_LENGTH),
+    holder: text("holder", POCKET_HOLDER_MAX_LENGTH),
+    codeText: canEncodeCode128(code) ? code : "",
+    details: cleanPocketDetails({ title: source.title, venue: source.venue, startsAt: source.starts_at, seat: source.seat }),
+  };
+}
+
+/**
+ * Pours a reading into a draft without overwriting anything the user already
+ * typed: AI fills blanks, it does not correct the person holding the ticket.
+ * A printed code is used only when no code was read from the picture itself.
+ */
+export function applyTicketReading(draft: PocketCard, reading: PocketTicketReading): PocketCard {
+  const details: PocketDetails = { ...reading.details, ...cleanPocketDetails(draft.details) };
+  const next: PocketCard = {
+    ...draft,
+    label: draft.label.trim() ? draft.label : reading.label || draft.label,
+    bank: draft.bank?.trim() ? draft.bank : reading.issuer || draft.bank,
+    holder: draft.holder?.trim() ? draft.holder : reading.holder || draft.holder,
+    details,
+  };
+  if (!draft.value.trim() && reading.codeText) {
+    next.value = reading.codeText;
+    next.code = "barcode";
+  }
+  return next;
 }
 
 // ---------------------------------------------------------------------------
@@ -274,27 +489,27 @@ export function formatAccountNumber(value: string) {
 
 /** The one line under a card's code saying what it is, in words. */
 export function pocketCardCaption(card: PocketCard) {
-  const parts: string[] = [];
+  const parts: (string | null | undefined)[] = [];
   if (card.kind === "promptpay") parts.push(`${ewalletProvider(card.value) ?? "พร้อมเพย์"} ${formatPromptPayNumber(card.value)}`);
   else if (card.kind === "account") parts.push(card.bank ?? "บัญชีธนาคาร");
   else if (card.kind === "qr") parts.push(describeScannedQr(card.value) ?? "QR");
-  else parts.push(card.bank ?? "บาร์โค้ด");
+  else parts.push(card.bank ?? POCKET_KIND_LABELS[card.kind], card.details.venue);
   if (card.holder) parts.push(card.holder);
-  return parts.join(" · ");
+  return parts.filter(Boolean).join(" · ");
 }
 
 /** What "คัดลอก" puts on the clipboard: the number someone would type. */
 export function pocketCopyValue(card: PocketCard): { label: string; text: string } | null {
   if (card.kind === "promptpay") return { label: promptPayTarget(card.value) === "phone" ? "เบอร์พร้อมเพย์" : "เลขพร้อมเพย์", text: digitsOnly(card.value) };
   if (card.kind === "account") return { label: "เลขบัญชี", text: digitsOnly(card.value) };
-  if (card.kind === "barcode") return { label: "เลขบาร์โค้ด", text: card.value };
+  if (isGeneralPocketKind(card.kind) && card.code === "barcode" && card.value) return { label: "เลขบาร์โค้ด", text: card.value };
   return null;
 }
 
 /** The text a card's QR carries, or null for a card that draws no QR. */
 export function pocketQrPayload(card: PocketCard): string | null {
   if (card.kind === "promptpay") return buildPromptPayPayload(card.value);
-  if (card.kind === "qr") return card.value;
+  if (pocketCodeFormat(card) === "qr" && card.value) return card.value;
   return null;
 }
 

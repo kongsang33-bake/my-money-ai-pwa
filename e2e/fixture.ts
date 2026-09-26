@@ -108,10 +108,20 @@ export function buildSeed(now = Date.now()): PreviewSeed {
     // for a QR read out of a bank app's screenshot, so it is a real payment
     // payload rather than text that only looks like one.
     pocketCards: [
-      { id: "preview-p1", kind: "promptpay", label: "พร้อมเพย์ส่วนตัว", holder: "เบค ส.", bank: null, value: "0812345678", hue: "--cat-bills" },
-      { id: "preview-p2", kind: "qr", label: "K+ ร้านกาแฟ", holder: "ร้านบ้านเบค", bank: null, value: buildPromptPayPayload("1234567890123")!, hue: "--cat-travel" },
-      { id: "preview-p3", kind: "account", label: "บัญชีเงินเดือน", holder: "เบค ส.", bank: "ไทยพาณิชย์", value: "4071234567", hue: "--cat-goods" },
-      { id: "preview-p4", kind: "barcode", label: "The 1", holder: null, bank: "Central", value: "7001234567890123", hue: "--cat-entertainment" },
+      { id: "preview-p1", kind: "promptpay", label: "พร้อมเพย์ส่วนตัว", holder: "เบค ส.", bank: null, value: "0812345678", code: "qr", details: {}, hue: "--cat-bills" },
+      { id: "preview-p2", kind: "qr", label: "K+ ร้านกาแฟ", holder: "ร้านบ้านเบค", bank: null, value: buildPromptPayPayload("1234567890123")!, code: "qr", details: {}, hue: "--cat-travel" },
+      { id: "preview-p3", kind: "account", label: "บัญชีเงินเดือน", holder: "เบค ส.", bank: "ไทยพาณิชย์", value: "4071234567", code: "none", details: {}, hue: "--cat-goods" },
+      { id: "preview-p4", kind: "membership", label: "The 1", holder: null, bank: "Central", value: "7001234567890123", code: "barcode", details: {}, hue: "--cat-entertainment" },
+      // A ticket two days out, and one from last week -- which the pocket
+      // shows last, dimmed, with its delete in place of แชร์.
+      {
+        id: "preview-p5", kind: "ticket", label: "ตั๋วหนังคืนวันเสาร์", holder: null, bank: "Major", value: "MJR-7788-F12", code: "qr",
+        details: { title: "Midnight Rain", venue: "โรง 5 พารากอน", startsAt: `${billsOn(2)}T19:30`, seat: "F12, F13" }, hue: "--cat-food",
+      },
+      {
+        id: "preview-p6", kind: "ticket", label: "คอนเสิร์ตเดือนก่อน", holder: null, bank: null, value: "", code: "none",
+        details: { title: "Summer Live", venue: "อิมแพ็ค อารีน่า", startsAt: `${billsOn(-7)}T20:00` }, hue: "--cat-health",
+      },
     ],
   };
 }

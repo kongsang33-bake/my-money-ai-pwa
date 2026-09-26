@@ -3137,14 +3137,18 @@ export default function Home() {
       if (card.id) {
         const { error } = await supabase.from(TABLES.pocketCards).update({ ...row, updated_at: new Date().toISOString() }).eq("id", card.id);
         if (error) throw error;
-        setPocketCards((cards) => cards.map((item) => (item.id === card.id ? { ...item, ...row } : item)));
+        // Read back through toPocketCard, the way a loaded row is, so the card
+        // on screen is exactly what the next launch will show.
+        const saved = toPocketCard({ id: card.id, ...row });
+        if (saved) setPocketCards((cards) => cards.map((item) => (item.id === card.id ? saved : item)));
       } else {
         const id = crypto.randomUUID();
         const sortOrder = Math.max(-1, ...pocketOrderRef.current.values()) + 1;
         const { error } = await supabase.from(TABLES.pocketCards).insert({ id, user_id: user.id, sort_order: sortOrder, ...row });
         if (error) throw error;
         pocketOrderRef.current.set(id, sortOrder);
-        setPocketCards((cards) => [...cards, { ...card, ...row, id }]);
+        const saved = toPocketCard({ id, ...row });
+        if (saved) setPocketCards((cards) => [...cards, saved]);
       }
       notify({ tone: "success", title: card.id ? "บันทึกการ์ดแล้ว" : "เพิ่มการ์ดลงกระเป๋าแล้ว", detail: row.label });
       pocketDismiss.requestClose();
@@ -3156,7 +3160,8 @@ export default function Home() {
   }
 
   async function deletePocketCard(card: PocketCard) {
-    const confirmed = await requestConfirm({ title: "ลบการ์ดนี้?", detail: card.label, confirmLabel: "ลบการ์ด", tone: "danger" });
+    const ticket = card.kind === "ticket";
+    const confirmed = await requestConfirm({ title: ticket ? "ลบตั๋วนี้?" : "ลบการ์ดนี้?", detail: card.label, confirmLabel: ticket ? "ลบตั๋ว" : "ลบการ์ด", tone: "danger" });
     if (!confirmed || !supabase) return;
     const { error } = await supabase.from(TABLES.pocketCards).delete().eq("id", card.id);
     if (error) {
@@ -3403,6 +3408,7 @@ export default function Home() {
                       onAdd={() => openPocketSheet({ kind: "form", card: null })}
                       onShare={(card) => openPocketSheet({ kind: "share", card })}
                       onDetails={(card) => openPocketSheet({ kind: "detail", card })}
+                      onDelete={deletePocketCard}
                     />
                   )}
                 />

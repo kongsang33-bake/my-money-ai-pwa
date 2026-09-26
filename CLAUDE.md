@@ -84,11 +84,25 @@ a button, never a tap anywhere on the box, because a miss beside จดราย
 would flip it -- and the same corner turns it back, with focus following the
 turn and the turned-away face `inert`. The back swipes one card at a time
 (native scroll-snap, arrows for a mouse, arrow keys) and each card shows its
-code at once: a PromptPay number drawn as its QR (`buildPromptPayPayload`,
-EMVCo + CRC16), a QR read out of a bank app's screenshot **on the device**
-(jsQR, lazy-loaded) and stored as its text, a Code 128 barcode, or a bank
-account's number set large. **No picture is ever stored** -- say so in the
-privacy policy if that changes. Codes are black on white (`--qr-paper`/
+code at once. What a card **is** (`kind`: the payment kinds promptpay / qr /
+account, and the general kinds membership / ticket / other, picked from
+`POCKET_KIND_GROUPS` in a grouped `<select>`) is kept apart from what **code**
+it carries (`code_format`: qr / barcode / none, `pocketCodeFormat`) -- the old
+"barcode" kind was both and said nothing about what the barcode was for; it
+is still read (as a membership card) but never written. A PromptPay number is
+drawn as its QR (`buildPromptPayPayload`, EMVCo + CRC16); a photo's QR or
+barcode is read **on the device** (jsQR, then ZXing for 1D codes, both
+lazy-loaded) and stored as text; a bank account's number is set large; a
+card with no code shows its name there. **No picture is ever stored** -- say
+so in the privacy policy if that changes. The one time a picture leaves the
+device is "ให้ AI ช่วยกรอก" on a general card: the photo goes to
+`/api/analyze-ticket` (Gemini) to read what is printed -- title, venue, when,
+seat, issuer, a barcode's printed digits -- into `details`, filling only the
+blanks (`applyTicketReading`); the route refuses the payment kinds whatever
+the client sends. A ticket whose `details.startsAt` is over
+(`isPocketPast`, `POCKET_PAST_GRACE_HOURS` after it starts, or after its day
+for a date alone) goes last (`orderPocketForDisplay`), dimmed, labelled
+"ผ่านไปแล้ว", with ลบตั๋วนี้ in place of แชร์ -- never deleted on its own. Codes are black on white (`--qr-paper`/
 `--qr-ink`) whatever the theme, because many scanners will not read a light
 QR on dark. QR text goes in as UTF-8 through `encodeQr`; the library's own
 default kept only each character's low byte. National ID numbers are masked
