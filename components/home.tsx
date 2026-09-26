@@ -1,9 +1,9 @@
 "use client";
 
 import { memo, useEffect, useId, useMemo, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, CreditCard, Info, Lightbulb, Pencil, Plus, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet as WalletIcon, WalletCards, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, CreditCard, Eye, EyeOff, Info, Lightbulb, Pencil, Plus, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet as WalletIcon, WalletCards, X } from "lucide-react";
 import { BRAND_SLOGANS, DETAIL_SIMILAR_LIMIT, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
-import { formatChatTime, formatDateTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, moneySign, toMoneyAmount } from "@/lib/format";
+import { MASKED_MONEY, formatChatTime, formatDateTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, maskMoneyInText, moneySign, toMoneyAmount } from "@/lib/format";
 import { entryDisplayImpact } from "@/lib/money";
 import { shiftMonthKey } from "@/lib/cycle";
 import { sameTitleSummary, similarEntries, spendingByDay, type CashFlowSummary, type CyclePace, type SetupStep, type UnpaidOwnDebt } from "@/lib/insights";
@@ -198,6 +198,7 @@ export const HeroWalletCard = memo(function HeroWalletCard({
   /** Turns the billboard over to the card pocket (components/pocket.tsx). */
   onOpenPocket?: () => void;
 }) {
+  const [amountShown, setAmountShown] = useState(false);
   return (
     // With no history there is no art to fill the billboard's top half, and a
     // new account opened on a tall box of empty green over "฿ 0". Bare, it
@@ -232,13 +233,35 @@ export const HeroWalletCard = memo(function HeroWalletCard({
             ยอดรวมของกระเป๋าประเภท &ldquo;เงินใช้จ่าย&rdquo; ตามที่จดไว้ ไม่รวมเงินที่กันไว้ในกระเป๋าออม และไม่รวมหนี้
           </InfoHint>
         </div>
-        <strong className="hero-amount">
-          {balance < 0 ? "−" : ""}
-          <CountUpMoney value={Math.abs(balance)} />
-        </strong>
+        {/* Hidden until asked for, every time Home opens: a balance on the
+            first screen is read by whoever is beside you. The eye sits after
+            the figure and says which way it will turn. */}
+        <div className="hero-amount-row">
+          <strong className="hero-amount" aria-live="polite">
+            {amountShown ? (
+              <>
+                {balance < 0 ? "−" : ""}
+                <CountUpMoney value={Math.abs(balance)} />
+              </>
+            ) : (
+              // The button beside it says the figure is hidden ("แสดงยอดเงิน");
+              // read aloud, the dots would only be six "bullet"s.
+              <span aria-hidden="true">{MASKED_MONEY}</span>
+            )}
+          </strong>
+          <button
+            type="button"
+            className="hero-eye"
+            onClick={() => setAmountShown((shown) => !shown)}
+            aria-pressed={amountShown}
+            aria-label={amountShown ? "ซ่อนยอดเงิน" : "แสดงยอดเงิน"}
+          >
+            {amountShown ? <EyeOff size={22} strokeWidth={2.25} aria-hidden="true" /> : <Eye size={22} strokeWidth={2.25} aria-hidden="true" />}
+          </button>
+        </div>
         <ul className="billboard-tags">
           <li className="billboard-status">{insight.label}</li>
-          <li>{insight.text}</li>
+          <li>{amountShown ? insight.text : maskMoneyInText(insight.text)}</li>
           {streak >= 2 && <li>จดติดกัน {streak} วัน</li>}
         </ul>
         {/* Play / More info: the white --primary CTA, and a quieter second

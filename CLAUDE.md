@@ -36,7 +36,10 @@ scrolls under it; the billboard as the mock draws it (art filling the box,
 kicker, amount, tags and two actions over a fade at the bottom, landscape
 with the words on the left from 900px up), whose art is the spending
 balance's real last 30 days (`buildBalanceHistory`, which walks back from
-the ledger's own figure so it cannot end on a different number); and every
+the ledger's own figure so it cannot end on a different number) -- and
+whose figure opens **hidden** (`MASKED_MONEY`) every time Home mounts, with an
+eye after it to show and hide it; the per-day line under it is masked with it
+(`maskMoneyInText`), since it gives the balance away; and every
 Home section below it as a rail. The rails' items are built for a rail now
 (components/home.tsx): **posters** (2:3, `Poster`) for bills due and unpaid
 cards (`DueSoonRail`) and for the ranked categories with the mock's outlined

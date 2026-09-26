@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { clampInteger, formatChatTime, formatDateInputValue, formatMonthInputValue, formatSignedMoney, normalizeIntervalCount, roundMoney, roundMoneyDeep, toFiniteNumber, toMoneyAmount } from "./format.ts";
+import { MASKED_MONEY, clampInteger, maskMoneyInText, formatChatTime, formatDateInputValue, formatMonthInputValue, formatSignedMoney, normalizeIntervalCount, roundMoney, roundMoneyDeep, toFiniteNumber, toMoneyAmount } from "./format.ts";
 
 describe("toFiniteNumber", () => {
   it("parses numeric strings", () => {
@@ -163,5 +163,17 @@ describe("formatMonthInputValue", () => {
 
   it("returns an empty string for an unset field", () => {
     assert.equal(formatMonthInputValue(""), "");
+  });
+});
+
+describe("maskMoneyInText", () => {
+  it("hides every baht figure and leaves the words", () => {
+    assert.equal(maskMoneyInText("เหลือใช้ได้ประมาณ ฿ 1,130.71 ต่อวัน"), "เหลือใช้ได้ประมาณ ฿ ••• ต่อวัน");
+    assert.equal(maskMoneyInText("เกินงบ −฿ 20 และ ฿5"), "เกินงบ ฿ ••• และ ฿ •••");
+    assert.equal(maskMoneyInText("จดติดกัน 12 วัน"), "จดติดกัน 12 วัน");
+  });
+
+  it("gives a hidden figure no length to read", () => {
+    assert.doesNotMatch(MASKED_MONEY, /\d/);
   });
 });

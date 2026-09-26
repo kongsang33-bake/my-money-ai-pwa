@@ -1678,9 +1678,34 @@ a:focus-visible {
   text-align: left;
 }
 
+/* The balance and its eye on one line, centred as the figure alone was. */
+.hero-amount-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
+
+.hero-eye {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-sm);
+  color: var(--ink-2);
+  transition: background var(--t-2) var(--e-out), color var(--t-2) var(--e-out);
+}
+
+.hero-eye:hover {
+  background: var(--cta-secondary);
+  color: var(--ink);
+}
+
 .hero-amount {
   display: block;
-  margin-top: var(--s-2);
+  min-width: 0;
   color: var(--hero-amount);
   font-size: var(--fs-display);
   font-weight: var(--fw-bold);
@@ -9089,6 +9114,10 @@ body:has(.login-page) #app-splash {
   }
 
   .billboard-tags {
+    justify-content: flex-start;
+  }
+
+  .hero-amount-row {
     justify-content: flex-start;
   }
 

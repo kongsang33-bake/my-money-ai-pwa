@@ -5,6 +5,16 @@ import { MAX_BILLING_INTERVAL_COUNT } from "./constants.ts";
 
 export const moneySign = "฿ ";
 
+// What a hidden figure shows in its place: the currency, and dots that do not
+// say how many digits there are.
+export const MASKED_MONEY = `${moneySign}••••••`;
+
+/**
+ * A sentence with every baht figure in it hidden, for text that sits beside a
+ * hidden balance ("เหลือใช้ได้ประมาณ ฿ 130.71 ต่อวัน" gives the balance away).
+ */
+export const maskMoneyInText = (text: string) => text.replace(/[−-]?฿\s?[\d,]+(\.\d+)?/g, `${moneySign}•••`);
+
 export const localDateInput = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
