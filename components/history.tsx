@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useRef, useState } from "react";
-import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
+import { ArrowUp, ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
 import { formatMoney, moneySign } from "@/lib/format";
 import { transactionTypeLabels, type TransactionType } from "@/lib/taxonomy";
@@ -229,3 +229,32 @@ export const IncomeBreakdown = memo(function IncomeBreakdown({ items }: { items:
     </details>
   );
 });
+
+/**
+ * A way back up once a long month has been scrolled: History's search and
+ * calendar sit at the top, and a busy month left them several screens of
+ * flicking away. `.phone` is the scroller (the document never scrolls), so
+ * that is what this listens to; it only re-renders when it crosses the line.
+ */
+export function HistoryBackToTop({ active }: { active: boolean }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    const phone = document.querySelector<HTMLElement>(".phone");
+    if (!phone) return;
+    const update = () => setShown(phone.scrollTop > phone.clientHeight * 1.5);
+    phone.addEventListener("scroll", update, { passive: true });
+    return () => phone.removeEventListener("scroll", update);
+  }, [active]);
+  if (!active || !shown) return null;
+  return (
+    <button
+      type="button"
+      className="history-back-to-top"
+      onClick={() => document.querySelector(".phone")?.scrollTo({ top: 0, behavior: "smooth" })}
+    >
+      <ArrowUp size={16} strokeWidth={2.25} aria-hidden="true" />
+      ขึ้นบนสุด
+    </button>
+  );
+}

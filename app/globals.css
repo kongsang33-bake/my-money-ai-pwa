@@ -4703,6 +4703,22 @@ button.poster:active {
   color: var(--ink);
 }
 
+/* Folds the month to one week and back (CalendarHeatmap). A quiet line under
+   the legend rather than a button-shaped box: it is a view switch, not an
+   action. */
+.heatmap-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  width: 100%;
+  min-height: 32px;
+  margin-top: var(--s-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-2);
+}
+
 .debtor-statement span {
   display: block;
   font-size: var(--fs-micro);
@@ -4734,6 +4750,30 @@ button.poster:active {
   margin-inline: calc(-1 * var(--s-5));
   padding: var(--s-2) var(--s-5) var(--s-3);
   background: var(--bg);
+}
+
+/* HistoryBackToTop. Sticky at the foot of the view rather than fixed, so it
+   stays inside the column at 600-899px and on the desk instead of drifting
+   to the window's edge; the negative margin keeps it from adding a row of
+   space under the list. It floats over rows, hence the one real shadow. */
+.history-back-to-top {
+  position: sticky;
+  /* Measured from inside .phone's padding, the way .review-savebar's is. */
+  bottom: calc(var(--nav-height) + var(--nav-lift) + var(--s-3) - var(--nav-clearance));
+  z-index: calc(var(--z-nav) - 1);
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  width: fit-content;
+  min-height: 40px;
+  margin: calc(-40px - var(--s-3)) 0 0 auto;
+  padding: 0 var(--s-4);
+  border-radius: var(--r-sm);
+  background: var(--primary);
+  color: var(--primary-text);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  box-shadow: var(--sh-2);
 }
 
 /* Bare tier on purpose (CLAUDE.md surface tiers) -- this is a one-line
@@ -9178,7 +9218,8 @@ body:has(.login-page) #app-splash {
     padding-bottom: var(--s-3);
   }
 
-  .review-savebar {
+  .review-savebar,
+  .history-back-to-top {
     bottom: var(--s-3);
   }
 

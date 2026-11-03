@@ -1,8 +1,8 @@
 "use client";
 
 import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, CreditCard, Eye, EyeOff, Info, Lightbulb, Pencil, Plus, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet as WalletIcon, WalletCards, X } from "lucide-react";
-import { BRAND_SLOGANS, DETAIL_SIMILAR_LIMIT, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CreditCard, Eye, EyeOff, Info, Lightbulb, Pencil, Plus, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet as WalletIcon, WalletCards, X } from "lucide-react";
+import { BRAND_SLOGANS, DETAIL_SIMILAR_LIMIT, HISTORY_CALENDAR_EXPANDED_STORAGE_KEY, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
 import { MASKED_MONEY, formatChatTime, formatDateTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, maskMoneyInText, moneySign, toMoneyAmount } from "@/lib/format";
 import { entryDisplayImpact } from "@/lib/money";
 import { shiftMonthKey } from "@/lib/cycle";
@@ -11,7 +11,7 @@ import { transactionTypeLabels } from "@/lib/taxonomy";
 import { categoryColor, nameColor } from "@/lib/category";
 import type { Entry, MoneyGoal, NetWorthDebtFormula, RecurringExpense, Wallet } from "@/lib/types";
 import { CategoryIcon, RecurringAvatarGlyph } from "@/components/shared";
-import { CountUpMoney, DateField, EmptyNote, IconChip, IconPattern, InfoHint, MonthField, Rail, SheetFrame, SkeletonList, decimalInputPattern, SheetClose } from "@/components/primitives";
+import { CountUpMoney, DateField, EmptyNote, IconChip, IconPattern, InfoHint, MonthField, Rail, SheetFrame, SkeletonList, decimalInputPattern, SheetClose, useMediaQuery } from "@/components/primitives";
 
 export const CalendarHeatmap = memo(function CalendarHeatmap({
   start,
@@ -65,8 +65,37 @@ export const CalendarHeatmap = memo(function CalendarHeatmap({
   }, []);
   const leadingBlanks = days.length ? days[0].date.getDay() : 0;
 
+  // Folded, the calendar is the one week holding the selected day: the whole
+  // month was a full phone screen of squares before the first entry, and the
+  // list under it is what History is for. Opening it is remembered on this
+  // device (a convenience, so storage failing just means it opens folded).
+  // Read on first render: History only mounts once it is opened, on the
+  // client, so there is no server render for this to disagree with.
+  const [expanded, setExpanded] = useState(() => {
+    try {
+      return window.localStorage.getItem(HISTORY_CALENDAR_EXPANDED_STORAGE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleExpanded = () => {
+    setExpanded((value) => {
+      try {
+        window.localStorage.setItem(HISTORY_CALENDAR_EXPANDED_STORAGE_KEY, value ? "0" : "1");
+      } catch {}
+      return !value;
+    });
+  };
+  const selectedIndex = Math.max(0, days.findIndex((day) => day.key === selectedDay));
+  const weekRow = Math.floor((leadingBlanks + selectedIndex) / 7);
+  // The desk gives the calendar a column of its own beside the list, so there
+  // is nothing to win by folding it there.
+  const desk = useMediaQuery("(min-width: 900px)");
+  const folded = !expanded && !desk;
+  const visible = (position: number) => !folded || Math.floor(position / 7) === weekRow;
+
   return (
-    <section className="heatmap-panel">
+    <section className={`heatmap-panel${folded ? " is-folded" : ""}`}>
       <div className="section-title">
         <h2>ปฏิทินการใช้จ่าย</h2>
         <div className="heatmap-month-controls" aria-label="เลือกรอบเดือนของปฏิทิน">
@@ -81,10 +110,10 @@ export const CalendarHeatmap = memo(function CalendarHeatmap({
         ))}
       </div>
       <div className="heatmap-grid">
-        {Array.from({ length: leadingBlanks }, (_, index) => (
-          <span key={`blank-${index}`} className="heatmap-cell-blank" />
-        ))}
-        {days.map((day) => (
+        {Array.from({ length: leadingBlanks }, (_, index) => index)
+          .filter(visible)
+          .map((index) => <span key={`blank-${index}`} className="heatmap-cell-blank" />)}
+        {days.map((day, index) => visible(leadingBlanks + index) && (
           <button
             key={day.key}
             className={`heatmap-cell bucket-${bucket(day.amount)}${selectedDay === day.key ? " selected" : ""}`}
@@ -96,6 +125,12 @@ export const CalendarHeatmap = memo(function CalendarHeatmap({
         ))}
       </div>
       <HeatmapLegend total={days.reduce((sum, day) => sum + day.amount, 0)} activeDays={days.filter((day) => day.amount > 0).length} />
+      {!desk && (
+        <button type="button" className="heatmap-toggle" aria-expanded={expanded} onClick={toggleExpanded}>
+          {expanded ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
+          {expanded ? "ย่อเหลือสัปดาห์เดียว" : "ดูทั้งเดือน"}
+        </button>
+      )}
     </section>
   );
 });

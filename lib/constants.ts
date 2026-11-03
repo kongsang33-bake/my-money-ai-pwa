@@ -24,6 +24,9 @@ export const BRAND_SLOGANS = [
 // so everyone is asked to read it again before their next sign-in.
 export const PRIVACY_POLICY_VERSION = "2026-09-26.2";
 export const PRIVACY_ACK_STORAGE_KEY = "nubmon-privacy-ack";
+// History's calendar opens folded to one week; this remembers, per device,
+// that someone opened the whole month and wants it that way.
+export const HISTORY_CALENDAR_EXPANDED_STORAGE_KEY = "nubmon-history-calendar-expanded";
 // Where the policy tells people to write to have their account deleted.
 export const PRIVACY_CONTACT_EMAIL = "kongsang33@gmail.com";
 
