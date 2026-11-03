@@ -128,7 +128,7 @@ import {
 } from "@/components/home";
 import { FlipBillboard, PocketCardForm, PocketDetailSheet, PocketFace, PocketManageSheet, PocketShareSheet } from "@/components/pocket";
 import { movePocketCard as planPocketMove, pocketCardRow, toPocketCard, type PocketCard } from "@/lib/pocket";
-import { HistoryFilterBar } from "@/components/history";
+import { HistoryBackToTop, HistoryFilterBar } from "@/components/history";
 import { PinGate, PrivacyGate, SecurityView } from "@/components/auth";
 import { clearLocalPrivacyAck, fetchPrivacyAck, readLocalPrivacyAck, recordPrivacyAck } from "@/lib/privacy";
 import { Landing } from "@/components/landing";
@@ -3643,6 +3643,7 @@ export default function Home() {
                     <EntryList entries={monthlyEntries} selectedDay={selectedDay} dayTotals onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
                   </>
                 )}
+                <HistoryBackToTop active={tab === "history"} />
               </>
             )}
           </div>
