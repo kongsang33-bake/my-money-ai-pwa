@@ -1145,6 +1145,24 @@ export function describeDraftSave(drafts: Draft[]): string {
   return `${drafts.length} รายการ${split} รวม ${moneySign}${formatMoney(draftSaveTotal(drafts))}`;
 }
 
+/**
+ * The one figure receiptMismatch compares against, from the totals the AI read
+ * off each attached slip -- or 0, which skips the check.
+ *
+ * The model used to return a single receiptTotal, so with two slips it reported
+ * one of them and every correct parse of both was flagged as a mismatch. Now it
+ * returns one total per image, and the sum is only trusted when there is one
+ * readable total for every slip: a slip whose total could not be read would
+ * otherwise be compared as if it cost nothing, which is the same false warning
+ * again.
+ */
+export function combinedReceiptTotal(totals: unknown, imageCount: number): number {
+  if (!Array.isArray(totals) || imageCount <= 0 || totals.length !== imageCount) return 0;
+  const amounts = totals.map((total) => (typeof total === "number" && Number.isFinite(total) ? total : 0));
+  if (amounts.some((amount) => !(amount > 0))) return 0;
+  return roundMoney(amounts.reduce((sum, amount) => sum + amount, 0));
+}
+
 export type ReceiptMismatch = { parsedTotal: number; receiptTotal: number; detail: string };
 
 /**

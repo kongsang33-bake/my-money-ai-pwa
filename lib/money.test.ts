@@ -37,6 +37,7 @@ import {
   planDebtSettlement,
   planEntryUpdate,
   receiptMismatch,
+  combinedReceiptTotal,
   recurringExpenseEntries,
   recurringTotals,
   recurringYearlyAmount,
@@ -967,6 +968,32 @@ describe("draftSaveTotal / describeDraftSave", () => {
   it("handles an empty batch without producing NaN", () => {
     assert.equal(draftSaveTotal([]), 0);
     assert.ok(!describeDraftSave([]).includes("NaN"));
+  });
+});
+
+describe("combinedReceiptTotal", () => {
+  it("adds up one total per slip, so two slips are not compared against one", () => {
+    // The 7-Eleven case: 40 + 38 on one slip, 69 on the other.
+    assert.equal(combinedReceiptTotal([78, 69], 2), 147);
+  });
+
+  it("skips the check when any slip's total could not be read", () => {
+    assert.equal(combinedReceiptTotal([78, 0], 2), 0);
+  });
+
+  it("skips the check when the model did not give one total per slip", () => {
+    assert.equal(combinedReceiptTotal([69], 2), 0);
+    assert.equal(combinedReceiptTotal([78, 69, 10], 2), 0);
+  });
+
+  it("skips the check with no slip attached or a malformed answer", () => {
+    assert.equal(combinedReceiptTotal([], 0), 0);
+    assert.equal(combinedReceiptTotal(undefined, 1), 0);
+    assert.equal(combinedReceiptTotal(["69"], 1), 0);
+  });
+
+  it("returns a single slip's total unchanged", () => {
+    assert.equal(combinedReceiptTotal([69.5], 1), 69.5);
   });
 });
 
