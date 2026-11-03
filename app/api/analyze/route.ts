@@ -15,6 +15,7 @@ import {
   imageBytes,
 } from "@/lib/constants";
 import type { AiEntryExample } from "@/lib/ai-memory";
+import { combinedReceiptTotal } from "@/lib/money";
 
 const itemSchema = {
   type: "object",
@@ -62,12 +63,13 @@ const schema = {
   type: "object",
   properties: {
     items: { type: "array", items: itemSchema },
-    receiptTotal: {
-      type: "number",
-      description: "ยอดรวมสุทธิที่ระบุไว้บนสลิปโดยตรง (ตัวเลขที่พิมพ์อยู่บนสลิปจริง ๆ) ถ้ามีรูปสลิปแนบมาและเห็นยอดรวมชัดเจน ให้ใส่ตัวเลขนั้น ถ้าไม่มีรูปสลิปแนบมา หรือมีรูปแต่ไม่เห็นยอดรวมชัดเจน ให้ใส่ 0",
+    receiptTotals: {
+      type: "array",
+      items: { type: "number", minimum: 0 },
+      description: "ยอดรวมสุทธิที่พิมพ์อยู่บนสลิปแต่ละใบ หนึ่งตัวเลขต่อรูปหนึ่งรูป เรียงตามลำดับรูปที่แนบมา ถ้ารูปไหนไม่เห็นยอดรวมชัดเจนให้ใส่ 0 ในตำแหน่งของรูปนั้น ถ้าไม่มีรูปแนบมาให้ส่ง array ว่าง",
     },
   },
-  required: ["items", "receiptTotal"],
+  required: ["items", "receiptTotals"],
   additionalProperties: false,
 };
 
@@ -137,7 +139,7 @@ function buildPrompt(
           "- ตั้ง title ของแต่ละรายการตามชื่อสินค้านั้นจริง ๆ ตามที่พิมพ์บนสลิป ไม่ใช่ชื่อร้านหรือชื่อรวม",
           "- จัดหมวดหมู่ (category) ของแต่ละรายการแยกกันตามประเภทของสินค้านั้นเอง เช่น เครื่องดื่ม/ของกินให้เป็นอาหาร เครื่องเขียนหรือของใช้ทั่วไปให้เป็นของใช้",
           "- ยอดรวมของทุกรายการที่แยกจากสลิปเดียวกัน ต้องบวกกันได้เท่ากับยอดสุทธิที่ระบุบนสลิป",
-          "- ใส่ยอดสุทธิที่อ่านได้จากสลิปลงใน receiptTotal ตรง ๆ ตามที่พิมพ์ไว้ (ไม่ใช่ผลรวมที่คำนวณเอง) เพื่อให้แอพเทียบยอดได้ภายหลัง",
+          "- ใส่ยอดสุทธิที่อ่านได้จากสลิปแต่ละใบลงใน receiptTotals ตรง ๆ ตามที่พิมพ์ไว้ (ไม่ใช่ผลรวมที่คำนวณเอง) หนึ่งตัวเลขต่อสลิปหนึ่งใบ ถ้าแนบมาหลายใบห้ามรวมเป็นตัวเลขเดียว และห้ามใส่แค่ใบเดียว",
           "",
         ]
       : []),
@@ -336,8 +338,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const parsed = JSON.parse(response.text || "{}") as { items?: unknown[]; receiptTotal?: number };
-    return Response.json({ items: parsed.items ?? [], receiptTotal: parsed.receiptTotal ?? 0 });
+    const parsed = JSON.parse(response.text || "{}") as { items?: unknown[]; receiptTotals?: unknown };
+    return Response.json({ items: parsed.items ?? [], receiptTotal: combinedReceiptTotal(parsed.receiptTotals, images.length) });
   } catch (error) {
     console.error("Gemini analyze: could not parse response as JSON", error, response.text);
     return Response.json({ error: "AI ส่งข้อมูลกลับมาในรูปแบบที่อ่านไม่ได้ กรุณาลองใหม่" }, { status: 502 });
