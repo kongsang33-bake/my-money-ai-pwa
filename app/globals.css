@@ -4736,6 +4736,10 @@ button.poster:active {
    a well inside a panel, two edges for one control. */
 .history-search {
   display: grid;
+  /* minmax(0, 1fr), not the implicit auto track: the type chips are a
+     sideways scroller, and an auto track grew to fit them, widening the
+     search row past the column and clipping the filter button. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-3);
   margin-bottom: var(--s-5);
 }
