@@ -11,11 +11,16 @@ import { GEMINI_TEXT_TIMEOUT_MS } from "./constants.ts";
 // gemini-1.5-flash was dropped: it is retired, so it could only ever 404 --
 // and being last in the chain, its 404 became the error the app reported even
 // when the models that matter had failed for a completely different reason.
+//
+// gemini-2.5-flash gave way to gemini-3.5-flash-lite: Google retires it on
+// 2026-12-01 and redirects it there anyway. Named directly, the model gets
+// thinking_level from the first attempt -- under the old name it was sent
+// thinking_budget, which 3.5 rejects with a 400 and cost a retry every time.
 const MODEL_CHAIN = [
   ...(process.env.GEMINI_MODEL ? [process.env.GEMINI_MODEL] : []),
   "gemini-3.6-flash",
   "gemini-3.5-flash",
-  "gemini-2.5-flash",
+  "gemini-3.5-flash-lite",
   "gemini-flash-latest",
   "gemini-2.0-flash",
 ].filter((model, index, all) => all.indexOf(model) === index);

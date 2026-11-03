@@ -119,6 +119,10 @@ describe("thinkingConfigForModel", () => {
     assert.deepEqual(thinkingConfigForModel("gemini-3.6-flash"), { thinkingLevel: "MINIMAL" });
   });
 
+  it("gives Flash-Lite thinking_level, not the budget field it rejects", () => {
+    assert.deepEqual(thinkingConfigForModel("gemini-3.5-flash-lite"), { thinkingLevel: "MINIMAL" });
+  });
+
   it("asks for low rather than minimal thinking when the caller says so", () => {
     assert.deepEqual(thinkingConfigForModel("gemini-3.6-flash", "low"), { thinkingLevel: "LOW" });
     assert.deepEqual(thinkingConfigForModel("gemini-2.5-flash", "low"), { thinkingBudget: 1024 });
