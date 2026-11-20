@@ -101,3 +101,29 @@ E2E_CHROMIUM_PATH=/opt/pw-browsers/chromium npx playwright test --trace off
 - จุดที่ไม่แน่ใจ หรือทำต่างจากคำสั่ง พร้อมเหตุผล
 
 แล้ว push branch ห้าม merge เอง
+
+---
+
+## ผลการทำ (Sonnet)
+
+branch `sonnet/round1-guards-export` (แตกจาก `claude/confident-euler-l155ra`)
+
+### commit
+1. **Guard recurring log, wallet reconcile and debt settle against double taps** (งาน A): `lib/in-flight.ts` (`recurringLogKey` = id บิล + วันที่รอบบิลตามเวลาเครื่อง) พร้อมเทส; `page.tsx` มี `inFlightRef` (ตัวกันจริง) กับ `loggingKeys` (state ไว้วาดปุ่ม) ส่งเป็น prop `loggingKeys` ให้ `DueSoonRail` และ `UpcomingView` ปุ่ม "บันทึกเลย" ปิดและเปลี่ยนเป็น "กำลังบันทึก..." ระหว่างรอ
+2. **Add whole-account JSON backup ...** (งาน B): `lib/account-export.ts` + เทส, `downloadFile` ใน `lib/csv.ts` (`downloadCsv` เรียกใช้), `useAccountBackup` ใน `components/sheets.tsx` ใช้ใน `ReportExportView` และ `ConfirmDeleteAccount` (ปุ่มรอง ไม่บังคับ), แก้ข้อความใน `components/privacy.tsx`, เพิ่ม `.delete-account-backup` / `.backup-error` ใน globals.css
+3. **Draw the success toast tick ...** (งาน C): `@keyframes toast-tick` + `.toast.success > span:first-child svg path` (lucide Check เป็น path เดียว ยาว ~22.6 จึงใช้ dasharray 24) หน่วง `--t-1` วาด `--t-3` รวม ~330ms; reduced-motion: กฎรวมท้ายไฟล์ตั้ง duration เกือบ 0 อยู่แล้ว เพิ่ม `animation-delay: 0s` เข้าไปให้ติ๊กเต็มทันที
+
+### ผลตรวจ
+- `npx tsc --noEmit` ผ่าน · `npm run lint` ผ่าน · `npm test` 546 ผ่าน 0 ล้ม · `npm run verify:design` OK
+- e2e ทั้ง 3 viewport: 349 ผ่าน, 26 ข้าม (ข้ามตามที่ spec เดิมกำหนด), 0 ล้ม
+
+### งาน A ข้อ 3
+- `reconcileWallet`: เดิมตั้ง `busy` ก่อน insert อยู่แล้ว และ `ReconcileSheet` ปิดปุ่มด้วย `busy` แต่ state มาทีหลังการแตะเร็ว จึงเพิ่มตัวกันด้วย ref (key `reconcile:<wallet id>`) เป็นจุดเล็กๆ ที่เห็นชัด
+- `settleDebtor`: ปุ่ม `debtor-settle-button` กดซ้ำได้จริง ทั้งระหว่างที่ confirm dialog เปิดอยู่และระหว่าง insert (แตะสองครั้งเปิด confirm สองรอบและอาจ insert สองชุด) แก้ด้วย ref key `settle:<ชื่อ>` ถือตั้งแต่แตะจนจบ (ล้างใน `finally`) ไม่ได้แก้ที่ตัวปุ่ม
+
+### จุดที่ควรรู้ / ต่างจากคำสั่ง
+- `settleDebtor` ถูกห่อด้วย try/finally ทำให้ diff ในฟังก์ชันนั้นเยอะกว่าจำนวนบรรทัดที่เปลี่ยนจริง (ตรรกะเดิมไม่เปลี่ยน)
+- ตารางอื่นนอกจาก `transactions` ส่งออกแบบแบ่งหน้าด้วย `ENTRY_PAGE_SIZE` เหมือนกัน (`investment_prices` อาจเกิน 1,000 แถว) และจะ throw ถ้าครบ `ENTRY_PAGE_MAX_REQUESTS` แล้วยังไม่ครบ เพื่อไม่ให้ได้ไฟล์ที่ดูครบแต่ไม่ครบ
+- allowlist ของ `profiles`: user_id, nickname, app_icon, app_icon_image, month_start_day, net_worth_formula, net_worth_hide_card, ai_context, created_at, updated_at (`app_icon_image` เป็นรูปโปรไฟล์ที่ผู้ใช้อัปโหลดเอง ถ้าเจ้าของไม่อยากให้อยู่ในไฟล์ให้ตัดออกจาก `PROFILE_EXPORT_COLUMNS`)
+- ไฟล์ JSON ไม่ได้ทดสอบกับ Supabase จริง (เทสด้วย fake client เท่านั้น ตามที่ e2e ทำไม่ได้ตาม CLAUDE.md) ควรลองกดจริงหนึ่งครั้งหลัง merge
+- ไม่ได้ดูอนิเมชันติ๊กด้วยตาในเบราว์เซอร์ (toast สำเร็จเกิดจากการบันทึก ซึ่ง e2e ไม่มี Supabase) ค่าเวลาและเส้นทางคำนวณจากตัวไอคอนโดยตรง
