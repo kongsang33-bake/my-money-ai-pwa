@@ -129,7 +129,8 @@ import {
 import { FlipBillboard, PocketCardForm, PocketDetailSheet, PocketFace, PocketManageSheet, PocketShareSheet } from "@/components/pocket";
 import { movePocketCard as planPocketMove, pocketCardRow, toPocketCard, type PocketCard } from "@/lib/pocket";
 import { HistoryBackToTop, HistoryFilterBar } from "@/components/history";
-import { PinGate, PrivacyGate, SecurityView } from "@/components/auth";
+import { LoadFailedScreen, PinGate, PrivacyGate, SecurityView } from "@/components/auth";
+import { loadSucceeded, startupScreen } from "@/lib/startup";
 import { clearLocalPrivacyAck, fetchPrivacyAck, readLocalPrivacyAck, recordPrivacyAck } from "@/lib/privacy";
 import { Landing } from "@/components/landing";
 import type { WalletInput, RecurringExpenseInput } from "@/components/wallets-recurring";
@@ -364,6 +365,9 @@ export default function Home() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
+  // A full load where some read failed: the app is held at LoadFailedScreen
+  // until one succeeds (lib/startup.ts).
+  const [loadFailed, setLoadFailed] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [entryDate, setEntryDate] = useState(todayDateInput);
   // AiComposer owns the text and the attached slips (see its comment in
@@ -620,8 +624,8 @@ export default function Home() {
   // exactly one request. The id tiebreaker matters: occurred_at alone is not
   // a total order, and same-timestamp rows sorting differently between two
   // requests would let a page boundary skip or double-count a row.
-  const loadEntries = useCallback(async () => {
-    if (!supabase) return;
+  const loadEntries = useCallback(async (): Promise<boolean> => {
+    if (!supabase) return true;
 
     const rows: Parameters<typeof mapTransactionRow>[0][] = [];
     let total: number | null = null;
@@ -636,7 +640,7 @@ export default function Home() {
 
       if (error) {
         setError(error.message);
-        return;
+        return false;
       }
 
       if (count != null) total = count;
@@ -649,6 +653,7 @@ export default function Home() {
     }
 
     setEntries(rows.map(mapTransactionRow));
+    return true;
   }, []);
 
   const loadProfile = useCallback(async () => {
@@ -673,8 +678,8 @@ export default function Home() {
     return nextProfile;
   }, []);
 
-  const loadDebtors = useCallback(async () => {
-    if (!supabase) return;
+  const loadDebtors = useCallback(async (): Promise<boolean> => {
+    if (!supabase) return true;
 
     const { data, error } = await supabase
       .from(TABLES.debtors)
@@ -682,7 +687,7 @@ export default function Home() {
       .order("name", { ascending: true });
     if (error) {
       setError(error.message);
-      return;
+      return false;
     }
     setDebtors((data ?? []).map((row) => ({
       ...row,
@@ -692,10 +697,11 @@ export default function Home() {
       credit_limit: row.credit_limit == null ? null : Number(row.credit_limit),
       credit_card_min_payment_percent: row.credit_card_min_payment_percent == null ? null : Number(row.credit_card_min_payment_percent),
     })) as Debtor[]);
+    return true;
   }, []);
 
-  const loadWallets = useCallback(async () => {
-    if (!supabase) return;
+  const loadWallets = useCallback(async (): Promise<boolean> => {
+    if (!supabase) return true;
 
     const { data, error } = await supabase
       .from(TABLES.wallets)
@@ -703,13 +709,14 @@ export default function Home() {
       .order("created_at", { ascending: true });
     if (error) {
       setError(error.message);
-      return;
+      return false;
     }
     setWallets((data ?? []).map((row) => ({ ...row, balance: toFiniteNumber(row.balance), is_default: !!row.is_default })) as Wallet[]);
+    return true;
   }, []);
 
-  const loadRecurringExpenses = useCallback(async () => {
-    if (!supabase) return;
+  const loadRecurringExpenses = useCallback(async (): Promise<boolean> => {
+    if (!supabase) return true;
 
     const { data, error } = await supabase
       .from(TABLES.recurringExpenses)
@@ -717,13 +724,14 @@ export default function Home() {
       .order("anchor_date", { ascending: true });
     if (error) {
       setError(error.message);
-      return;
+      return false;
     }
     setRecurringExpenses((data ?? []).map((row) => ({ ...row, amount: toMoneyAmount(row.amount), interval_count: normalizeIntervalCount(row.interval_count) })) as RecurringExpense[]);
+    return true;
   }, []);
 
-  const loadInvestments = useCallback(async () => {
-    if (!supabase) return;
+  const loadInvestments = useCallback(async (): Promise<boolean> => {
+    if (!supabase) return true;
 
     const { data, error } = await supabase
       .from(TABLES.investments)
@@ -731,17 +739,18 @@ export default function Home() {
       .order("created_at", { ascending: true });
     if (error) {
       setError(error.message);
-      return;
+      return false;
     }
     setInvestments((data ?? []).map((row) => ({
       ...row,
       units: toFiniteNumber(row.units),
       cost_basis: toFiniteNumber(row.cost_basis),
     })) as Investment[]);
+    return true;
   }, []);
 
-  const loadInvestmentPrices = useCallback(async () => {
-    if (!supabase) return;
+  const loadInvestmentPrices = useCallback(async (): Promise<boolean> => {
+    if (!supabase) return true;
 
     const { data, error } = await supabase
       .from(TABLES.investmentPrices)
@@ -749,24 +758,26 @@ export default function Home() {
       .order("recorded_at", { ascending: true });
     if (error) {
       setError(error.message);
-      return;
+      return false;
     }
     setInvestmentPrices((data ?? []).map((row) => ({ ...row, nav: toFiniteNumber(row.nav) })) as InvestmentPrice[]);
+    return true;
   }, []);
 
-  const loadBudgets = useCallback(async () => {
-    if (!supabase) return;
+  const loadBudgets = useCallback(async (): Promise<boolean> => {
+    if (!supabase) return true;
 
     const { data, error } = await supabase.from(TABLES.budgets).select(BUDGET_COLUMNS);
     if (error) {
       setError(error.message);
-      return;
+      return false;
     }
     setBudgets(Object.fromEntries((data ?? []).map((row) => [row.category, toMoneyAmount(row.amount)])));
+    return true;
   }, []);
 
-  const loadGoals = useCallback(async () => {
-    if (!supabase) return;
+  const loadGoals = useCallback(async (): Promise<boolean> => {
+    if (!supabase) return true;
 
     const { data, error } = await supabase
       .from(TABLES.moneyGoals)
@@ -774,7 +785,7 @@ export default function Home() {
       .order("created_at", { ascending: false });
     if (error) {
       setError(error.message);
-      return;
+      return false;
     }
     setGoals((data ?? []).map((row) => ({
       ...row,
@@ -782,10 +793,11 @@ export default function Home() {
       saved: toMoneyAmount(row.saved),
       deadline: row.deadline ?? "",
     })) as MoneyGoal[]);
+    return true;
   }, []);
 
-  const loadPocketCards = useCallback(async () => {
-    if (!supabase) return;
+  const loadPocketCards = useCallback(async (): Promise<boolean> => {
+    if (!supabase) return true;
 
     const { data, error } = await supabase
       .from(TABLES.pocketCards)
@@ -799,15 +811,16 @@ export default function Home() {
       // user's money.
       if (error.code === "PGRST205" || error.code === "42P01") {
         setPocketCards([]);
-        return;
+        return true;
       }
       setError(error.message);
-      return;
+      return false;
     }
     const rows = (data ?? []) as Record<string, unknown>[];
     const cards = rows.map(toPocketCard).filter((card): card is PocketCard => !!card);
     pocketOrderRef.current = new Map(rows.map((row) => [String(row.id), Number(row.sort_order) || 0]));
     setPocketCards(cards);
+    return true;
   }, []);
 
   // One-time import for a returning user whose budgets/goals/net-worth
@@ -859,12 +872,21 @@ export default function Home() {
     setError("");
     try {
       await migrateLocalDataIfNeeded(userId);
-      await Promise.all([loadEntries(), loadDebtors(), loadWallets(), loadRecurringExpenses(), loadInvestments(), loadInvestmentPrices(), loadBudgets(), loadGoals(), loadPocketCards()]);
+      const results = await Promise.all([loadEntries(), loadDebtors(), loadWallets(), loadRecurringExpenses(), loadInvestments(), loadInvestmentPrices(), loadBudgets(), loadGoals(), loadPocketCards()]);
       // "This account really is empty" is only true once its rows have
-      // actually been fetched. Without this the setup gate could be offered
-      // to an existing user in the frame between unlocking and the first
-      // read landing, when every collection is still at its initial [].
-      loadedUserIdRef.current = userId;
+      // actually been fetched -- all of them. Without this the setup gate
+      // could be offered to an existing user in the frame between unlocking
+      // and the first read landing, or after a read failed and left its
+      // collection at the initial [] (lib/startup.ts).
+      if (loadSucceeded(results)) {
+        loadedUserIdRef.current = userId;
+        setLoadFailed(false);
+      } else {
+        setLoadFailed(true);
+      }
+    } catch (loadError) {
+      console.error("Loading the account failed", loadError);
+      setLoadFailed(true);
     } finally {
       setDataLoading(false);
     }
@@ -896,6 +918,7 @@ export default function Home() {
     setComposerResetKey((key) => key + 1);
     setEditing(null);
     setDataLoading(false);
+    setLoadFailed(false);
   }, []);
 
   // Makes sure the privacy acknowledgement is on record before anything else
@@ -1182,8 +1205,14 @@ export default function Home() {
   const accountIsEmpty =
     !wallets.length && !entries.length && !debtors.length && !recurringExpenses.length
     && !goals.length && !budgetCount;
-  const showSetupGate =
-    !dataLoading && loadedUserIdRef.current === currentUserId && accountIsEmpty && !setupGateDismissed;
+  const startup = startupScreen({
+    loadFailed,
+    loadedForUser: loadedUserIdRef.current === currentUserId,
+    dataLoading,
+    accountIsEmpty,
+    setupGateDismissed,
+  });
+  const showSetupGate = startup === "setup";
   const showStartChecklist = !checklistHidden && !setupChecklist.coreDone;
   // Under this, every analysis card on Home is a confident-looking zero. Home
   // holds them back and shows the checklist instead -- see the Home tab below.
@@ -3078,7 +3107,7 @@ export default function Home() {
   // of the screens rendered in place of the app (the landing, the privacy
   // and PIN gates, setup) -- pressed at the PIN gate, it quietly moved the
   // app to จดรายการ, which is where it then opened on unlocking.
-  const appShowing = ready && Boolean(user) && !privacyNeeded && pinMode === "unlocked" && !showSetupGate;
+  const appShowing = ready && Boolean(user) && !privacyNeeded && pinMode === "unlocked" && startup === "app";
   useEffect(() => {
     if (!appShowing) return;
     const onKey = (event: KeyboardEvent) => {
@@ -3242,6 +3271,12 @@ export default function Home() {
         onLogout={() => supabase?.auth.signOut()}
       />
     );
+  }
+
+  // Some read failed: hold here rather than show the failed collections as
+  // empty, or offer setup to an account that already has data.
+  if (startup === "load-failed") {
+    return <LoadFailedScreen busy={dataLoading} onRetry={retrySync} onLogout={() => supabase?.auth.signOut()} />;
   }
 
   // An account with nothing in it gets the setup flow instead of a Home made

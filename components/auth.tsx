@@ -480,6 +480,48 @@ export function PrivacyGate({ busy, error, onAccept, onLogout }: { busy: boolean
   );
 }
 
+// Held here when any of the account's reads failed (lib/startup.ts). The app
+// behind it would show the failed collections as empty -- and offer to
+// "start" an account that already has data -- so nothing opens until a full
+// load succeeds. Coming back online retries by itself; the button is for
+// when the network was fine and the server was not.
+export function LoadFailedScreen({ busy, onRetry, onLogout }: { busy: boolean; onRetry: () => void; onLogout: () => void }) {
+  const [offline, setOffline] = useState(() => typeof navigator !== "undefined" && navigator.onLine === false);
+  const retryRef = useRef(onRetry);
+  useEffect(() => { retryRef.current = onRetry; }, [onRetry]);
+
+  useEffect(() => {
+    const goOnline = () => { setOffline(false); retryRef.current(); };
+    const goOffline = () => setOffline(true);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
+
+  return (
+    <main className="shell">
+      <div className="auth-screen">
+        <section className="auth-card" role="alert">
+          <span className="auth-mark" aria-hidden="true">!</span>
+          <h1>โหลดข้อมูลไม่สำเร็จ</h1>
+          <p className="auth-copy">
+            {offline
+              ? "เครื่องยังไม่ได้ต่ออินเทอร์เน็ต พอต่อได้แล้วแอปจะโหลดให้เอง ข้อมูลของคุณยังอยู่ครบ"
+              : "ดึงข้อมูลจากเซิร์ฟเวอร์ไม่ครบ ข้อมูลของคุณยังอยู่ครบ ลองโหลดใหม่อีกครั้ง"}
+          </p>
+          <div className="error-actions">
+            <button onClick={onRetry} disabled={busy}>{busy ? "กำลังโหลด..." : "โหลดใหม่"}</button>
+            <button onClick={onLogout} disabled={busy}>ออกจากระบบ</button>
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
 export function GoogleIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22">
