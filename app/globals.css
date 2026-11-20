@@ -6936,6 +6936,25 @@ input[type="checkbox"], input[type="radio"] {
   font-weight: var(--fw-semibold);
 }
 
+/* Account backup (useAccountBackup, components/sheets.tsx): the secondary
+   button above the typed confirmation, and the one error both places show. */
+.delete-account-backup {
+  display: block;
+  width: 100%;
+  margin-bottom: var(--s-5);
+  background: var(--surface-2);
+  border-radius: var(--r-md);
+  padding: 11px;
+  font-weight: var(--fw-semibold);
+}
+
+.backup-error {
+  margin: var(--s-3) 0 var(--s-4);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--danger);
+}
+
 /* Delete account: a typed confirmation between the warning and the buttons. */
 .delete-account-field {
   display: block;

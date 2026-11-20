@@ -3807,6 +3807,7 @@ export default function Home() {
             payableSummary={payableSummary}
             selectedMonth={selectedMonth}
             monthStartDay={monthStartDay}
+            userEmail={user?.email ?? null}
             onBack={backFromMoreSection}
           />
         )}
@@ -4087,6 +4088,7 @@ export default function Home() {
         )}
         {deleteAccountDismiss.mounted && (
           <ConfirmDeleteAccount
+            userEmail={user?.email ?? null}
             busy={busy}
             error={deleteAccountError}
             onCancel={deleteAccountDismiss.requestClose}
