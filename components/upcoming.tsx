@@ -2,6 +2,7 @@
 
 import { memo, useMemo, useState } from "react";
 import { CalendarClock, Check, CreditCard, Target } from "lucide-react";
+import { recurringLogKey } from "@/lib/in-flight";
 import { formatMoney, formatPercent, moneySign } from "@/lib/format";
 import { describeDaysUntil, type UnpaidOwnDebt, type UpcomingItem } from "@/lib/insights";
 import { describeBillingCycle } from "@/lib/taxonomy";
@@ -37,6 +38,7 @@ export const UpcomingView = memo(function UpcomingView({
   windowDays,
   billCount,
   onLogNow,
+  loggingKeys,
   onManageBills,
   onOpenDebts,
   onOpenBudgets,
@@ -50,6 +52,8 @@ export const UpcomingView = memo(function UpcomingView({
   /** Every recurring bill the account has, due soon or not -- zero means nobody has set one up yet. */
   billCount: number;
   onLogNow: (item: RecurringExpense, billingDate: Date) => void;
+  /** recurringLogKey of every bill being saved right now. */
+  loggingKeys: ReadonlySet<string>;
   onManageBills: () => void;
   onOpenDebts: () => void;
   onOpenBudgets: () => void;
@@ -165,7 +169,13 @@ export const UpcomingView = memo(function UpcomingView({
                     <>
                       {item.isLogged
                         ? <span className="upcoming-done"><Check size={14} strokeWidth={2.5} aria-hidden="true" />บันทึกแล้ว</span>
-                        : <button className="upcoming-action primary" onClick={() => onLogNow(item.bill, item.date)}>บันทึกเลย</button>}
+                        : <button
+                          className="upcoming-action primary"
+                          onClick={() => onLogNow(item.bill, item.date)}
+                          disabled={loggingKeys.has(recurringLogKey(item.bill.id, item.date))}
+                        >
+                          {loggingKeys.has(recurringLogKey(item.bill.id, item.date)) ? "กำลังบันทึก..." : "บันทึกเลย"}
+                        </button>}
                       <button className="upcoming-action" onClick={onManageBills}>จัดการ</button>
                     </>
                   )}
