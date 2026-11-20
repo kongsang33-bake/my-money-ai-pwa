@@ -6128,6 +6128,18 @@ button.entry-main {
   letter-spacing: var(--ls-tight);
 }
 
+/* The entry morph's flying copy (components/morph.ts): fixed to the viewport
+   above the sheet, origin at its top left so one translate + scale lands it
+   on the header. Its look is copied inline from the row it left. */
+.morph-ghost {
+  position: fixed;
+  margin: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+  z-index: var(--z-dialog);
+  will-change: transform;
+}
+
 .detail-meta {
   display: flex;
   flex-wrap: wrap;

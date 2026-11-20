@@ -13,6 +13,7 @@ import { summarizeDayEntries } from "@/lib/insights";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
 import { CategoryIcon, CategoryPicker, FundingSelect } from "@/components/shared";
+import { morphSource } from "@/components/morph";
 import { AmountInput, DateField, EmptyNote, SheetFrame, StateCard, SheetClose, revealAboveKeyboard } from "@/components/primitives";
 
 // The whole "let AI write it for me" half of the Add tab: the example chips,
@@ -666,7 +667,7 @@ export const EntryList = memo(function EntryList({
               const impact = amountField === "debt" ? entry.debt_impact : entryDisplayImpact(entry);
               const content = (
                 <>
-                  <span className="entry-icon" style={{ background: categoryTint(entry.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(entry.category) }}><CategoryIcon category={entry.category} size={18} /></span>
+                  <span className="entry-icon" style={{ background: categoryTint(entry.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(entry.category) }} {...morphSource("icon", entry.id)}><CategoryIcon category={entry.category} size={18} /></span>
                   <div>
                     <b>{entry.title}</b>
                     <small>
@@ -678,7 +679,7 @@ export const EntryList = memo(function EntryList({
                     </small>
                     {entry.note && <small className="entry-note" title={entry.note}>{entry.note}</small>}
                   </div>
-                  <strong className={impact >= 0 ? "income" : "expense"}>{formatSignedMoney(impact)}</strong>
+                  <strong className={impact >= 0 ? "income" : "expense"} {...morphSource("amount", entry.id)}>{formatSignedMoney(impact)}</strong>
                 </>
               );
               const tap = onOpen ?? onEdit;

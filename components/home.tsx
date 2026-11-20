@@ -4,6 +4,7 @@ import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } fr
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CreditCard, Eye, EyeOff, Info, Lightbulb, Pencil, Plus, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet as WalletIcon, WalletCards, X } from "lucide-react";
 import { BRAND_SLOGANS, DETAIL_SIMILAR_LIMIT, HISTORY_CALENDAR_EXPANDED_STORAGE_KEY, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
 import { recurringLogKey } from "@/lib/in-flight";
+import { morphSource, morphTarget, useEntryMorph } from "@/components/morph";
 import { MASKED_MONEY, formatChatTime, formatDateTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, maskMoneyInText, moneySign, toMoneyAmount } from "@/lib/format";
 import { entryDisplayImpact } from "@/lib/money";
 import { shiftMonthKey } from "@/lib/cycle";
@@ -749,13 +750,13 @@ export const RecentRail = memo(function RecentRail({
           <button className="recent-tile" key={entry.id} style={{ "--hue": categoryColor(entry.category) } as React.CSSProperties} onClick={() => onOpen(entry)}>
             <span className="tile-art">
               <IconPattern renderGlyph={(size) => <CategoryIcon category={entry.category} size={size} />} />
-              <IconChip><CategoryIcon category={entry.category} size={18} /></IconChip>
+              <IconChip morph={morphSource("icon", entry.id)}><CategoryIcon category={entry.category} size={18} /></IconChip>
             </span>
             <span className="recent-body">
               <b>{entry.title}</b>
               <small>
                 <span>{formatChatTime(entry.occurred_at)}</span>
-                <span className={impact >= 0 ? "income" : "expense"}>{formatSignedMoney(impact)}</span>
+                <span className={impact >= 0 ? "income" : "expense"} {...morphSource("amount", entry.id)}>{formatSignedMoney(impact)}</span>
               </small>
             </span>
           </button>
@@ -1104,12 +1105,14 @@ export function EntryDetailSheet({
   const similar = useMemo(() => similarEntries(entry, entries, DETAIL_SIMILAR_LIMIT), [entry, entries]);
   const repeat = useMemo(() => sameTitleSummary(entry, entries), [entry, entries]);
   const hue = categoryColor(entry.category);
+  const heroRef = useRef<HTMLDivElement>(null);
+  useEntryMorph(entry.id, heroRef);
 
   return (
     <SheetFrame onClose={onClose} className="entry-detail-sheet" closing={closing}>
-      <div className="detail-hero" style={{ "--hue": hue } as React.CSSProperties} aria-hidden="true">
+      <div className="detail-hero" ref={heroRef} style={{ "--hue": hue } as React.CSSProperties} aria-hidden="true">
         <IconPattern renderGlyph={(size) => <CategoryIcon category={entry.category} size={size} />} />
-        <IconChip><CategoryIcon category={entry.category} size={18} /></IconChip>
+        <IconChip morph={morphTarget("icon")}><CategoryIcon category={entry.category} size={18} /></IconChip>
       </div>
       <button className="detail-close" onClick={onClose} aria-label="ปิด">
         <X size={20} strokeWidth={2.25} aria-hidden="true" />
@@ -1120,7 +1123,7 @@ export function EntryDetailSheet({
           <span>{transactionTypeLabels[entry.transaction_type]}</span>
         </div>
         <h2>{entry.title}</h2>
-        <strong className={`detail-amount ${impact >= 0 ? "income" : "expense"}`}>{formatSignedMoney(impact)}</strong>
+        <strong className={`detail-amount ${impact >= 0 ? "income" : "expense"}`} {...morphTarget("amount")}>{formatSignedMoney(impact)}</strong>
         <ul className="detail-meta">
           <li>{formatDateTime(entry.occurred_at)}</li>
           <li className="detail-pill">{entry.category}</li>
