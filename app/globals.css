@@ -7070,6 +7070,16 @@ input[type="checkbox"], input[type="radio"] {
   height: 20px;
 }
 
+/* The success tick draws itself once the box is up. lucide's Check is a single
+   path about 22.6 units long, so 24 covers it with a hair to spare; drawing
+   starts one beat after toast-in and ends well inside 400ms. Reduced motion
+   gets the finished tick at once (the rule at the end of the file). */
+.toast.success > span:first-child svg path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 0;
+  animation: toast-tick var(--t-3) var(--e-out) var(--t-1) both;
+}
+
 .toast b {
   display: block;
   font-size: var(--fs-body);
@@ -8803,6 +8813,11 @@ body:has(.login-page) #app-splash {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes toast-tick {
+  from { stroke-dashoffset: 24; }
+  to { stroke-dashoffset: 0; }
+}
+
 @keyframes toast-out {
   from { opacity: 1; transform: translateY(0) scale(1); }
   to { opacity: 0; transform: translateY(10px) scale(0.97); }
@@ -8882,6 +8897,7 @@ body:has(.login-page) #app-splash {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
