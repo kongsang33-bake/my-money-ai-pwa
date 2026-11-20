@@ -65,6 +65,7 @@ import {
   unnamedDebtor,
   withEntries,
 } from "@/lib/money";
+import { recurringLogKey } from "@/lib/in-flight";
 import { buildCyclePace, buildSetupChecklist, buildUpcoming, buildWalletInsight, computeStreak, deriveQuickShortcuts, describeDaysUntil, isRecurringLogged, lastSevenDayCashFlow, unpaidOwnDebts, type SetupStep } from "@/lib/insights";
 import { buildAiExamples, buildCategoryMemory } from "@/lib/ai-memory";
 import { draftAttention } from "@/lib/draft-review";
@@ -413,6 +414,11 @@ export default function Home() {
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [deleteAccountError, setDeleteAccountError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Saves started by one tap and not yet answered. The ref is the guard (a
+  // second tap lands before any state would have re-rendered); the state copy
+  // only draws the buttons.
+  const inFlightRef = useRef(new Set<string>());
+  const [loggingKeys, setLoggingKeys] = useState<ReadonlySet<string>>(() => new Set());
   const [error, setError] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(monthKey(new Date()));
@@ -2046,6 +2052,20 @@ export default function Home() {
    */
   async function logRecurringNow(item: RecurringExpense, billingDate: Date) {
     if (!supabase || !user) return;
+    const key = recurringLogKey(item.id, billingDate);
+    if (inFlightRef.current.has(key)) return;
+    inFlightRef.current.add(key);
+    setLoggingKeys(new Set(inFlightRef.current));
+    try {
+      await saveRecurringNow(item, billingDate);
+    } finally {
+      inFlightRef.current.delete(key);
+      setLoggingKeys(new Set(inFlightRef.current));
+    }
+  }
+
+  async function saveRecurringNow(item: RecurringExpense, billingDate: Date) {
+    if (!supabase || !user) return;
     setBusy(true);
     setError("");
     const normalized = recurringExpenseEntries(item, billingDate, wallets, crypto.randomUUID(), debtors);
@@ -2084,6 +2104,9 @@ export default function Home() {
     if (!supabase || !user) return false;
     const normalized = balanceAdjustmentEntry(wallet, realBalance, crypto.randomUUID(), new Date());
     if (!normalized) return false;
+    const key = `reconcile:${wallet.id}`;
+    if (inFlightRef.current.has(key)) return false;
+    inFlightRef.current.add(key);
 
     setBusy(true);
     setError("");
@@ -2091,6 +2114,7 @@ export default function Home() {
       .from(TABLES.transactions)
       .insert({ id: normalized.id, user_id: user.id, ...buildTransactionCore(normalized, wallets) })
       .select(TRANSACTION_COLUMNS);
+    inFlightRef.current.delete(key);
     setBusy(false);
 
     if (error) {
@@ -2127,28 +2151,37 @@ export default function Home() {
       return;
     }
 
-    const confirmed = await requestConfirm({
-      title: `เคลียร์ยอดกับ ${debtor.name}?`,
-      detail: plan.detail,
-      confirmLabel: "เคลียร์ยอด",
-      tone: "default",
-    });
-    if (!confirmed) return;
+    // Held from the tap, not from the confirm: a second tap on the button
+    // while the dialog is open or the insert is out would ask and write again.
+    const key = `settle:${debtor.name.trim().toLowerCase()}`;
+    if (inFlightRef.current.has(key)) return;
+    inFlightRef.current.add(key);
+    try {
+      const confirmed = await requestConfirm({
+        title: `เคลียร์ยอดกับ ${debtor.name}?`,
+        detail: plan.detail,
+        confirmLabel: "เคลียร์ยอด",
+        tone: "default",
+      });
+      if (!confirmed) return;
 
-    setBusy(true);
-    setError("");
-    const { data, error } = await supabase
-      .from(TABLES.transactions)
-      .insert(plan.entries.map((entry) => ({ id: entry.id, user_id: user.id, ...buildTransactionCore(entry, wallets) })))
-      .select(TRANSACTION_COLUMNS);
-    setBusy(false);
+      setBusy(true);
+      setError("");
+      const { data, error } = await supabase
+        .from(TABLES.transactions)
+        .insert(plan.entries.map((entry) => ({ id: entry.id, user_id: user.id, ...buildTransactionCore(entry, wallets) })))
+        .select(TRANSACTION_COLUMNS);
+      setBusy(false);
 
-    if (error) {
-      setError(error.message);
-      return;
+      if (error) {
+        setError(error.message);
+        return;
+      }
+      setEntries((current) => withEntries(current, (data ?? []).map(mapTransactionRow)));
+      notify({ tone: "success", title: "เคลียร์ยอดแล้ว", detail: plan.detail });
+    } finally {
+      inFlightRef.current.delete(key);
     }
-    setEntries((current) => withEntries(current, (data ?? []).map(mapTransactionRow)));
-    notify({ tone: "success", title: "เคลียร์ยอดแล้ว", detail: plan.detail });
   }
 
   async function updateBudgets(next: Record<string, number>) {
@@ -3304,6 +3337,7 @@ export default function Home() {
       unpaid={unpaidCards}
       onManage={openRecurringTab}
       onLogNow={logRecurringNowHandler}
+      loggingKeys={loggingKeys}
       onOpenDebts={openCardDebts}
     />
   ) : null;
@@ -3726,6 +3760,7 @@ export default function Home() {
             windowDays={UPCOMING_WINDOW_DAYS}
             billCount={recurringExpenses.length}
             onLogNow={logRecurringNowHandler}
+            loggingKeys={loggingKeys}
             onManageBills={openRecurringTab}
             onOpenDebts={openCardDebts}
             onOpenBudgets={openBudgetsTab}
@@ -3772,6 +3807,7 @@ export default function Home() {
             payableSummary={payableSummary}
             selectedMonth={selectedMonth}
             monthStartDay={monthStartDay}
+            userEmail={user?.email ?? null}
             onBack={backFromMoreSection}
           />
         )}
@@ -4052,6 +4088,7 @@ export default function Home() {
         )}
         {deleteAccountDismiss.mounted && (
           <ConfirmDeleteAccount
+            userEmail={user?.email ?? null}
             busy={busy}
             error={deleteAccountError}
             onCancel={deleteAccountDismiss.requestClose}

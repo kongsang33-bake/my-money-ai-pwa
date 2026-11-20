@@ -3,6 +3,7 @@
 import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CreditCard, Eye, EyeOff, Info, Lightbulb, Pencil, Plus, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet as WalletIcon, WalletCards, X } from "lucide-react";
 import { BRAND_SLOGANS, DETAIL_SIMILAR_LIMIT, HISTORY_CALENDAR_EXPANDED_STORAGE_KEY, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
+import { recurringLogKey } from "@/lib/in-flight";
 import { MASKED_MONEY, formatChatTime, formatDateTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, maskMoneyInText, moneySign, toMoneyAmount } from "@/lib/format";
 import { entryDisplayImpact } from "@/lib/money";
 import { shiftMonthKey } from "@/lib/cycle";
@@ -578,12 +579,15 @@ export const DueSoonRail = memo(function DueSoonRail({
   unpaid,
   onManage,
   onLogNow,
+  loggingKeys,
   onOpenDebts,
 }: {
   items: { item: RecurringExpense; billingDate: Date; daysUntil: number; isLogged: boolean }[];
   unpaid: UnpaidOwnDebt[];
   onManage: () => void;
   onLogNow: (item: RecurringExpense, billingDate: Date) => void;
+  /** recurringLogKey of every bill being saved right now. */
+  loggingKeys: ReadonlySet<string>;
   onOpenDebts: () => void;
 }) {
   return (
@@ -603,7 +607,13 @@ export const DueSoonRail = memo(function DueSoonRail({
           {isLogged ? (
             <span className="poster-done"><Check size={14} strokeWidth={2.5} aria-hidden="true" />บันทึกแล้ว</span>
           ) : (
-            <button className="poster-action" onClick={() => onLogNow(item, billingDate)}>บันทึกเลย</button>
+            <button
+              className="poster-action"
+              onClick={() => onLogNow(item, billingDate)}
+              disabled={loggingKeys.has(recurringLogKey(item.id, billingDate))}
+            >
+              {loggingKeys.has(recurringLogKey(item.id, billingDate)) ? "กำลังบันทึก..." : "บันทึกเลย"}
+            </button>
           )}
         </Poster>
       ))}
