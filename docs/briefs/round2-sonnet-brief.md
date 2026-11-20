@@ -5,7 +5,7 @@
 ## ก่อนเริ่ม
 
 - อ่าน `CLAUDE.md` โดยเฉพาะ `SwipeEntry`, ปุ่มย้อนคืน (undo) และหัวข้อเรื่อง motion token
-- แตก branch `sonnet/round2-exit-rows` ออกจาก branch ที่รวมรอบ 1 แล้ว (Opus จะบอกชื่อ)
+- แตก branch `sonnet/round2-exit-rows` ออกจาก `claude/confident-euler-l155ra` (รวมรอบ 1 แล้วตั้งแต่ commit `e259e74`)
 - รอบนี้ **ห้ามแตะ** `EntryDetailSheet` และการเปิดรายละเอียดรายการ เพราะ Opus ทำอนิเมชันข้อ 6 อยู่ที่นั่น
 - ตรวจงานด้วยคำสั่งชุดเดียวกับรอบ 1 (`tsc`, `lint`, `npm test`, `verify:design`, e2e ทั้งชุด)
 
