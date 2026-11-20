@@ -345,7 +345,7 @@ export function ReportExportView({
           <b>รายการ · กระเป๋า · หนี้ · บิล · งบ · เป้าหมาย · พอร์ต · บัตรในกระเป๋า · โปรไฟล์</b>
         </div>
         <p className="budget-hint">ไฟล์ JSON เก็บข้อมูลทั้งบัญชีไว้ครบ ไม่รวม PIN และข้อมูลล็อกอินด้วยลายนิ้วมือ ยังนำกลับเข้าแอปไม่ได้ในตอนนี้ แต่เก็บไว้เป็นสำรองได้</p>
-        <button className="save" onClick={() => { void backup.run(); }} disabled={backup.busy}>
+        <button className="backup-button" onClick={() => { void backup.run(); }} disabled={backup.busy}>
           {backup.busy ? "กำลังเตรียมไฟล์..." : "ดาวน์โหลดไฟล์สำรอง (JSON)"}
         </button>
         {backup.error && <p className="backup-error" role="alert">{backup.error}</p>}
@@ -763,7 +763,7 @@ export function ConfirmDeleteAccount({
           รายการ กระเป๋าเงิน หนี้ บิล งบ เป้าหมาย พอร์ต และประวัติแชททั้งหมดจะถูกลบทันที
           และกู้คืนไม่ได้ ถ้าอยากเก็บไว้ ดาวน์โหลดไฟล์สำรองก่อนได้
         </p>
-        <button className="delete-account-backup" onClick={() => { void backup.run(); }} disabled={busy || backup.busy}>
+        <button className="backup-button" onClick={() => { void backup.run(); }} disabled={busy || backup.busy}>
           {backup.busy ? "กำลังเตรียมไฟล์..." : "ดาวน์โหลดไฟล์สำรองก่อน"}
         </button>
         {backup.error && <p className="backup-error" role="alert">{backup.error}</p>}

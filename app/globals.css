@@ -6936,15 +6936,18 @@ input[type="checkbox"], input[type="radio"] {
   font-weight: var(--fw-semibold);
 }
 
-/* Account backup (useAccountBackup, components/sheets.tsx): the secondary
-   button above the typed confirmation, and the one error both places show. */
-.delete-account-backup {
+/* Account backup (useAccountBackup, components/sheets.tsx): a secondary
+   button in both places it is offered -- under the CSV report, which keeps the
+   page's one white primary, and above the delete dialog's typed confirmation
+   -- and the one error both show. */
+.backup-button {
   display: block;
   width: 100%;
   margin-bottom: var(--s-5);
   background: var(--surface-2);
+  color: var(--ink);
   border-radius: var(--r-md);
-  padding: 11px;
+  padding: var(--s-3);
   font-weight: var(--fw-semibold);
 }
 
