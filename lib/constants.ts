@@ -94,6 +94,11 @@ export const GEMINI_CHAT_TIMEOUT_MS = 20000;
 // AI. Long enough for a paragraph of household/business vocabulary, short
 // enough that it can't crowd out the parsing rules in the prompt itself.
 export const AI_CONTEXT_MAX_LENGTH = 1000;
+// How many AI requests one account may make per Bangkok day, all AI features
+// counted together (parse, slips, investments, tickets, Ask AI). Enforced by
+// consume_ai_quota (supabase/migrations/20261120090000_add_ai_daily_quota.sql)
+// through lib/ai-quota.ts, so the number is only written here.
+export const AI_DAILY_LIMIT = 100;
 
 // How many past entries of the user's own get replayed to the model as
 // "you recorded something like this before" examples, and how similar the
@@ -137,6 +142,9 @@ export const RPC = {
   // Deletes the caller's own account and, by cascade, all of its data
   // (supabase/migrations/20260926090000_add_delete_my_account.sql).
   deleteMyAccount: "delete_my_account",
+  // Counts one AI request against the caller's daily ceiling and says whether
+  // it was allowed (supabase/migrations/20261120090000_add_ai_daily_quota.sql).
+  consumeAiQuota: "consume_ai_quota",
 } as const;
 
 // What the user types into the delete-account dialog before its button wakes.

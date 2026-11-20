@@ -1,5 +1,6 @@
 import { createGeminiClient, describeGeminiError, generateGeminiContent, getGeminiApiKey, missingGeminiKeyResponse } from "@/lib/gemini";
 import { requireUser, unauthorizedResponse } from "@/lib/auth";
+import { enforceAiQuota } from "@/lib/ai-quota";
 import { DATE_INPUT_PATTERN, GEMINI_EXTRACTION_TEMPERATURE, GEMINI_IMAGE_TIMEOUT_MS, MAX_IMAGE_BYTES, imageBytes } from "@/lib/constants";
 import { isGeneralPocketKind, normalizeTicketReading, type PocketCardKind } from "@/lib/pocket";
 
@@ -68,6 +69,11 @@ export async function POST(request: Request) {
     `- วันนี้คือ ${today} ถ้าบนตั๋วไม่มีปี ให้ใช้ปีที่ทำให้วันนั้นเป็นวันที่ใกล้ที่สุดที่ยังไม่ผ่านไป ถ้าเป็นปี พ.ศ. ให้แปลงเป็น ค.ศ.`,
     "- label ให้สั้นและอ่านรู้เรื่อง เช่น ชื่อหนัง หรือ ชื่อร้านตามด้วยคำว่าบัตรสมาชิก",
   ].join("\n");
+
+  // Counted after the input checks, so a request the route would refuse
+  // anyway spends nothing (lib/ai-quota.ts).
+  const overQuota = await enforceAiQuota(user);
+  if (overQuota) return overQuota;
 
   let response;
   try {

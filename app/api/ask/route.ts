@@ -1,5 +1,6 @@
 import { createGeminiClient, describeGeminiError, generateGeminiContent, getGeminiApiKey, missingGeminiKeyResponse } from "@/lib/gemini";
 import { requireUser, unauthorizedResponse } from "@/lib/auth";
+import { enforceAiQuota } from "@/lib/ai-quota";
 import { AI_CONTEXT_MAX_LENGTH, GEMINI_CHAT_TIMEOUT_MS } from "@/lib/constants";
 import { roundMoneyDeep } from "@/lib/format";
 
@@ -67,6 +68,11 @@ export async function POST(request: Request) {
     ...history.map((turn) => ({ role: turn.role === "user" ? ("user" as const) : ("model" as const), parts: [{ text: turn.content }] })),
     { role: "user" as const, parts: [{ text: question }] },
   ];
+
+  // Counted after the input checks, so a request the route would refuse
+  // anyway spends nothing (lib/ai-quota.ts).
+  const overQuota = await enforceAiQuota(user);
+  if (overQuota) return overQuota;
 
   try {
     const ai = createGeminiClient(apiKey);

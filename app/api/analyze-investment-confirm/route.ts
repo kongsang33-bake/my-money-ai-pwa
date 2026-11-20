@@ -1,5 +1,6 @@
 import { createGeminiClient, describeGeminiError, generateGeminiContent, getGeminiApiKey, missingGeminiKeyResponse } from "@/lib/gemini";
 import { requireUser, unauthorizedResponse } from "@/lib/auth";
+import { enforceAiQuota } from "@/lib/ai-quota";
 import { GEMINI_EXTRACTION_TEMPERATURE, GEMINI_IMAGE_TIMEOUT_MS, MAX_IMAGE_BYTES, imageBytes } from "@/lib/constants";
 
 // Reads one purchase row's unit count off a mutual-fund transaction
@@ -53,6 +54,11 @@ export async function POST(request: Request) {
 
   const targetAmount = typeof body.targetAmount === "number" && Number.isFinite(body.targetAmount) ? body.targetAmount : undefined;
   const prompt = buildPrompt(targetAmount);
+
+  // Counted after the input checks, so a request the route would refuse
+  // anyway spends nothing (lib/ai-quota.ts).
+  const overQuota = await enforceAiQuota(user);
+  if (overQuota) return overQuota;
 
   let response;
   try {
