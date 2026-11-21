@@ -79,7 +79,12 @@ amount, date/category/wallet, then "แก้ไข" and "ลบ", then "รา�
 (`similarEntries`: same title, then same category, never another leg of the
 same event) and how often the title recurs (`sameTitleSummary`). It edits
 and deletes nothing itself: "แก้ไข" hands the row to `EditSheet` and "ลบ" to
-`deleteEntry`, so there is still one edit path and one delete path. History's
+`deleteEntry`, so there is still one edit path and one delete path. It opens
+with the **entry morph** (components/morph.ts): the tapped row's icon and
+amount fly into the sheet's header as copies fixed to the viewport, the real
+ones hidden for the flight, measured against where the header will be once
+the slide-in ends. A list joins in by spreading `morphSource(part, entry.id)`
+on its icon and amount; only the first open morphs, never with reduced motion. History's
 fast path is the row itself (`SwipeEntry`, components/add.tsx): on touch it
 slides left to uncover "แก้ไข" and "ลบ" (`ENTRY_SWIPE_ACTIONS_WIDTH`), on a
 mouse the same two sit at the row's end as icons, and a keyboard focusing
@@ -451,6 +456,34 @@ equal-sized cards (both in `app/page.tsx` + `app/globals.css` together).
 When redesigning a screen, decide its layout and surface tiers first, the
 same way `docs/design-reference.html` did for Home, before touching any
 token value.
+
+## Loading and limits
+
+- **A failed read is not an empty account.** Every loader in page.tsx returns
+  whether it succeeded, and only a full load where all of them did marks the
+  account as read (`loadedUserIdRef`). Any failure holds the app at
+  `LoadFailedScreen` (components/auth.tsx; `startupScreen`, lib/startup.ts),
+  which retries by itself when the device comes back online. Before this, an
+  existing user opening the app offline was offered the first-run setup flow.
+- **AI has a daily ceiling per account**, every AI route counted together:
+  `AI_DAILY_LIMIT` in lib/constants.ts, enforced by `consume_ai_quota` (a
+  security-definer function counting against `auth.uid()`) through
+  `enforceAiQuota` (lib/ai-quota.ts), called after a route's input checks. A
+  counter that cannot be read lets the request through. A new AI route calls
+  `enforceAiQuota(user)` before it calls Gemini.
+- **A deleted row folds away; a filtered one just goes.** `useExitingList`
+  (components/exiting-list.ts; the pure half, with tests, in
+  lib/exiting-list.ts) keeps a removed row on screen for `--t-3`, faded and
+  closed to height 0 by `collapseOnExit`, with `restoreRow` on every other row
+  so one that comes back (undo) is whole again. Used by History's
+  `EntryList` (opt-in through `exitSource`/`exitScope`), the debtors list and
+  the goals list. Pass the unfiltered list as `source` wherever the visible
+  one can be filtered, and anything that swaps the list wholesale (the month,
+  the debt book) as `scope`, or a filter would fold rows away. More than three
+  rows gone at once is a new list, not a delete, and simply changes.
+- **A save started by one tap guards itself against the second**: a ref'd set
+  of in-flight keys (`inFlightRef` in page.tsx) is the real guard, and a state
+  copy only draws the button -- `disabled` alone lands a render too late.
 
 ## Dev workflow
 

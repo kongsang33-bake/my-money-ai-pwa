@@ -6128,6 +6128,18 @@ button.entry-main {
   letter-spacing: var(--ls-tight);
 }
 
+/* The entry morph's flying copy (components/morph.ts): fixed to the viewport
+   above the sheet, origin at its top left so one translate + scale lands it
+   on the header. Its look is copied inline from the row it left. */
+.morph-ghost {
+  position: fixed;
+  margin: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+  z-index: var(--z-dialog);
+  will-change: transform;
+}
+
 .detail-meta {
   display: flex;
   flex-wrap: wrap;
@@ -6936,6 +6948,28 @@ input[type="checkbox"], input[type="radio"] {
   font-weight: var(--fw-semibold);
 }
 
+/* Account backup (useAccountBackup, components/sheets.tsx): a secondary
+   button in both places it is offered -- under the CSV report, which keeps the
+   page's one white primary, and above the delete dialog's typed confirmation
+   -- and the one error both show. */
+.backup-button {
+  display: block;
+  width: 100%;
+  margin-bottom: var(--s-5);
+  background: var(--surface-2);
+  color: var(--ink);
+  border-radius: var(--r-md);
+  padding: var(--s-3);
+  font-weight: var(--fw-semibold);
+}
+
+.backup-error {
+  margin: var(--s-3) 0 var(--s-4);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--danger);
+}
+
 /* Delete account: a typed confirmation between the warning and the buttons. */
 .delete-account-field {
   display: block;
@@ -7049,6 +7083,16 @@ input[type="checkbox"], input[type="radio"] {
 .toast > span:first-child svg {
   width: 20px;
   height: 20px;
+}
+
+/* The success tick draws itself once the box is up. lucide's Check is a single
+   path about 22.6 units long, so 24 covers it with a hair to spare; drawing
+   starts one beat after toast-in and ends well inside 400ms. Reduced motion
+   gets the finished tick at once (the rule at the end of the file). */
+.toast.success > span:first-child svg path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 0;
+  animation: toast-tick var(--t-3) var(--e-out) var(--t-1) both;
 }
 
 .toast b {
@@ -8784,6 +8828,11 @@ body:has(.login-page) #app-splash {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes toast-tick {
+  from { stroke-dashoffset: 24; }
+  to { stroke-dashoffset: 0; }
+}
+
 @keyframes toast-out {
   from { opacity: 1; transform: translateY(0) scale(1); }
   to { opacity: 0; transform: translateY(10px) scale(0.97); }
@@ -8863,6 +8912,7 @@ body:has(.login-page) #app-splash {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }

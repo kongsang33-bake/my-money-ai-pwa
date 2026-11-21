@@ -10,6 +10,7 @@ import type { Debtor, DebtorKind, Entry } from "@/lib/types";
 import { CategoryIcon, IconColorPicker, WalletAvatarGlyph } from "@/components/shared";
 import { CountUpMoney, EmptyNote, PageFrame, SheetFrame, SkeletonList, StateCard, decimalInputPattern, SheetClose } from "@/components/primitives";
 import { EntryList } from "@/components/add";
+import { collapseOnExit, restoreRow, useExitingList } from "@/components/exiting-list";
 import { IncomeBreakdown, MonthlyTrendChart } from "@/components/history";
 
 /**
@@ -26,6 +27,8 @@ function balanceReading(kind: DebtorKind, name: string, amount: number): { label
   if (amount >= 0) return { label: kind === "own" ? "ยอดหนี้คงเหลือ" : "ยอดค้างปัจจุบัน", value: amount };
   return { label: kind === "own" ? `${name}ติดเราอยู่` : `ตอนนี้เราติด${name}อยู่`, value: -amount };
 }
+
+const debtorKey = (debtor: Debtor) => debtor.id;
 
 export function DebtorsView({
   debtors,
@@ -72,6 +75,11 @@ export function DebtorsView({
   const otherSideAmount = selectedDebtor
     ? balanceOf(selectedDebtor.kind === "own" ? receivableSummary : payableSummary, selectedDebtor.name)
     : 0;
+
+  const visibleDebtors = debtors.filter((debtor) => debtor.kind === activeKind);
+  // Above the early return below: a hook runs on every render or none. The
+  // other book's debtors are filtered out, not deleted, hence the source.
+  const debtorRows = useExitingList(visibleDebtors, debtorKey, { source: debtors, scope: activeKind });
 
   if (selectedDebtor) {
     return (
@@ -123,7 +131,6 @@ export function DebtorsView({
     );
   }
 
-  const visibleDebtors = debtors.filter((debtor) => debtor.kind === activeKind);
   const summaryTotal = summary.reduce((sum, item) => sum + item.amount, 0);
   // The headline for "หนี้ของฉัน" is what's actually due this cycle (fixed
   // installment, credit card minimum, or the full balance for debts with
@@ -156,10 +163,10 @@ export function DebtorsView({
         {activeKind === "own" && <small>ยอดหนี้คงเหลือรวม {moneySign}{formatMoney(summaryTotal)}</small>}
       </section>
       <div className="debtor-page-list">
-        {visibleDebtors.map((debtor) => {
+        {debtorRows.map(({ item: debtor, exiting }) => {
           const amount = summary.find((item) => item.name.trim().toLowerCase() === debtor.name.trim().toLowerCase())?.amount ?? 0;
           return (
-            <article className="debtor-page-item" key={debtor.id}>
+            <article className="debtor-page-item" key={debtor.id} ref={exiting ? collapseOnExit : restoreRow}>
               <button className="debtor-main-button" onClick={() => onSelect(debtor)}>
                 <span className="debtor-avatar" style={{ background: debtor.icon_color ?? nameColor(debtor.name) }}>
                   <WalletAvatarGlyph iconKey={debtor.icon} fallbackName={debtor.name} />

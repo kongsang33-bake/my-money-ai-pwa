@@ -29,7 +29,8 @@ import { authHeaders } from "@/lib/api";
 import { formatChatTime, formatMoney, formatSignedMoney, moneySign, clampInteger } from "@/lib/format";
 import { entriesInRange, reportBounds, reportLabel } from "@/lib/cycle";
 import { totalWallet } from "@/lib/money";
-import { buildReportCsv, downloadCsv } from "@/lib/csv";
+import { buildReportCsv, downloadCsv, downloadFile } from "@/lib/csv";
+import { accountExportFilename, fetchAccountExport } from "@/lib/account-export";
 import { compressProfileImage } from "@/lib/image";
 import { nameInitial } from "@/lib/category";
 import type { AiChatMessage, AiFinanceContext, Entry, NetWorthDisplaySettings, Profile, ReportPeriod, Wallet } from "@/lib/types";
@@ -214,6 +215,31 @@ export function AskFinanceView({ context, userId, aiContext, onBack }: { context
   </PageFrame>;
 }
 
+/**
+ * One tap: read the whole account fresh, then hand it over as a JSON file.
+ * Reads before it downloads, so a table that will not load shows an error and
+ * no file at all rather than a backup that is quietly missing something.
+ */
+function useAccountBackup(userEmail: string | null) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function run() {
+    if (!supabase || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const now = new Date();
+      const file = await fetchAccountExport(supabase, userEmail, now);
+      downloadFile(accountExportFilename(now), JSON.stringify(file, null, 2), "application/json;charset=utf-8");
+    } catch (backupError) {
+      setError(backupError instanceof Error && backupError.message ? backupError.message : "เตรียมไฟล์สำรองไม่สำเร็จ ลองอีกครั้ง");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return { busy, error, run };
+}
+
 export function ReportExportView({
   entries,
   wallets,
@@ -221,16 +247,19 @@ export function ReportExportView({
   payableSummary,
   selectedMonth,
   monthStartDay,
+  userEmail,
   onBack,
 }: {
   entries: Entry[];
   wallets: Wallet[];
+  userEmail: string | null;
   receivableSummary: { name: string; amount: number }[];
   payableSummary: { name: string; amount: number }[];
   selectedMonth: string;
   monthStartDay: number;
   onBack: () => void;
 }) {
+  const backup = useAccountBackup(userEmail);
   const [period, setPeriod] = useState<ReportPeriod>("month");
   const [month, setMonth] = useState(selectedMonth);
   const [year, setYear] = useState(Number(selectedMonth.slice(0, 4)) || new Date().getFullYear());
@@ -310,6 +339,16 @@ export function ReportExportView({
         <button className="save" onClick={submit}>
           ดาวน์โหลดไฟล์ CSV
         </button>
+
+        <div className="report-includes">
+          <span>สำรองข้อมูลทั้งบัญชี</span>
+          <b>รายการ · กระเป๋า · หนี้ · บิล · งบ · เป้าหมาย · พอร์ต · บัตรในกระเป๋า · โปรไฟล์</b>
+        </div>
+        <p className="budget-hint">ไฟล์ JSON เก็บข้อมูลทั้งบัญชีไว้ครบ ไม่รวม PIN และข้อมูลล็อกอินด้วยลายนิ้วมือ ยังนำกลับเข้าแอปไม่ได้ในตอนนี้ แต่เก็บไว้เป็นสำรองได้</p>
+        <button className="backup-button" onClick={() => { void backup.run(); }} disabled={backup.busy}>
+          {backup.busy ? "กำลังเตรียมไฟล์..." : "ดาวน์โหลดไฟล์สำรอง (JSON)"}
+        </button>
+        {backup.error && <p className="backup-error" role="alert">{backup.error}</p>}
     </PageFrame>
   );
 }
@@ -687,18 +726,21 @@ export function ProfileView({
 // button stays shut until DELETE_ACCOUNT_CONFIRM_TEXT has been typed. It
 // only asks; page.tsx does the delete and keeps the dialog open on failure.
 export function ConfirmDeleteAccount({
+  userEmail,
   busy,
   error,
   onCancel,
   onConfirm,
   closing,
 }: {
+  userEmail: string | null;
   busy: boolean;
   error: string;
   onCancel: () => void;
   onConfirm: () => void;
   closing?: boolean;
 }) {
+  const backup = useAccountBackup(userEmail);
   const [typed, setTyped] = useState("");
   const cancel = () => { if (!busy) onCancel(); };
   useEscapeToClose(cancel);
@@ -719,8 +761,12 @@ export function ConfirmDeleteAccount({
         <h2 id="delete-account-title">ลบบัญชีถาวร?</h2>
         <p>
           รายการ กระเป๋าเงิน หนี้ บิล งบ เป้าหมาย พอร์ต และประวัติแชททั้งหมดจะถูกลบทันที
-          และกู้คืนไม่ได้ ถ้าอยากเก็บไว้ ส่งออกเป็น CSV ที่ &ldquo;ส่งออกรีพอร์ท&rdquo; ก่อน
+          และกู้คืนไม่ได้ ถ้าอยากเก็บไว้ ดาวน์โหลดไฟล์สำรองก่อนได้
         </p>
+        <button className="backup-button" onClick={() => { void backup.run(); }} disabled={busy || backup.busy}>
+          {backup.busy ? "กำลังเตรียมไฟล์..." : "ดาวน์โหลดไฟล์สำรองก่อน"}
+        </button>
+        {backup.error && <p className="backup-error" role="alert">{backup.error}</p>}
         <label className="delete-account-field">
           พิมพ์ &ldquo;{DELETE_ACCOUNT_CONFIRM_TEXT}&rdquo; เพื่อยืนยัน
           <input

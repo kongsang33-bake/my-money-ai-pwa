@@ -3,6 +3,9 @@
 import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CreditCard, Eye, EyeOff, Info, Lightbulb, Pencil, Plus, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet as WalletIcon, WalletCards, X } from "lucide-react";
 import { BRAND_SLOGANS, DETAIL_SIMILAR_LIMIT, HISTORY_CALENDAR_EXPANDED_STORAGE_KEY, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
+import { recurringLogKey } from "@/lib/in-flight";
+import { morphSource, morphTarget, useEntryMorph } from "@/components/morph";
+import { collapseOnExit, restoreRow, useExitingList } from "@/components/exiting-list";
 import { MASKED_MONEY, formatChatTime, formatDateTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, maskMoneyInText, moneySign, toMoneyAmount } from "@/lib/format";
 import { entryDisplayImpact } from "@/lib/money";
 import { shiftMonthKey } from "@/lib/cycle";
@@ -578,12 +581,15 @@ export const DueSoonRail = memo(function DueSoonRail({
   unpaid,
   onManage,
   onLogNow,
+  loggingKeys,
   onOpenDebts,
 }: {
   items: { item: RecurringExpense; billingDate: Date; daysUntil: number; isLogged: boolean }[];
   unpaid: UnpaidOwnDebt[];
   onManage: () => void;
   onLogNow: (item: RecurringExpense, billingDate: Date) => void;
+  /** recurringLogKey of every bill being saved right now. */
+  loggingKeys: ReadonlySet<string>;
   onOpenDebts: () => void;
 }) {
   return (
@@ -603,7 +609,13 @@ export const DueSoonRail = memo(function DueSoonRail({
           {isLogged ? (
             <span className="poster-done"><Check size={14} strokeWidth={2.5} aria-hidden="true" />บันทึกแล้ว</span>
           ) : (
-            <button className="poster-action" onClick={() => onLogNow(item, billingDate)}>บันทึกเลย</button>
+            <button
+              className="poster-action"
+              onClick={() => onLogNow(item, billingDate)}
+              disabled={loggingKeys.has(recurringLogKey(item.id, billingDate))}
+            >
+              {loggingKeys.has(recurringLogKey(item.id, billingDate)) ? "กำลังบันทึก..." : "บันทึกเลย"}
+            </button>
           )}
         </Poster>
       ))}
@@ -739,13 +751,13 @@ export const RecentRail = memo(function RecentRail({
           <button className="recent-tile" key={entry.id} style={{ "--hue": categoryColor(entry.category) } as React.CSSProperties} onClick={() => onOpen(entry)}>
             <span className="tile-art">
               <IconPattern renderGlyph={(size) => <CategoryIcon category={entry.category} size={size} />} />
-              <IconChip><CategoryIcon category={entry.category} size={18} /></IconChip>
+              <IconChip morph={morphSource("icon", entry.id)}><CategoryIcon category={entry.category} size={18} /></IconChip>
             </span>
             <span className="recent-body">
               <b>{entry.title}</b>
               <small>
                 <span>{formatChatTime(entry.occurred_at)}</span>
-                <span className={impact >= 0 ? "income" : "expense"}>{formatSignedMoney(impact)}</span>
+                <span className={impact >= 0 ? "income" : "expense"} {...morphSource("amount", entry.id)}>{formatSignedMoney(impact)}</span>
               </small>
             </span>
           </button>
@@ -759,10 +771,12 @@ export function goalProgress(goal: MoneyGoal): number {
   return Math.min(100, Math.max(0, (goal.saved / goal.target) * 100));
 }
 
-export function GoalItem({ goal, onDelete }: { goal: MoneyGoal; onDelete: (goal: MoneyGoal) => void }) {
+const goalKey = (goal: MoneyGoal) => goal.id;
+
+export function GoalItem({ goal, onDelete, exiting = false }: { goal: MoneyGoal; onDelete: (goal: MoneyGoal) => void; exiting?: boolean }) {
   const progress = goalProgress(goal);
   return (
-    <div className="goal-item">
+    <div className="goal-item" ref={exiting ? collapseOnExit : restoreRow}>
       <div className="goal-item-head"><b>{goal.name}</b><button className="icon-button" onClick={() => onDelete(goal)} aria-label={`ลบเป้าหมาย ${goal.name}`}>×</button></div>
       <div className="goal-card-values"><strong>{moneySign}{formatMoney(goal.saved)}</strong><span>จาก {moneySign}{formatMoney(goal.target)}</span></div>
       <div className="goal-progress" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${progress}%` }} /></div>
@@ -784,6 +798,7 @@ export function GoalsView({
   onAdd: () => void;
   onDelete: (goal: MoneyGoal) => void;
 }) {
+  const goalRows = useExitingList(goals, goalKey);
   return (
     <div className="view debtor-view">
       {loading && <SkeletonList rows={3} />}
@@ -796,10 +811,10 @@ export function GoalsView({
         <button className="header-add-button" onClick={onAdd}>เพิ่ม</button>
       </div>
       <div className="goal-list">
-        {goals.map((goal) => (
-          <GoalItem key={goal.id} goal={goal} onDelete={onDelete} />
+        {goalRows.map(({ item: goal, exiting }) => (
+          <GoalItem key={goal.id} goal={goal} onDelete={onDelete} exiting={exiting} />
         ))}
-        {!goals.length && <EmptyNote glyph="●" action={{ label: "สร้างเป้าหมาย", onClick: onAdd }}>ตั้งก้อนเงินที่อยากเก็บให้ได้ เช่น เงินฉุกเฉิน หรือทริปที่วางไว้ · ใส่ยอดเป้าหมายแล้วแอพจะคิดความคืบหน้าให้</EmptyNote>}
+        {!goalRows.length && <EmptyNote glyph="●" action={{ label: "สร้างเป้าหมาย", onClick: onAdd }}>ตั้งก้อนเงินที่อยากเก็บให้ได้ เช่น เงินฉุกเฉิน หรือทริปที่วางไว้ · ใส่ยอดเป้าหมายแล้วแอพจะคิดความคืบหน้าให้</EmptyNote>}
       </div>
     </div>
   );
@@ -1094,12 +1109,14 @@ export function EntryDetailSheet({
   const similar = useMemo(() => similarEntries(entry, entries, DETAIL_SIMILAR_LIMIT), [entry, entries]);
   const repeat = useMemo(() => sameTitleSummary(entry, entries), [entry, entries]);
   const hue = categoryColor(entry.category);
+  const heroRef = useRef<HTMLDivElement>(null);
+  useEntryMorph(entry.id, heroRef);
 
   return (
     <SheetFrame onClose={onClose} className="entry-detail-sheet" closing={closing}>
-      <div className="detail-hero" style={{ "--hue": hue } as React.CSSProperties} aria-hidden="true">
+      <div className="detail-hero" ref={heroRef} style={{ "--hue": hue } as React.CSSProperties} aria-hidden="true">
         <IconPattern renderGlyph={(size) => <CategoryIcon category={entry.category} size={size} />} />
-        <IconChip><CategoryIcon category={entry.category} size={18} /></IconChip>
+        <IconChip morph={morphTarget("icon")}><CategoryIcon category={entry.category} size={18} /></IconChip>
       </div>
       <button className="detail-close" onClick={onClose} aria-label="ปิด">
         <X size={20} strokeWidth={2.25} aria-hidden="true" />
@@ -1110,7 +1127,7 @@ export function EntryDetailSheet({
           <span>{transactionTypeLabels[entry.transaction_type]}</span>
         </div>
         <h2>{entry.title}</h2>
-        <strong className={`detail-amount ${impact >= 0 ? "income" : "expense"}`}>{formatSignedMoney(impact)}</strong>
+        <strong className={`detail-amount ${impact >= 0 ? "income" : "expense"}`} {...morphTarget("amount")}>{formatSignedMoney(impact)}</strong>
         <ul className="detail-meta">
           <li>{formatDateTime(entry.occurred_at)}</li>
           <li className="detail-pill">{entry.category}</li>

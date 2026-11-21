@@ -182,8 +182,9 @@ export function IconPattern({ renderGlyph }: { renderGlyph: (size: number) => Re
 }
 
 /** The icon itself at reading size, in a square tinted with its card's --hue -- the one จดเร็ว uses. */
-export function IconChip({ children }: { children: React.ReactNode }) {
-  return <span className="icon-chip" aria-hidden="true">{children}</span>;
+/** `morph` takes morphSource/morphTarget (components/morph.ts), for the entry morph. */
+export function IconChip({ children, morph }: { children: React.ReactNode; morph?: Record<string, string> }) {
+  return <span className="icon-chip" aria-hidden="true" {...morph}>{children}</span>;
 }
 
 export function EmptyNote({ glyph, children, action }: { glyph: string; children: React.ReactNode; action?: EmptyAction }) {

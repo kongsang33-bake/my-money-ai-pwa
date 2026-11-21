@@ -102,8 +102,8 @@ export function buildReportCsv({
   return `﻿${lines.join("\r\n")}`;
 }
 
-export function downloadCsv(filename: string, csv: string) {
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+export function downloadFile(filename: string, text: string, mime: string) {
+  const blob = new Blob([text], { type: mime });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -112,4 +112,8 @@ export function downloadCsv(filename: string, csv: string) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+export function downloadCsv(filename: string, csv: string) {
+  downloadFile(filename, csv, "text/csv;charset=utf-8");
 }

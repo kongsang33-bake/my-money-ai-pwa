@@ -13,6 +13,8 @@ import { summarizeDayEntries } from "@/lib/insights";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
 import { CategoryIcon, CategoryPicker, FundingSelect } from "@/components/shared";
+import { morphSource } from "@/components/morph";
+import { collapseOnExit, restoreRow, useExitingList } from "@/components/exiting-list";
 import { AmountInput, DateField, EmptyNote, SheetFrame, StateCard, SheetClose, revealAboveKeyboard } from "@/components/primitives";
 
 // The whole "let AI write it for me" half of the Add tab: the example chips,
@@ -618,6 +620,8 @@ export function DraftImpact({ items, wallets, knownDebtors }: { items: Draft[]; 
   );
 }
 
+const entryKey = (entry: Entry) => entry.id;
+
 export const EntryList = memo(function EntryList({
   entries,
   onOpen,
@@ -627,6 +631,8 @@ export const EntryList = memo(function EntryList({
   amountField = "wallet",
   selectedDay,
   dayTotals = false,
+  exitSource,
+  exitScope,
 }: {
   entries: Entry[];
   /** What a tap on the row does -- the detail sheet, where one exists. Falls back to onEdit. */
@@ -639,18 +645,31 @@ export const EntryList = memo(function EntryList({
   selectedDay?: string;
   /** Each day's money in and out beside its date -- the list reads as a statement. */
   dayTotals?: boolean;
+  /**
+   * Every entry before any filter or search. Given, a deleted row folds away
+   * (components/exiting-list.ts) and a filtered-out one just goes; left out,
+   * rows simply appear and disappear.
+   */
+  exitSource?: Entry[];
+  /** What swaps the list wholesale (the month shown); a new one starts clean. */
+  exitScope?: string;
 }) {
-  const groups = useMemo(() => groupEntriesByDay(entries), [entries]);
+  const exitRows = useExitingList(entries, entryKey, { source: exitSource, scope: exitScope });
+  const rows = exitSource ? exitRows : entries.map((item) => ({ item, key: item.id, exiting: false }));
+  const exitingIds = new Set(rows.filter((row) => row.exiting).map((row) => row.key));
+  const shown = rows.map((row) => row.item);
+  const groups = groupEntriesByDay(shown);
   // One row open at a time, the way iOS Mail does it: opening another, or
   // tapping the open one, closes it.
   const [openId, setOpenId] = useState<string | null>(null);
 
-  if (!entries.length) return <EmptyNote glyph="▣" action={emptyAction}>ยังไม่มีรายการในช่วงนี้</EmptyNote>;
+  if (!shown.length) return <EmptyNote glyph="▣" action={emptyAction}>ยังไม่มีรายการในช่วงนี้</EmptyNote>;
 
   return (
     <div className="entry-list">
       {groups.map((group) => {
-        const totals = dayTotals ? summarizeDayEntries(group.items) : null;
+        // A row on its way out no longer counts toward its day.
+        const totals = dayTotals ? summarizeDayEntries(group.items.filter((entry) => !exitingIds.has(entry.id))) : null;
         return (
           <div className={`entry-group${group.key === selectedDay ? " is-selected" : ""}`} key={group.key} data-day={group.key}>
             <p className="entry-day">
@@ -666,7 +685,7 @@ export const EntryList = memo(function EntryList({
               const impact = amountField === "debt" ? entry.debt_impact : entryDisplayImpact(entry);
               const content = (
                 <>
-                  <span className="entry-icon" style={{ background: categoryTint(entry.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(entry.category) }}><CategoryIcon category={entry.category} size={18} /></span>
+                  <span className="entry-icon" style={{ background: categoryTint(entry.category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(entry.category) }} {...morphSource("icon", entry.id)}><CategoryIcon category={entry.category} size={18} /></span>
                   <div>
                     <b>{entry.title}</b>
                     <small>
@@ -678,13 +697,14 @@ export const EntryList = memo(function EntryList({
                     </small>
                     {entry.note && <small className="entry-note" title={entry.note}>{entry.note}</small>}
                   </div>
-                  <strong className={impact >= 0 ? "income" : "expense"}>{formatSignedMoney(impact)}</strong>
+                  <strong className={impact >= 0 ? "income" : "expense"} {...morphSource("amount", entry.id)}>{formatSignedMoney(impact)}</strong>
                 </>
               );
               const tap = onOpen ?? onEdit;
+              const exitRef = exitingIds.has(entry.id) ? collapseOnExit : restoreRow;
               if (!onEdit && !onDelete) {
                 return (
-                  <article className="entry" key={entry.id}>
+                  <article className="entry" key={entry.id} ref={exitRef}>
                     {tap
                       ? <button type="button" className="entry-main entry-tappable" onClick={() => tap(entry)}>{content}</button>
                       : <div className="entry-main">{content}</div>}
@@ -694,6 +714,7 @@ export const EntryList = memo(function EntryList({
               return (
                 <SwipeEntry
                   key={entry.id}
+                  exitRef={exitRef}
                   open={openId === entry.id}
                   onOpenChange={(open) => setOpenId(open ? entry.id : null)}
                   onTap={tap ? () => tap(entry) : undefined}
@@ -720,6 +741,7 @@ export const EntryList = memo(function EntryList({
  * variable during the drag, so a move does not re-render the list.
  */
 function SwipeEntry({
+  exitRef,
   open,
   onOpenChange,
   onTap,
@@ -727,6 +749,8 @@ function SwipeEntry({
   onDelete,
   children,
 }: {
+  /** collapseOnExit or restoreRow (components/exiting-list.ts), on the whole row -- buttons included. */
+  exitRef?: (element: HTMLElement | null) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onTap?: () => void;
@@ -782,7 +806,7 @@ function SwipeEntry({
 
   return (
     <article
-      ref={rowRef}
+      ref={(element) => { rowRef.current = element; exitRef?.(element); }}
       className={`entry swipe-row${open ? " is-open" : ""}`}
       style={{ "--swipe-actions-w": `${width}px` } as React.CSSProperties}
     >

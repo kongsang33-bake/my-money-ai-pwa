@@ -30,3 +30,31 @@ test.describe("history length", () => {
     await expect(back).toHaveCount(0);
   });
 });
+
+// components/exiting-list.ts folds away a row that was deleted. A row that a
+// filter or a search hides has not been deleted: it must just go, and come
+// back whole -- in the rental app this port came from, a quickly cleared
+// search once left rows stuck at height 0, there but invisible.
+test.describe("filtering is not deleting", () => {
+  test("a type chip and a search hide rows without folding them, and bring them back whole", async ({ app }) => {
+    await navigate(app, "history");
+    const view = app.locator(".view:not(.is-parked)");
+    const rowsOf = () => view.locator(".entry-list .entry");
+    const before = await rowsOf().count();
+    expect(before).toBeGreaterThan(3);
+
+    await view.locator(".history-search").getByRole("button", { name: "รายรับ", exact: true }).click();
+    await expect.poll(() => rowsOf().count()).toBeLessThan(before);
+    expect(await view.locator("[data-collapsing]").count()).toBe(0);
+    await view.locator(".history-search").getByRole("button", { name: "รายรับ", exact: true }).click();
+    await expect.poll(() => rowsOf().count()).toBe(before);
+
+    const search = view.getByRole("searchbox", { name: "ค้นหารายการ" });
+    await search.fill("ค่า");
+    await search.fill("");
+    await expect.poll(() => rowsOf().count()).toBe(before);
+    expect(await view.locator("[data-collapsing]").count()).toBe(0);
+    const heights = await rowsOf().evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().height));
+    expect(heights.every((height) => height > 0)).toBe(true);
+  });
+});

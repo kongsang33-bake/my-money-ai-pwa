@@ -16,6 +16,18 @@ test.describe("entry detail", () => {
     await expect(sheet.locator(".detail-amount")).toHaveText(amount);
   });
 
+  test("flies the row's icon and amount into the header, then leaves nothing behind", async ({ app }) => {
+    await app.locator(".home-view .recent-tile").first().click();
+    // components/morph.ts: one ghost per part, removed when it lands.
+    await expect(app.locator(".morph-ghost")).toHaveCount(2);
+    await expect(app.locator(".morph-ghost")).toHaveCount(0);
+    const sheet = app.locator(".sheet-backdrop > .entry-detail-sheet");
+    for (const part of [".detail-amount", ".detail-hero .icon-chip"]) {
+      expect(await sheet.locator(part).evaluate((element) => getComputedStyle(element).visibility)).toBe("visible");
+    }
+    expect(await app.locator(".home-view .recent-tile .icon-chip").first().evaluate((element) => getComputedStyle(element).visibility)).toBe("visible");
+  });
+
   test("hands off to the edit sheet rather than stacking on it", async ({ app }) => {
     await app.locator(".home-view .recent-tile").first().click();
     await app.locator(".entry-detail-sheet button", { hasText: "แก้ไข" }).click();
