@@ -3699,7 +3699,7 @@ export default function Home() {
                         ? `แสดง ${SEARCH_RESULT_LIMIT} รายการแรกจากทุกเดือน · ลองใส่ตัวกรองเพิ่มเพื่อจำกัดผลลัพธ์`
                         : `พบ ${searchResults.length} รายการจากทุกเดือน`}
                     </p>
-                    <EntryList entries={searchResults} onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+                    <EntryList entries={searchResults} exitSource={entries} exitScope="search" onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
                   </>
                 ) : (
                   <>
@@ -3709,7 +3709,7 @@ export default function Home() {
                         A tap on a day jumps the list to it rather than hiding the
                         rest; the month's charts live in "สรุปเดือนนี้". */}
                     <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedMonth={selectedMonth} onChangeMonth={selectHistoryMonth} selectedDay={selectedDay} defaultDay={defaultHistoryDay} onSelectDay={selectHistoryDay} />
-                    <EntryList entries={monthlyEntries} selectedDay={selectedDay} dayTotals onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+                    <EntryList entries={monthlyEntries} exitSource={entries} exitScope={selectedMonth} selectedDay={selectedDay} dayTotals onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
                   </>
                 )}
                 <HistoryBackToTop active={tab === "history"} />

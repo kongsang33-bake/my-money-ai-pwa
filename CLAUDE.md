@@ -471,6 +471,16 @@ token value.
   `enforceAiQuota` (lib/ai-quota.ts), called after a route's input checks. A
   counter that cannot be read lets the request through. A new AI route calls
   `enforceAiQuota(user)` before it calls Gemini.
+- **A deleted row folds away; a filtered one just goes.** `useExitingList`
+  (components/exiting-list.ts; the pure half, with tests, in
+  lib/exiting-list.ts) keeps a removed row on screen for `--t-3`, faded and
+  closed to height 0 by `collapseOnExit`, with `restoreRow` on every other row
+  so one that comes back (undo) is whole again. Used by History's
+  `EntryList` (opt-in through `exitSource`/`exitScope`), the debtors list and
+  the goals list. Pass the unfiltered list as `source` wherever the visible
+  one can be filtered, and anything that swaps the list wholesale (the month,
+  the debt book) as `scope`, or a filter would fold rows away. More than three
+  rows gone at once is a new list, not a delete, and simply changes.
 - **A save started by one tap guards itself against the second**: a ref'd set
   of in-flight keys (`inFlightRef` in page.tsx) is the real guard, and a state
   copy only draws the button -- `disabled` alone lands a render too late.

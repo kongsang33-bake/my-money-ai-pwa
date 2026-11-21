@@ -5,6 +5,7 @@ import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CreditCard, E
 import { BRAND_SLOGANS, DETAIL_SIMILAR_LIMIT, HISTORY_CALENDAR_EXPANDED_STORAGE_KEY, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
 import { recurringLogKey } from "@/lib/in-flight";
 import { morphSource, morphTarget, useEntryMorph } from "@/components/morph";
+import { collapseOnExit, restoreRow, useExitingList } from "@/components/exiting-list";
 import { MASKED_MONEY, formatChatTime, formatDateTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, maskMoneyInText, moneySign, toMoneyAmount } from "@/lib/format";
 import { entryDisplayImpact } from "@/lib/money";
 import { shiftMonthKey } from "@/lib/cycle";
@@ -770,10 +771,12 @@ export function goalProgress(goal: MoneyGoal): number {
   return Math.min(100, Math.max(0, (goal.saved / goal.target) * 100));
 }
 
-export function GoalItem({ goal, onDelete }: { goal: MoneyGoal; onDelete: (goal: MoneyGoal) => void }) {
+const goalKey = (goal: MoneyGoal) => goal.id;
+
+export function GoalItem({ goal, onDelete, exiting = false }: { goal: MoneyGoal; onDelete: (goal: MoneyGoal) => void; exiting?: boolean }) {
   const progress = goalProgress(goal);
   return (
-    <div className="goal-item">
+    <div className="goal-item" ref={exiting ? collapseOnExit : restoreRow}>
       <div className="goal-item-head"><b>{goal.name}</b><button className="icon-button" onClick={() => onDelete(goal)} aria-label={`ลบเป้าหมาย ${goal.name}`}>×</button></div>
       <div className="goal-card-values"><strong>{moneySign}{formatMoney(goal.saved)}</strong><span>จาก {moneySign}{formatMoney(goal.target)}</span></div>
       <div className="goal-progress" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${progress}%` }} /></div>
@@ -795,6 +798,7 @@ export function GoalsView({
   onAdd: () => void;
   onDelete: (goal: MoneyGoal) => void;
 }) {
+  const goalRows = useExitingList(goals, goalKey);
   return (
     <div className="view debtor-view">
       {loading && <SkeletonList rows={3} />}
@@ -807,10 +811,10 @@ export function GoalsView({
         <button className="header-add-button" onClick={onAdd}>เพิ่ม</button>
       </div>
       <div className="goal-list">
-        {goals.map((goal) => (
-          <GoalItem key={goal.id} goal={goal} onDelete={onDelete} />
+        {goalRows.map(({ item: goal, exiting }) => (
+          <GoalItem key={goal.id} goal={goal} onDelete={onDelete} exiting={exiting} />
         ))}
-        {!goals.length && <EmptyNote glyph="●" action={{ label: "สร้างเป้าหมาย", onClick: onAdd }}>ตั้งก้อนเงินที่อยากเก็บให้ได้ เช่น เงินฉุกเฉิน หรือทริปที่วางไว้ · ใส่ยอดเป้าหมายแล้วแอพจะคิดความคืบหน้าให้</EmptyNote>}
+        {!goalRows.length && <EmptyNote glyph="●" action={{ label: "สร้างเป้าหมาย", onClick: onAdd }}>ตั้งก้อนเงินที่อยากเก็บให้ได้ เช่น เงินฉุกเฉิน หรือทริปที่วางไว้ · ใส่ยอดเป้าหมายแล้วแอพจะคิดความคืบหน้าให้</EmptyNote>}
       </div>
     </div>
   );
