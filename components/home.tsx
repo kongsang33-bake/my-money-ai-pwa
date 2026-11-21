@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CreditCard, Eye, EyeOff, Info, Lightbulb, Pencil, Plus, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet as WalletIcon, WalletCards, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CopyPlus, CreditCard, Eye, EyeOff, Info, Lightbulb, Pencil, Plus, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet as WalletIcon, WalletCards, X } from "lucide-react";
 import { BRAND_SLOGANS, DETAIL_SIMILAR_LIMIT, HISTORY_CALENDAR_EXPANDED_STORAGE_KEY, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
 import { recurringLogKey } from "@/lib/in-flight";
 import { morphSource, morphTarget, useEntryMorph } from "@/components/morph";
@@ -14,7 +14,7 @@ import { transactionTypeLabels } from "@/lib/taxonomy";
 import { categoryColor, nameColor } from "@/lib/category";
 import type { Entry, MoneyGoal, NetWorthDebtFormula, RecurringExpense, Wallet } from "@/lib/types";
 import { CategoryIcon, RecurringAvatarGlyph } from "@/components/shared";
-import { AmountInput, CountUpMoney, DateField, EmptyNote, IconChip, IconPattern, InfoHint, MonthField, Rail, SheetFrame, SkeletonList, SheetClose, useMediaQuery } from "@/components/primitives";
+import { AmountInput, CountUpMoney, DateField, EmptyNote, IconChip, IconPattern, InfoHint, MonthField, Rail, SheetFrame, SkeletonList, SheetClose, useLongPress, useMediaQuery } from "@/components/primitives";
 
 export const CalendarHeatmap = memo(function CalendarHeatmap({
   start,
@@ -738,23 +738,37 @@ export const TopCategoriesRail = memo(function TopCategoriesRail({
 export const RecentRail = memo(function RecentRail({
   entries,
   onOpen,
+  onLongPress,
   onSeeAll,
 }: {
   entries: Entry[];
   onOpen: (entry: Entry) => void;
+  /** Press and hold a tile (or right-click it) for its actions -- EntryActionSheet. */
+  onLongPress?: (entry: Entry) => void;
   onSeeAll: () => void;
 }) {
   // The whole list as the source, so a tile pushed off the end by a new one
   // is not "removed", and a save -- which lands here, since saving goes back
   // to Home -- is told apart from the first load (lib/exiting-list.ts).
   const recent = useExitingList(entries.slice(0, RECENT_RAIL_LIMIT), recentKey, { source: entries }).filter((row) => !row.exiting);
+  const press = useLongPress<Entry>((entry) => onLongPress?.(entry));
   if (!recent.length) return null;
   return (
     <Rail title="เพิ่งจด" action="ดูทั้งหมด" onAction={onSeeAll} size="small" className="recent-rail">
       {recent.map(({ item: entry, entering }) => {
         const impact = entryDisplayImpact(entry);
         return (
-          <button className={`recent-tile${entering ? " is-new" : ""}`} key={entry.id} style={{ "--hue": categoryColor(entry.category) } as React.CSSProperties} onClick={() => onOpen(entry)}>
+          <button
+            className={`recent-tile${entering ? " is-new" : ""}`}
+            key={entry.id}
+            style={{ "--hue": categoryColor(entry.category) } as React.CSSProperties}
+            onClick={() => { if (!press.consumeClick()) onOpen(entry); }}
+            onPointerDown={onLongPress ? (event) => press.start(event, entry) : undefined}
+            onPointerMove={onLongPress ? press.move : undefined}
+            onPointerUp={onLongPress ? press.end : undefined}
+            onPointerCancel={onLongPress ? press.end : undefined}
+            onContextMenu={onLongPress ? (event) => press.contextMenu(event, entry) : undefined}
+          >
             <span className="tile-art">
               <IconPattern renderGlyph={(size) => <CategoryIcon category={entry.category} size={size} />} />
               <IconChip morph={morphSource("icon", entry.id)}><CategoryIcon category={entry.category} size={18} /></IconChip>
@@ -1122,6 +1136,7 @@ export function EntryDetailSheet({
   onEdit,
   onDelete,
   onOpen,
+  onRepeat,
   closing,
 }: {
   entry: Entry;
@@ -1131,6 +1146,8 @@ export function EntryDetailSheet({
   onEdit: (entry: Entry) => void;
   onDelete: (entry: Entry) => void;
   onOpen: (entry: Entry) => void;
+  /** "จดซ้ำวันนี้", where the row can stand on its own (canLogAgain) -- what the press-and-hold menu offers, reachable by a tap too. */
+  onRepeat?: (entry: Entry) => void;
   closing?: boolean;
 }) {
   const impact = entryDisplayImpact(entry);
@@ -1172,6 +1189,11 @@ export function EntryDetailSheet({
           <button className="detail-delete" onClick={() => onDelete(entry)}>
             <Trash2 size={18} strokeWidth={2.25} aria-hidden="true" />ลบ
           </button>
+          {onRepeat && (
+            <button className="detail-repeat-button" onClick={() => onRepeat(entry)}>
+              <CopyPlus size={18} strokeWidth={2.25} aria-hidden="true" />จดซ้ำวันนี้
+            </button>
+          )}
         </div>
         {repeat.count > 1 && (
           <p className="detail-repeat">

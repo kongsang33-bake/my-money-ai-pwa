@@ -469,6 +469,31 @@ the product name -- leave them.
   crossing its line (sheet will close, pull will refresh, edge swipe will go
   back, a row's actions lock open) and a result: saved, wrong PIN. Nothing
   may depend on one having happened -- older iOS and desktops get none.
+- **Press and hold an entry for its actions** (`useLongPress` in
+  components/primitives.tsx; History's rows through `EntryList`'s
+  `onLongPress`, Home's เพิ่งจด tiles; `EntryActionSheet`): ดูรายละเอียด /
+  แก้ไข / จดซ้ำวันนี้ / ลบ, each handing the entry to the one path that
+  already does it. A right click or the menu key opens the same. Traps it
+  hit: the sheet opens under the finger, so a touch hold's release -- its
+  click *and* its compatibility mousedown, which closes a sheet from the scrim
+  -- is swallowed at the window until the finger lifts (`swallowReleaseClick`,
+  never a timer: a long hold outlived one); a row still captured to the finger
+  must drop its swipe when the hold fires, or a drift swipes it open behind
+  the sheet; and Android's own `contextmenu` (400ms, before our 450) goes
+  through the same haptic and guard, or is ignored if the hold drifted.
+  "จดซ้ำ" is `repeatDraftFromEntry` (lib/repeat-entry.ts): a draft dated
+  today, into the review, so the save is still confirmed and still goes
+  through `expandDraftForSave`; it keeps a split's `partner_share` and falls
+  back to the default wallet for a deleted one, and `canLogAgain` keeps it
+  off a pair's single leg, a transfer, and the form-only types. It is on
+  the detail sheet too, so it is never gesture-only.
+- **A screen's large title folds into the topbar** once it scrolls up under
+  the bar (an effect in page.tsx; `data-title-collapsed` on `.topbar`, the
+  copy drawn from `data-title` by CSS -- never page text, which showed every
+  heading twice to find-in-page and `getByText`). It waits for a code-split
+  screen's heading for as long as the loading fallback shows, leaves a
+  screen with no title (Home) alone, and rebuilds when the bar's height
+  changes.
 - **The app does not zoom.** Three layers, because no one switch reaches
   every browser: the viewport's `maximumScale: 1`/`userScalable: false`
   (app/layout.tsx; Android follows it), `noPinchZoomScript` cancelling iOS's

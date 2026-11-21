@@ -854,6 +854,43 @@ a:focus-visible {
   letter-spacing: -0.01em;
 }
 
+/* The wordmark and the screen's folded title share one cell and cross-fade
+   (the collapsing-title effect in page.tsx sets data-title-collapsed): the
+   wordmark lifts away as the title rises in, the way iOS's large title
+   settles into its bar. The mark itself stays. */
+.topbar-brand-swap {
+  display: grid;
+  min-width: 0;
+}
+
+.topbar-brand-swap > b {
+  grid-area: 1 / 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: opacity var(--t-3) var(--e-out), transform var(--t-3) var(--e-out);
+}
+
+.topbar-title {
+  opacity: 0;
+  transform: translateY(var(--s-2));
+}
+
+.topbar-title::before {
+  content: attr(data-title);
+}
+
+.topbar[data-title-collapsed] .brand-name {
+  opacity: 0;
+  transform: translateY(calc(-1 * var(--s-2)));
+}
+
+.topbar[data-title-collapsed] .topbar-title {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 /* The account button: your name, then your face, tappable as one -- the way
    Netflix puts the profile at the top right. Padding rather than a visible
    fill, so it reads as the identity it is rather than a control. */
@@ -2887,10 +2924,23 @@ button.poster:active {
   text-align: left;
   color: var(--ink);
   transition: transform var(--t-press) var(--e-out);
+  /* Held for its actions (useLongPress), so iOS's own long-press -- the
+     callout, a text selection starting under the finger -- stays out. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .tile:active, .recent-tile:active {
   transform: scale(0.98);
+}
+
+/* Being held for its actions: it sinks a little over the hold, so the hold
+   is visibly doing something -- over --t-hold, which useLongPress sets from
+   LONG_PRESS_MS itself, so the sink ends as the menu opens. */
+.recent-tile.is-pressing {
+  transform: scale(0.97);
+  transition: transform var(--t-hold) var(--e-out);
 }
 
 /* What was just saved, arriving on Home's "เพิ่งจด" rail -- which is where a
@@ -5550,10 +5600,22 @@ button.entry-main {
   transition: transform var(--t-2) var(--e-out);
   /* The browser keeps vertical scrolling; horizontal moves come to us. */
   touch-action: pan-y;
+  /* Held for its actions (useLongPress), so iOS's own long-press -- the
+     callout, a text selection starting under the finger -- stays out. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .swipe-row.is-dragging .swipe-content {
   transition: none;
+}
+
+/* Being held for its actions: the row sinks a little over the hold, the
+   same way a เพิ่งจด tile does (.recent-tile.is-pressing). */
+.swipe-content.is-pressing .entry-main {
+  transform: scale(0.97);
+  transition: transform var(--t-hold) var(--e-out);
 }
 
 .swipe-actions {
@@ -6327,7 +6389,8 @@ button.entry-main {
 
 /* Beside แก้ไข, not a second full-width bar under it: deleting is the rarer
    act, and it still asks to be confirmed. */
-.detail-delete {
+.detail-delete,
+.detail-repeat-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -6339,6 +6402,12 @@ button.entry-main {
   color: var(--danger);
   font-size: var(--fs-body);
   font-weight: var(--fw-semibold);
+}
+
+/* "จดซ้ำวันนี้": the quiet, full-width third action, under แก้ไข and ลบ. */
+.detail-repeat-button {
+  grid-column: 1 / -1;
+  color: var(--ink);
 }
 
 .detail-repeat {
@@ -7105,14 +7174,47 @@ input[type="checkbox"]:focus-visible {
 }
 
 /* Sign out: the last row of the account list, in --danger so it can't be
-   mistaken for one more screen to open (it has no chevron either). */
-.me-logout .me-row-icon {
+   mistaken for one more screen to open (it has no chevron either). The same
+   for any destructive row in a list of this shape (`.is-danger`: an entry's
+   ลบ in EntryActionSheet). */
+.me-logout .me-row-icon,
+.me-row.is-danger .me-row-icon {
   background: var(--danger-soft);
   color: var(--danger);
 }
 
-.me-logout .me-row-text {
+.me-logout .me-row-text,
+.me-row.is-danger .me-row-text {
   color: var(--danger);
+}
+
+/* EntryActionSheet's head: the entry being acted on, small -- the sheet is
+   about the choices, not a second detail page. */
+.entry-actions-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+
+.entry-actions-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: var(--s-0);
+}
+
+.entry-actions-text b {
+  overflow: hidden;
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entry-actions-text small {
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
 }
 
 .more-grid {
