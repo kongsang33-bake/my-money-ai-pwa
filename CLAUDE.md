@@ -454,6 +454,14 @@ the product name -- leave them.
   section, after every sheet's own rules); and the scrim fades through its
   background colour (`--sheet-scrim`), never the backdrop's opacity, which
   is the sheet's parent and turned the sheet see-through.
+- **The app does not zoom.** Three layers, because no one switch reaches
+  every browser: the viewport's `maximumScale: 1`/`userScalable: false`
+  (app/layout.tsx; Android follows it), `noPinchZoomScript` cancelling iOS's
+  own `gesture*` events (Safari has ignored the viewport tag since iOS 10),
+  and `touch-action: manipulation` on `html` for double-tap. Don't "finish
+  the job" with a non-passive `touchmove` listener on the document: every
+  scroll in the app would then wait on JavaScript. Fields stay at 16px or
+  more anyway (e2e/input-zoom.spec.ts).
 - **`.phone` is the real, edge-to-edge app root at every width — not a
   device mockup.** There is no rounded-card-with-drop-shadow "phone frame"
   centered on a differently-colored backdrop any more; that read as a

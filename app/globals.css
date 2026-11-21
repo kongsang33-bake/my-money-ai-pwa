@@ -285,6 +285,13 @@ html, body {
   overscroll-behavior-y: none;
 }
 
+/* No double-tap zoom anywhere (an element's touch-action is intersected
+   with every ancestor's, so this covers the page). Pinch is stopped by the
+   viewport tag and, on iOS, by app/layout.tsx's noPinchZoomScript. */
+html {
+  touch-action: manipulation;
+}
+
 body {
   background: var(--bg);
   color: var(--ink);

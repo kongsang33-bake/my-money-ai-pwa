@@ -63,3 +63,30 @@ test.describe("no zoom on focus", () => {
     expect(await undersizedFields(page)).toEqual([]);
   });
 });
+
+// The app does not pinch-zoom at all: an app, not a document. Each of the
+// three layers is checked where it can be, since no Chromium here performs a
+// real pinch: the viewport tag (what Android's browsers follow), iOS's own
+// gesture events being cancelled (Safari ignores the tag since iOS 10, so
+// this is what stops it there), and double-tap zoom switched off for the
+// whole page through touch-action.
+test.describe("no pinch zoom", () => {
+  test("the viewport forbids zooming", async ({ app }) => {
+    const content = await app.locator('meta[name="viewport"]').getAttribute("content");
+    expect(content).toMatch(/maximum-scale=1\b/);
+    expect(content).toMatch(/user-scalable=no/);
+  });
+
+  test("an iOS pinch gesture is cancelled", async ({ app }) => {
+    const cancelled = await app.evaluate(() => ["gesturestart", "gesturechange"].map((type) => {
+      const event = new Event(type, { cancelable: true, bubbles: true });
+      document.body.dispatchEvent(event);
+      return event.defaultPrevented;
+    }));
+    expect(cancelled).toEqual([true, true]);
+  });
+
+  test("double-tap zoom is off for the whole page", async ({ app }) => {
+    expect(await app.evaluate(() => getComputedStyle(document.documentElement).touchAction)).toBe("manipulation");
+  });
+});
