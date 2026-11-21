@@ -366,3 +366,12 @@ export const SHEET_DRAG_CLOSE_FRACTION = 0.3;
 export const SHEET_DRAG_FLICK_VELOCITY = 0.5;
 export const SHEET_DRAG_FLICK_MIN_PX = 40;
 export const SHEET_DRAG_FLICK_STALE_MS = 100;
+
+// Swipe from the left edge to go back (EdgeSwipeBack, components/primitives.tsx;
+// decisions in lib/edge-swipe.ts). A touch has to start within this many px
+// of the screen's left edge, travel the slop to be decided, and on release
+// have gone this share of the screen's width -- or been flicked as fast as a
+// sheet's flick, over at least the flick distance.
+export const EDGE_SWIPE_ZONE = 20;
+export const EDGE_SWIPE_SLOP = 10;
+export const EDGE_SWIPE_BACK_FRACTION = 0.35;

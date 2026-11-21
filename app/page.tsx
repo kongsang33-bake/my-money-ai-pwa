@@ -107,7 +107,7 @@ import { WalletAvatarGlyph } from "@/components/shared";
 import { BottomNav } from "@/components/bottom-nav";
 import { UpcomingView } from "@/components/upcoming";
 import { SideNav, type SideNavKey } from "@/components/side-nav";
-import { ConfirmDialog, CountUpMoney, ElapsedSeconds, EmptyNote, ErrorActions, PullToRefresh, Rail, SheetClose, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useMediaQuery, useStableHandler } from "@/components/primitives";
+import { ConfirmDialog, CountUpMoney, EdgeSwipeBack, ElapsedSeconds, EmptyNote, ErrorActions, PullToRefresh, Rail, SheetClose, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useMediaQuery, useStableHandler } from "@/components/primitives";
 import { AiComposer, DraftImpact, DraftRow, EditSheet, EntryList, ManualEntryForm, QuickAddStrip } from "@/components/add";
 import {
   CalendarHeatmap,
@@ -133,6 +133,7 @@ import { HistoryBackToTop, HistoryFilterBar } from "@/components/history";
 import { LoadFailedScreen, PinGate, PrivacyGate, SecurityView } from "@/components/auth";
 import { loadSucceeded, startupScreen } from "@/lib/startup";
 import { viewMotion, type ViewMotion } from "@/lib/view-motion";
+import { haptic } from "@/components/haptics";
 import { clearLocalPrivacyAck, fetchPrivacyAck, readLocalPrivacyAck, recordPrivacyAck } from "@/lib/privacy";
 import { Landing } from "@/components/landing";
 import type { WalletInput, RecurringExpenseInput } from "@/components/wallets-recurring";
@@ -1826,6 +1827,7 @@ export default function Home() {
       setComposerResetKey((key) => key + 1);
       setTab("home");
       setSavePulse(normalizedItems.length);
+      haptic("success");
       notify({
         tone: "success",
         title: "บันทึกรายการแล้ว",
@@ -3142,10 +3144,30 @@ export default function Home() {
     tab === "profile" || tab === "security" || tab === "more" ? "more"
       : tab === "add" ? null
         : tab;
-  const selectSideNav = useCallback((key: SideNavKey) => {
-    if (key === "debtors") setSelectedDebtor(null);
+  // A tab tapped while it is already showing goes back to its top, the way
+  // every iOS tab bar does -- smoothly, since nothing else is moving (unlike
+  // a tab change, whose own arrival is the transition). Any other tap just
+  // changes tab.
+  const selectTab = useCallback((key: Tab) => {
+    if (key === tab) {
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      scrollRootRef.current?.scrollTo({ top: 0, behavior: reduce ? "instant" : "smooth" });
+      return;
+    }
     setTab(key);
-  }, []);
+  }, [tab]);
+
+  const selectSideNav = useCallback((key: SideNavKey) => {
+    // Inside one debtor's history, the debts row goes back to the list first
+    // (iOS pops to a tab's root before it scrolls); from anywhere else it
+    // opens the list, never a debtor left selected last time.
+    if (key === "debtors" && (tab !== "debtors" || selectedDebtor)) {
+      setSelectedDebtor(null);
+      setTab("debtors");
+      return;
+    }
+    selectTab(key);
+  }, [tab, selectedDebtor, selectTab]);
 
   // "N" opens จดรายการ from anywhere on a desktop, the shortcut the side
   // nav's button advertises. Not while typing, not over a sheet, not on
@@ -3425,6 +3447,8 @@ export default function Home() {
       {/* Off on Ask AI, whose chat has its own scroller -- a pull there
           belongs to the conversation, not to the page. */}
       <PullToRefresh root={scrollRootEl} onRefresh={refreshUserData} enabled={!overlayOpen && !dataLoading && tab !== "ask"} />
+      {/* Only where there is a back chevron to press -- a screen drilled into. */}
+      <EdgeSwipeBack root={scrollRootEl} enabled={!overlayOpen && tabDepth(tab) === 1} />
       <section className={`phone tab-${tab}`} data-motion={motion} ref={attachScrollRoot}>
         {/* The topbar is a floating pill, so the page scrolls through the gap
             above and beside it -- a hero balance sliding past the header used
@@ -4132,9 +4156,9 @@ export default function Home() {
         <BottomNav
           active={tab === "more" || MORE_SECTION_TABS.includes(tab) ? "more" : tab === "home" || tab === "history" || tab === "upcoming" ? tab : null}
           inert={overlayOpen}
-          onSelect={setTab}
+          onSelect={selectTab}
           onAdd={() => openAddTab()}
-          onMore={() => setTab("more")}
+          onMore={() => selectTab("more")}
           upcomingCount={dueSoonRecurring.length + unpaidCards.length}
         />
       </section>

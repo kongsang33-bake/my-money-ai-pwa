@@ -1,5 +1,6 @@
 "use client";
 
+import { haptic } from "@/components/haptics";
 import { memo, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowLeftRight, ArrowUp, ChevronDown, ImagePlus, Lightbulb, Minus, Pencil, Plus, Trash2, X } from "lucide-react";
 import { reviewDraft } from "@/lib/draft-review";
@@ -802,7 +803,11 @@ function SwipeEntry({
     rowRef.current?.classList.remove("is-dragging");
     setOffset(null);
     swallowClick.current = true;
-    onOpenChange(state.offset < -width / 2);
+    const opens = state.offset < -width / 2;
+    // A tap of the engine as แก้ไข and ลบ lock into view, not as the row
+    // snaps shut again.
+    if (opens && !open) haptic("light");
+    onOpenChange(opens);
   };
 
   return (
