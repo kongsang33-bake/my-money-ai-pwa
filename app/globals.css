@@ -525,9 +525,11 @@ a:focus-visible {
    render the tab changes in). Between tabs it only fades, quickly -- the
    nav's tabs are places side by side, not a sequence to slide along. Into a
    screen with a back button it comes in from the right, and going back from
-   the left, the way the chevron says. Its cards do not also rise on a slide:
-   two motions at once read as one wobble. `.view`'s own view-in stays the
-   first screen's arrival ("rise"). */
+   the left, the way the chevron says. `.view`'s own view-in stays the
+   first screen's arrival ("rise"). The cards keep their own card-in: a rule
+   that switched it off "while sliding" could only key on data-motion, which
+   lasts the life of the screen, and so also took the entrance from anything
+   opened on it later (a wallet's statement). */
 @keyframes view-fade {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -553,11 +555,6 @@ a:focus-visible {
 
 .phone[data-motion="back"] > .view:not(.is-parked) {
   animation: view-back var(--t-3) var(--e-out) backwards;
-}
-
-.phone[data-motion="forward"] > .view > :not(.success-pulse),
-.phone[data-motion="back"] > .view > :not(.success-pulse) {
-  animation: none;
 }
 
 /* A tab kept mounted while another one is showing (Home, and History and
@@ -8217,6 +8214,32 @@ input[type="checkbox"], input[type="radio"] {
   margin-bottom: 0;
 }
 
+/* On a desk the install section is two columns -- what it is on the left,
+   the steps on the right -- instead of a 640px column pinned left with the
+   other half of the page empty beside it, between sections that fill it. */
+@media (min-width: 900px) {
+  .landing-install-block {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    /* The steps span both rows; the slack goes under the lead, not between
+       the heading and it. */
+    grid-template-rows: auto 1fr;
+    column-gap: var(--s-8);
+    align-items: start;
+  }
+
+  .landing-install-block > h2,
+  .landing-install-block > .landing-block-lead {
+    grid-column: 1;
+  }
+
+  .landing-install-block > .landing-install {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    max-width: none;
+  }
+}
+
 .landing-steps {
   display: grid;
   gap: var(--s-3);
@@ -9363,6 +9386,15 @@ body:has(.login-page) #app-splash {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
+  /* "ของฉัน" is a list of rows and a menu, not a dashboard: across the whole
+     desk column each row ran 1300px from its name to its chevron. Centred at
+     a width the four tiles still fit in. */
+  .more-view > * {
+    max-width: 880px;
+    margin-inline: auto;
+    width: 100%;
+  }
+
   .rail.is-wide .rail-track > * { width: 340px; }
   .rail.is-compact .rail-track > * { width: 260px; }
   .rail.is-poster .rail-track > * { width: 156px; }
@@ -9537,9 +9569,21 @@ body:has(.login-page) #app-splash {
   /* จดรายการ on a desk is a panel over the page's ground -- framed, with
      its own close button (and Esc) back to where it was opened -- rather
      than a bare screen, which at this width read as a page gone missing. */
+  /* Centred in the window while it is shorter than it -- a panel opened
+     over the app, not a strip stuck to the top of an empty screen. A flex
+     column's auto margins fall to zero once the panel is taller (the manual
+     form), so it then starts at the top and the window scrolls as before;
+     the padding keeps the old gap at either end. */
+  .phone.tab-add {
+    display: flex;
+    flex-direction: column;
+    padding-block: var(--s-7);
+  }
+
   .phone > .add-view {
     width: min(760px, 100%);
-    margin: var(--s-7) auto;
+    margin: auto;
+    flex-shrink: 0;
     padding: var(--s-6) var(--s-7) var(--s-7);
     border: 1px solid var(--line);
     border-radius: var(--r-lg);

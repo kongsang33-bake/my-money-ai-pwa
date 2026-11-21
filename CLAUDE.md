@@ -225,7 +225,11 @@ Ask AI, bills due, categories, wallets, recent) and a narrower `home-side`
 (health, goals/budgets, the month's overview) -- the same section elements
 as the phone, placed by page.tsx, with rails wrapping into grids on the left
 and stacking on the right instead of scrolling sideways. จดรายการ is a framed
-panel with its own close button and Esc back to `addBack`; an entry's detail
+panel with its own close button and Esc back to `addBack`, centred in the
+window while it is shorter than it (`.phone.tab-add` is a flex column, so a
+taller panel falls back to the top and scrolls); the list-shaped screens
+(ของฉัน, งบประมาณ, กำลังจะมา) keep a centred reading width rather than the
+whole desk column; the landing's install section is two columns there; an entry's detail
 opens as a drawer down the right edge; the composer sends on Ctrl/⌘+Enter.
 The e2e fixture's `navigate` and `openMe` go through the side nav when it is
 showing (`hasSideNav`).
@@ -519,7 +523,9 @@ token value.
   `data-motion` on `.phone`, set in the render the tab changes in): tabs
   fade into each other, a screen with a back button slides in from the
   right and going back slides in from the left, and only the first screen
-  after launch rises. On a slide the view's own cards do not also rise.
+  after launch rises. Don't switch the cards' card-in off "during" a slide:
+  data-motion lasts the life of the screen, so that also takes the entrance
+  from anything opened on it later -- it did, to a wallet's statement.
   Smaller moments: a calendar tap's day glows once where the list lands
   (`.entry-group.is-arrived`, on a pseudo-element so the group's card-in is
   not replayed), a new set of filtered results arrives with its card-in
