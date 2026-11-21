@@ -133,7 +133,11 @@ down the left, of what `buildUpcoming` finds in the next
 30th a bill due on the 1st is "พรุ่งนี้" rather than hidden behind a month
 edge the user does not think in — under a "ตอนนี้" group for undated things
 already wanting attention (unpaid cards, budgets at `BUDGET_NEAR_PERCENT`).
-Wallets moved off the nav to make room: it is the first tile under "อื่น ๆ"
+A date (or "ตอนนี้") is printed once per run of rows, not beside each card.
+Bills coming due are counted on this tab (`upcomingCount`, the bottom nav's
+corner badge and the side nav's count) -- there is no launch toast for them
+any more: it covered Home for seconds while the same bill sat on Home's own
+rail, so don't bring it back. Wallets moved off the nav to make room: it is the first tile under "อื่น ๆ"
 (`MORE_SECTION_TABS`, so it has a back button and the nav shows "อื่น ๆ"),
 still parked like Home and History, still one tap from Home's billboard and
 wallet rail. The e2e fixture's `navigate(page, "wallets")` goes through that
@@ -193,6 +197,14 @@ so check it when the data handling changes. `/login` and `/privacy` are the
 only routes besides `/`: the service worker leaves other navigations to the
 network, and CSS hides the boot splash on both. The e2e suite reaches it through the seed's `pinMode`
 (`openPinGate` in e2e/fixture.ts) and the a11y audit measures both modes.
+The money tools under "ของฉัน" each show what they are about, not just a
+form: budgets (`BudgetsView`) put this cycle's spending and a `StatMeter`
+under every field (the same figure Home's budget tiles read), recurring bills
+(`RecurringExpensesView`) are one list in the order the money goes out -- its
+date, an `IconChip`, cycle and what pays it, the ⋮ menu on the row -- rather
+than a "next four" timeline above the same bills listed again, and goals
+(`GoalItem`) are Home's goal tile at page size. The debt books switch with
+underlined tabs (`.add-mode-tabs`), not a segmented control.
 Wallets (`WalletsView`) is a bare total -- the billboard's kicker, a display
 figure, the spendable/set-aside split as one bar -- over `.wallet-tiles`:
 each wallet a tile in its own `--hue` with its share of the total as a meter
@@ -213,7 +225,11 @@ Ask AI, bills due, categories, wallets, recent) and a narrower `home-side`
 (health, goals/budgets, the month's overview) -- the same section elements
 as the phone, placed by page.tsx, with rails wrapping into grids on the left
 and stacking on the right instead of scrolling sideways. จดรายการ is a framed
-panel with its own close button and Esc back to `addBack`; an entry's detail
+panel with its own close button and Esc back to `addBack`, centred in the
+window while it is shorter than it (`.phone.tab-add` is a flex column, so a
+taller panel falls back to the top and scrolls); the list-shaped screens
+(ของฉัน, งบประมาณ, กำลังจะมา) keep a centred reading width rather than the
+whole desk column; the landing's install section is two columns there; an entry's detail
 opens as a drawer down the right edge; the composer sends on Ctrl/⌘+Enter.
 The e2e fixture's `navigate` and `openMe` go through the side nav when it is
 showing (`hasSideNav`).
@@ -224,7 +240,10 @@ the filter panel sets); then the calendar, which carries the month switcher;
 then the whole month as one statement, newest day first, each day's money
 in/out beside its date. A tap on a calendar day scrolls the list to that
 day (`selectHistoryDay`, which finds the group by `data-day`) rather than
-hiding every other day. It used to open on a "ภาพรวมเดือนนี้" card of month
+hiding every other day. The search and the calendar sit in `.history-side`,
+which is `display: contents` on a phone (so the search still sticks under
+the topbar) and, on a desk, the left column held still while the list
+scrolls with the page -- the list never gets a scroller of its own there. It used to open on a "ภาพรวมเดือนนี้" card of month
 totals; those are Home's job, and that card is gone along with `MonthSummary`,
 `Metric` and the one-day `HistoryInsight`. The six-month trend and the income
 sources moved into "สรุปเดือนนี้" (`RecapSheet`), which is a dark sheet like
@@ -418,6 +437,17 @@ the product name -- leave them.
   with no way to scroll to them. A keyboard spec has to shrink `--vvh` alone,
   not the window: shrinking the window also shrinks every fixed box, which
   is the one thing iOS does not do.
+- **A sheet swipes down to close, below 900px** (`useSheetDrag` inside
+  `SheetFrame`; the decisions and their tests in lib/sheet-drag.ts, the
+  thresholds `SHEET_DRAG_*` in lib/constants.ts), so every sheet gets it
+  and none needs its own. Only a touch that starts with nothing under it
+  scrolled and moves mostly down is a drag; the position goes straight to
+  the DOM, like `PullToRefresh`. Two traps it already hit: the sheets'
+  entrance animations are `both`-filled and beat an inline transform, so a
+  dragged sheet swaps them for transitions (`.sheet-drag`, in the Motion
+  section, after every sheet's own rules); and the scrim fades through its
+  background colour (`--sheet-scrim`), never the backdrop's opacity, which
+  is the sheet's parent and turned the sheet see-through.
 - **`.phone` is the real, edge-to-edge app root at every width — not a
   device mockup.** There is no rounded-card-with-drop-shadow "phone frame"
   centered on a differently-colored backdrop any more; that read as a
@@ -481,6 +511,28 @@ token value.
   one can be filtered, and anything that swaps the list wholesale (the month,
   the debt book) as `scope`, or a filter would fold rows away. More than three
   rows gone at once is a new list, not a delete, and simply changes.
+- **A new row opens up in place, the mirror of a delete.** The same
+  snapshot keeps `known` (every key the list's source has had) and marks
+  keys added since as `entering` (at most `MAX_EXITING_ROWS`, and never the
+  first load); `rowMotionRef(row)` picks `collapseOnExit`, `growOnEnter` or
+  `restoreRow`. A list hidden while the save happens (History, parked behind
+  จดรายการ) has nothing to measure, so the save's visible arrival is Home's
+  "เพิ่งจด" rail, where the new tile pops in (`.recent-tile.is-new`) --
+  saving always goes back to Home.
+- **How a screen arrives says where it is** (`viewMotion`, lib/view-motion.ts;
+  `data-motion` on `.phone`, set in the render the tab changes in): tabs
+  fade into each other, a screen with a back button slides in from the
+  right and going back slides in from the left, and only the first screen
+  after launch rises. Don't switch the cards' card-in off "during" a slide:
+  data-motion lasts the life of the screen, so that also takes the entrance
+  from anything opened on it later -- it did, to a wallet's statement.
+  Smaller moments: a calendar tap's day glows once where the list lands
+  (`.entry-group.is-arrived`, on a pseudo-element so the group's card-in is
+  not replayed), a new set of filtered results arrives with its card-in
+  (the list is keyed on the chips' filters, never the typed query), and the
+  billboard's figure comes up out of a blur when the eye shows it
+  (`.hero-reveal`). All of it is the motion tokens, and reduced motion
+  turns it off with everything else.
 - **A save started by one tap guards itself against the second**: a ref'd set
   of in-flight keys (`inFlightRef` in page.tsx) is the real guard, and a state
   copy only draws the button -- `disabled` alone lands a render too late.

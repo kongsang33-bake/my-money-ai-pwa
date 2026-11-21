@@ -246,7 +246,7 @@ export function Landing() {
             <a className="landing-policy-link" href="/privacy">อ่านนโยบายความเป็นส่วนตัวฉบับเต็ม</a>
           </section>
 
-          <section id="landing-install" className="landing-block" aria-labelledby="landing-install-title">
+          <section id="landing-install" className="landing-block landing-install-block" aria-labelledby="landing-install-title">
             <h2 id="landing-install-title">ติดตั้งบนมือถือ</h2>
             <p className="landing-block-lead">ไม่ต้องโหลดจาก App Store หรือ Play Store เพิ่มจากเบราว์เซอร์ได้เลย เปิดแล้วเต็มจอเหมือนแอพทั่วไป</p>
             <div className="landing-install">

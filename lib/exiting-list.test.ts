@@ -80,3 +80,35 @@ describe("keySig", () => {
     assert.notEqual(keySig(rows("a", "b"), key), keySig(rows("b", "a"), key));
   });
 });
+
+describe("entering rows", () => {
+  it("marks a row that was nowhere in the list before", () => {
+    const next = nextExitSnap(initialExitSnap(rows("a", "b"), key), rows("c", "a", "b"), key, 0)!;
+    assert.deepEqual(next.entering, ["c"]);
+    assert.deepEqual(mergeExitRows(next.items, key, next.exiting, next.entering).map((row) => row.entering), [true, false, false]);
+  });
+
+  it("does not mark a row that only comes back from behind a filter", () => {
+    const all = new Set(["a", "b", "c"]);
+    const filtered = initialExitSnap(rows("a"), key, undefined, all);
+    assert.deepEqual(nextExitSnap(filtered, rows("a", "c"), key, 0, all)!.entering, []);
+  });
+
+  it("does not open the first rows of a list that was still loading", () => {
+    assert.deepEqual(nextExitSnap(initialExitSnap(rows(), key), rows("a"), key, 0)!.entering, []);
+  });
+
+  it("treats many new rows at once as a new list, not a save", () => {
+    assert.deepEqual(nextExitSnap(initialExitSnap(rows("a"), key), rows("a", "b", "c", "d", "e"), key, 0)!.entering, []);
+  });
+
+  it("starts a new scope with nothing entering", () => {
+    const next = nextExitSnap(initialExitSnap(rows("a"), key, "2026-10"), rows("x"), key, 0, undefined, "2026-11")!;
+    assert.deepEqual(next.entering, []);
+  });
+
+  it("stops marking a row once the list changes again", () => {
+    const added = nextExitSnap(initialExitSnap(rows("a"), key), rows("b", "a"), key, 0)!;
+    assert.deepEqual(nextExitSnap(added, rows("b"), key, 0)!.entering, []);
+  });
+});

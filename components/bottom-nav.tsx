@@ -22,8 +22,11 @@ export function BottomNav({
   onSelect,
   onAdd,
   onMore,
+  upcomingCount = 0,
 }: {
   active: BottomNavKey | null;
+  /** Things in "กำลังจะมา" wanting attention -- the side nav's count, as a small badge on the icon; 0 hides it. */
+  upcomingCount?: number;
   inert: boolean;
   onSelect: (key: "home" | "history" | "upcoming") => void;
   onAdd: () => void;
@@ -76,10 +79,11 @@ export function BottomNav({
           </svg>
         </span>
       </button>
-      <button className={active === "upcoming" ? "active" : ""} onClick={() => onSelect("upcoming")} aria-label="กำลังจะมา">
+      <button className={active === "upcoming" ? "active" : ""} onClick={() => onSelect("upcoming")} aria-label={upcomingCount > 0 ? `กำลังจะมา (${upcomingCount} รายการ)` : "กำลังจะมา"}>
         <span className="nav-item">
           <span className="nav-icon" aria-hidden="true">
             <CalendarClock aria-hidden="true" />
+            {upcomingCount > 0 && <span className="nav-count">{upcomingCount > 9 ? "9+" : upcomingCount}</span>}
           </span>
           <span className="nav-label">กำลังจะมา</span>
         </span>

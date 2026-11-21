@@ -3,7 +3,7 @@
 import { memo, useMemo, useState } from "react";
 import { CalendarClock, Check, CreditCard, Target } from "lucide-react";
 import { recurringLogKey } from "@/lib/in-flight";
-import { formatMoney, formatPercent, moneySign } from "@/lib/format";
+import { formatMoney, formatPercent, localDateInput, moneySign } from "@/lib/format";
 import { describeDaysUntil, type UnpaidOwnDebt, type UpcomingItem } from "@/lib/insights";
 import { describeBillingCycle } from "@/lib/taxonomy";
 import { categoryColor, nameColor } from "@/lib/category";
@@ -114,9 +114,10 @@ export const UpcomingView = memo(function UpcomingView({
 
       {nowCount > 0 && (
         <section className="upcoming-group" aria-label="ต้องจัดการตอนนี้">
-          {unpaid.map((debt) => (
+          {unpaid.map((debt, index) => (
             <UpcomingRow
               key={`debt:${debt.name}`}
+              continued={index > 0}
               hue={nameColor(debt.name)}
               renderGlyph={(size) => <CreditCard size={size} strokeWidth={2.25} />}
               name={debt.name}
@@ -127,11 +128,12 @@ export const UpcomingView = memo(function UpcomingView({
               actions={<button className="upcoming-action" onClick={onOpenDebts}>ดูหนี้</button>}
             />
           ))}
-          {budgets.map((budget) => {
+          {budgets.map((budget, index) => {
             const over = budget.spent > budget.budget;
             return (
               <UpcomingRow
                 key={`budget:${budget.category}`}
+                continued={unpaid.length + index > 0}
                 hue={categoryColor(budget.category)}
                 renderGlyph={(size) => <CategoryIcon category={budget.category} size={size} />}
                 name={`งบ${budget.category}`}
@@ -150,13 +152,17 @@ export const UpcomingView = memo(function UpcomingView({
 
       {dated.length > 0 && (
         <section className="upcoming-group" aria-label="ตามวันที่">
-          {dated.map((item) => {
+          {dated.map((item, index) => {
+            // A day with several things on it prints its date once, the way
+            // a statement does, rather than beside every card.
+            const continued = index > 0 && localDateInput(dated[index - 1].date) === localDateInput(item.date);
             if (item.kind === "bill") {
               const wallet = wallets.find((entry) => entry.id === item.bill.wallet_id);
               const source = item.bill.funding_card_name ? `ตัดบัตร ${item.bill.funding_card_name}` : wallet ? `ตัดจาก ${wallet.name}` : null;
               return (
                 <UpcomingRow
                   key={item.key}
+                  continued={continued}
                   date={item.date}
                   hue={item.bill.icon_color ?? nameColor(item.bill.name)}
                   renderGlyph={(size) => <RecurringAvatarGlyph iconKey={item.bill.icon} fallbackName={item.bill.name} size={size} />}
@@ -187,6 +193,7 @@ export const UpcomingView = memo(function UpcomingView({
               return (
                 <UpcomingRow
                   key={item.key}
+                  continued={continued}
                   date={item.date}
                   hue="var(--accent)"
                   renderGlyph={(size) => <Target size={size} strokeWidth={2.25} />}
@@ -202,6 +209,7 @@ export const UpcomingView = memo(function UpcomingView({
             return (
               <UpcomingRow
                 key={item.key}
+                continued={continued}
                 date={item.date}
                 hue="var(--cat-other)"
                 renderGlyph={(size) => <CalendarClock size={size} strokeWidth={2.25} />}
@@ -229,6 +237,7 @@ export const UpcomingView = memo(function UpcomingView({
  * none), then a card in the item's colour carrying the words.
  */
 function UpcomingRow({
+  continued = false,
   date,
   hue,
   renderGlyph,
@@ -239,6 +248,8 @@ function UpcomingRow({
   detail,
   actions,
 }: {
+  /** The row before it already printed this date (or "ตอนนี้"), so this one leaves the column blank. */
+  continued?: boolean;
   date?: Date;
   hue: string;
   renderGlyph: (size: number) => React.ReactNode;
@@ -252,8 +263,8 @@ function UpcomingRow({
 }) {
   return (
     <article className="upcoming-row" style={{ "--hue": hue } as React.CSSProperties}>
-      <div className="upcoming-date">
-        {date ? (
+      <div className="upcoming-date" aria-hidden={continued || undefined}>
+        {continued ? null : date ? (
           <>
             <small>{date.toLocaleDateString("th-TH", { month: "short" })}</small>
             <b>{date.getDate()}</b>

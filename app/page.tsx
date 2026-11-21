@@ -132,6 +132,7 @@ import { movePocketCard as planPocketMove, pocketCardRow, toPocketCard, type Poc
 import { HistoryBackToTop, HistoryFilterBar } from "@/components/history";
 import { LoadFailedScreen, PinGate, PrivacyGate, SecurityView } from "@/components/auth";
 import { loadSucceeded, startupScreen } from "@/lib/startup";
+import { viewMotion, type ViewMotion } from "@/lib/view-motion";
 import { clearLocalPrivacyAck, fetchPrivacyAck, readLocalPrivacyAck, recordPrivacyAck } from "@/lib/privacy";
 import { Landing } from "@/components/landing";
 import type { WalletInput, RecurringExpenseInput } from "@/components/wallets-recurring";
@@ -198,6 +199,11 @@ type PocketSheet =
 // selected, because that is the section the user is in and the tab that
 // gets them back to the list.
 const MORE_SECTION_TABS: readonly Tab[] = ["wallets", "debtors", "recurring", "goals", "portfolio", "budgets", "ask", "report"];
+
+/** 1 for a screen with a back button (a money tool, the account), 0 for a tab -- what viewMotion compares. */
+function tabDepth(tab: Tab): number {
+  return MORE_SECTION_TABS.includes(tab) || tab === "profile" || tab === "security" ? 1 : 0;
+}
 
 const secondaryWalletTags: { tag: WalletTag; label: string; className: string }[] = [
   { tag: "savings", label: walletTagLabels.savings, className: "savings-wallet" },
@@ -347,8 +353,12 @@ export default function Home() {
   // Where จดรายการ was opened from, for the desk's close button and Esc: on
   // a desk it reads as a panel over the app rather than a tab of its own.
   const [addBack, setAddBack] = useState<Tab>("home");
+  // How the screen now arriving comes in (lib/view-motion.ts), decided in
+  // the same render the tab changes in, so its first frame already has it.
+  const [motion, setMotion] = useState<ViewMotion>("rise");
   if (tab !== lastTab) {
     setLastTab(tab);
+    setMotion(viewMotion(tabDepth(lastTab), tabDepth(tab)));
     if (tab === "add") setAddBack(lastTab);
     if (MORE_SECTION_TABS.includes(tab)) setMoreSectionBack(lastTab === "more" ? "more" : "home");
     if ((tab === "profile" || tab === "security") && lastTab !== "profile" && lastTab !== "security") {
@@ -1261,19 +1271,10 @@ export default function Home() {
     return buildUpcoming({ recurring: recurringExpenses, entries, goals, cycleEnd, now, windowDays: UPCOMING_WINDOW_DAYS });
   }, [tab, recurringExpenses, entries, goals, monthStartDay]);
 
-  useEffect(() => {
-    if (!user || !dueSoonRecurring.length) return;
-    const key = `money-ai-recurring-reminded:${user.id}:${todayDateInput()}`;
-    if (window.localStorage.getItem(key)) return;
-    const timer = window.setTimeout(() => {
-      const detail = dueSoonRecurring
-        .map(({ item, billingDate }) => `${item.name} ${moneySign}${formatMoney(item.amount)} (${billingDate.getDate()}/${billingDate.getMonth() + 1})`)
-        .join(", ");
-      notify({ tone: "info", title: "ใกล้ถึงกำหนดตัดเงิน", detail });
-      window.localStorage.setItem(key, "1");
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [dueSoonRecurring, user, notify]);
+  // Bills coming due are not announced with a toast on launch any more: it
+  // sat over Home's content for seconds while the same bill was already on
+  // Home's own "ใกล้ถึงกำหนด" rail, in "ของฉัน"'s heads-up row and counted on
+  // the "กำลังจะมา" tab (BottomNav / SideNav upcomingCount).
 
   const cycleRange = useMemo(() => cycleBounds(selectedMonth, monthStartDay), [selectedMonth, monthStartDay]);
   const defaultHistoryDay = useMemo(() => defaultDayForCycle(selectedMonth, monthStartDay), [selectedMonth, monthStartDay]);
@@ -1292,7 +1293,15 @@ export default function Home() {
       const target = new Date(day).getTime();
       const group = groups.find((node) => node.dataset.day === day)
         ?? groups.find((node) => new Date(node.dataset.day!).getTime() <= target);
-      group?.scrollIntoView({ block: "start", behavior: "smooth" });
+      if (!group) return;
+      group.scrollIntoView({ block: "start", behavior: "smooth" });
+      // Say where it landed: the day glows once (.entry-group.is-arrived).
+      // Off and on again with a reflow between, so a second tap on the same
+      // day plays it again.
+      group.classList.remove("is-arrived");
+      void group.offsetWidth;
+      group.classList.add("is-arrived");
+      group.addEventListener("animationend", () => group.classList.remove("is-arrived"), { once: true });
     });
   }, []);
   const monthlyEntries = useMemo(
@@ -1360,6 +1369,10 @@ export default function Home() {
   const categoryMemory = useMemo(() => buildCategoryMemory(entries), [entries]);
 
   const monthlyCategorySpend = useMemo(() => spendByCategory(monthlyEntries), [monthlyEntries]);
+  const budgetSpent = useMemo(
+    () => Object.fromEntries(monthlyCategorySpend.map((item) => [item.category, item.amount])),
+    [monthlyCategorySpend],
+  );
   const categorySummary = useMemo(() => {
     const unspentBudgeted = Object.keys(budgets)
       .filter((category) => !monthlyCategorySpend.some((item) => item.category === category))
@@ -3412,7 +3425,7 @@ export default function Home() {
       {/* Off on Ask AI, whose chat has its own scroller -- a pull there
           belongs to the conversation, not to the page. */}
       <PullToRefresh root={scrollRootEl} onRefresh={refreshUserData} enabled={!overlayOpen && !dataLoading && tab !== "ask"} />
-      <section className={`phone tab-${tab}`} ref={attachScrollRoot}>
+      <section className={`phone tab-${tab}`} data-motion={motion} ref={attachScrollRoot}>
         {/* The topbar is a floating pill, so the page scrolls through the gap
             above and beside it -- a hero balance sliding past the header used
             to be readable over the top of it. This is the ground that gap
@@ -3687,31 +3700,39 @@ export default function Home() {
               </EmptyNote>
             ) : (
               <>
-                <HistoryFilterBar
-                  filters={historyFilters}
-                  onChange={setHistoryFilters}
-                  onClear={() => setHistoryFilters({ query: "", category: "", type: "all", minAmount: "", maxAmount: "" })}
-                />
-                {searchActive ? (
-                  <>
+                {/* The search and the calendar are one column on a desk, held
+                    in place while the list beside it scrolls with the page --
+                    rather than the list scrolling in a box of its own inside a
+                    page that also scrolls. On a phone this wrapper draws no box
+                    (display: contents), so the search still sticks under the
+                    topbar and the order is unchanged. */}
+                <div className="history-side">
+                  <HistoryFilterBar
+                    filters={historyFilters}
+                    onChange={setHistoryFilters}
+                    onClear={() => setHistoryFilters({ query: "", category: "", type: "all", minAmount: "", maxAmount: "" })}
+                  />
+                  {searchActive ? (
                     <p className="history-search-summary">
                       {searchResults.length >= SEARCH_RESULT_LIMIT
                         ? `แสดง ${SEARCH_RESULT_LIMIT} รายการแรกจากทุกเดือน · ลองใส่ตัวกรองเพิ่มเพื่อจำกัดผลลัพธ์`
                         : `พบ ${searchResults.length} รายการจากทุกเดือน`}
                     </p>
-                    <EntryList entries={searchResults} exitSource={entries} exitScope="search" onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
-                  </>
-                ) : (
-                  <>
-                    {/* History is where an entry is found: the calendar (which
-                        carries the month switcher) and then the whole month as one
-                        statement, newest day first, each day with its own totals.
-                        A tap on a day jumps the list to it rather than hiding the
-                        rest; the month's charts live in "สรุปเดือนนี้". */}
+                  ) : (
+                    // History is where an entry is found: the calendar (which
+                    // carries the month switcher) and then the whole month as one
+                    // statement, newest day first, each day with its own totals.
+                    // A tap on a day jumps the list to it rather than hiding the
+                    // rest; the month's charts live in "สรุปเดือนนี้".
                     <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedMonth={selectedMonth} onChangeMonth={selectHistoryMonth} selectedDay={selectedDay} defaultDay={defaultHistoryDay} onSelectDay={selectHistoryDay} />
-                    <EntryList entries={monthlyEntries} exitSource={entries} exitScope={selectedMonth} selectedDay={selectedDay} dayTotals onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
-                  </>
-                )}
+                  )}
+                </div>
+                {/* Keyed on the chosen filters (never the typed query, or every
+                    keystroke would replay it), so a new set of results arrives
+                    with the list's own card-in instead of swapping in place. */}
+                {searchActive
+                  ? <EntryList key={`${historyFilters.type}|${historyFilters.category}|${historyFilters.minAmount}|${historyFilters.maxAmount}`} entries={searchResults} exitSource={entries} exitScope="search" onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+                  : <EntryList entries={monthlyEntries} exitSource={entries} exitScope={selectedMonth} selectedDay={selectedDay} dayTotals onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />}
                 <HistoryBackToTop active={tab === "history"} />
               </>
             )}
@@ -3792,7 +3813,7 @@ export default function Home() {
         )}
 
         {tab === "budgets" && (
-          <BudgetsView budgets={budgets} onBack={backFromMoreSection} onSave={updateBudgets} />
+          <BudgetsView budgets={budgets} spent={budgetSpent} onBack={backFromMoreSection} onSave={updateBudgets} />
         )}
 
         {tab === "ask" && user && aiFinanceContext && (
@@ -4114,6 +4135,7 @@ export default function Home() {
           onSelect={setTab}
           onAdd={() => openAddTab()}
           onMore={() => setTab("more")}
+          upcomingCount={dueSoonRecurring.length + unpaidCards.length}
         />
       </section>
     </main>

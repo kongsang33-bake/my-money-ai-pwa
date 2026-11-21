@@ -3,7 +3,8 @@
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, CalendarDays, Check, ChevronLeft, Info, RefreshCw, X } from "lucide-react";
-import { KEYBOARD_SETTLE_MAX_MS, KEYBOARD_SETTLE_QUIET_MS, PULL_REFRESH_MAX, PULL_REFRESH_MIN_MS, PULL_REFRESH_THRESHOLD } from "@/lib/constants";
+import { KEYBOARD_SETTLE_MAX_MS, KEYBOARD_SETTLE_QUIET_MS, PULL_REFRESH_MAX, PULL_REFRESH_MIN_MS, PULL_REFRESH_THRESHOLD, SHEET_DRAG_FLICK_STALE_MS } from "@/lib/constants";
+import { scrimOpacityFor, sheetDragIntent, shouldCloseSheet } from "@/lib/sheet-drag";
 import { formatDateInputValue, formatMonthInputValue, formatMoney, moneySign } from "@/lib/format";
 import type { ConfirmDialogState, EmptyAction, Toast } from "@/lib/types";
 
@@ -232,9 +233,134 @@ export function ToastHost({ toasts, closingIds, onDismiss }: { toasts: Toast[]; 
   );
 }
 
+/**
+ * Swipe a sheet down to close it, on a phone. Only a touch that starts with
+ * the sheet (and whatever scroller it landed in) at the top, and then moves
+ * mostly down, is a drag -- anything else is left to the sheet's own scroll
+ * or the rail under the finger. The decisions are lib/sheet-drag.ts; this
+ * owns the listeners and writes the position straight to the DOM, the way
+ * PullToRefresh does, so a drag never re-renders the sheet.
+ *
+ * The first drag puts `.sheet-drag` on the sheet and its scrim for good: it
+ * swaps their `both`-filled entrance animations (which would otherwise hold
+ * the transform and override the inline one) for transitions, and taking
+ * the class off again would replay the entrance. A release past the line
+ * sends the sheet the rest of the way down and closes it through `onClose`,
+ * the same path SheetClose and Esc take.
+ *
+ * From 900px a sheet is a centred panel or a drawer, not something pulled up
+ * from the bottom, so there is nothing to drag down.
+ */
+function useSheetDrag(sheetRef: React.RefObject<HTMLElement | null>, onClose: () => void, enabled: boolean) {
+  const closeRef = useRef(onClose);
+  useLayoutEffect(() => {
+    closeRef.current = onClose;
+  });
+
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    const backdrop = sheet?.parentElement ?? null;
+    if (!sheet || !backdrop || !enabled) return;
+    let start: { x: number; y: number } | null = null;
+    let dragging = false;
+    let offset = 0;
+    let last = { y: 0, t: 0 };
+    let velocity = 0;
+
+    // A drag only starts where nothing between the finger and the scrim has
+    // been scrolled -- pulling down inside a scrolled list scrolls it back.
+    const scrolledAbove = (target: EventTarget | null) => {
+      for (let node = target instanceof HTMLElement ? target : null; node && node !== backdrop; node = node.parentElement) {
+        if (node.scrollTop > 0) return true;
+      }
+      return false;
+    };
+    const paint = (y: number) => {
+      offset = y;
+      sheet.style.transform = y > 0 ? `translateY(${y}px)` : "";
+      // The scrim's colour, not the backdrop's opacity: the sheet is the
+      // backdrop's child, and fading the parent made the sheet see-through.
+      if (y > 0) backdrop.style.setProperty("--sheet-scrim", String(scrimOpacityFor(y, sheet.offsetHeight)));
+      else backdrop.style.removeProperty("--sheet-scrim");
+    };
+
+    const onStart = (event: TouchEvent) => {
+      start = null;
+      dragging = false;
+      if (event.touches.length !== 1 || !window.matchMedia("(max-width: 899px)").matches) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable]") || scrolledAbove(target)) return;
+      start = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+      last = { y: start.y, t: event.timeStamp };
+      velocity = 0;
+    };
+    const onMove = (event: TouchEvent) => {
+      if (!start) return;
+      const touch = event.touches[0];
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      if (!dragging) {
+        const intent = sheetDragIntent(dx, dy);
+        if (intent === "ignore") {
+          start = null;
+          return;
+        }
+        // Still undecided but heading down: hold the browser's own overscroll
+        // off now, or iOS commits to its bounce and ignores a later cancel.
+        if (intent === "pending") {
+          if (dy > 0 && dy >= Math.abs(dx) && event.cancelable) event.preventDefault();
+          return;
+        }
+        dragging = true;
+        // Measure from here, so the sheet does not jump by the slop.
+        start = { x: touch.clientX, y: touch.clientY };
+        sheet.classList.add("sheet-drag", "is-dragging");
+        backdrop.classList.add("sheet-drag", "is-dragging");
+      }
+      if (event.cancelable) event.preventDefault();
+      const dt = event.timeStamp - last.t;
+      if (dt > 0) velocity = (touch.clientY - last.y) / dt;
+      last = { y: touch.clientY, t: event.timeStamp };
+      paint(Math.max(0, touch.clientY - start.y));
+    };
+    const onEnd = (event: TouchEvent) => {
+      const wasDragging = dragging;
+      start = null;
+      dragging = false;
+      if (!wasDragging) return;
+      // A finger that stopped before lifting is not a flick, whatever speed
+      // its last move had.
+      if (event.timeStamp - last.t > SHEET_DRAG_FLICK_STALE_MS) velocity = 0;
+      sheet.classList.remove("is-dragging");
+      backdrop.classList.remove("is-dragging");
+      if (shouldCloseSheet(offset, velocity, sheet.offsetHeight)) {
+        sheet.style.transform = `translateY(${sheet.offsetHeight}px)`;
+        backdrop.style.setProperty("--sheet-scrim", "0");
+        closeRef.current();
+        return;
+      }
+      paint(0);
+    };
+
+    sheet.addEventListener("touchstart", onStart, { passive: true });
+    // Not passive: once it is a drag, the sheet's own scroll and the
+    // browser's bounce have to be cancelled, or both move at once.
+    sheet.addEventListener("touchmove", onMove, { passive: false });
+    sheet.addEventListener("touchend", onEnd, { passive: true });
+    sheet.addEventListener("touchcancel", onEnd, { passive: true });
+    return () => {
+      sheet.removeEventListener("touchstart", onStart);
+      sheet.removeEventListener("touchmove", onMove);
+      sheet.removeEventListener("touchend", onEnd);
+      sheet.removeEventListener("touchcancel", onEnd);
+    };
+  }, [sheetRef, enabled]);
+}
+
 export function SheetFrame({ children, onClose, className = "edit-sheet", closing = false }: { children: React.ReactNode; onClose: () => void; className?: string; closing?: boolean }) {
   useEscapeToClose(onClose);
   const dialogRef = useFocusTrap<HTMLElement>(!closing);
+  useSheetDrag(dialogRef, onClose, !closing);
   // A field focused in a sheet is brought up above the keyboard with its
   // label, once the keyboard has finished opening -- the browser alone only
   // shows the caret, and on iOS not even that (see .sheet-backdrop).

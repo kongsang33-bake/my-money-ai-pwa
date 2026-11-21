@@ -9,7 +9,10 @@ import { parseDuration } from "@/lib/morph";
 // exiting, and where) is lib/exiting-list.ts.
 //
 //   const rows = useExitingList(visible, (item) => item.id, { source: all, scope: month });
-//   rows.map(({ item, key, exiting }) => <Row key={key} ref={exiting ? collapseOnExit : restoreRow} />)
+//   rows.map((row) => <Row key={row.key} ref={rowMotionRef(row)} />)
+//
+// A row just added (a save) opens up in place the same way in reverse
+// (growOnEnter), so the rows under it slide down rather than jump.
 //
 // - source: the whole list before any filter or search. Pass it whenever the
 //   visible list can be filtered, or a filter change would fold rows away.
@@ -36,9 +39,9 @@ export function useExitingList<T>(
   items: T[],
   getKey: (item: T) => string,
   options: { source?: readonly T[]; scope?: string } = {},
-): { item: T; key: string; exiting: boolean }[] {
+): { item: T; key: string; exiting: boolean; entering: boolean }[] {
   const { source, scope } = options;
-  const [snap, setSnap] = useState<ExitSnap<T>>(() => initialExitSnap(items, getKey, scope));
+  const [snap, setSnap] = useState<ExitSnap<T>>(() => initialExitSnap(items, getKey, scope, source ? new Set(source.map(getKey)) : undefined));
 
   const next = nextExitSnap(snap, items, getKey, nextExitStamp(snap.exiting), source ? new Set(source.map(getKey)) : undefined, scope);
   if (next) setSnap(next);
@@ -55,7 +58,42 @@ export function useExitingList<T>(
     return () => window.clearTimeout(timer);
   }, [snap.exiting]);
 
-  return mergeExitRows(items, getKey, (next ?? snap).exiting);
+  const current = next ?? snap;
+  return mergeExitRows(items, getKey, current.exiting, current.entering);
+}
+
+/** The ref for a row from useExitingList: fold it, open it, or leave it whole. */
+export function rowMotionRef(row: { exiting: boolean; entering: boolean }) {
+  if (row.exiting) return collapseOnExit;
+  return row.entering ? growOnEnter : restoreRow;
+}
+
+/**
+ * Ref for a row that has just been added: opens its height from zero, then
+ * fades it in -- collapseOnExit run backwards. Only once per element, and
+ * not at all with reduced motion; nothing is held afterwards (no fill), so
+ * the row is an ordinary row the moment it lands.
+ */
+export function growOnEnter(element: HTMLElement | null) {
+  if (!element || element.dataset.entered || element.dataset.collapsing) return;
+  element.dataset.entered = "1";
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  const { durationMs, easing } = exitTiming();
+  const height = element.getBoundingClientRect().height;
+  if (!height) return;
+  const style = getComputedStyle(element);
+  element.style.overflow = "hidden";
+  const animation = element.animate(
+    [
+      { height: "0px", opacity: 0, paddingTop: "0px", paddingBottom: "0px", marginTop: "0px", marginBottom: "0px", borderTopWidth: "0px", borderBottomWidth: "0px" },
+      { height: `${height}px`, opacity: 0, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, marginTop: style.marginTop, marginBottom: style.marginBottom, borderTopWidth: style.borderTopWidth, borderBottomWidth: style.borderBottomWidth, offset: 0.6 },
+      { height: `${height}px`, opacity: 1, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, marginTop: style.marginTop, marginBottom: style.marginBottom, borderTopWidth: style.borderTopWidth, borderBottomWidth: style.borderBottomWidth },
+    ],
+    { duration: durationMs * 1.5, easing },
+  );
+  const release = () => { element.style.overflow = ""; };
+  animation.onfinish = release;
+  animation.oncancel = release;
 }
 
 /**

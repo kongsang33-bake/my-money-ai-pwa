@@ -349,7 +349,6 @@ export function RecurringExpensesView({
   const scheduled = items
     .map((item) => ({ item, ...nextBillingInfo(item, today) }))
     .sort((a, b) => Number(b.item.is_active) - Number(a.item.is_active) || a.billingDate.getTime() - b.billingDate.getTime());
-  const upcoming = scheduled.filter(({ item }) => item.is_active).slice(0, 4);
 
   return (
     <div className="view debtor-view">
@@ -370,44 +369,51 @@ export function RecurringExpensesView({
             average rather than instead of it. */}
         <small>รวมทั้งปี {moneySign}{formatMoney(totals.yearly)}{pausedCount > 0 ? ` · ไม่นับรายการที่หยุดไว้ ${pausedCount} รายการ` : ""}</small>
       </section>
-      {!!upcoming.length && (
-        <section className="recurring-timeline" aria-label="กำหนดตัดเงินถัดไป">
-          <div className="section-title-row"><h3>กำหนดตัดเงินถัดไป</h3><small>{upcoming.length} รายการ</small></div>
-          <div className="recurring-timeline-list">
-            {upcoming.map(({ item, billingDate, daysUntil }) => (
-              <button key={item.id} className="recurring-timeline-row" onClick={() => onEdit(item)}>
-                <span className="recurring-date"><b>{billingDate.getDate()}</b><small>{billingDate.toLocaleDateString("th-TH", { month: "short" })}</small></span>
-                <span className="recurring-service"><i style={{ background: item.icon_color ?? nameColor(item.name) }}><RecurringAvatarGlyph iconKey={item.icon} fallbackName={item.name} size={15} /></i><span><b>{item.name}</b><small>{daysUntil === 0 ? "วันนี้" : `อีก ${daysUntil} วัน`} · {describeBillingCycle(item.interval_unit, item.interval_count)}</small></span></span>
-                <strong>{moneySign}{formatMoney(item.amount)}</strong>
-              </button>
+      {/* One list, in the order the money goes out. It used to be a
+          "next four" timeline and then every bill again underneath with the
+          same names and amounts; the schedule is what a bill list is read
+          for, so each row is its date, and its menu sits on the row. */}
+      {!!scheduled.length && (
+        <section className="recurring-timeline" aria-label="บิลทั้งหมด ตามวันตัดเงิน">
+          <div className="section-title-row"><h3>ตามวันตัดเงิน</h3><small>{scheduled.length} รายการ</small></div>
+          <div className="recurring-schedule">
+            {scheduled.map(({ item, billingDate, daysUntil }) => (
+              <article
+                className={`recurring-schedule-row${item.is_active ? "" : " is-paused"}`}
+                key={item.id}
+                style={{ "--hue": item.icon_color ?? nameColor(item.name) } as React.CSSProperties}
+              >
+                <button className="recurring-timeline-row" onClick={() => onEdit(item)}>
+                  <span className="recurring-date">
+                    {item.is_active
+                      ? <><b>{billingDate.getDate()}</b><small>{billingDate.toLocaleDateString("th-TH", { month: "short" })}</small></>
+                      : <small>หยุดไว้</small>}
+                  </span>
+                  <span className="recurring-service">
+                    <IconChip><RecurringAvatarGlyph iconKey={item.icon} fallbackName={item.name} size={16} /></IconChip>
+                    <span>
+                      <b>{item.name}</b>
+                      <small>
+                        {[item.is_active ? (daysUntil === 0 ? "วันนี้" : `อีก ${daysUntil} วัน`) : null, describeBillingCycle(item.interval_unit, item.interval_count), fundingLabel(item, wallets)].filter(Boolean).join(" · ")}
+                      </small>
+                    </span>
+                  </span>
+                  <strong>{moneySign}{formatMoney(item.amount)}</strong>
+                </button>
+                <details className="kebab-menu" name="recurring-kebab">
+                  <summary aria-label={`ตัวเลือกของ ${item.name}`}>⋮</summary>
+                  <menu>
+                    <button onClick={() => onEdit(item)}>แก้ไข</button>
+                    <button onClick={() => onToggleActive(item)}>{item.is_active ? "หยุดชั่วคราว" : "ใช้งานต่อ"}</button>
+                    <button onClick={() => onDelete(item)}>ลบ</button>
+                  </menu>
+                </details>
+              </article>
             ))}
           </div>
         </section>
       )}
-      <div className="debtor-page-list">
-        {scheduled.map(({ item, billingDate }) => (
-          <article className={`debtor-page-item${item.is_active ? "" : " is-paused"}`} key={item.id}>
-            <button className="debtor-main-button" onClick={() => onEdit(item)}>
-              <span className="debtor-avatar" style={{ background: item.icon_color ?? nameColor(item.name) }}>
-                <RecurringAvatarGlyph iconKey={item.icon} fallbackName={item.name} />
-              </span>
-              <div>
-                <span>{item.name}{!item.is_active && <em className="recurring-paused-tag">หยุดไว้</em>}</span>
-                <small className="recurring-meta">{describeBillingCycle(item.interval_unit, item.interval_count)}{item.is_active ? ` · ครั้งถัดไป ${formatShortDate(billingDate)}` : ""} · {moneySign}{formatMoney(item.amount)} · {fundingLabel(item, wallets)}</small>
-              </div>
-            </button>
-            <details className="kebab-menu" name="recurring-kebab">
-              <summary>⋮</summary>
-              <menu>
-                <button onClick={() => onEdit(item)}>แก้ไข</button>
-                <button onClick={() => onToggleActive(item)}>{item.is_active ? "หยุดชั่วคราว" : "ใช้งานต่อ"}</button>
-                <button onClick={() => onDelete(item)}>ลบ</button>
-              </menu>
-            </details>
-          </article>
-        ))}
-        {!items.length && <EmptyNote glyph="↻" action={{ label: "เพิ่มรายจ่ายประจำ", onClick: onAdd }}>บิลที่ตัดเงินเป็นรอบ — ค่าเน็ตรายเดือน ค่าสมาชิกรายปี ค่าบริการราย 3 เดือน · เพิ่มไว้แล้วหน้าแรกจะเตือนก่อนถึงกำหนด และกดบันทึกได้ในปุ่มเดียว</EmptyNote>}
-      </div>
+      {!items.length && <EmptyNote glyph="↻" action={{ label: "เพิ่มรายจ่ายประจำ", onClick: onAdd }}>บิลที่ตัดเงินเป็นรอบ — ค่าเน็ตรายเดือน ค่าสมาชิกรายปี ค่าบริการราย 3 เดือน · เพิ่มไว้แล้วหน้าแรกจะเตือนก่อนถึงกำหนด และกดบันทึกได้ในปุ่มเดียว</EmptyNote>}
     </div>
   );
 }
