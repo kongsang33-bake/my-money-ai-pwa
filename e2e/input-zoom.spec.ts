@@ -1,4 +1,4 @@
-import { test, expect, navigate, openApp, openDraft, seedDraft, buildSeed } from "./fixture.ts";
+import { test, expect, navigate, openApp, openDraft, openMoneyTool, seedDraft, buildSeed } from "./fixture.ts";
 import type { Page } from "@playwright/test";
 
 // iOS Safari zooms the whole page in when a field whose text is under 16px
@@ -27,10 +27,7 @@ async function undersizedFields(page: Page) {
 }
 
 async function openMoreScreen(page: Page, label: string) {
-  await navigate(page, "more");
-  const tile = page.locator(".more-grid button", { hasText: label });
-  await tile.evaluate((node) => node.scrollIntoView({ block: "center", behavior: "instant" }));
-  await tile.dispatchEvent("click");
+  await openMoneyTool(page, label);
 }
 
 test.describe("no zoom on focus", () => {

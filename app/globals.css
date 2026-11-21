@@ -9380,17 +9380,18 @@ body:has(.login-page) #app-splash {
     color: var(--ink-2);
   }
 
-  /* Four across on a desk: two columns of 540px cards read as a form, not
-     a set of tools. */
+  /* The money tools are the side nav's own rows on a desk, always in view,
+     so "ของฉัน" does not list them a second time: it is you, the heads-up
+     row and the account. */
+  .me-tools-heading,
   .more-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    display: none;
   }
 
-  /* "ของฉัน" is a list of rows and a menu, not a dashboard: across the whole
-     desk column each row ran 1300px from its name to its chevron. Centred at
-     a width the four tiles still fit in. */
+  /* What is left is a list of rows, not a dashboard: across the whole desk
+     column each row ran 1300px from its name to its chevron. */
   .more-view > * {
-    max-width: 880px;
+    max-width: 720px;
     margin-inline: auto;
     width: 100%;
   }
