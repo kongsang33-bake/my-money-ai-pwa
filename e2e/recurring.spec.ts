@@ -21,14 +21,14 @@ test.describe("recurring bills", () => {
   });
 
   test("says how often each bill comes round, not just when", async ({ app }) => {
-    const yearlyRow = app.locator(".debtor-page-list > .debtor-page-item").filter({ hasText: "โดเมนเว็บ" });
+    const yearlyRow = app.locator(".recurring-schedule > .recurring-schedule-row").filter({ hasText: "โดเมนเว็บ" });
     await expect(yearlyRow).toContainText("ทุกปี");
-    const quarterlyRow = app.locator(".debtor-page-list > .debtor-page-item").filter({ hasText: "ประกันรถ" });
+    const quarterlyRow = app.locator(".recurring-schedule > .recurring-schedule-row").filter({ hasText: "ประกันรถ" });
     await expect(quarterlyRow).toContainText("ทุก 3 เดือน");
   });
 
   test("offers a cycle and a first billing date instead of a day of the month", async ({ app }) => {
-    await app.locator(".debtor-page-list .debtor-main-button").first().click();
+    await app.locator(".recurring-schedule .recurring-timeline-row").first().click();
     const sheet = app.locator(".edit-sheet");
     await expect(sheet.locator(".date-shell input[type=date]")).toHaveCount(1);
     for (const cycle of ["ทุกสัปดาห์", "ทุกเดือน", "ทุก 3 เดือน", "ทุก 6 เดือน", "ทุกปี", "กำหนดเอง"]) {
@@ -41,7 +41,7 @@ test.describe("recurring bills", () => {
     // emptied, so selecting the 1 and typing 14 leaves 141 or 114 depending on
     // where the caret was. Unit tests cannot see this: the clamp they check is
     // correct, it is being run on the wrong thing.
-    await app.locator(".debtor-page-list .debtor-main-button").first().click();
+    await app.locator(".recurring-schedule .recurring-timeline-row").first().click();
     const count = app.getByLabel("จำนวนรอบ");
     await app.getByRole("radio", { name: "กำหนดเอง" }).click();
     await count.fill("");
@@ -55,7 +55,7 @@ test.describe("recurring bills", () => {
   });
 
   test("opens the count and unit fields only for a cycle no preset names", async ({ app }) => {
-    await app.locator(".debtor-page-list .debtor-main-button").first().click();
+    await app.locator(".recurring-schedule .recurring-timeline-row").first().click();
     const sheet = app.locator(".edit-sheet");
     await expect(sheet.locator(".cycle-custom")).toHaveCount(0);
     await sheet.getByRole("radio", { name: "กำหนดเอง" }).click();

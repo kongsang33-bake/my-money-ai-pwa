@@ -1351,6 +1351,10 @@ export default function Home() {
   const categoryMemory = useMemo(() => buildCategoryMemory(entries), [entries]);
 
   const monthlyCategorySpend = useMemo(() => spendByCategory(monthlyEntries), [monthlyEntries]);
+  const budgetSpent = useMemo(
+    () => Object.fromEntries(monthlyCategorySpend.map((item) => [item.category, item.amount])),
+    [monthlyCategorySpend],
+  );
   const categorySummary = useMemo(() => {
     const unspentBudgeted = Object.keys(budgets)
       .filter((category) => !monthlyCategorySpend.some((item) => item.category === category))
@@ -3678,31 +3682,36 @@ export default function Home() {
               </EmptyNote>
             ) : (
               <>
-                <HistoryFilterBar
-                  filters={historyFilters}
-                  onChange={setHistoryFilters}
-                  onClear={() => setHistoryFilters({ query: "", category: "", type: "all", minAmount: "", maxAmount: "" })}
-                />
-                {searchActive ? (
-                  <>
+                {/* The search and the calendar are one column on a desk, held
+                    in place while the list beside it scrolls with the page --
+                    rather than the list scrolling in a box of its own inside a
+                    page that also scrolls. On a phone this wrapper draws no box
+                    (display: contents), so the search still sticks under the
+                    topbar and the order is unchanged. */}
+                <div className="history-side">
+                  <HistoryFilterBar
+                    filters={historyFilters}
+                    onChange={setHistoryFilters}
+                    onClear={() => setHistoryFilters({ query: "", category: "", type: "all", minAmount: "", maxAmount: "" })}
+                  />
+                  {searchActive ? (
                     <p className="history-search-summary">
                       {searchResults.length >= SEARCH_RESULT_LIMIT
                         ? `แสดง ${SEARCH_RESULT_LIMIT} รายการแรกจากทุกเดือน · ลองใส่ตัวกรองเพิ่มเพื่อจำกัดผลลัพธ์`
                         : `พบ ${searchResults.length} รายการจากทุกเดือน`}
                     </p>
-                    <EntryList entries={searchResults} exitSource={entries} exitScope="search" onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
-                  </>
-                ) : (
-                  <>
-                    {/* History is where an entry is found: the calendar (which
-                        carries the month switcher) and then the whole month as one
-                        statement, newest day first, each day with its own totals.
-                        A tap on a day jumps the list to it rather than hiding the
-                        rest; the month's charts live in "สรุปเดือนนี้". */}
+                  ) : (
+                    // History is where an entry is found: the calendar (which
+                    // carries the month switcher) and then the whole month as one
+                    // statement, newest day first, each day with its own totals.
+                    // A tap on a day jumps the list to it rather than hiding the
+                    // rest; the month's charts live in "สรุปเดือนนี้".
                     <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedMonth={selectedMonth} onChangeMonth={selectHistoryMonth} selectedDay={selectedDay} defaultDay={defaultHistoryDay} onSelectDay={selectHistoryDay} />
-                    <EntryList entries={monthlyEntries} exitSource={entries} exitScope={selectedMonth} selectedDay={selectedDay} dayTotals onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
-                  </>
-                )}
+                  )}
+                </div>
+                {searchActive
+                  ? <EntryList entries={searchResults} exitSource={entries} exitScope="search" onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+                  : <EntryList entries={monthlyEntries} exitSource={entries} exitScope={selectedMonth} selectedDay={selectedDay} dayTotals onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />}
                 <HistoryBackToTop active={tab === "history"} />
               </>
             )}
@@ -3783,7 +3792,7 @@ export default function Home() {
         )}
 
         {tab === "budgets" && (
-          <BudgetsView budgets={budgets} onBack={backFromMoreSection} onSave={updateBudgets} />
+          <BudgetsView budgets={budgets} spent={budgetSpent} onBack={backFromMoreSection} onSave={updateBudgets} />
         )}
 
         {tab === "ask" && user && aiFinanceContext && (

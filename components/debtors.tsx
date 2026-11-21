@@ -12,6 +12,7 @@ import { CountUpMoney, EmptyNote, PageFrame, SheetFrame, SkeletonList, StateCard
 import { EntryList } from "@/components/add";
 import { collapseOnExit, restoreRow, useExitingList } from "@/components/exiting-list";
 import { IncomeBreakdown, MonthlyTrendChart } from "@/components/history";
+import { StatMeter } from "@/components/home";
 
 /**
  * What a balance says out loud, including when it has gone past zero.
@@ -153,9 +154,12 @@ export function DebtorsView({
         </div>
         <button className="header-add-button" onClick={onAdd}>เพิ่ม</button>
       </div>
-      <div className="report-period-toggle">
-        <button className={activeKind === "lend" ? "active" : ""} onClick={() => onChangeActiveKind("lend")}>ยืมเรา</button>
-        <button className={activeKind === "own" ? "active" : ""} onClick={() => onChangeActiveKind("own")}>หนี้ของฉัน</button>
+      {/* Two books of one page, so underlined tabs like the add tab's -- not
+          a segmented control, which sat above the total as a second, heavier
+          box of the same weight as the card under it. */}
+      <div className="add-mode-tabs" role="group" aria-label="สมุดหนี้">
+        <button className={activeKind === "lend" ? "active" : ""} aria-pressed={activeKind === "lend"} onClick={() => onChangeActiveKind("lend")}>ยืมเรา</button>
+        <button className={activeKind === "own" ? "active" : ""} aria-pressed={activeKind === "own"} onClick={() => onChangeActiveKind("own")}>หนี้ของฉัน</button>
       </div>
       <section className="debtor-detail-card">
         <span>{activeKind === "own" ? "ต้องจ่ายเดือนนี้รวม" : "ยอดรวมที่ค้างรับ"}</span>
@@ -476,10 +480,13 @@ export function RecapSheet({
 
 export function BudgetsView({
   budgets,
+  spent,
   onBack,
   onSave,
 }: {
   budgets: Record<string, number>;
+  /** This cycle's spending per category -- the figure Home's budget tiles read. */
+  spent: Record<string, number>;
   onBack: () => void;
   onSave: (next: Record<string, number>) => void;
 }) {
@@ -501,18 +508,35 @@ export function BudgetsView({
   return (
     <PageFrame onBack={onBack} eyebrow="ตั้งค่า" title="งบประมาณต่อเดือน" className="budget-page">
         <p className="budget-hint">ตั้งวงเงินที่ตั้งใจจะใช้ในหนึ่งเดือนของแต่ละหมวด แล้วหน้าแรกจะบอกว่าใช้ไปกี่เปอร์เซ็นต์แล้ว · เว้นว่างไว้ถ้าหมวดไหนไม่อยากจำกัด</p>
-        {expenseCategories.map((category) => (
-          <label key={category} className="budget-row">
-            <span className="cat-dot" style={{ background: categoryTint(category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(category) }}><CategoryIcon category={category} /></span>
-            {category}
-            <input
-              inputMode="decimal"
-              placeholder="ไม่จำกัด"
-              value={draft[category] ?? ""}
-              onChange={(event) => setDraft((current) => ({ ...current, [category]: event.target.value }))}
-            />
-          </label>
-        ))}
+        {/* Each field says what it is being set against: this cycle's
+            spending so far, and -- once there is a limit, including one being
+            typed -- how much of it is gone, on the same 3px meter Home's tiles
+            carry. A form of bare numbers made a budget something set blind. */}
+        {expenseCategories.map((category) => {
+          const used = spent[category] ?? 0;
+          const limit = toMoneyAmount(draft[category] ?? "");
+          const percent = limit > 0 ? (used / limit) * 100 : 0;
+          const over = limit > 0 && used > limit;
+          const caption = limit > 0
+            ? `ใช้ไป ${moneySign}${formatMoney(used)} · ${formatPercent(percent)}${over ? ` · เกิน ${moneySign}${formatMoney(used - limit)}` : ""}`
+            : used > 0 ? `รอบนี้ใช้ไป ${moneySign}${formatMoney(used)}` : "รอบนี้ยังไม่ได้ใช้";
+          return (
+            <label key={category} className="budget-row" style={{ "--hue": categoryColor(category) } as React.CSSProperties}>
+              <span className="cat-dot" style={{ background: categoryTint(category, CATEGORY_DOT_TINT_ALPHA), color: categoryColor(category) }}><CategoryIcon category={category} /></span>
+              <span className="budget-row-text">
+                <b>{category}</b>
+                <small className={over ? "over" : undefined}>{caption}</small>
+              </span>
+              <input
+                inputMode="decimal"
+                placeholder="ไม่จำกัด"
+                value={draft[category] ?? ""}
+                onChange={(event) => setDraft((current) => ({ ...current, [category]: event.target.value }))}
+              />
+              {limit > 0 && <StatMeter percent={percent} tone={over ? "expense" : "hue"} />}
+            </label>
+          );
+        })}
         <button className="save" onClick={submit}>
           บันทึกงบประมาณ
         </button>

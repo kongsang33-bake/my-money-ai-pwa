@@ -1755,6 +1755,15 @@ a:focus-visible {
   color: var(--ink-3);
 }
 
+/* On a phone the three never share one line, and a wrap left the streak's
+   bullet dangling at the start of the second -- so the streak takes the
+   second line by itself, with no bullet. The desk's landscape billboard has
+   the width for all three in a row. */
+@media (max-width: 899px) {
+  .billboard-tags .billboard-streak { flex-basis: 100%; text-align: center; }
+  .billboard-tags .billboard-streak::before { content: none; }
+}
+
 .billboard-status {
   color: var(--ink);
   font-weight: var(--fw-semibold);
@@ -3454,16 +3463,32 @@ button.poster:active {
 }
 
 .goal-list { display: grid; gap: var(--s-3); margin-top: var(--s-3); }
-.goal-item { padding-top: var(--s-3); border-top: 1px solid var(--line-soft); }
-.goal-item-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
-.goal-item-head b { font-size: var(--fs-body); }
-.goal-item-head .icon-button { min-width: 36px; min-height: 36px; border-radius: var(--r-sm); color: var(--ink-3); }
-.goal-item-head .icon-button:hover { color: var(--danger); background: var(--surface-2); }
-.goal-card-values { display: flex; align-items: baseline; gap: var(--s-2); margin-top: var(--s-4); }
+@media (min-width: 600px) {
+  .goal-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* GoalItem: one of Home's goal tiles at page size -- a short band instead of
+   the rail's 16:9, since the figure lives under it rather than on it. */
+.goal-item.tile { border: var(--card-border); }
+.goal-art.tile-art { aspect-ratio: auto; height: 88px; }
+.goal-delete {
+  position: absolute;
+  top: var(--s-2);
+  right: var(--s-2);
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
+  color: var(--ink-2);
+}
+.goal-delete:hover { color: var(--danger); background: var(--surface-2); }
+.goal-body { display: grid; gap: var(--s-2); padding: var(--s-3) var(--s-4) var(--s-4); }
+.goal-name { font-size: var(--fs-h3); font-weight: var(--fw-semibold); }
+.goal-card-values { display: flex; align-items: baseline; gap: var(--s-2); }
 .goal-card-values strong { font-size: var(--fs-value); letter-spacing: -0.035em; }
-.goal-card-values span { color: var(--ink-3); font-size: var(--fs-micro); }
-.goal-progress { height: 7px; margin: var(--s-3) 0 5px; border-radius: var(--r-full); background: var(--surface-3); overflow: hidden; }
-.goal-progress i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width var(--t-3) var(--e-out); }
+.goal-card-values span { color: var(--ink-3); font-size: var(--fs-caption); }
+.goal-body .tile-bar { border-radius: var(--r-full); overflow: hidden; }
+.goal-body small { color: var(--ink-3); font-size: var(--fs-caption); }
 
 .recurring-timeline { margin: var(--s-4) 0; padding: var(--s-4); border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
 /* A section heading and the one control that belongs to it, on one line:
@@ -3499,42 +3524,29 @@ button.poster:active {
 .section-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); margin-bottom: var(--s-2); }
 .section-title-row h3 { margin: 0; font-size: var(--fs-body-sm); }
 .section-title-row small { color: var(--ink-3); font-size: var(--fs-micro); }
-.recurring-timeline-list { display: grid; gap: 0; }
-.recurring-timeline-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: var(--s-3); width: 100%; padding: var(--s-3) 0; border-bottom: 1px solid var(--line-soft); text-align: left; }
-.recurring-timeline-row:last-child { border-bottom: 0; padding-bottom: 0; }
-.recurring-timeline-row:first-child { padding-top: var(--s-2); }
-.recurring-date { display: grid; place-items: center; padding: 4px 0; border-radius: var(--r-sm); background: var(--surface-2); }
+/* The bills list (RecurringExpensesView): one row per bill in the order the
+   money goes out -- its date, its icon in the tinted square every rail uses
+   (IconChip, the row's --hue), name and cycle, amount, then its menu. */
+.recurring-schedule { display: grid; }
+.recurring-schedule-row { display: flex; align-items: center; gap: var(--s-1); border-bottom: 1px solid var(--line-soft); }
+.recurring-schedule-row:last-child { border-bottom: 0; }
+.recurring-timeline-row { display: grid; flex: 1; min-width: 0; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: var(--s-3); padding: var(--s-3) 0; text-align: left; }
+.recurring-date { display: grid; place-items: center; min-height: 40px; padding: 4px 0; border-radius: var(--r-sm); background: var(--surface-2); }
 .recurring-date b { font-size: var(--fs-body); line-height: 1; }
 .recurring-date small, .recurring-service small { display: block; color: var(--ink-3); font-size: var(--fs-micro); }
 .recurring-service { display: flex; align-items: center; min-width: 0; gap: var(--s-2); }
-.recurring-service > i { display: grid; flex: 0 0 auto; place-items: center; width: 26px; height: 26px; border-radius: var(--r-sm); color: var(--primary-text); }
 .recurring-service > span { min-width: 0; }
 .recurring-service b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-body); }
 .recurring-timeline-row strong { font-size: var(--fs-body); white-space: nowrap; }
+/* The last row's menu opens upwards, or it hangs off the card's foot. */
+.recurring-schedule-row:last-child .kebab-menu menu { top: auto; bottom: 42px; }
 
 /* A paused bill: still on the list, still carrying its history, just no
    longer money going out. It reads as set-down rather than disabled -- the
    row is still a working button, so it keeps its full-strength name and only
    the surrounding detail steps back. */
-.debtor-page-item.is-paused .debtor-avatar,
-.debtor-page-item.is-paused .card-accent { opacity: 0.45; }
-.debtor-page-item.is-paused .debtor-main-button small { color: var(--ink-3); }
-/* Three facts on one line -- the billing day, the amount, and what pays it --
-   and the shared one-line .debtor-main-button small drops the last of them to
-   an ellipsis on a phone. Which card a subscription is charged to is the
-   whole reason the line is worth reading, so it wraps here instead. */
-.debtor-main-button small.recurring-meta { white-space: normal; }
-.recurring-paused-tag {
-  margin-left: var(--s-2);
-  padding: 2px var(--s-2);
-  border: 1px solid var(--line);
-  border-radius: var(--r-full);
-  color: var(--ink-3);
-  font-size: var(--fs-micro);
-  font-style: normal;
-  font-weight: var(--fw-semibold);
-  white-space: nowrap;
-}
+.recurring-schedule-row.is-paused .icon-chip,
+.recurring-schedule-row.is-paused strong { opacity: 0.45; }
 
 /* Ask AI is a chat screen, not a form: the page itself does not scroll, the
    thread does, and the composer holds the bottom edge the way a messaging
@@ -4769,6 +4781,10 @@ button.poster:active {
 /* Held under the topbar while the month scrolls by, so a search is always
    one tap away. The ground is the page's own, running a little past the
    chips so rows slide under an edge rather than a line. */
+.history-side {
+  display: contents;
+}
+
 .history-view .history-search {
   position: sticky;
   top: var(--topbar-block);
@@ -6096,8 +6112,11 @@ button.entry-main {
 
 .detail-hero {
   position: relative;
-  aspect-ratio: 16 / 9;
-  max-height: 260px;
+  /* A band, not a 16:9 picture: there is no picture, only the pattern and a
+     small icon, and at 16:9 that was a quarter of a phone's screen of
+     nothing above the entry's name. */
+  aspect-ratio: 3 / 1;
+  max-height: 160px;
   width: 100%;
   overflow: hidden;
   background: linear-gradient(160deg, color-mix(in oklab, var(--hue) 62%, var(--bg)), color-mix(in oklab, var(--hue) 14%, var(--bg)));
@@ -6192,18 +6211,22 @@ button.entry-main {
 
 .detail-actions {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--s-2);
   margin-bottom: var(--s-5);
 }
 
+/* Beside แก้ไข, not a second full-width bar under it: deleting is the rarer
+   act, and it still asks to be confirmed. */
 .detail-delete {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--s-2);
   min-height: 44px;
+  padding: 0 var(--s-4);
   border-radius: var(--r-sm);
-  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  background: var(--surface-2);
   color: var(--danger);
   font-size: var(--fs-body);
   font-weight: var(--fw-semibold);
@@ -6639,10 +6662,16 @@ input[type="checkbox"], input[type="radio"] {
 }
 
 .edit-sheet label.budget-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 110px;
   align-items: center;
-  gap: var(--s-3);
-  margin: var(--s-2) 0;
+  column-gap: var(--s-3);
+  row-gap: var(--s-2);
+  /* auto, not 0: this outranks .budget-page > *, and the rows have to centre
+     in the desk's reading measure with the header and the save button. */
+  margin: 0 auto;
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--line-soft);
   animation: card-in var(--t-3) var(--e-out) backwards;
 }
 
@@ -6658,13 +6687,45 @@ input[type="checkbox"], input[type="radio"] {
 
 /* Same specificity story as the row itself: `.edit-sheet label input` (0,1,2)
    was beating a bare `.budget-row input` (0,1,1), so the field stretched to
-   the full row instead of sitting as a fixed-width amount box. margin-left
-   pins every field to the same right edge, so the rows read as one column. */
+   the full row instead of sitting in its fixed-width column. */
 .edit-sheet label.budget-row input {
-  width: 110px;
   margin-top: 0;
-  margin-left: auto;
-  flex-shrink: 0;
+}
+
+/* A form of eight rows reads down, not across: past a phone it keeps a
+   reading measure, centred, like the Upcoming timeline -- across the desk's
+   whole column each meter was a bar the width of the screen. */
+.budget-page > * {
+  max-width: 720px;
+  margin-inline: auto;
+  width: 100%;
+}
+
+.budget-row-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.budget-row-text b {
+  color: var(--ink);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+}
+
+.budget-row-text small {
+  color: var(--ink-3);
+  font-size: var(--fs-caption);
+}
+
+.budget-row-text small.over {
+  color: var(--expense);
+}
+
+/* The row's meter runs under all three columns. */
+.budget-row .stat-meter {
+  grid-column: 1 / -1;
+  margin-top: 0;
 }
 
 .report-summary-tiles {
@@ -9363,21 +9424,30 @@ body:has(.login-page) #app-splash {
     grid-column: 1;
   }
 
-  /* Spans the rows the left column stacks into, so a tall list never
-     stretches the search row and opens a gap above the calendar. */
-  /* The list scrolls itself here, with nothing sticky over it. */
-  .history-view > .entry-list .entry-group {
-    scroll-margin-top: 0;
+  /* The search and calendar hold still in the left column while the list
+     scrolls with the page beside them -- not the list in a scroller of its
+     own inside a page that scrolls too. Nothing sticky sits over the list. */
+  .history-view > .history-side {
+    display: grid;
+    align-self: start;
+    position: sticky;
+    top: var(--s-6);
   }
 
+  .history-view > .history-side .history-search {
+    position: static;
+  }
+
+  .history-view > .entry-list .entry-group {
+    scroll-margin-top: var(--s-6);
+  }
+
+  /* Spans the rows the left column stacks into, so a tall list never
+     stretches the search row and opens a gap above the calendar. */
   .history-view > .entry-list {
     grid-column: 2;
     grid-row: 2 / span 8;
     align-self: start;
-    position: sticky;
-    top: 88px;
-    max-height: min(720px, calc(100vh - 200px));
-    overflow: auto;
   }
 
   .history-view > .add-title {
@@ -9553,7 +9623,9 @@ body:has(.login-page) #app-splash {
 
   .history-view > .entry-list {
     grid-row: auto;
+  }
+
+  .history-view > .history-side {
     position: static;
-    max-height: none;
   }
 }

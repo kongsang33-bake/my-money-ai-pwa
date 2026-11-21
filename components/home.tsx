@@ -347,7 +347,7 @@ export const HeroWalletCard = memo(function HeroWalletCard({
         <ul className="billboard-tags">
           <li className="billboard-status">{insight.label}</li>
           <li>{amountShown ? insight.text : maskMoneyInText(insight.text)}</li>
-          {streak >= 2 && <li>จดติดกัน {streak} วัน</li>}
+          {streak >= 2 && <li className="billboard-streak">จดติดกัน {streak} วัน</li>}
         </ul>
         {/* Play / More info: the white --primary CTA, and a quieter second
             button, instead of the whole billboard being one tap target. */}
@@ -370,7 +370,7 @@ export const HeroWalletCard = memo(function HeroWalletCard({
  * "เป้าหมายและงบ" rather than as three boxed numbers. Decorative -- the
  * percentage it draws is already written in the tile.
  */
-function StatMeter({ percent, tone }: { percent: number; tone: "income" | "expense" | "hue" }) {
+export function StatMeter({ percent, tone }: { percent: number; tone: "income" | "expense" | "hue" }) {
   return (
     <span className={`stat-meter ${tone}`} aria-hidden="true">
       <i style={{ width: `${Math.max(2, Math.min(100, percent))}%` }} />
@@ -773,14 +773,36 @@ export function goalProgress(goal: MoneyGoal): number {
 
 const goalKey = (goal: MoneyGoal) => goal.id;
 
+/**
+ * A goal on its own page: the same tile family as Home's goal tiles (its
+ * --hue band with the icon printed as a pattern, then a 3px bar), grown to
+ * carry the figure, what is still missing and the date. It was a bare row of
+ * text under a hairline, so the one place that is all goals looked less
+ * finished than the rail that only previews them.
+ */
 export function GoalItem({ goal, onDelete, exiting = false }: { goal: MoneyGoal; onDelete: (goal: MoneyGoal) => void; exiting?: boolean }) {
   const progress = goalProgress(goal);
+  const missing = Math.max(0, goal.target - goal.saved);
+  const renderGlyph = (size: number) => <Target size={size} strokeWidth={2.25} />;
   return (
-    <div className="goal-item" ref={exiting ? collapseOnExit : restoreRow}>
-      <div className="goal-item-head"><b>{goal.name}</b><button className="icon-button" onClick={() => onDelete(goal)} aria-label={`ลบเป้าหมาย ${goal.name}`}><Trash2 size={18} strokeWidth={2.25} aria-hidden="true" /></button></div>
-      <div className="goal-card-values"><strong>{moneySign}{formatMoney(goal.saved)}</strong><span>จาก {moneySign}{formatMoney(goal.target)}</span></div>
-      <div className="goal-progress" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${progress}%` }} /></div>
-      <small>{Math.round(progress)}%{goal.deadline ? ` · เป้าหมาย ${formatShortDate(`${goal.deadline}T00:00:00`)}` : ""}</small>
+    <div className="goal-item tile" style={{ "--hue": "var(--accent)" } as React.CSSProperties} ref={exiting ? collapseOnExit : restoreRow}>
+      <div className="tile-art goal-art">
+        <IconPattern renderGlyph={renderGlyph} />
+        <IconChip>{renderGlyph(18)}</IconChip>
+        <button className="goal-delete" onClick={() => onDelete(goal)} aria-label={`ลบเป้าหมาย ${goal.name}`}><Trash2 size={18} strokeWidth={2.25} aria-hidden="true" /></button>
+      </div>
+      <div className="goal-body">
+        <b className="goal-name">{goal.name}</b>
+        <div className="goal-card-values"><strong>{moneySign}{formatMoney(goal.saved)}</strong><span>จาก {moneySign}{formatMoney(goal.target)}</span></div>
+        <span className="tile-bar" role="progressbar" aria-label={`ความคืบหน้า ${goal.name}`} aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}>
+          <i style={{ width: `${Math.max(2, progress)}%` }} />
+        </span>
+        <small>
+          {Math.round(progress)}%
+          {missing > 0 ? ` · ยังขาด ${moneySign}${formatMoney(missing)}` : " · ครบแล้ว"}
+          {goal.deadline ? ` · เป้าหมาย ${formatShortDate(`${goal.deadline}T00:00:00`)}` : ""}
+        </small>
+      </div>
     </div>
   );
 }
@@ -1141,7 +1163,7 @@ export function EntryDetailSheet({
             <Pencil size={18} strokeWidth={2.25} aria-hidden="true" />แก้ไข
           </button>
           <button className="detail-delete" onClick={() => onDelete(entry)}>
-            <Trash2 size={18} strokeWidth={2.25} aria-hidden="true" />ลบรายการนี้
+            <Trash2 size={18} strokeWidth={2.25} aria-hidden="true" />ลบ
           </button>
         </div>
         {repeat.count > 1 && (

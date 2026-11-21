@@ -197,6 +197,14 @@ so check it when the data handling changes. `/login` and `/privacy` are the
 only routes besides `/`: the service worker leaves other navigations to the
 network, and CSS hides the boot splash on both. The e2e suite reaches it through the seed's `pinMode`
 (`openPinGate` in e2e/fixture.ts) and the a11y audit measures both modes.
+The money tools under "ของฉัน" each show what they are about, not just a
+form: budgets (`BudgetsView`) put this cycle's spending and a `StatMeter`
+under every field (the same figure Home's budget tiles read), recurring bills
+(`RecurringExpensesView`) are one list in the order the money goes out -- its
+date, an `IconChip`, cycle and what pays it, the ⋮ menu on the row -- rather
+than a "next four" timeline above the same bills listed again, and goals
+(`GoalItem`) are Home's goal tile at page size. The debt books switch with
+underlined tabs (`.add-mode-tabs`), not a segmented control.
 Wallets (`WalletsView`) is a bare total -- the billboard's kicker, a display
 figure, the spendable/set-aside split as one bar -- over `.wallet-tiles`:
 each wallet a tile in its own `--hue` with its share of the total as a meter
@@ -228,7 +236,10 @@ the filter panel sets); then the calendar, which carries the month switcher;
 then the whole month as one statement, newest day first, each day's money
 in/out beside its date. A tap on a calendar day scrolls the list to that
 day (`selectHistoryDay`, which finds the group by `data-day`) rather than
-hiding every other day. It used to open on a "ภาพรวมเดือนนี้" card of month
+hiding every other day. The search and the calendar sit in `.history-side`,
+which is `display: contents` on a phone (so the search still sticks under
+the topbar) and, on a desk, the left column held still while the list
+scrolls with the page -- the list never gets a scroller of its own there. It used to open on a "ภาพรวมเดือนนี้" card of month
 totals; those are Home's job, and that card is gone along with `MonthSummary`,
 `Metric` and the one-day `HistoryInsight`. The six-month trend and the income
 sources moved into "สรุปเดือนนี้" (`RecapSheet`), which is a dark sheet like
