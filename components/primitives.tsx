@@ -1,9 +1,11 @@
 "use client";
 
+import { haptic } from "@/components/haptics";
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, CalendarDays, Check, ChevronLeft, Info, RefreshCw, X } from "lucide-react";
 import { KEYBOARD_SETTLE_MAX_MS, KEYBOARD_SETTLE_QUIET_MS, PULL_REFRESH_MAX, PULL_REFRESH_MIN_MS, PULL_REFRESH_THRESHOLD, SHEET_DRAG_FLICK_STALE_MS } from "@/lib/constants";
+import { edgeSwipeIntent, shouldGoBack, startsAtEdge } from "@/lib/edge-swipe";
 import { scrimOpacityFor, sheetDragIntent, shouldCloseSheet } from "@/lib/sheet-drag";
 import { formatDateInputValue, formatMonthInputValue, formatMoney, moneySign } from "@/lib/format";
 import type { ConfirmDialogState, EmptyAction, Toast } from "@/lib/types";
@@ -275,8 +277,15 @@ function useSheetDrag(sheetRef: React.RefObject<HTMLElement | null>, onClose: ()
       }
       return false;
     };
+    let armed = false;
     const paint = (y: number) => {
       offset = y;
+      // Once, as the drag crosses the line where letting go closes the sheet
+      // (a flick can close it short of that, but a slow drag is the one that
+      // needs telling).
+      const willClose = shouldCloseSheet(y, 0, sheet.offsetHeight);
+      if (willClose && !armed) haptic("light");
+      armed = willClose;
       sheet.style.transform = y > 0 ? `translateY(${y}px)` : "";
       // The scrim's colour, not the backdrop's opacity: the sheet is the
       // backdrop's child, and fading the parent made the sheet see-through.
@@ -831,6 +840,155 @@ export function ErrorActions({ onRetry, onDismiss }: { onRetry: () => void; onDi
  * React only hears about the two moments that change what is on screen --
  * the disc appearing, and the refresh starting and ending.
  */
+/**
+ * Swipe in from the left edge to go back, on a screen that has a back
+ * chevron -- the gesture every iOS app has and a home-screen web app does
+ * not get from the system. iOS home-screen app only (`navigator.standalone`):
+ * in Safari the same swipe is the browser's own back, and on Android the
+ * system owns both edges. The decisions are lib/edge-swipe.ts.
+ *
+ * The visible view follows the finger (written to the DOM, like
+ * PullToRefresh), lifted by a shadow, with a haptic tap as it crosses the
+ * point where letting go goes back. Going back presses the view's own back
+ * chevron (`.add-title > button:first-child`), so a swipe takes exactly the
+ * path the button does -- a debtor's history back to the list, a tool back to
+ * wherever it was opened from. Only the touchstart listener is always there,
+ * and it is passive; the touchmove that has to cancel the page's scroll is
+ * added for a touch that began at the edge and removed when it ends, so
+ * every other scroll stays off the main thread.
+ */
+export function EdgeSwipeBack({ root, enabled }: { root: HTMLElement | null; enabled: boolean }) {
+  useEffect(() => {
+    if (!root || !enabled) return;
+    const host = root;
+    if ((navigator as Navigator & { standalone?: boolean }).standalone !== true) return;
+    let start: { x: number; y: number } | null = null;
+    let swiping = false;
+    let view: HTMLElement | null = null;
+    let offset = 0;
+    let last = { x: 0, t: 0 };
+    let velocity = 0;
+    let armed = false;
+    let leaving = false;
+    const width = () => host.clientWidth || window.innerWidth;
+    const backButton = (node: HTMLElement | null) => node?.querySelector<HTMLButtonElement>(".add-title > button:first-child") ?? null;
+
+    const paint = (x: number) => {
+      offset = x;
+      if (view) view.style.transform = x > 0 ? `translateX(${x}px)` : "";
+      const willGoBack = shouldGoBack(x, 0, width());
+      if (willGoBack && !armed) haptic("light");
+      armed = willGoBack;
+    };
+    const stop = () => {
+      start = null;
+      host.removeEventListener("touchmove", onMove);
+      host.removeEventListener("touchend", onEnd);
+      host.removeEventListener("touchcancel", onEnd);
+    };
+    // Once a transition has run (or at once, with reduced motion), whatever
+    // it was moving is an ordinary view again.
+    const afterTransition = (node: HTMLElement, done: () => void) => {
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        node.removeEventListener("transitionend", finish);
+        done();
+      };
+      node.addEventListener("transitionend", finish);
+      window.setTimeout(finish, 450);
+    };
+
+    function onMove(event: TouchEvent) {
+      if (!start) return;
+      const touch = event.touches[0];
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      if (!swiping) {
+        const intent = edgeSwipeIntent(dx, dy);
+        if (intent === "ignore") {
+          stop();
+          return;
+        }
+        if (intent === "pending") {
+          if (dx > Math.abs(dy) && event.cancelable) event.preventDefault();
+          return;
+        }
+        view = host.querySelector<HTMLElement>(":scope > .view:not(.is-parked)");
+        if (!view || !backButton(view)) {
+          stop();
+          return;
+        }
+        swiping = true;
+        start = { x: touch.clientX, y: touch.clientY };
+        view.classList.add("is-edge-swiping");
+      }
+      if (event.cancelable) event.preventDefault();
+      const dt = event.timeStamp - last.t;
+      if (dt > 0) velocity = (touch.clientX - last.x) / dt;
+      last = { x: touch.clientX, t: event.timeStamp };
+      paint(Math.max(0, touch.clientX - start.x));
+    }
+
+    function onEnd(event: TouchEvent) {
+      const wasSwiping = swiping;
+      stop();
+      swiping = false;
+      const target = view;
+      view = null;
+      if (!wasSwiping || !target) return;
+      if (event.timeStamp - last.t > SHEET_DRAG_FLICK_STALE_MS) velocity = 0;
+      target.classList.remove("is-edge-swiping");
+      const back = backButton(target);
+      const goBack = !!back && shouldGoBack(offset, velocity, width());
+      offset = 0;
+      armed = false;
+      if (goBack) {
+        leaving = true;
+        target.classList.add("is-edge-leaving");
+        target.style.transform = `translateX(${width()}px)`;
+        afterTransition(target, () => {
+          back!.click();
+          // A parked view (Wallets) stays mounted, so nothing of the swipe
+          // may be left on it for the next time it is shown.
+          requestAnimationFrame(() => {
+            target.classList.remove("is-edge-leaving");
+            target.style.transform = "";
+            leaving = false;
+          });
+        });
+        return;
+      }
+      target.classList.add("is-edge-settling");
+      target.style.transform = "";
+      afterTransition(target, () => target.classList.remove("is-edge-settling"));
+    }
+
+    const onStart = (event: TouchEvent) => {
+      if (leaving || event.touches.length !== 1) return;
+      if (window.matchMedia("(min-width: 900px)").matches) return;
+      const touch = event.touches[0];
+      // Measured from the app's own left edge: from 600px .phone is a centred column.
+      if (!startsAtEdge(touch.clientX - host.getBoundingClientRect().left)) return;
+      start = { x: touch.clientX, y: touch.clientY };
+      last = { x: touch.clientX, t: event.timeStamp };
+      velocity = 0;
+      swiping = false;
+      host.addEventListener("touchmove", onMove, { passive: false });
+      host.addEventListener("touchend", onEnd, { passive: true });
+      host.addEventListener("touchcancel", onEnd, { passive: true });
+    };
+
+    host.addEventListener("touchstart", onStart, { passive: true });
+    return () => {
+      host.removeEventListener("touchstart", onStart);
+      stop();
+    };
+  }, [root, enabled]);
+  return null;
+}
+
 export function PullToRefresh({
   root,
   onRefresh,
@@ -856,7 +1014,10 @@ export function PullToRefresh({
     if (!disc) return;
     disc.style.setProperty("--pull", `${pull}px`);
     disc.style.setProperty("--pull-turn", `${(pull / PULL_REFRESH_THRESHOLD) * 270}deg`);
-    disc.classList.toggle("is-ready", pull >= PULL_REFRESH_THRESHOLD);
+    const ready = pull >= PULL_REFRESH_THRESHOLD;
+    // Once, as the pull crosses the line where letting go refreshes.
+    if (ready && !disc.classList.contains("is-ready")) haptic("light");
+    disc.classList.toggle("is-ready", ready);
   }, []);
 
   // The disc mounts on the first frame of a pull; give it the pull so far.

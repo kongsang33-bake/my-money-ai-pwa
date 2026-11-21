@@ -1,5 +1,6 @@
 "use client";
 
+import { haptic } from "@/components/haptics";
 import { useEffect, useRef, useState } from "react";
 import NextImage from "next/image";
 import type { User } from "@supabase/supabase-js";
@@ -80,6 +81,7 @@ export function PinGate({
   }, [mode, faceIdAvailable, blocked, onFaceIdUnlock]);
 
   const triggerShake = () => {
+    haptic("warning");
     setShake(true);
     window.setTimeout(() => setShake(false), 420);
   };

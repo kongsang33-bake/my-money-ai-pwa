@@ -564,6 +564,31 @@ a:focus-visible {
   animation: view-back var(--t-3) var(--e-out) backwards;
 }
 
+/* Swipe from the left edge to go back (EdgeSwipeBack). The view follows the
+   finger with nothing easing it, lifted off the ground by the one real
+   shadow so it reads as a page being drawn away; let go short of the line it
+   springs home, past it it eases the rest of the way off before back runs.
+   Its own arrival animation is long finished by then (backwards fill holds
+   nothing), so the inline transform is the only one in play. */
+.phone > .view.is-edge-swiping,
+.phone > .view.is-edge-settling,
+.phone > .view.is-edge-leaving {
+  background: var(--bg);
+  box-shadow: var(--sh-2);
+}
+
+.phone > .view.is-edge-swiping {
+  transition: none;
+}
+
+.phone > .view.is-edge-settling {
+  transition: transform var(--t-3) var(--e-spring);
+}
+
+.phone > .view.is-edge-leaving {
+  transition: transform var(--t-3) var(--e-out);
+}
+
 /* A tab kept mounted while another one is showing (Home, and History and
    Wallets once visited -- see the comment on .home-view in app/page.tsx). content-visibility: hidden rather than
    display: none is the whole point: display: none throws the subtree's layout

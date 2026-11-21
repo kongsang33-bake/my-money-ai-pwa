@@ -454,6 +454,21 @@ the product name -- leave them.
   section, after every sheet's own rules); and the scrim fades through its
   background colour (`--sheet-scrim`), never the backdrop's opacity, which
   is the sheet's parent and turned the sheet see-through.
+- **The iOS habits, as the system gives a native app** (e2e/gestures.spec.ts).
+  A tab tapped while showing scrolls back to its top (`selectTab` in
+  page.tsx; the side nav's debts row pops a debtor's history to the list
+  first). A screen with a back chevron can be swiped in from the left edge
+  to go back (`EdgeSwipeBack`; decisions in lib/edge-swipe.ts, `EDGE_SWIPE_*`)
+  -- in the iOS home-screen app only (`navigator.standalone`), since in
+  Safari that swipe is the browser's own back and on Android the system's.
+  It presses the view's own `.add-title > button:first-child`, so it can
+  never go anywhere the button would not; its non-passive touchmove exists
+  only for a touch that began at the edge. A `haptic()` (components/
+  haptics.ts: `navigator.vibrate`, or on iOS 18+ a hidden `switch` checkbox
+  clicked by script, the only haptic Safari offers) marks a gesture
+  crossing its line (sheet will close, pull will refresh, edge swipe will go
+  back, a row's actions lock open) and a result: saved, wrong PIN. Nothing
+  may depend on one having happened -- older iOS and desktops get none.
 - **The app does not zoom.** Three layers, because no one switch reaches
   every browser: the viewport's `maximumScale: 1`/`userScalable: false`
   (app/layout.tsx; Android follows it), `noPinchZoomScript` cancelling iOS's
