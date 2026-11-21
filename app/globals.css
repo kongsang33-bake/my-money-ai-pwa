@@ -592,7 +592,7 @@ a:focus-visible {
 .debtor-settle-button {
   margin-top: var(--s-3);
   padding: 10px var(--s-4);
-  border-radius: var(--r-full);
+  border-radius: var(--r-sm);
   background: var(--primary);
   color: var(--primary-text);
   font-size: var(--fs-body-sm);
@@ -6447,8 +6447,47 @@ button.entry-main {
   font-weight: var(--fw-bold);
 }
 
-input[type="checkbox"], input[type="radio"] {
+input[type="radio"] {
   accent-color: var(--primary);
+}
+
+/* A checkbox in the fields' own shape: a --surface-2 well with a hairline
+   edge, white (--primary) when on, with its tick in --primary-text. The
+   browser's own was a 13px glyph in the OS's grey, the one control on a form
+   that did not look like the rest of it. */
+input[type="checkbox"] {
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: background var(--t-1) var(--e-out), border-color var(--t-1) var(--e-out);
+}
+
+input[type="checkbox"]:checked {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 3px;
+  width: 6px;
+  height: 11px;
+  border: solid var(--primary-text);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 
 .amount-field-sign {
@@ -6461,6 +6500,17 @@ input[type="checkbox"], input[type="radio"] {
   font-weight: var(--fw-bold);
   color: var(--ink-3);
   pointer-events: none;
+}
+
+/* size="field": an amount among other fields of the same weight, so it reads
+   at a field's size -- still bold, still with its sign inside. */
+.amount-field.is-field .amount-input {
+  font-size: var(--fs-h3);
+  padding-left: 40px;
+}
+
+.amount-field.is-field .amount-field-sign {
+  font-size: var(--fs-h3);
 }
 
 /* A person's share inside a split is a part of the bill's amount, typed in a
@@ -6604,11 +6654,18 @@ input[type="checkbox"], input[type="radio"] {
   display: flex;
   align-items: center;
   gap: var(--s-2);
+  min-height: 44px;
 }
 
-.edit-sheet .sheet-check-row input {
-  width: auto;
+/* Restated over `.edit-sheet label input` (the text field's 52px well and
+   padding), which would otherwise apply to the box once it has no native
+   appearance. */
+.edit-sheet .sheet-check-row input[type="checkbox"] {
+  width: 22px;
+  min-height: 0;
+  height: 22px;
   margin: 0;
+  padding: 0;
 }
 
 /* A sheet like every other one: it used to be a white card with an emerald
@@ -6744,7 +6801,7 @@ input[type="checkbox"], input[type="radio"] {
   align-items: center;
   column-gap: var(--s-3);
   row-gap: var(--s-2);
-  /* auto, not 0: this outranks .budget-page > *, and the rows have to centre
+  /* auto, not 0: this outranks .view.edit-sheet > *, and the rows have to centre
      in the desk's reading measure with the header and the save button. */
   margin: 0 auto;
   padding: var(--s-3) 0;
@@ -6769,13 +6826,20 @@ input[type="checkbox"], input[type="radio"] {
   margin-top: 0;
 }
 
-/* A form of eight rows reads down, not across: past a phone it keeps a
-   reading measure, centred, like the Upcoming timeline -- across the desk's
-   whole column each meter was a bar the width of the screen. */
-.budget-page > * {
+/* Every PageFrame screen (budgets, profile, PIN, report, Ask AI) is a form
+   or a conversation, and reads down, not across: past a phone it keeps a
+   reading measure, centred, like the Upcoming timeline. Across the desk's
+   whole column a name field ran 1300px and each budget meter was a bar the
+   width of the screen. */
+.view.edit-sheet > * {
   max-width: 720px;
   margin-inline: auto;
   width: 100%;
+}
+
+/* A button is inline-block, which auto margins cannot centre. */
+.view.edit-sheet > .side-ghost {
+  display: block;
 }
 
 .budget-row-text {
@@ -6857,6 +6921,9 @@ input[type="checkbox"], input[type="radio"] {
 }
 
 .report-includes {
+  /* Label over value: two inline siblings ran together ("Sheetsสรุปยอด"). */
+  display: grid;
+  gap: 2px;
   font-size: var(--fs-caption);
   color: var(--ink-3);
   padding: var(--s-3);

@@ -229,8 +229,8 @@ and stacking on the right instead of scrolling sideways. จดรายกา�
 panel with its own close button and Esc back to `addBack`, centred in the
 window while it is shorter than it (`.phone.tab-add` is a flex column, so a
 taller panel falls back to the top and scrolls); the list-shaped screens
-(ของฉัน, งบประมาณ, กำลังจะมา) keep a centred reading width rather than the
-whole desk column; the landing's install section is two columns there; an entry's detail
+(ของฉัน, กำลังจะมา, and every `PageFrame` screen through `.view.edit-sheet > *`)
+keep a centred reading width rather than the whole desk column; the landing's install section is two columns there; an entry's detail
 opens as a drawer down the right edge; the composer sends on Ctrl/⌘+Enter.
 The e2e fixture's `navigate`, `openMe` and `openMoneyTool` go through the
 side nav when it is showing (`hasSideNav`) -- a spec opens a money tool with
@@ -338,7 +338,11 @@ the product name -- leave them.
   (`--ink`), never emerald and never a second glow ring. Choices (category
   and cycle chips, colour swatches, icon tiles, the split stepper) are flat
   `--r-sm`/`--r-xs` tiles, not pills or discs. Money is always `AmountInput`,
-  which draws the baht sign inside the field. A sheet closes with
+  which draws the baht sign inside the field -- in every sheet too, at
+  `size="field"` where the amount is one field among several (a wallet's
+  balance, a goal's target) rather than the figure the form is about. A
+  checkbox is the same well as a field, white with a dark tick when on
+  (`input[type="checkbox"]`), never the browser's own grey glyph. A sheet closes with
   `SheetClose` (a lucide X), never a typed "x". A file input's own chrome is
   hidden behind a `.file-button` label, the way the composer's แนบสลิป is.
   The add tab's AI/manual switch is underlined tabs (`.add-mode-tabs`) so it

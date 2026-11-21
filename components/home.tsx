@@ -14,7 +14,7 @@ import { transactionTypeLabels } from "@/lib/taxonomy";
 import { categoryColor, nameColor } from "@/lib/category";
 import type { Entry, MoneyGoal, NetWorthDebtFormula, RecurringExpense, Wallet } from "@/lib/types";
 import { CategoryIcon, RecurringAvatarGlyph } from "@/components/shared";
-import { CountUpMoney, DateField, EmptyNote, IconChip, IconPattern, InfoHint, MonthField, Rail, SheetFrame, SkeletonList, decimalInputPattern, SheetClose, useMediaQuery } from "@/components/primitives";
+import { AmountInput, CountUpMoney, DateField, EmptyNote, IconChip, IconPattern, InfoHint, MonthField, Rail, SheetFrame, SkeletonList, SheetClose, useMediaQuery } from "@/components/primitives";
 
 export const CalendarHeatmap = memo(function CalendarHeatmap({
   start,
@@ -868,11 +868,11 @@ export function GoalEditSheet({ onClose, onCreate, closing }: { onClose: () => v
       </label>
       <label>
         ยอดเป้าหมาย
-        <input inputMode="decimal" value={targetText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setTargetText(event.target.value); }} placeholder="50000" />
+        <AmountInput size="field" value={toMoneyAmount(targetText)} onChange={(amount) => setTargetText(amount ? String(amount) : "")} placeholder="50000" />
       </label>
       <label>
         มีเงินเก็บแล้ว
-        <input inputMode="decimal" value={savedText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setSavedText(event.target.value); }} placeholder="0" />
+        <AmountInput size="field" value={toMoneyAmount(savedText)} onChange={(amount) => setSavedText(amount ? String(amount) : "")} />
       </label>
       <label>วันที่อยากบรรลุ (ถ้ามี)<DateField value={deadline} onChange={setDeadline} /></label>
       <button className="save" onClick={submit} disabled={!name.trim() || toMoneyAmount(targetText) <= 0}>สร้างเป้าหมาย</button>
