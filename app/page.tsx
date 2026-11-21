@@ -1261,19 +1261,10 @@ export default function Home() {
     return buildUpcoming({ recurring: recurringExpenses, entries, goals, cycleEnd, now, windowDays: UPCOMING_WINDOW_DAYS });
   }, [tab, recurringExpenses, entries, goals, monthStartDay]);
 
-  useEffect(() => {
-    if (!user || !dueSoonRecurring.length) return;
-    const key = `money-ai-recurring-reminded:${user.id}:${todayDateInput()}`;
-    if (window.localStorage.getItem(key)) return;
-    const timer = window.setTimeout(() => {
-      const detail = dueSoonRecurring
-        .map(({ item, billingDate }) => `${item.name} ${moneySign}${formatMoney(item.amount)} (${billingDate.getDate()}/${billingDate.getMonth() + 1})`)
-        .join(", ");
-      notify({ tone: "info", title: "ใกล้ถึงกำหนดตัดเงิน", detail });
-      window.localStorage.setItem(key, "1");
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [dueSoonRecurring, user, notify]);
+  // Bills coming due are not announced with a toast on launch any more: it
+  // sat over Home's content for seconds while the same bill was already on
+  // Home's own "ใกล้ถึงกำหนด" rail, in "ของฉัน"'s heads-up row and counted on
+  // the "กำลังจะมา" tab (BottomNav / SideNav upcomingCount).
 
   const cycleRange = useMemo(() => cycleBounds(selectedMonth, monthStartDay), [selectedMonth, monthStartDay]);
   const defaultHistoryDay = useMemo(() => defaultDayForCycle(selectedMonth, monthStartDay), [selectedMonth, monthStartDay]);
@@ -4114,6 +4105,7 @@ export default function Home() {
           onSelect={setTab}
           onAdd={() => openAddTab()}
           onMore={() => setTab("more")}
+          upcomingCount={dueSoonRecurring.length + unpaidCards.length}
         />
       </section>
     </main>

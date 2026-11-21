@@ -133,7 +133,11 @@ down the left, of what `buildUpcoming` finds in the next
 30th a bill due on the 1st is "พรุ่งนี้" rather than hidden behind a month
 edge the user does not think in — under a "ตอนนี้" group for undated things
 already wanting attention (unpaid cards, budgets at `BUDGET_NEAR_PERCENT`).
-Wallets moved off the nav to make room: it is the first tile under "อื่น ๆ"
+A date (or "ตอนนี้") is printed once per run of rows, not beside each card.
+Bills coming due are counted on this tab (`upcomingCount`, the bottom nav's
+corner badge and the side nav's count) -- there is no launch toast for them
+any more: it covered Home for seconds while the same bill sat on Home's own
+rail, so don't bring it back. Wallets moved off the nav to make room: it is the first tile under "อื่น ๆ"
 (`MORE_SECTION_TABS`, so it has a back button and the nav shows "อื่น ๆ"),
 still parked like Home and History, still one tap from Home's billboard and
 wallet rail. The e2e fixture's `navigate(page, "wallets")` goes through that
@@ -418,6 +422,17 @@ the product name -- leave them.
   with no way to scroll to them. A keyboard spec has to shrink `--vvh` alone,
   not the window: shrinking the window also shrinks every fixed box, which
   is the one thing iOS does not do.
+- **A sheet swipes down to close, below 900px** (`useSheetDrag` inside
+  `SheetFrame`; the decisions and their tests in lib/sheet-drag.ts, the
+  thresholds `SHEET_DRAG_*` in lib/constants.ts), so every sheet gets it
+  and none needs its own. Only a touch that starts with nothing under it
+  scrolled and moves mostly down is a drag; the position goes straight to
+  the DOM, like `PullToRefresh`. Two traps it already hit: the sheets'
+  entrance animations are `both`-filled and beat an inline transform, so a
+  dragged sheet swaps them for transitions (`.sheet-drag`, in the Motion
+  section, after every sheet's own rules); and the scrim fades through its
+  background colour (`--sheet-scrim`), never the backdrop's opacity, which
+  is the sheet's parent and turned the sheet see-through.
 - **`.phone` is the real, edge-to-edge app root at every width — not a
   device mockup.** There is no rounded-card-with-drop-shadow "phone frame"
   centered on a differently-colored backdrop any more; that read as a

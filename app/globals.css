@@ -954,8 +954,8 @@ a:focus-visible {
   margin-bottom: var(--s-4);
   padding: 0 var(--s-4);
   border-radius: var(--r-sm);
-  border: 1px solid var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border: 1px solid var(--line);
+  background: var(--surface-2);
   color: var(--ink);
   font-weight: var(--fw-semibold);
   font-size: var(--fs-body);
@@ -1114,6 +1114,26 @@ a:focus-visible {
   height: 24px;
   display: grid;
   place-items: center;
+}
+
+/* The side nav's "things wanting attention" count, as a corner badge drawn
+   the way the side nav draws it (emerald ink on its soft wash) -- never a
+   red alarm dot. */
+.bottom-nav .nav-icon { position: relative; }
+.bottom-nav .nav-count {
+  position: absolute;
+  top: -4px;
+  right: -9px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--r-xs);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  line-height: 16px;
+  text-align: center;
 }
 
 @keyframes nav-pop {
@@ -3437,7 +3457,8 @@ button.poster:active {
 .goal-item { padding-top: var(--s-3); border-top: 1px solid var(--line-soft); }
 .goal-item-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
 .goal-item-head b { font-size: var(--fs-body); }
-.goal-item-head .icon-button { font-size: var(--fs-h3); }
+.goal-item-head .icon-button { min-width: 36px; min-height: 36px; border-radius: var(--r-sm); color: var(--ink-3); }
+.goal-item-head .icon-button:hover { color: var(--danger); background: var(--surface-2); }
 .goal-card-values { display: flex; align-items: baseline; gap: var(--s-2); margin-top: var(--s-4); }
 .goal-card-values strong { font-size: var(--fs-value); letter-spacing: -0.035em; }
 .goal-card-values span { color: var(--ink-3); font-size: var(--fs-micro); }
@@ -3573,7 +3594,7 @@ button.poster:active {
   align-self: center;
   margin-bottom: var(--s-3);
   padding: 5px 12px;
-  border-radius: var(--r-full);
+  border-radius: var(--r-sm);
   background: var(--surface-2);
   color: var(--ink-3);
   font-size: var(--fs-micro);
@@ -3600,8 +3621,9 @@ button.poster:active {
 }
 
 .ask-ai-examples button {
+  min-height: 36px;
   padding: 8px 14px;
-  border-radius: var(--r-full);
+  border-radius: var(--r-sm);
   background: var(--surface-2);
   border: 1px solid var(--line);
   color: var(--ink-2);
@@ -5963,9 +5985,12 @@ button.entry-main {
 }
 
 /* A timeline reads down, not across: past a phone's width the rows keep a
-   reading measure rather than stretching to the page. */
+   reading measure rather than stretching to the page -- centred in it,
+   like every other desk view, not pinned left with a gulf on the right. */
 .upcoming-view > * {
   max-width: 720px;
+  margin-inline: auto;
+  width: 100%;
 }
 
 .upcoming-kicker {
@@ -6594,6 +6619,9 @@ input[type="checkbox"], input[type="radio"] {
 }
 
 .recap-share {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   min-height: 52px;
   padding: 14px;
@@ -8882,6 +8910,44 @@ body:has(.login-page) #app-splash {
 
 .confirm-dialog.closing {
   animation: pop-out var(--t-2) var(--e-out) both;
+}
+
+/* Swipe-down-to-close (useSheetDrag, components/primitives.tsx). Once a
+   sheet has been dragged, its `both`-filled entrance animation -- which would
+   hold the transform and beat the inline one -- gives way to transitions for
+   the rest of its life: none while the finger is down, a spring back if it
+   is let go short, and an ease down (or, closed later by its X, the same
+   ease from where it rests) when it closes. Its scrim follows. Here, after
+   every sheet's own entrance and exit rules, so these win at the same
+   specificity. */
+.sheet-backdrop.sheet-drag,
+.sheet-backdrop > .sheet-drag {
+  animation: none;
+}
+
+.sheet-backdrop > .sheet-drag {
+  transition: transform var(--t-3) var(--e-spring);
+}
+
+.sheet-backdrop.sheet-drag:not(:has(~ .dialog-backdrop)) {
+  background: color-mix(in srgb, var(--overlay-scrim) calc(var(--sheet-scrim, 1) * 100%), transparent);
+  transition: background var(--t-3) var(--e-out);
+}
+
+.sheet-backdrop.sheet-drag.is-dragging,
+.sheet-backdrop > .sheet-drag.is-dragging {
+  transition: none;
+}
+
+.sheet-backdrop > .sheet-drag.closing {
+  animation: none;
+  transform: translateY(100%);
+  transition: transform var(--t-3) var(--e-out);
+}
+
+.sheet-backdrop.sheet-drag.closing {
+  animation: none;
+  --sheet-scrim: 0;
 }
 
 @keyframes spin {

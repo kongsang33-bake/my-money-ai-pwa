@@ -353,3 +353,16 @@ export const ENTRY_SWIPE_SLOP = 8;
 export const PULL_REFRESH_THRESHOLD = 64;
 export const PULL_REFRESH_MAX = 96;
 export const PULL_REFRESH_MIN_MS = 600;
+
+// Swipe a sheet down to close it (useSheetDrag, components/primitives.tsx;
+// the decision itself is lib/sheet-drag.ts). How far a finger travels before
+// a touch at the sheet's top counts as a drag rather than a tap; the share of
+// the sheet's height that closes it on release; and the flick speed (px/ms)
+// that closes it however short the drag, provided it travelled at least
+// SHEET_DRAG_FLICK_MIN_PX -- a twitch is not a flick. A finger held still
+// for SHEET_DRAG_FLICK_STALE_MS before lifting has no flick speed left.
+export const SHEET_DRAG_SLOP = 8;
+export const SHEET_DRAG_CLOSE_FRACTION = 0.3;
+export const SHEET_DRAG_FLICK_VELOCITY = 0.5;
+export const SHEET_DRAG_FLICK_MIN_PX = 40;
+export const SHEET_DRAG_FLICK_STALE_MS = 100;
