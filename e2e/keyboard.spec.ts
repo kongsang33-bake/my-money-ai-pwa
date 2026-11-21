@@ -1,4 +1,4 @@
-import { test, expect, navigate } from "./fixture.ts";
+import { test, expect, navigate, openMoneyTool } from "./fixture.ts";
 import type { Page } from "@playwright/test";
 
 // While the on-screen keyboard is up the bottom nav slides out of the way,
@@ -15,10 +15,7 @@ const navState = (page: Page) =>
   }));
 
 async function openAsk(page: Page) {
-  await navigate(page, "more");
-  const tile = page.locator(".more-grid button", { hasText: "ถาม AI เรื่องเงิน" });
-  await tile.evaluate((node) => node.scrollIntoView({ block: "center", behavior: "instant" }));
-  await tile.dispatchEvent("click");
+  await openMoneyTool(page, "ถาม AI เรื่องเงิน");
   await expect(page.locator(".ask-ai-input")).toBeVisible();
   await page.waitForTimeout(400);
 }

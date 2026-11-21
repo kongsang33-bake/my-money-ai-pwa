@@ -216,6 +216,29 @@ export async function navigate(page: Page, tab: keyof typeof NAV | "wallets") {
   await page.waitForTimeout(400);
 }
 
+/**
+ * Opens one of the money tools the way this width offers them: a row of the
+ * side nav on a desk (where "ของฉัน" no longer repeats them as tiles), or its
+ * tile under "ของฉัน" on a phone. `label` is the tool's name, which the two
+ * share. The tile is scrolled into view and tapped with dispatchEvent: the
+ * last tile can sit at the very end of .phone's scroll range, and against
+ * .phone's smooth scrolling Playwright's own click kept re-scrolling and never
+ * read the tile as stable.
+ */
+export async function openMoneyTool(page: Page, label: string) {
+  if (await hasSideNav(page)) {
+    await page.locator(".side-nav button", { hasText: label }).first().click();
+    await page.waitForTimeout(400);
+    return;
+  }
+  await navigate(page, "more");
+  const tile = page.locator(".more-grid button", { hasText: label });
+  await tile.evaluate((node) => node.scrollIntoView({ block: "center", behavior: "instant" }));
+  await expect(tile).toBeInViewport();
+  await tile.dispatchEvent("click");
+  await page.waitForTimeout(400);
+}
+
 /** Whether this width shows the desktop side nav (from 900px) rather than the phone's bottom bar and topbar. */
 export async function hasSideNav(page: Page) {
   return page.evaluate(() => {

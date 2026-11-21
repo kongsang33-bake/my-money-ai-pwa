@@ -484,10 +484,12 @@ export function MoreView({
           <ChevronRight size={18} aria-hidden="true" />
         </button>
       )}
-      <h3 className="me-section">เครื่องมือเงิน</h3>
+      <h3 className="me-section me-tools-heading">เครื่องมือเงิน</h3>
       {/* A grid, not a rail as the mock drew it: this is a menu of eight
           places to go, and a row that scrolls sideways would hide most of
-          them. */}
+          them. Phone only: from 900px every one of them is a row of the side
+          nav, always in view, so the grid (and its heading) would be the same
+          eight places listed twice on one screen. */}
       <div className="more-grid">
         {/* First, because it was a bottom-nav tab until "กำลังจะมา" took the
             slot: the most-used thing on this list. */}

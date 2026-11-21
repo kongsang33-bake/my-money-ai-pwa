@@ -1,4 +1,4 @@
-import { test, expect, buildEmptySeed, buildSeed, openApp, openSetup, waitForApp, navigate } from "./fixture.ts";
+import { test, expect, buildEmptySeed, buildSeed, openApp, openSetup, waitForApp, navigate, hasSideNav } from "./fixture.ts";
 
 // What a brand-new account actually sees. Everything here is the boundary the
 // suite can reach: rendering, navigation and local component state. Creating
@@ -77,7 +77,11 @@ test.describe("first run", () => {
     // งบประมาณ / ถาม AI / ส่งออกรีพอร์ท used to be behind the hamburger,
     // next to sign-out, where nobody looking for a budget would find them.
     await navigate(app, "more");
-    const tiles = app.locator(".more-grid button");
+    // On a desk the place is the side nav, always in view, and "ของฉัน"
+    // does not repeat it as tiles.
+    const desk = await hasSideNav(app);
+    if (desk) await expect(app.locator(".more-grid")).toBeHidden();
+    const tiles = desk ? app.locator('.side-nav .side-nav-item:not([data-nav="home"]):not([data-nav="history"]):not([data-nav="upcoming"])') : app.locator(".more-grid button");
     // Eight since Wallets moved here from the bottom nav to make room for
     // "กำลังจะมา".
     await expect(tiles).toHaveCount(8);

@@ -149,7 +149,8 @@ profile form -- it was a large centred portrait plus a second "บัญชี�
 row, three doors into one screen counting the topbar, and the portrait pushed
 the tools off the first screenful; don't grow it back), one heads-up row
 (the nearest unlogged bill, else an unpaid card, else a budget at its edge —
-it opens "กำลังจะมา"), the money tools, then the account's own rows (PIN, the
+it opens "กำลังจะมา"), the money tools (a phone only: from 900px they are the
+side nav's rows, so ของฉัน does not list them twice), then the account's own rows (PIN, the
 privacy policy, ออกจากระบบ and ลบบัญชี in `--danger`). ลบบัญชี opens
 `ConfirmDeleteAccount`, whose button stays disabled until
 `DELETE_ACCOUNT_CONFIRM_TEXT` is typed; the delete is one `RPC.deleteMyAccount`
@@ -231,8 +232,9 @@ taller panel falls back to the top and scrolls); the list-shaped screens
 (ของฉัน, งบประมาณ, กำลังจะมา) keep a centred reading width rather than the
 whole desk column; the landing's install section is two columns there; an entry's detail
 opens as a drawer down the right edge; the composer sends on Ctrl/⌘+Enter.
-The e2e fixture's `navigate` and `openMe` go through the side nav when it is
-showing (`hasSideNav`).
+The e2e fixture's `navigate`, `openMe` and `openMoneyTool` go through the
+side nav when it is showing (`hasSideNav`) -- a spec opens a money tool with
+`openMoneyTool`, never by clicking `.more-grid` itself, which is hidden there.
 History ("รายการ") is list-first: a bare search field (no card around it),
 held under the topbar while the month scrolls, with one row of type chips
 under it (`QUICK_TYPES` in components/history.tsx, the same `filters.type`

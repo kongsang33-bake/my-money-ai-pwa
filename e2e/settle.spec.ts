@@ -1,4 +1,4 @@
-import { test, expect, navigate, openApp, openDraft, seedDraft, buildSeed } from "./fixture.ts";
+import { test, expect, navigate, openApp, openDraft, openMoneyTool, seedDraft, buildSeed } from "./fixture.ts";
 
 // Two halves of the same evening: an expense someone else fronted, and
 // clearing what is left between you afterwards.
@@ -50,8 +50,7 @@ test.describe("settling up", () => {
   });
 
   test("offers to clear both sides with one person", async ({ app }) => {
-    await app.evaluate(() => document.querySelectorAll<HTMLButtonElement>(".bottom-nav > button")[4].click());
-    await app.locator(".more-grid button", { hasText: "จัดการหนี้" }).click();
+    await openMoneyTool(app, "จัดการหนี้");
     await app.locator(".debtor-page-list .debtor-main-button").first().click();
 
     const settle = app.locator(".debtor-settle-button");

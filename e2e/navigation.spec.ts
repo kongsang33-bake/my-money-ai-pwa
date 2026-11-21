@@ -1,4 +1,4 @@
-import { test, expect, hasSideNav, navigate, openMe, scrollAppTo } from "./fixture.ts";
+import { test, expect, hasSideNav, navigate, openMe, openMoneyTool, scrollAppTo } from "./fixture.ts";
 
 const scrollTop = (page: Parameters<typeof navigate>[0]) =>
   page.evaluate(() => document.querySelector(".phone")!.scrollTop);
@@ -85,18 +85,10 @@ test.describe("navigation", () => {
       await app.locator(".me-list .me-row", { hasText: label }).click();
       return;
     }
+    // From "ของฉัน", so back has somewhere to land that is not Home -- on a
+    // desk through the side nav's row, on a phone through its tile.
     await navigate(app, "more");
-    const tile = app.locator(".more-grid button", { hasText: label });
-    // Now that this is a page rather than a sheet, the last tile can sit at
-    // the very end of .phone's scroll range. Playwright's click scrolls the
-    // target again on every attempt, and against .phone's
-    // scroll-behavior: smooth that re-starts a scroll each time, so the tile
-    // never reads as "stable" even though it is sitting still (measured: the
-    // same box for eight frames). Bring it into view and check it is there,
-    // then fire the tap itself.
-    await tile.evaluate((node) => node.scrollIntoView({ block: "center", behavior: "instant" }));
-    await expect(tile).toBeInViewport();
-    await tile.dispatchEvent("click");
+    await openMoneyTool(app, label);
   }
 
   for (const { label, heading, from } of MENU_SCREENS) {
@@ -114,7 +106,7 @@ test.describe("navigation", () => {
       // Back goes where the screen was opened from.
       await app.locator(".view:not(.is-parked) .add-title > button:first-child").click();
       // Both kinds are reached through "ของฉัน" now, so back lands there.
-      await expect(app.locator(".more-grid")).toBeVisible();
+      await expect(app.locator(".view:not(.is-parked).more-view")).toBeVisible();
     });
   }
 
@@ -134,8 +126,7 @@ test.describe("navigation", () => {
   });
 
   test("keeps อื่น ๆ selected inside the screens it lists", async ({ app }) => {
-    await navigate(app, "more");
-    await app.locator(".more-grid button", { hasText: "รายจ่ายประจำ" }).click();
+    await openMoneyTool(app, "รายจ่ายประจำ");
     await expect(app.locator(".bottom-nav > button").nth(4)).toHaveClass(/\bactive\b/);
   });
 
