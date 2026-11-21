@@ -108,7 +108,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { UpcomingView } from "@/components/upcoming";
 import { SideNav, type SideNavKey } from "@/components/side-nav";
 import { ConfirmDialog, CountUpMoney, EdgeSwipeBack, ElapsedSeconds, EmptyNote, ErrorActions, PullToRefresh, Rail, SheetClose, SkeletonDashboard, SkeletonList, StateCard, ToastHost, useDismiss, useMediaQuery, useStableHandler } from "@/components/primitives";
-import { AiComposer, DraftImpact, DraftRow, EditSheet, EntryList, ManualEntryForm, QuickAddStrip } from "@/components/add";
+import { AiComposer, DraftImpact, DraftRow, EditSheet, EntryActionSheet, EntryList, ManualEntryForm, QuickAddStrip } from "@/components/add";
 import {
   CalendarHeatmap,
   CashFlowTrendCard,
@@ -133,6 +133,7 @@ import { HistoryBackToTop, HistoryFilterBar } from "@/components/history";
 import { LoadFailedScreen, PinGate, PrivacyGate, SecurityView } from "@/components/auth";
 import { loadSucceeded, startupScreen } from "@/lib/startup";
 import { viewMotion, type ViewMotion } from "@/lib/view-motion";
+import { canLogAgain, repeatDraftFromEntry } from "@/lib/repeat-entry";
 import { haptic } from "@/components/haptics";
 import { clearLocalPrivacyAck, fetchPrivacyAck, readLocalPrivacyAck, recordPrivacyAck } from "@/lib/privacy";
 import { Landing } from "@/components/landing";
@@ -402,6 +403,8 @@ export default function Home() {
   // The entry open in the detail sheet (EntryDetailSheet), which is where a
   // tap on an entry lands now; editing is one step on from there.
   const [viewing, setViewing] = useState<Entry | null>(null);
+  // The entry a press-and-hold opened EntryActionSheet for.
+  const [actionsEntry, setActionsEntry] = useState<Entry | null>(null);
   // Where the "อื่น ๆ" nav button sat when it was tapped, so the sheet can
   // expand out of it instead of just sliding up from the bottom edge.
   const [debtorSheetMode, setDebtorSheetMode] = useState<"create" | "edit" | null>(null);
@@ -1037,6 +1040,7 @@ export default function Home() {
     !!editing ||
     !!pocketSheet ||
     !!viewing ||
+    !!actionsEntry ||
     !!debtorSheetMode ||
     !!walletSheetMode ||
     !!reconcilingWallet ||
@@ -1115,6 +1119,92 @@ export default function Home() {
       root.style.removeProperty("--vvh");
     };
   }, []);
+
+  const topbarRef = useRef<HTMLElement | null>(null);
+  const topbarTitleRef = useRef<HTMLElement | null>(null);
+  // The large title folding into the topbar: once the shown screen's heading
+  // has scrolled up under the bar, the bar carries a copy of it in place of
+  // the wordmark (data-title-collapsed; the CSS does the cross-fade). Written
+  // to the DOM from an IntersectionObserver, never through state, for the
+  // same reason as data-scrolled: nothing re-renders while a page scrolls.
+  // Looked up again whenever the screen changes -- a debtor's history titles
+  // itself with their name -- and watched for its text changing in place
+  // (the debt books share one heading).
+  useEffect(() => {
+    const root = scrollRootEl;
+    const bar = topbarRef.current;
+    const copy = topbarTitleRef.current;
+    if (!root || !bar || !copy) return;
+    let observer: IntersectionObserver | null = null;
+    let textWatch: MutationObserver | null = null;
+    let arrival: MutationObserver | null = null;
+    let barSize: ResizeObserver | null = null;
+    const reset = () => {
+      bar.removeAttribute("data-title-collapsed");
+      delete copy.dataset.title;
+    };
+    // A code-split screen can arrive well after its tab does -- seconds, on a
+    // slow network's first visit -- so while what is showing is still the
+    // loading fallback (a bare `.view`; every real screen adds its own class)
+    // its heading is waited for, however long that takes. A real screen with
+    // no title (Home) is simply left alone: watching the app's every change
+    // for a heading that will never come cost a whole-document lookup per
+    // toast, per rail update, per piece of a streamed Ask AI answer.
+    const shown = () => root.querySelector<HTMLElement>(":scope > .view:not(.is-parked)");
+    const lookUp = () => shown()?.querySelector<HTMLElement>(":is(.add-title h2, .upcoming-head h1)") ?? null;
+    const stillLoading = () => {
+      const view = shown();
+      return !view || view.className.trim() === "view";
+    };
+    const find = () => {
+      const heading = lookUp();
+      if (!heading) {
+        if (!stillLoading()) return;
+        if (!arrival) {
+          arrival = new MutationObserver(() => {
+            if (!lookUp() && stillLoading()) return;
+            arrival?.disconnect();
+            arrival = null;
+            find();
+          });
+          arrival.observe(root, { childList: true, subtree: true });
+        }
+        return;
+      }
+      const sync = () => { copy.dataset.title = heading.textContent ?? ""; };
+      sync();
+      textWatch = new MutationObserver(sync);
+      textWatch.observe(heading, { childList: true, characterData: true, subtree: true });
+      // The line it folds at is the bar's foot, so the observer is rebuilt
+      // whenever the bar's height changes -- from 900px the bar is not shown
+      // at all, and a tablet turned across that width brings it back.
+      const watch = () => {
+        observer?.disconnect();
+        observer = new IntersectionObserver(([entry]) => {
+          const above = !entry.isIntersecting && entry.boundingClientRect.top < (entry.rootBounds?.top ?? 0);
+          bar.toggleAttribute("data-title-collapsed", above);
+        }, { root, rootMargin: `-${bar.offsetHeight}px 0px 0px 0px`, threshold: 0 });
+        observer.observe(heading);
+      };
+      watch();
+      let height = bar.offsetHeight;
+      barSize = new ResizeObserver(() => {
+        if (bar.offsetHeight === height) return;
+        height = bar.offsetHeight;
+        watch();
+      });
+      barSize.observe(bar);
+    };
+    reset();
+    find();
+    return () => {
+      arrival?.disconnect();
+      barSize?.disconnect();
+      observer?.disconnect();
+      textWatch?.disconnect();
+      reset();
+    };
+  }, [scrollRootEl, tab, selectedDebtor]);
 
   // The scroll container, plus one thing that has to watch it scroll: Home's
   // topbar floats clear over the billboard until content passes under it,
@@ -3119,6 +3209,34 @@ export default function Home() {
     setViewing(null);
     void deleteEntry(entry);
   }, [deleteEntry]);
+  // A press-and-hold's action sheet. Each choice closes it and hands the
+  // entry to the path that already does that thing; "จดซ้ำ" adds a draft and
+  // opens the review on it, so the save is still one the user confirms.
+  const actionsDismiss = useDismiss(!!actionsEntry, () => setActionsEntry(null));
+  const openEntryActions = useCallback((entry: Entry) => setActionsEntry(entry), []);
+  const viewFromActions = useCallback((entry: Entry) => {
+    setActionsEntry(null);
+    setViewing(entry);
+  }, []);
+  const editFromActions = useCallback((entry: Entry) => {
+    setActionsEntry(null);
+    openEditSheet(entry);
+  }, [openEditSheet]);
+  const deleteFromActions = useCallback((entry: Entry) => {
+    setActionsEntry(null);
+    void deleteEntry(entry);
+  }, [deleteEntry]);
+  // "จดซ้ำวันนี้", from the hold menu or the detail sheet: a new draft dated
+  // today, opened in the review. Joining a review already open, it makes that
+  // batch more than the slip it came from, so the slip's total stops being
+  // the thing to check it against.
+  const repeatEntry = useCallback((entry: Entry) => {
+    setActionsEntry(null);
+    setViewing(null);
+    if (drafts.length) setReceiptTotal(0);
+    setDrafts((items) => [...items, repeatDraftFromEntry(entry, fromDateInput(todayDateInput()), `${Date.now()}-repeat`, wallets)]);
+    openAddTab("ai");
+  }, [drafts.length, wallets, openAddTab]);
   const debtorSheetDismiss = useDismiss(!!debtorSheetMode, () => { setDebtorSheetMode(null); setEditingDebtor(null); });
   const walletSheetDismiss = useDismiss(!!walletSheetMode, () => { setWalletSheetMode(null); setEditingWallet(null); });
   const reconcileDismiss = useDismiss(!!reconcilingWallet, () => setReconcilingWallet(null));
@@ -3428,7 +3546,7 @@ export default function Home() {
       </div>
     </section>
   ) : null;
-  const homeRecent = <RecentRail entries={entries} onOpen={openEntryDetail} onSeeAll={openHistoryTab} />;
+  const homeRecent = <RecentRail entries={entries} onOpen={openEntryDetail} onLongPress={openEntryActions} onSeeAll={openHistoryTab} />;
 
   return (
     <main className="shell">
@@ -3464,10 +3582,19 @@ export default function Home() {
             one hub the account hangs off, rather than straight into the
             profile form -- three separate doors into that form was the
             clutter "ของฉัน" was cleaned up to remove. */}
-        <header className="topbar">
+        <header className="topbar" ref={topbarRef}>
           <div className="topbar-brand">
             <i className="brand-mark" aria-hidden="true" />
-            <b className="brand-name">{APP_NAME}</b>
+            {/* The wordmark gives way to the screen's own title once that
+                title has scrolled up under the bar (the collapsing-title effect) --
+                iOS's large title folding into its navigation bar. The copy is
+                drawn by CSS from data-title, never text in the page: the
+                heading itself is still there, and a second copy of it showed
+                up twice to find-in-page, a screen reader and getByText. */}
+            <span className="topbar-brand-swap">
+              <b className="brand-name">{APP_NAME}</b>
+              <b className="topbar-title" ref={topbarTitleRef} aria-hidden="true" />
+            </span>
           </div>
           <button className="home-identity" onClick={() => setTab("more")} aria-label="ของฉัน" aria-current={tab === "more" ? "page" : undefined}>
             <b>{displayName}</b>
@@ -3755,8 +3882,8 @@ export default function Home() {
                     keystroke would replay it), so a new set of results arrives
                     with the list's own card-in instead of swapping in place. */}
                 {searchActive
-                  ? <EntryList key={`${historyFilters.type}|${historyFilters.category}|${historyFilters.minAmount}|${historyFilters.maxAmount}`} entries={searchResults} exitSource={entries} exitScope="search" onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
-                  : <EntryList entries={monthlyEntries} exitSource={entries} exitScope={selectedMonth} selectedDay={selectedDay} dayTotals onOpen={openEntryDetail} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />}
+                  ? <EntryList key={`${historyFilters.type}|${historyFilters.category}|${historyFilters.minAmount}|${historyFilters.maxAmount}`} entries={searchResults} exitSource={entries} exitScope="search" onOpen={openEntryDetail} onLongPress={openEntryActions} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+                  : <EntryList entries={monthlyEntries} exitSource={entries} exitScope={selectedMonth} selectedDay={selectedDay} dayTotals onOpen={openEntryDetail} onLongPress={openEntryActions} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />}
                 <HistoryBackToTop active={tab === "history"} />
               </>
             )}
@@ -3962,8 +4089,21 @@ export default function Home() {
             onClose={viewingDismiss.requestClose}
             onEdit={editFromDetail}
             onDelete={deleteFromDetail}
+            onRepeat={canLogAgain(viewing) ? repeatEntry : undefined}
             onOpen={setViewing}
             closing={viewingDismiss.closing}
+          />
+        )}
+        {actionsDismiss.mounted && actionsEntry && (
+          <EntryActionSheet
+            entry={actionsEntry}
+            canRepeat={canLogAgain(actionsEntry)}
+            onClose={actionsDismiss.requestClose}
+            onView={() => viewFromActions(actionsEntry)}
+            onEdit={() => editFromActions(actionsEntry)}
+            onRepeat={() => repeatEntry(actionsEntry)}
+            onDelete={() => deleteFromActions(actionsEntry)}
+            closing={actionsDismiss.closing}
           />
         )}
         {editingDismiss.mounted && editing && (

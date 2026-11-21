@@ -2,11 +2,11 @@
 
 import { haptic } from "@/components/haptics";
 import { memo, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeftRight, ArrowUp, ChevronDown, ImagePlus, Lightbulb, Minus, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowLeftRight, ArrowUp, ChevronDown, CopyPlus, Eye, ImagePlus, Lightbulb, Minus, Pencil, Plus, Trash2, X } from "lucide-react";
 import { reviewDraft } from "@/lib/draft-review";
 import { CATEGORY_DOT_TINT_ALPHA, ENTRY_SWIPE_ACTIONS_WIDTH, ENTRY_SWIPE_SLOP, MAX_SPLIT_PEOPLE, MIN_SPLIT_PEOPLE } from "@/lib/constants";
 import { compressSlipImage } from "@/lib/image";
-import { formatMoney, formatTime, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
+import { formatDateTime, formatMoney, formatTime, formatSignedMoney, moneySign, toDateInput } from "@/lib/format";
 import { dayLabel, todayDateInput, withDateKeepingTime, groupEntriesByDay } from "@/lib/cycle";
 import { CARD_FUNDABLE_TYPES, SHARED_EXPENSE_TYPES, defaultWalletId, draftTotals, draftSplitPins, entryDisplayImpact, isFundedLeg, isMultiPersonSplit, normalizeEntry, partnerShareForPeople, peopleFromPartnerShare, retargetPartnerShare, retypedTo, splitDebtorNames, splitPinMismatch, splitSharesBetween, unnamedDebtor } from "@/lib/money";
 import { DEBT_TYPES, TYPES_USER_OWES, isFormOnlyDerivedType, transactionKind, transactionTypeLabels, transactionTypeOptions, type TransactionType } from "@/lib/taxonomy";
@@ -16,7 +16,7 @@ import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, Quick
 import { CategoryIcon, CategoryPicker, FundingSelect } from "@/components/shared";
 import { morphSource } from "@/components/morph";
 import { rowMotionRef, useExitingList } from "@/components/exiting-list";
-import { AmountInput, DateField, EmptyNote, SheetFrame, StateCard, SheetClose, revealAboveKeyboard } from "@/components/primitives";
+import { AmountInput, DateField, EmptyNote, IconChip, SheetFrame, StateCard, SheetClose, revealAboveKeyboard, useLongPress } from "@/components/primitives";
 
 // The whole "let AI write it for me" half of the Add tab: the example chips,
 // the date picker, the textarea, slip attachments and the analyse button.
@@ -626,6 +626,7 @@ const entryKey = (entry: Entry) => entry.id;
 export const EntryList = memo(function EntryList({
   entries,
   onOpen,
+  onLongPress,
   onEdit,
   onDelete,
   emptyAction,
@@ -638,6 +639,8 @@ export const EntryList = memo(function EntryList({
   entries: Entry[];
   /** What a tap on the row does -- the detail sheet, where one exists. Falls back to onEdit. */
   onOpen?: (entry: Entry) => void;
+  /** Press and hold a row (or right-click it) for its actions -- EntryActionSheet. */
+  onLongPress?: (entry: Entry) => void;
   onEdit?: (entry: Entry) => void;
   onDelete?: (entry: Entry) => void;
   emptyAction?: EmptyAction;
@@ -722,6 +725,7 @@ export const EntryList = memo(function EntryList({
                   onTap={tap ? () => tap(entry) : undefined}
                   onEdit={onEdit ? () => { setOpenId(null); onEdit(entry); } : undefined}
                   onDelete={onDelete ? () => { setOpenId(null); onDelete(entry); } : undefined}
+                  onLongPress={onLongPress ? () => { setOpenId(null); onLongPress(entry); } : undefined}
                 >
                   {content}
                 </SwipeEntry>
@@ -749,6 +753,7 @@ function SwipeEntry({
   onTap,
   onEdit,
   onDelete,
+  onLongPress,
   children,
 }: {
   /** rowMotionRef (components/exiting-list.ts): fold, open or restore, on the whole row -- buttons included. */
@@ -758,6 +763,7 @@ function SwipeEntry({
   onTap?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onLongPress?: () => void;
   children: React.ReactNode;
 }) {
   const rowRef = useRef<HTMLElement | null>(null);
@@ -771,8 +777,20 @@ function SwipeEntry({
     if (px == null) row.style.removeProperty("--swipe-x");
     else row.style.setProperty("--swipe-x", `${px}px`);
   };
+  // A hold that opens the menu ends this touch as a swipe too: the finger is
+  // still down and still captured to the row, and a drift sideways under the
+  // open sheet would otherwise swipe the row open behind it.
+  const press = useLongPress<null>(() => {
+    drag.current = null;
+    rowRef.current?.classList.remove("is-dragging");
+    setOffset(null);
+    onLongPress?.();
+  });
 
   const onPointerDown = (event: React.PointerEvent) => {
+    // Every pointer, a mouse's too, so a past hold's leftovers never outlive
+    // this press (useLongPress ignores a mouse itself).
+    if (onLongPress) press.start(event, null);
     if (event.pointerType === "mouse") return;
     // A browser may send no click at all after a swipe; a fresh touch means
     // any click still owed to the last one is not coming.
@@ -780,6 +798,7 @@ function SwipeEntry({
     drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, base: open ? -width : 0, mode: "pending", offset: open ? -width : 0 };
   };
   const onPointerMove = (event: React.PointerEvent) => {
+    press.move(event);
     const state = drag.current;
     if (!state || state.id !== event.pointerId) return;
     const dx = event.clientX - state.x;
@@ -796,6 +815,7 @@ function SwipeEntry({
     setOffset(state.offset);
   };
   const onPointerEnd = (event: React.PointerEvent) => {
+    press.end(event);
     const state = drag.current;
     if (!state || state.id !== event.pointerId) return;
     drag.current = null;
@@ -836,11 +856,13 @@ function SwipeEntry({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
+        onContextMenu={onLongPress ? (event) => press.contextMenu(event, null) : undefined}
       >
         <button
           type="button"
           className="entry-main entry-tappable"
           onClick={() => {
+            if (press.consumeClick()) return;
             if (swallowClick.current) { swallowClick.current = false; return; }
             if (open) { onOpenChange(false); return; }
             onTap?.();
@@ -850,6 +872,70 @@ function SwipeEntry({
         </button>
       </div>
     </article>
+  );
+}
+
+/**
+ * What a press-and-hold on an entry opens: the iOS action sheet, built on
+ * SheetFrame so it swipes down and Escapes like every other sheet. It does
+ * nothing itself -- each row hands the entry to the one path that already
+ * does that thing (the detail sheet, EditSheet, deleteEntry), plus "จดซ้ำ",
+ * which is only offered where `canLogAgain` says a row can stand on its own.
+ */
+export function EntryActionSheet({
+  entry,
+  canRepeat,
+  onClose,
+  onView,
+  onEdit,
+  onRepeat,
+  onDelete,
+  closing,
+}: {
+  entry: Entry;
+  canRepeat: boolean;
+  onClose: () => void;
+  onView: () => void;
+  onEdit: () => void;
+  onRepeat: () => void;
+  onDelete: () => void;
+  closing?: boolean;
+}) {
+  const impact = entryDisplayImpact(entry);
+  return (
+    <SheetFrame onClose={onClose} className="edit-sheet entry-actions-sheet" closing={closing}>
+      <div className="entry-actions-head" style={{ "--hue": categoryColor(entry.category) } as React.CSSProperties}>
+        <IconChip><CategoryIcon category={entry.category} size={18} /></IconChip>
+        <span className="entry-actions-text">
+          <b>{entry.title}</b>
+          <small><span className={impact >= 0 ? "income" : "expense"}>{formatSignedMoney(impact)}</span> · {formatDateTime(entry.occurred_at)}</small>
+        </span>
+        <SheetClose onClick={onClose} />
+      </div>
+      <div className="me-list">
+        <button type="button" className="me-row" onClick={onView}>
+          <span className="me-row-icon"><Eye size={18} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span className="me-row-text">ดูรายละเอียด</span>
+        </button>
+        <button type="button" className="me-row" onClick={onEdit}>
+          <span className="me-row-icon"><Pencil size={18} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span className="me-row-text">แก้ไข</span>
+        </button>
+        {canRepeat && (
+          <button type="button" className="me-row" onClick={onRepeat}>
+            <span className="me-row-icon"><CopyPlus size={18} strokeWidth={2.25} aria-hidden="true" /></span>
+            <span className="me-row-text">
+              จดซ้ำวันนี้
+              <small>เปิดในหน้าตรวจสอบก่อนบันทึก แก้ยอดหรือรายละเอียดได้</small>
+            </span>
+          </button>
+        )}
+        <button type="button" className="me-row is-danger" onClick={onDelete}>
+          <span className="me-row-icon"><Trash2 size={18} strokeWidth={2.25} aria-hidden="true" /></span>
+          <span className="me-row-text">ลบ</span>
+        </button>
+      </div>
+    </SheetFrame>
   );
 }
 

@@ -375,3 +375,13 @@ export const SHEET_DRAG_FLICK_STALE_MS = 100;
 export const EDGE_SWIPE_ZONE = 20;
 export const EDGE_SWIPE_SLOP = 10;
 export const EDGE_SWIPE_BACK_FRACTION = 0.35;
+
+// Press and hold an entry for its actions (useLongPress, components/
+// primitives.tsx): how long the finger has to stay down, and how far it may
+// drift before the hold counts as a scroll or a swipe instead.
+export const LONG_PRESS_MS = 450;
+export const LONG_PRESS_SLOP = 8;
+// After a hold opens its menu, the release's click is swallowed (it would
+// land on the menu, now under the finger) until this long after the finger
+// lifts -- however long the hold went on.
+export const LONG_PRESS_CLICK_GRACE_MS = 50;

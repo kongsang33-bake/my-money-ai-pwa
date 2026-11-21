@@ -1,4 +1,4 @@
-import { test, expect, buildSeed, openApp, navigate, hasSideNav, scrollAppTo, waitForAnimations } from "./fixture.ts";
+import { test, expect, buildSeed, openApp, navigate, hasSideNav, openMoneyTool, scrollAppTo, waitForAnimations } from "./fixture.ts";
 import type { CDPSession, Page } from "@playwright/test";
 
 // The iOS-shaped gestures: swipe a sheet down to close it, swipe in from the
@@ -135,4 +135,193 @@ test("a tap on the tab already showing takes it back to the top", async ({ page 
   else await page.evaluate(() => document.querySelectorAll<HTMLButtonElement>(".bottom-nav > button")[1].click());
   await expect.poll(() => page.evaluate(() => document.querySelector(".phone")!.scrollTop)).toBe(0);
   expect(await shownView(page)).toContain("history-view");
+});
+
+// Press and hold an entry for its actions (useLongPress, EntryActionSheet).
+// The sheet's ลบ is a write and is left alone (see e2e/fixture.ts); the rest
+// stays on this side of one.
+test.describe("press and hold", () => {
+  const actions = ".sheet-backdrop > .entry-actions-sheet";
+
+  async function hold(cdp: CDPSession, page: Page, at: { x: number; y: number }, ms: number, drift = 0) {
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [at] });
+    if (drift) {
+      await page.waitForTimeout(80);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: at.x, y: at.y + drift }] });
+    }
+    await page.waitForTimeout(ms);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  }
+
+  test.beforeEach(({}, info) => {
+    test.skip(info.project.name !== "mobile", "a hold is a touch");
+  });
+
+  test("holding a History row opens its actions, and not its detail too", async ({ page }) => {
+    await openStandalone(page, false);
+    await navigate(page, "history");
+    await waitForAnimations(page);
+    const row = page.locator(".view:not(.is-parked) .entry.swipe-row .entry-main").first();
+    const box = (await row.boundingBox())!;
+    const before = await vibrations(page);
+    const cdp = await page.context().newCDPSession(page);
+    await hold(cdp, page, { x: box.x + box.width / 2, y: box.y + box.height / 2 }, 700);
+    // Past a whole close animation: a sheet closing is still visible for
+    // its length, so checking at once would miss the release closing it
+    // (the first row sits over the scrim, where the release lands).
+    await page.waitForTimeout(500);
+    await expect(page.locator(actions)).toBeVisible();
+    await expect(page.locator(".sheet-backdrop > .entry-detail-sheet")).toHaveCount(0);
+    expect(await vibrations(page)).toBeGreaterThan(before);
+    for (const label of ["ดูรายละเอียด", "แก้ไข", "ลบ"]) {
+      await expect(page.locator(`${actions} .me-row`, { hasText: label })).toHaveCount(1);
+    }
+  });
+
+  test("a hold that drifts is a scroll, not a press", async ({ page }) => {
+    await openStandalone(page, false);
+    await navigate(page, "history");
+    await waitForAnimations(page);
+    const box = (await page.locator(".view:not(.is-parked) .entry.swipe-row .entry-main").first().boundingBox())!;
+    const cdp = await page.context().newCDPSession(page);
+    await hold(cdp, page, { x: box.x + box.width / 2, y: box.y + box.height / 2 }, 700, 30);
+    await page.waitForTimeout(200);
+    await expect(page.locator(actions)).toHaveCount(0);
+  });
+
+  test("holding a เพิ่งจด tile opens its actions; จดซ้ำ puts it in the review as a new draft", async ({ page }) => {
+    await openStandalone(page, false);
+    await waitForAnimations(page);
+    const tile = page.locator(".recent-tile").nth(1);
+    await tile.scrollIntoViewIfNeeded();
+    const title = (await tile.locator(".recent-body b").textContent())!.trim();
+    const box = (await tile.boundingBox())!;
+    const cdp = await page.context().newCDPSession(page);
+    await hold(cdp, page, { x: box.x + box.width / 2, y: box.y + box.height / 2 }, 700);
+    await expect(page.locator(actions)).toBeVisible();
+    await page.locator(`${actions} .me-row`, { hasText: "จดซ้ำวันนี้" }).click();
+    await expect(page.locator(".view:not(.is-parked).add-view")).toBeVisible();
+    await expect(page.locator(".draft")).toHaveCount(1);
+    await expect(page.locator(".draft").first()).toContainText(title);
+  });
+
+  test("a thumb drifting sideways after the sheet opens does not swipe the row open behind it", async ({ page }) => {
+    await openStandalone(page, false);
+    await navigate(page, "history");
+    await waitForAnimations(page);
+    const box = (await page.locator(".view:not(.is-parked) .entry.swipe-row .entry-main").first().boundingBox())!;
+    const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [at] });
+    await page.waitForTimeout(600);
+    for (let i = 1; i <= 6; i++) {
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: at.x - i * 20, y: at.y }] });
+      await page.waitForTimeout(16);
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await expect(page.locator(actions)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".sheet-backdrop")).toHaveCount(0);
+    await expect(page.locator(".view:not(.is-parked) .entry.swipe-row.is-open")).toHaveCount(0);
+  });
+
+  test("a long hold still does not press whatever row of the sheet is under the thumb on release", async ({ page }) => {
+    await openStandalone(page, false);
+    await navigate(page, "history");
+    await waitForAnimations(page);
+    // A row low on the screen, where the sheet will open under the thumb.
+    const point = await page.evaluate(() => {
+      const nav = document.querySelector(".bottom-nav")!.getBoundingClientRect().top;
+      const rows = [...document.querySelectorAll<HTMLElement>(".view:not(.is-parked) .entry.swipe-row .entry-main")];
+      const box = rows.map((row) => row.getBoundingClientRect()).find((r) => r.top > window.innerHeight * 0.55 && r.bottom < nav)!;
+      return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    });
+    const cdp = await page.context().newCDPSession(page);
+    await hold(cdp, page, point, 4500);
+    await page.waitForTimeout(400);
+    await expect(page.locator(actions)).toBeVisible();
+    await expect(page.locator(".sheet-backdrop > .entry-detail-sheet, .sheet-backdrop > .edit-sheet:not(.entry-actions-sheet), .dialog-backdrop")).toHaveCount(0);
+  });
+
+  test("แก้ไข from the actions opens the one edit sheet", async ({ page }) => {
+    await openStandalone(page, false);
+    await navigate(page, "history");
+    await waitForAnimations(page);
+    const box = (await page.locator(".view:not(.is-parked) .entry.swipe-row .entry-main").first().boundingBox())!;
+    const cdp = await page.context().newCDPSession(page);
+    await hold(cdp, page, { x: box.x + box.width / 2, y: box.y + box.height / 2 }, 700);
+    await page.locator(`${actions} .me-row`, { hasText: "แก้ไข" }).click();
+    await expect(page.locator(".sheet-backdrop > .edit-sheet:not(.entry-actions-sheet)")).toBeVisible();
+    await expect(page.locator(actions)).toHaveCount(0);
+  });
+});
+
+test("a right click on a History row opens its actions, and the next click on it still opens it", async ({ page }, info) => {
+  test.skip(info.project.name === "mobile", "a mouse's way in");
+  await openApp(page, buildSeed());
+  await navigate(page, "history");
+  await waitForAnimations(page);
+  const row = page.locator(".view:not(.is-parked) .entry.swipe-row .entry-main").first();
+  await row.click({ button: "right" });
+  await expect(page.locator(".sheet-backdrop > .entry-actions-sheet")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".sheet-backdrop")).toHaveCount(0);
+  // A right click sends no click after it, so nothing may be left waiting to
+  // swallow this one (the review found the row going dead here).
+  await row.click();
+  await expect(page.locator(".sheet-backdrop > .entry-detail-sheet")).toBeVisible();
+});
+
+// iOS's large title folding into its bar: once a screen's heading has
+// scrolled up under the topbar, the bar shows it in place of the wordmark.
+// Phone and 700px only -- from 900px there is no topbar.
+test.describe("large title", () => {
+  test.beforeEach(async ({}, info) => {
+    test.skip(info.project.name === "desktop", "the desk has no topbar");
+  });
+
+  const bar = (page: Page) => page.evaluate(() => {
+    const topbar = document.querySelector(".topbar")!;
+    return { collapsed: topbar.hasAttribute("data-title-collapsed"), title: topbar.querySelector<HTMLElement>(".topbar-title")!.dataset.title ?? "" };
+  });
+
+  test("History's title folds into the bar once scrolled, and back out at the top", async ({ page }) => {
+    await openApp(page, buildSeed());
+    await navigate(page, "history");
+    expect((await bar(page)).collapsed).toBe(false);
+    await scrollAppTo(page, 600);
+    await expect.poll(() => bar(page)).toEqual({ collapsed: true, title: "รายการทั้งหมด" });
+    await scrollAppTo(page, 0);
+    await expect.poll(async () => (await bar(page)).collapsed).toBe(false);
+  });
+
+  test("Home has no title to fold, so the wordmark stays", async ({ page }) => {
+    await openApp(page, buildSeed());
+    await scrollAppTo(page, 900);
+    await page.waitForTimeout(200);
+    expect((await bar(page)).collapsed).toBe(false);
+  });
+
+  test("the bar follows a title that changes in place (the debt books)", async ({ page }) => {
+    await openApp(page, buildSeed());
+    await openMoneyTool(page, "จัดการหนี้");
+    await expect.poll(async () => (await bar(page)).title).toBe("ยืมเรา");
+    await page.locator(".view:not(.is-parked) .add-mode-tabs button", { hasText: "หนี้ของฉัน" }).click();
+    await expect.poll(async () => (await bar(page)).title).toBe("หนี้ของฉัน");
+  });
+});
+
+test("จดซ้ำ is a tap away too, on the entry's detail", async ({ page }) => {
+  await openApp(page, buildSeed());
+  await navigate(page, "history");
+  await waitForAnimations(page);
+  const row = page.locator(".view:not(.is-parked) .entry.swipe-row .entry-main").nth(1);
+  const title = (await row.locator("b").first().textContent())!.trim();
+  await row.click();
+  const repeat = page.locator(".sheet-backdrop .detail-repeat-button");
+  await expect(repeat).toBeVisible();
+  await repeat.click();
+  await expect(page.locator(".view:not(.is-parked).add-view")).toBeVisible();
+  await expect(page.locator(".draft")).toHaveCount(1);
+  await expect(page.locator(".draft").first()).toContainText(title);
 });

@@ -4,7 +4,7 @@ import { haptic } from "@/components/haptics";
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, CalendarDays, Check, ChevronLeft, Info, RefreshCw, X } from "lucide-react";
-import { KEYBOARD_SETTLE_MAX_MS, KEYBOARD_SETTLE_QUIET_MS, PULL_REFRESH_MAX, PULL_REFRESH_MIN_MS, PULL_REFRESH_THRESHOLD, SHEET_DRAG_FLICK_STALE_MS } from "@/lib/constants";
+import { KEYBOARD_SETTLE_MAX_MS, KEYBOARD_SETTLE_QUIET_MS, LONG_PRESS_CLICK_GRACE_MS, LONG_PRESS_MS, LONG_PRESS_SLOP, PULL_REFRESH_MAX, PULL_REFRESH_MIN_MS, PULL_REFRESH_THRESHOLD, SHEET_DRAG_FLICK_STALE_MS } from "@/lib/constants";
 import { edgeSwipeIntent, shouldGoBack, startsAtEdge } from "@/lib/edge-swipe";
 import { scrimOpacityFor, sheetDragIntent, shouldCloseSheet } from "@/lib/sheet-drag";
 import { formatDateInputValue, formatMonthInputValue, formatMoney, moneySign } from "@/lib/format";
@@ -821,25 +821,144 @@ export function ErrorActions({ onRetry, onDismiss }: { onRetry: () => void; onDi
 }
 
 /**
- * Pull down from the top of the page to reload it. The app scrolls inside
- * `.phone`, not the document, so neither iOS nor Android offers their own
- * pull-to-refresh here -- this listens on that one scroll container instead.
- *
- * The listeners are passive and never cancel the touch: the page scrolls and
- * bounces exactly as it would without this, and the gesture only counts
- * while the container is at its very top and the finger is moving down more
- * than sideways (so a horizontal rail swipe near the top is left alone).
- * `enabled` is false while a sheet is open or on a screen that fills the
- * viewport itself. `root` is the element itself rather than a ref, so the
- * listeners attach when `.phone` mounts -- behind the PIN or setup gate that
- * is later than this component's first render.
- *
- * Its own component, and the drag writes the indicator's position straight
- * to the DOM: it used to be state in the app's root component, so every
- * touchmove re-rendered the whole app, and the pull juddered on a phone.
- * React only hears about the two moments that change what is on screen --
- * the disc appearing, and the refresh starting and ending.
+ * Swallows the one click a held finger sends when it lifts, on whatever it
+ * lands on, by catching it on the window before anything below sees it: the
+ * menu a hold opens slides up under the finger, and that click would press
+ * whichever of its rows the thumb is now on (it did -- "ดูรายละเอียด"). The
+ * guard comes down a moment after the finger lifts (the click follows its
+ * pointerup in the same turn) however long the hold lasted, or at the next
+ * touch if that release never reached the window. `onDone` runs as it comes
+ * down.
  */
+function swallowReleaseClick(onDone: () => void) {
+  let done = false;
+  const swallow = (event: Event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    finish();
+  };
+  // A touch's release also sends the compatibility mousedown/mouseup ahead of
+  // its click, and a sheet's scrim closes on mousedown: held over the scrim
+  // rather than the panel, the release closed the menu it had just opened.
+  const block = (event: Event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const release = () => window.setTimeout(finish, LONG_PRESS_CLICK_GRACE_MS);
+  function finish() {
+    if (done) return;
+    done = true;
+    window.removeEventListener("click", swallow, true);
+    window.removeEventListener("mousedown", block, true);
+    window.removeEventListener("mouseup", block, true);
+    window.removeEventListener("pointerup", release, true);
+    window.removeEventListener("pointercancel", release, true);
+    window.removeEventListener("pointerdown", finish, true);
+    onDone();
+  }
+  window.addEventListener("click", swallow, true);
+  window.addEventListener("mousedown", block, true);
+  window.addEventListener("mouseup", block, true);
+  window.addEventListener("pointerup", release, { capture: true, once: true });
+  window.addEventListener("pointercancel", release, { capture: true, once: true });
+  // Only a later touch can mean this one's release went missing.
+  window.setTimeout(() => { if (!done) window.addEventListener("pointerdown", finish, true); }, 0);
+}
+
+/**
+ * Press and hold for an element's actions, the way iOS's Haptic Touch opens
+ * a menu. A touch held `LONG_PRESS_MS` without drifting `LONG_PRESS_SLOP`
+ * fires `onLongPress` with a haptic tap; while it is held the element carries
+ * `.is-pressing` and the hold's length as `--t-hold` (set here from the same
+ * constant, so the sink in the CSS ends as the menu opens), and the click its
+ * release sends is swallowed wherever it lands (swallowReleaseClick).
+ * `contextmenu` opens the same thing: Android's own long-press -- which can
+ * beat the timer, at 400ms, and then goes through the same haptic and guard,
+ * but is ignored once the hold has been given up for drifting (Chrome's own
+ * slop is wider than ours, so it can still arrive for what was a scroll) --
+ * and a mouse's right click or the keyboard's menu key, which send no click
+ * after them and so need neither.
+ *
+ * It attaches nothing itself: it returns the moments (start, move, end,
+ * contextMenu), for a caller to call from its own pointer handlers -- which
+ * SwipeEntry needs, since it already owns its row's pointer events. `start`
+ * goes on every pointerdown, a mouse's too, so nothing a past hold left set
+ * can outlive the next press.
+ */
+export function useLongPress<T>(onLongPress: (target: T) => void) {
+  const state = useRef<{ id: number; x: number; y: number; timer: number; element: HTMLElement } | null>(null);
+  // Set while a touch hold's release click is still owed, so `consumeClick`
+  // can drop it if it ever gets past the window guard.
+  const fired = useRef(false);
+  const callback = useRef(onLongPress);
+  useLayoutEffect(() => {
+    callback.current = onLongPress;
+  });
+
+  const cancel = useCallback(() => {
+    const current = state.current;
+    if (!current) return;
+    window.clearTimeout(current.timer);
+    current.element.classList.remove("is-pressing");
+    state.current = null;
+  }, []);
+
+  useEffect(() => cancel, [cancel]);
+
+  // A touch hold opening the menu, whichever got there first: the timer, or
+  // Android's contextmenu.
+  const fire = useCallback((target: T) => {
+    cancel();
+    fired.current = true;
+    swallowReleaseClick(() => { fired.current = false; });
+    haptic("light");
+    callback.current(target);
+  }, [cancel]);
+
+  const start = useCallback((event: React.PointerEvent, target: T) => {
+    cancel();
+    fired.current = false;
+    if (event.pointerType === "mouse" || !event.isPrimary) return;
+    const element = event.currentTarget as HTMLElement;
+    element.style.setProperty("--t-hold", `${LONG_PRESS_MS}ms`);
+    element.classList.add("is-pressing");
+    const timer = window.setTimeout(() => fire(target), LONG_PRESS_MS);
+    state.current = { id: event.pointerId, x: event.clientX, y: event.clientY, timer, element };
+  }, [cancel, fire]);
+
+  const move = useCallback((event: React.PointerEvent) => {
+    const current = state.current;
+    if (!current || current.id !== event.pointerId) return;
+    if (Math.hypot(event.clientX - current.x, event.clientY - current.y) > LONG_PRESS_SLOP) cancel();
+  }, [cancel]);
+
+  const end = useCallback((event: React.PointerEvent) => {
+    if (state.current?.id === event.pointerId) cancel();
+  }, [cancel]);
+
+  const contextMenu = useCallback((event: React.MouseEvent, target: T) => {
+    event.preventDefault();
+    // Android sends this for the same hold the timer may already have answered.
+    if (fired.current) return;
+    // Chrome sends contextmenu as a PointerEvent, so a touch says so.
+    const pointerType = (event.nativeEvent as PointerEvent).pointerType;
+    if (pointerType === "touch" || pointerType === "pen") {
+      if (state.current) fire(target);
+      return;
+    }
+    callback.current(target);
+  }, [fire]);
+
+  /** True once, for a hold's release click that got past the window guard. */
+  const consumeClick = useCallback(() => {
+    if (!fired.current) return false;
+    fired.current = false;
+    return true;
+  }, []);
+
+  return { start, move, end, cancel, contextMenu, consumeClick };
+}
+
 /**
  * Swipe in from the left edge to go back, on a screen that has a back
  * chevron -- the gesture every iOS app has and a home-screen web app does
@@ -989,6 +1108,26 @@ export function EdgeSwipeBack({ root, enabled }: { root: HTMLElement | null; ena
   return null;
 }
 
+/**
+ * Pull down from the top of the page to reload it. The app scrolls inside
+ * `.phone`, not the document, so neither iOS nor Android offers their own
+ * pull-to-refresh here -- this listens on that one scroll container instead.
+ *
+ * The listeners are passive and never cancel the touch: the page scrolls and
+ * bounces exactly as it would without this, and the gesture only counts
+ * while the container is at its very top and the finger is moving down more
+ * than sideways (so a horizontal rail swipe near the top is left alone).
+ * `enabled` is false while a sheet is open or on a screen that fills the
+ * viewport itself. `root` is the element itself rather than a ref, so the
+ * listeners attach when `.phone` mounts -- behind the PIN or setup gate that
+ * is later than this component's first render.
+ *
+ * Its own component, and the drag writes the indicator's position straight
+ * to the DOM: it used to be state in the app's root component, so every
+ * touchmove re-rendered the whole app, and the pull juddered on a phone.
+ * React only hears about the two moments that change what is on screen --
+ * the disc appearing, and the refresh starting and ending.
+ */
 export function PullToRefresh({
   root,
   onRefresh,
