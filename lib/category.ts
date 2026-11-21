@@ -64,8 +64,19 @@ export function nameColor(name: string) {
   const sum = [...name.trim()].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
   return `var(${avatarPaletteVars[sum % avatarPaletteVars.length]})`;
 }
+// Thai vowels written before the consonant they follow in speech (เ แ โ ใ ไ).
+const THAI_LEADING_VOWEL = /^[\u0E40-\u0E44]/;
+
+/**
+ * The letter an avatar shows for a name. A Thai name can start with a
+ * vowel that is written first but sounds after its consonant -- "เอก",
+ * "เงินออม" -- and on its own in a circle that vowel reads as a stray mark,
+ * so it keeps its consonant with it ("เอ", "เง"), one syllable as written.
+ */
 export function nameInitial(name: string) {
-  return name.trim().slice(0, 1).toUpperCase() || "?";
+  const trimmed = name.trim();
+  if (THAI_LEADING_VOWEL.test(trimmed) && trimmed.length > 1) return trimmed.slice(0, 2);
+  return trimmed.slice(0, 1).toUpperCase() || "?";
 }
 
 export const walletIconOptions: { key: string; label: string; Icon: LucideIcon }[] = [

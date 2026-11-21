@@ -81,8 +81,20 @@ describe("nameInitial", () => {
     assert.equal(nameInitial("anna"), "A");
   });
 
-  it("takes the first character of a Thai name as-is", () => {
-    assert.equal(nameInitial("เอก"), "เ");
+  it("takes the first character of a Thai name that starts with its consonant", () => {
+    assert.equal(nameInitial("จูน"), "จ");
+    assert.equal(nameInitial("น้ำ"), "น");
+  });
+
+  it("keeps a leading vowel with its consonant rather than showing it alone", () => {
+    assert.equal(nameInitial("เอก"), "เอ");
+    assert.equal(nameInitial("เงินออม"), "เง");
+    assert.equal(nameInitial("ไม้"), "ไม");
+    assert.equal(nameInitial("โอ"), "โอ");
+  });
+
+  it("shows a lone leading vowel when that is the whole name", () => {
+    assert.equal(nameInitial("เ"), "เ");
   });
 
   it("trims first, so a leading space does not become the initial", () => {

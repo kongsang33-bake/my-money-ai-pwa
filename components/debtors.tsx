@@ -8,7 +8,7 @@ import { installmentStatusText, monthlyDebtObligation, payableForDisplay } from 
 import { categories, categoryColor, categoryTint, nameColor } from "@/lib/category";
 import type { Debtor, DebtorKind, Entry } from "@/lib/types";
 import { CategoryIcon, IconColorPicker, WalletAvatarGlyph } from "@/components/shared";
-import { CountUpMoney, EmptyNote, PageFrame, SheetFrame, SkeletonList, StateCard, decimalInputPattern, SheetClose } from "@/components/primitives";
+import { AmountInput, CountUpMoney, EmptyNote, PageFrame, SheetFrame, SkeletonList, StateCard, decimalInputPattern, SheetClose } from "@/components/primitives";
 import { EntryList } from "@/components/add";
 import { rowMotionRef, useExitingList } from "@/components/exiting-list";
 import { IncomeBreakdown, MonthlyTrendChart } from "@/components/history";
@@ -249,7 +249,9 @@ export function DebtorStatementSummary({ entries, kind }: { entries: Entry[]; ki
         <span>รายการ</span>
         <b>{entries.length}</b>
       </div>
-      <small>{latest ? `ล่าสุด: ${latest.title}` : "ยังไม่มีประวัติการเคลื่อนไหว"}</small>
+      {/* Only when there is something to name: with no history, the list's
+          own empty note right under this already says so. */}
+      {latest && <small>ล่าสุด: {latest.title}</small>}
     </section>
   );
 }
@@ -349,13 +351,13 @@ export function DebtorEditSheet({
       </label>
       <label>
         {kind === "own" ? "ยอดหนี้คงเหลือ" : "ยอดเริ่มต้น"}
-        <input inputMode="decimal" value={openingBalanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setOpeningBalanceText(event.target.value); }} />
+        <AmountInput size="field" value={toMoneyAmount(openingBalanceText)} onChange={(amount) => setOpeningBalanceText(amount ? String(amount) : "")} />
       </label>
       {kind === "own" && (
         <>
           <label>
             วงเงิน (กรอกถ้าเป็นบัตรเครดิต)
-            <input inputMode="decimal" value={creditLimitText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setCreditLimitText(event.target.value); }} placeholder="เช่น 50000" />
+            <AmountInput size="field" value={toMoneyAmount(creditLimitText)} onChange={(amount) => setCreditLimitText(amount ? String(amount) : "")} placeholder="เช่น 50000" />
           </label>
           {isCreditCard ? (
             <label>
@@ -367,7 +369,7 @@ export function DebtorEditSheet({
             <>
               <label>
                 ผ่อนต่อเดือน
-                <input inputMode="decimal" value={monthlyInstallmentText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setMonthlyInstallmentText(event.target.value); }} placeholder="เช่น 15000" />
+                <AmountInput size="field" value={toMoneyAmount(monthlyInstallmentText)} onChange={(amount) => setMonthlyInstallmentText(amount ? String(amount) : "")} placeholder="เช่น 15000" />
               </label>
               {hasInstallment && (
                 <label>

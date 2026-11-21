@@ -10,7 +10,7 @@ import { compressSlipImage } from "@/lib/image";
 import { nameColor } from "@/lib/category";
 import type { Entry, Investment, InvestmentDraftItem, PortfolioHolding, SlipImage, Wallet } from "@/lib/types";
 import { IconColorPicker, WalletAvatarGlyph } from "@/components/shared";
-import { CountUpMoney, DateField, EmptyNote, SheetFrame, SkeletonList, StateCard, decimalInputPattern, SheetClose } from "@/components/primitives";
+import { AmountInput, CountUpMoney, DateField, EmptyNote, SheetFrame, SkeletonList, StateCard, decimalInputPattern, SheetClose } from "@/components/primitives";
 
 export function PortfolioTrendChart({ trend }: { trend: { date: string; value: number }[] }) {
   if (trend.length < 2) return null;
@@ -257,7 +257,7 @@ export function InvestmentBuySheet({
       </label>
       <label>
         จำนวนเงินที่จ่ายไป
-        <input inputMode="decimal" value={amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setAmountText(event.target.value); }} placeholder="เช่น 1000" />
+        <AmountInput size="field" value={toMoneyAmount(amountText)} onChange={(amount) => setAmountText(amount ? String(amount) : "")} placeholder="เช่น 1000" />
       </label>
       {pricePerUnit != null
         ? <small className="cycle-note">ราคาต่อหน่วย {pricePerUnit.toFixed(4)}</small>
@@ -595,7 +595,7 @@ export function InvestmentAiSheet({
               )}
               <label>
                 จำนวนเงิน
-                <input inputMode="decimal" value={draft.amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) updateDraft(index, { amountText: event.target.value }); }} />
+                <AmountInput size="field" value={toMoneyAmount(draft.amountText)} onChange={(amount) => updateDraft(index, { amountText: amount ? String(amount) : "" })} />
               </label>
               <label>
                 กระเป๋าต้นทาง

@@ -699,7 +699,13 @@ export function ConfirmDialog({ dialog, onClose, closing = false }: { dialog: Co
 
 export const decimalInputPattern = /^\d*\.?\d*$/;
 
-export function AmountInput({ value, onChange, disabled, autoFocus }: { value: number; onChange: (value: number) => void; disabled?: boolean; autoFocus?: boolean }) {
+/**
+ * Every money field in the app. `size="field"` is for an amount that sits
+ * among other fields of the same weight (a sheet's balance, a goal's target)
+ * rather than being the one figure a form is about, and sets it at a field's
+ * size instead of --fs-value.
+ */
+export function AmountInput({ value, onChange, disabled, autoFocus, placeholder = "0", size = "hero" }: { value: number; onChange: (value: number) => void; disabled?: boolean; autoFocus?: boolean; placeholder?: string; size?: "hero" | "field" }) {
   const [text, setText] = useState(() => (value ? String(value) : ""));
 
   if ((Number(text) || 0) !== value) {
@@ -709,12 +715,12 @@ export function AmountInput({ value, onChange, disabled, autoFocus }: { value: n
   // The baht sign sits inside the field, drawn over its left padding, so every
   // amount in the app reads as money before a digit is typed.
   return (
-    <span className="amount-field">
+    <span className={`amount-field${size === "field" ? " is-field" : ""}`}>
       <span className="amount-field-sign" aria-hidden="true">{moneySign}</span>
       <input
         className="amount-input"
         inputMode="decimal"
-        placeholder="0"
+        placeholder={placeholder}
         value={text}
         disabled={disabled}
         autoFocus={autoFocus}

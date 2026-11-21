@@ -9,7 +9,7 @@ import { BILLING_CYCLE_PRESETS, billingIntervalUnitLabels, describeBillingCycle,
 import { nameColor, recurringIconOptions } from "@/lib/category";
 import type { Debtor, Entry, RecurringExpense, Wallet, WalletDisplay } from "@/lib/types";
 import { FundingSelect, IconColorPicker, RecurringAvatarGlyph, WalletGlyph } from "@/components/shared";
-import { AmountInput, CountUpMoney, DateField, EmptyNote, IconChip, IconPattern, InfoHint, SheetFrame, SkeletonList, StateCard, decimalInputPattern, SheetClose } from "@/components/primitives";
+import { AmountInput, CountUpMoney, DateField, EmptyNote, IconChip, IconPattern, InfoHint, SheetFrame, SkeletonList, StateCard, SheetClose } from "@/components/primitives";
 
 export function WalletsView({
   wallets,
@@ -304,7 +304,7 @@ export function WalletEditSheet({
       </label>
       <label>
         ยอดเงิน
-        <input inputMode="decimal" value={balanceText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setBalanceText(event.target.value); }} />
+        <AmountInput size="field" value={toMoneyAmount(balanceText)} onChange={(amount) => setBalanceText(amount ? String(amount) : "")} />
       </label>
       <label className="sheet-check-row">
         <input type="checkbox" checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} />
@@ -534,7 +534,7 @@ export function RecurringExpenseEditSheet({
       </label>
       <label>
         ยอดที่ตัดแต่ละครั้ง
-        <input inputMode="decimal" value={amountText} onChange={(event) => { if (event.target.value === "" || decimalInputPattern.test(event.target.value)) setAmountText(event.target.value); }} />
+        <AmountInput size="field" value={toMoneyAmount(amountText)} onChange={(amount) => setAmountText(amount ? String(amount) : "")} />
       </label>
       <label>
         {item ? "วันตัดเงิน" : "วันตัดเงินครั้งแรก"}
