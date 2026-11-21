@@ -10,7 +10,7 @@ import type { Debtor, DebtorKind, Entry } from "@/lib/types";
 import { CategoryIcon, IconColorPicker, WalletAvatarGlyph } from "@/components/shared";
 import { CountUpMoney, EmptyNote, PageFrame, SheetFrame, SkeletonList, StateCard, decimalInputPattern, SheetClose } from "@/components/primitives";
 import { EntryList } from "@/components/add";
-import { collapseOnExit, restoreRow, useExitingList } from "@/components/exiting-list";
+import { rowMotionRef, useExitingList } from "@/components/exiting-list";
 import { IncomeBreakdown, MonthlyTrendChart } from "@/components/history";
 import { StatMeter } from "@/components/home";
 
@@ -167,10 +167,10 @@ export function DebtorsView({
         {activeKind === "own" && <small>ยอดหนี้คงเหลือรวม {moneySign}{formatMoney(summaryTotal)}</small>}
       </section>
       <div className="debtor-page-list">
-        {debtorRows.map(({ item: debtor, exiting }) => {
+        {debtorRows.map(({ item: debtor, exiting, entering }) => {
           const amount = summary.find((item) => item.name.trim().toLowerCase() === debtor.name.trim().toLowerCase())?.amount ?? 0;
           return (
-            <article className="debtor-page-item" key={debtor.id} ref={exiting ? collapseOnExit : restoreRow}>
+            <article className="debtor-page-item" key={debtor.id} ref={rowMotionRef({ exiting, entering })}>
               <button className="debtor-main-button" onClick={() => onSelect(debtor)}>
                 <span className="debtor-avatar" style={{ background: debtor.icon_color ?? nameColor(debtor.name) }}>
                   <WalletAvatarGlyph iconKey={debtor.icon} fallbackName={debtor.name} />

@@ -521,6 +521,45 @@ a:focus-visible {
   animation: view-in var(--t-3) var(--e-out) backwards;
 }
 
+/* How a screen arrives (lib/view-motion.ts; page.tsx sets data-motion in the
+   render the tab changes in). Between tabs it only fades, quickly -- the
+   nav's tabs are places side by side, not a sequence to slide along. Into a
+   screen with a back button it comes in from the right, and going back from
+   the left, the way the chevron says. Its cards do not also rise on a slide:
+   two motions at once read as one wobble. `.view`'s own view-in stays the
+   first screen's arrival ("rise"). */
+@keyframes view-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes view-forward {
+  from { opacity: 0; transform: translateX(var(--s-6)); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes view-back {
+  from { opacity: 0; transform: translateX(calc(-1 * var(--s-6))); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.phone[data-motion="fade"] > .view:not(.is-parked) {
+  animation: view-fade var(--t-2) var(--e-out) backwards;
+}
+
+.phone[data-motion="forward"] > .view:not(.is-parked) {
+  animation: view-forward var(--t-3) var(--e-out) backwards;
+}
+
+.phone[data-motion="back"] > .view:not(.is-parked) {
+  animation: view-back var(--t-3) var(--e-out) backwards;
+}
+
+.phone[data-motion="forward"] > .view > :not(.success-pulse),
+.phone[data-motion="back"] > .view > :not(.success-pulse) {
+  animation: none;
+}
+
 /* A tab kept mounted while another one is showing (Home, and History and
    Wallets once visited -- see the comment on .home-view in app/page.tsx). content-visibility: hidden rather than
    display: none is the whole point: display: none throws the subtree's layout
@@ -1723,6 +1762,18 @@ a:focus-visible {
   color: var(--ink);
 }
 
+/* The eye's toggle (HeroWalletCard): the figure surfaces out of a blur
+   rather than snapping in. backwards, so no filter is held afterwards. */
+.hero-reveal {
+  display: inline-block;
+  animation: hero-reveal var(--t-4) var(--e-out) backwards;
+}
+
+@keyframes hero-reveal {
+  from { opacity: 0; filter: blur(8px); }
+  to { opacity: 1; filter: blur(0); }
+}
+
 .hero-amount {
   display: block;
   min-width: 0;
@@ -2811,6 +2862,14 @@ button.poster:active {
 
 .tile:active, .recent-tile:active {
   transform: scale(0.98);
+}
+
+/* What was just saved, arriving on Home's "เพิ่งจด" rail -- which is where a
+   save lands. It pops in once Home's own fade has settled, so the eye goes
+   to it; backwards, not both, so no transform is held afterwards and the
+   press scale above still works. */
+.recent-tile.is-new {
+  animation: pop-in var(--t-4) var(--e-spring) var(--t-2) backwards;
 }
 
 .tile {
@@ -5312,6 +5371,7 @@ button.poster:active {
 }
 
 .entry-group {
+  position: relative;
   padding: var(--s-4) var(--s-5) 0;
   /* History jumps here from its calendar (selectHistoryDay); stop below the
      sticky search as well as the topbar. The topbar's share is already
@@ -5321,6 +5381,26 @@ button.poster:active {
 
 .entry-group:first-child {
   padding-top: var(--s-5);
+}
+
+/* The day a calendar tap scrolled to glows once, after the scroll has had a
+   moment, so the eye lands on it (selectHistoryDay). On a pseudo-element,
+   not the group: the group's own card-in would replay when the class came
+   off again. */
+.entry-group.is-arrived::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  pointer-events: none;
+  animation: day-arrived calc(var(--t-4) * 3) var(--e-in-out) var(--t-3) both;
+}
+
+@keyframes day-arrived {
+  0% { opacity: 0; }
+  25% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 .entry-day {

@@ -507,6 +507,26 @@ token value.
   one can be filtered, and anything that swaps the list wholesale (the month,
   the debt book) as `scope`, or a filter would fold rows away. More than three
   rows gone at once is a new list, not a delete, and simply changes.
+- **A new row opens up in place, the mirror of a delete.** The same
+  snapshot keeps `known` (every key the list's source has had) and marks
+  keys added since as `entering` (at most `MAX_EXITING_ROWS`, and never the
+  first load); `rowMotionRef(row)` picks `collapseOnExit`, `growOnEnter` or
+  `restoreRow`. A list hidden while the save happens (History, parked behind
+  จดรายการ) has nothing to measure, so the save's visible arrival is Home's
+  "เพิ่งจด" rail, where the new tile pops in (`.recent-tile.is-new`) --
+  saving always goes back to Home.
+- **How a screen arrives says where it is** (`viewMotion`, lib/view-motion.ts;
+  `data-motion` on `.phone`, set in the render the tab changes in): tabs
+  fade into each other, a screen with a back button slides in from the
+  right and going back slides in from the left, and only the first screen
+  after launch rises. On a slide the view's own cards do not also rise.
+  Smaller moments: a calendar tap's day glows once where the list lands
+  (`.entry-group.is-arrived`, on a pseudo-element so the group's card-in is
+  not replayed), a new set of filtered results arrives with its card-in
+  (the list is keyed on the chips' filters, never the typed query), and the
+  billboard's figure comes up out of a blur when the eye shows it
+  (`.hero-reveal`). All of it is the motion tokens, and reduced motion
+  turns it off with everything else.
 - **A save started by one tap guards itself against the second**: a ref'd set
   of in-flight keys (`inFlightRef` in page.tsx) is the real guard, and a state
   copy only draws the button -- `disabled` alone lands a render too late.

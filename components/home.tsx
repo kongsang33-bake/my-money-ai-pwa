@@ -5,7 +5,7 @@ import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CreditCard, E
 import { BRAND_SLOGANS, DETAIL_SIMILAR_LIMIT, HISTORY_CALENDAR_EXPANDED_STORAGE_KEY, RECENT_RAIL_LIMIT, TOP_CATEGORY_LIMIT } from "@/lib/constants";
 import { recurringLogKey } from "@/lib/in-flight";
 import { morphSource, morphTarget, useEntryMorph } from "@/components/morph";
-import { collapseOnExit, restoreRow, useExitingList } from "@/components/exiting-list";
+import { rowMotionRef, useExitingList } from "@/components/exiting-list";
 import { MASKED_MONEY, formatChatTime, formatDateTime, formatMoney, formatPercent, formatShortDate, formatSignedMoney, maskMoneyInText, moneySign, toMoneyAmount } from "@/lib/format";
 import { entryDisplayImpact } from "@/lib/money";
 import { shiftMonthKey } from "@/lib/cycle";
@@ -323,15 +323,18 @@ export const HeroWalletCard = memo(function HeroWalletCard({
             the figure and says which way it will turn. */}
         <div className="hero-amount-row">
           <strong ref={amountRef} className="hero-amount" aria-live="polite">
+            {/* Each state is its own element, so the eye's toggle replays
+                .hero-reveal: the figure comes up out of a blur (and counts
+                up), the dots come back the same way. */}
             {amountShown ? (
-              <>
+              <span className="hero-reveal" key="shown">
                 {balance < 0 ? "−" : ""}
                 <CountUpMoney value={Math.abs(balance)} />
-              </>
+              </span>
             ) : (
               // The button beside it says the figure is hidden ("แสดงยอดเงิน");
               // read aloud, the dots would only be six "bullet"s.
-              <span aria-hidden="true">{MASKED_MONEY}</span>
+              <span className="hero-reveal" key="hidden" aria-hidden="true">{MASKED_MONEY}</span>
             )}
           </strong>
           <button
@@ -741,14 +744,17 @@ export const RecentRail = memo(function RecentRail({
   onOpen: (entry: Entry) => void;
   onSeeAll: () => void;
 }) {
-  const recent = entries.slice(0, RECENT_RAIL_LIMIT);
+  // The whole list as the source, so a tile pushed off the end by a new one
+  // is not "removed", and a save -- which lands here, since saving goes back
+  // to Home -- is told apart from the first load (lib/exiting-list.ts).
+  const recent = useExitingList(entries.slice(0, RECENT_RAIL_LIMIT), recentKey, { source: entries }).filter((row) => !row.exiting);
   if (!recent.length) return null;
   return (
     <Rail title="เพิ่งจด" action="ดูทั้งหมด" onAction={onSeeAll} size="small" className="recent-rail">
-      {recent.map((entry) => {
+      {recent.map(({ item: entry, entering }) => {
         const impact = entryDisplayImpact(entry);
         return (
-          <button className="recent-tile" key={entry.id} style={{ "--hue": categoryColor(entry.category) } as React.CSSProperties} onClick={() => onOpen(entry)}>
+          <button className={`recent-tile${entering ? " is-new" : ""}`} key={entry.id} style={{ "--hue": categoryColor(entry.category) } as React.CSSProperties} onClick={() => onOpen(entry)}>
             <span className="tile-art">
               <IconPattern renderGlyph={(size) => <CategoryIcon category={entry.category} size={size} />} />
               <IconChip morph={morphSource("icon", entry.id)}><CategoryIcon category={entry.category} size={18} /></IconChip>
@@ -772,6 +778,7 @@ export function goalProgress(goal: MoneyGoal): number {
 }
 
 const goalKey = (goal: MoneyGoal) => goal.id;
+const recentKey = (entry: Entry) => entry.id;
 
 /**
  * A goal on its own page: the same tile family as Home's goal tiles (its
@@ -780,12 +787,12 @@ const goalKey = (goal: MoneyGoal) => goal.id;
  * text under a hairline, so the one place that is all goals looked less
  * finished than the rail that only previews them.
  */
-export function GoalItem({ goal, onDelete, exiting = false }: { goal: MoneyGoal; onDelete: (goal: MoneyGoal) => void; exiting?: boolean }) {
+export function GoalItem({ goal, onDelete, exiting = false, entering = false }: { goal: MoneyGoal; onDelete: (goal: MoneyGoal) => void; exiting?: boolean; entering?: boolean }) {
   const progress = goalProgress(goal);
   const missing = Math.max(0, goal.target - goal.saved);
   const renderGlyph = (size: number) => <Target size={size} strokeWidth={2.25} />;
   return (
-    <div className="goal-item tile" style={{ "--hue": "var(--accent)" } as React.CSSProperties} ref={exiting ? collapseOnExit : restoreRow}>
+    <div className="goal-item tile" style={{ "--hue": "var(--accent)" } as React.CSSProperties} ref={rowMotionRef({ exiting, entering })}>
       <div className="tile-art goal-art">
         <IconPattern renderGlyph={renderGlyph} />
         <IconChip>{renderGlyph(18)}</IconChip>
@@ -833,8 +840,8 @@ export function GoalsView({
         <button className="header-add-button" onClick={onAdd}>เพิ่ม</button>
       </div>
       <div className="goal-list">
-        {goalRows.map(({ item: goal, exiting }) => (
-          <GoalItem key={goal.id} goal={goal} onDelete={onDelete} exiting={exiting} />
+        {goalRows.map(({ item: goal, exiting, entering }) => (
+          <GoalItem key={goal.id} goal={goal} onDelete={onDelete} exiting={exiting} entering={entering} />
         ))}
         {!goalRows.length && <EmptyNote glyph="●" action={{ label: "สร้างเป้าหมาย", onClick: onAdd }}>ตั้งก้อนเงินที่อยากเก็บให้ได้ เช่น เงินฉุกเฉิน หรือทริปที่วางไว้ · ใส่ยอดเป้าหมายแล้วแอพจะคิดความคืบหน้าให้</EmptyNote>}
       </div>

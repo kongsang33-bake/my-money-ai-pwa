@@ -14,7 +14,7 @@ import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { AiSuggestion, Debtor, DebtorKind, Draft, EmptyAction, Entry, QuickShortcut, SlipImage, Wallet } from "@/lib/types";
 import { CategoryIcon, CategoryPicker, FundingSelect } from "@/components/shared";
 import { morphSource } from "@/components/morph";
-import { collapseOnExit, restoreRow, useExitingList } from "@/components/exiting-list";
+import { rowMotionRef, useExitingList } from "@/components/exiting-list";
 import { AmountInput, DateField, EmptyNote, SheetFrame, StateCard, SheetClose, revealAboveKeyboard } from "@/components/primitives";
 
 // The whole "let AI write it for me" half of the Add tab: the example chips,
@@ -655,8 +655,9 @@ export const EntryList = memo(function EntryList({
   exitScope?: string;
 }) {
   const exitRows = useExitingList(entries, entryKey, { source: exitSource, scope: exitScope });
-  const rows = exitSource ? exitRows : entries.map((item) => ({ item, key: item.id, exiting: false }));
+  const rows = exitSource ? exitRows : entries.map((item) => ({ item, key: item.id, exiting: false, entering: false }));
   const exitingIds = new Set(rows.filter((row) => row.exiting).map((row) => row.key));
+  const enteringIds = new Set(rows.filter((row) => row.entering).map((row) => row.key));
   const shown = rows.map((row) => row.item);
   const groups = groupEntriesByDay(shown);
   // One row open at a time, the way iOS Mail does it: opening another, or
@@ -701,7 +702,7 @@ export const EntryList = memo(function EntryList({
                 </>
               );
               const tap = onOpen ?? onEdit;
-              const exitRef = exitingIds.has(entry.id) ? collapseOnExit : restoreRow;
+              const exitRef = rowMotionRef({ exiting: exitingIds.has(entry.id), entering: enteringIds.has(entry.id) });
               if (!onEdit && !onDelete) {
                 return (
                   <article className="entry" key={entry.id} ref={exitRef}>
@@ -749,7 +750,7 @@ function SwipeEntry({
   onDelete,
   children,
 }: {
-  /** collapseOnExit or restoreRow (components/exiting-list.ts), on the whole row -- buttons included. */
+  /** rowMotionRef (components/exiting-list.ts): fold, open or restore, on the whole row -- buttons included. */
   exitRef?: (element: HTMLElement | null) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
