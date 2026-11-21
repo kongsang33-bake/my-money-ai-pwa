@@ -32,12 +32,26 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // An app, not a document: no pinch zoom. Android's browsers follow these
+  // two; iOS Safari has ignored them since iOS 10, which is what
+  // noPinchZoomScript below is for. Text is never set under 16px in a field
+  // (e2e/input-zoom.spec.ts), so iOS never needs to zoom in to type either.
+  maximumScale: 1,
+  userScalable: false,
   // Lets the page run under the iPhone's home indicator so
   // env(safe-area-inset-bottom) reports it -- without this it reads 0 and
   // the bottom nav sat flush on the screen's edge (see --nav-lift).
   viewportFit: "cover",
   themeColor: "#0a0b0c",
 };
+
+// iOS reports a pinch as its own gesture events, and cancelling them is the
+// one thing that stops it -- in Safari and in the home-screen app alike. Only
+// these: a non-passive touchmove listener on the document would make every
+// scroll in the app wait on JavaScript. Double-tap zoom is touch-action's job
+// (html in app/globals.css). Inline, so it is on before the app loads, and on
+// /login and /privacy too.
+const noPinchZoomScript = `(function(){var stop=function(e){e.preventDefault();};["gesturestart","gesturechange","gestureend"].forEach(function(t){document.addEventListener(t,stop,{passive:false});});})();`;
 
 const splashInitScript = `(function(){window.__splashStartedAt=Date.now();var el=document.getElementById("app-splash");if(el)el.classList.add("app-splash-play");})();`;
 
@@ -61,6 +75,7 @@ export default function RootLayout({
           </div>
         </div>
         <script dangerouslySetInnerHTML={{ __html: splashInitScript }} />
+        <script dangerouslySetInnerHTML={{ __html: noPinchZoomScript }} />
         <ServiceWorkerRegistrar />
         {children}
       </body>
