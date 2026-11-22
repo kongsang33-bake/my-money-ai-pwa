@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { scrimOpacityFor, sheetDragIntent, shouldCloseSheet } from "./sheet-drag.ts";
-import { SHEET_DRAG_CLOSE_FRACTION, SHEET_DRAG_FLICK_MIN_PX, SHEET_DRAG_FLICK_VELOCITY, SHEET_DRAG_SLOP } from "./constants.ts";
+import { rubberBand, scrimOpacityFor, sheetDragIntent, shouldCloseSheet } from "./sheet-drag.ts";
+import { SHEET_DRAG_CLOSE_FRACTION, SHEET_DRAG_FLICK_MIN_PX, SHEET_DRAG_FLICK_VELOCITY, SHEET_DRAG_SLOP, SHEET_STRETCH_MAX } from "./constants.ts";
 
 describe("sheetDragIntent", () => {
   it("waits until the finger has moved past the slop", () => {
@@ -44,5 +44,28 @@ describe("scrimOpacityFor", () => {
   });
   it("never fades below a third", () => {
     assert.equal(scrimOpacityFor(600, 600), 1 / 3);
+  });
+});
+
+describe("sheetDragIntent on a sheet with nothing to scroll", () => {
+  it("takes an upward push as a drag, to stretch", () => {
+    assert.equal(sheetDragIntent(0, -20, false), "drag");
+  });
+  it("still leaves an upward move to a sheet that scrolls", () => {
+    assert.equal(sheetDragIntent(0, -20, true), "ignore");
+  });
+});
+
+describe("rubberBand", () => {
+  it("follows the finger downwards", () => {
+    assert.equal(rubberBand(120), 120);
+  });
+  it("gives upwards, less than the finger moved", () => {
+    const at = rubberBand(-40);
+    assert.ok(at < 0 && at > -40);
+  });
+  it("gives more the further it is pushed, never past the limit", () => {
+    assert.ok(rubberBand(-200) < rubberBand(-40));
+    assert.ok(rubberBand(-100000) > -SHEET_STRETCH_MAX);
   });
 });

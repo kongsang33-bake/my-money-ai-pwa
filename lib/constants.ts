@@ -366,6 +366,8 @@ export const SHEET_DRAG_CLOSE_FRACTION = 0.3;
 export const SHEET_DRAG_FLICK_VELOCITY = 0.5;
 export const SHEET_DRAG_FLICK_MIN_PX = 40;
 export const SHEET_DRAG_FLICK_STALE_MS = 100;
+// How far a sheet pushed upwards can stretch at most (rubberBand).
+export const SHEET_STRETCH_MAX = 24;
 
 // Swipe from the left edge to go back (EdgeSwipeBack, components/primitives.tsx;
 // decisions in lib/edge-swipe.ts). A touch has to start within this many px

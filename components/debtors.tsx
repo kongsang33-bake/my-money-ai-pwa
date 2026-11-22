@@ -87,7 +87,7 @@ export function DebtorsView({
       <div className="view debtor-view">
         <div className="add-title">
           <button onClick={onBack} aria-label="ย้อนกลับ"><ChevronLeft aria-hidden="true" /></button>
-          <span className="debtor-avatar" style={{ background: selectedDebtor.icon_color ?? nameColor(selectedDebtor.name) }}>
+          <span className="debtor-avatar" style={{ "--hue": selectedDebtor.icon_color ?? nameColor(selectedDebtor.name) } as React.CSSProperties}>
             <WalletAvatarGlyph iconKey={selectedDebtor.icon} fallbackName={selectedDebtor.name} size={20} />
           </span>
           <div>
@@ -172,7 +172,7 @@ export function DebtorsView({
           return (
             <article className="debtor-page-item" key={debtor.id} ref={rowMotionRef({ exiting, entering })}>
               <button className="debtor-main-button" onClick={() => onSelect(debtor)}>
-                <span className="debtor-avatar" style={{ background: debtor.icon_color ?? nameColor(debtor.name) }}>
+                <span className="debtor-avatar" style={{ "--hue": debtor.icon_color ?? nameColor(debtor.name) } as React.CSSProperties}>
                   <WalletAvatarGlyph iconKey={debtor.icon} fallbackName={debtor.name} />
                 </span>
                 <div>

@@ -17,6 +17,35 @@ test.describe("history length", () => {
     expect(await cells.count()).toBeLessThanOrEqual(7);
   });
 
+  // The days below the fold are content-visibility placeholders, so a jump
+  // aimed at one far down used to chase a target that moved as the days in
+  // between laid out. It lays the list out in full for the jump instead.
+  test("a tap on a day far down the month lands on that day", async ({ app }) => {
+    await navigate(app, "history");
+    await app.getByRole("button", { name: "เดือนก่อนหน้า" }).click();
+    const unfold = app.getByRole("button", { name: "ดูทั้งเดือน" });
+    if (await unfold.count()) await unfold.click();
+    // A day in the middle of the month: far enough down the list (it runs
+    // newest first) that the days above it are placeholders on the way, with
+    // enough below it to be scrolled to the top.
+    const cells = app.locator(".history-view .heatmap-cell:not(.bucket-0)");
+    await cells.nth(Math.floor((await cells.count()) / 2)).click();
+    await expect.poll(() => app.evaluate(() => document.querySelector(".history-view .entry-list")?.classList.contains("is-jumping"))).toBe(false);
+    const landed = await app.evaluate(() => {
+      const group = document.querySelector<HTMLElement>(".history-view .entry-group.is-selected")!;
+      const phone = document.querySelector<HTMLElement>(".phone")!;
+      const box = phone.getBoundingClientRect();
+      const top = group.getBoundingClientRect().top - box.top;
+      // The last days of the list cannot be scrolled to the top: there is
+      // nothing below them. Then the page is simply as far down as it goes.
+      const atEnd = phone.scrollTop >= phone.scrollHeight - phone.clientHeight - 2;
+      return { top, height: box.height, atEnd };
+    });
+    expect(landed.atEnd).toBe(false);
+    expect(landed.top).toBeGreaterThanOrEqual(0);
+    expect(landed.top).toBeLessThan(landed.height / 3);
+  });
+
   test("offers a way back to the top once the month has been scrolled", async ({ app }) => {
     test.skip(await hasSideNav(app), "the desk scrolls the list in its own column");
     await navigate(app, "history");
