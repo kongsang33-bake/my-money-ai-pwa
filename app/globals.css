@@ -3412,7 +3412,14 @@ button.poster:active {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: var(--text-on-color);
+  /* Its colour (--hue: one the user picked, or the name's) tinted into the
+     ground with the letter or icon in a lightened tone of it, the way every
+     IconChip is -- not a white letter on the colour at full strength, which
+     fell to 1.9:1 on the palette's lighter slots. */
+  background: color-mix(in oklab, var(--hue) 24%, var(--bg));
+  color: color-mix(in oklab, var(--hue) 70%, var(--ink));
+  /* Home's wallet rail draws it as an <i>, which a browser slants. */
+  font-style: normal;
   font-weight: var(--fw-semibold);
   line-height: 1;
   overflow: hidden;
@@ -4843,7 +4850,7 @@ button.poster:active {
 .heatmap-cell.bucket-1 { background: var(--seq-1); }
 .heatmap-cell.bucket-2 { background: var(--seq-2); }
 .heatmap-cell.bucket-3 { background: var(--seq-3); }
-.heatmap-cell.bucket-4 { background: var(--seq-4); }
+.heatmap-cell.bucket-4 { background: var(--seq-4); color: var(--accent-contrast); } /* the brightest step: dark ink, as on every emerald fill (2:1 in white) */
 
 .heatmap-cell.selected {
   box-shadow: 0 0 0 2px var(--ink);
@@ -5456,6 +5463,23 @@ button.poster:active {
      sticky search as well as the topbar. The topbar's share is already
      .phone's scroll-padding-top, which a scroll-margin adds to. */
   scroll-margin-top: 96px;
+  /* A month is ~30 day groups and only the first few are on screen: the rest
+     skip style and layout until they come near (content-visibility), which is
+     what returning to History spent most of its first frame on -- restyling
+     every row of the month as the parked view came back. The height is a
+     placeholder for a day not yet laid out (width is the column's, as ever);
+     `auto` keeps the real one once it has been, so the scrollbar settles
+     rather than jumps. A calendar tap lays the list out in full for its jump
+     (.is-jumping), or it would aim at placeholders. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto none auto 200px;
+  /* content-visibility also clips painting to the group, so room under the
+     last row for its focus ring (2px out, 2px wide). */
+  padding-bottom: var(--s-1);
+}
+
+.entry-list.is-jumping .entry-group {
+  content-visibility: visible;
 }
 
 .entry-group:first-child {
@@ -5919,6 +5943,9 @@ button.entry-main {
   width: 56px;
   height: 56px;
   border-radius: var(--r-md);
+  /* An avatar is tinted now, so the preview also rings itself in the colour
+     at full strength -- the swatch that was tapped, recognisably. */
+  box-shadow: inset 0 0 0 2px var(--hue);
 }
 
 .icon-color-picker-reset {

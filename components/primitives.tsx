@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { AlertTriangle, CalendarDays, Check, ChevronLeft, Info, RefreshCw, X } from "lucide-react";
 import { KEYBOARD_SETTLE_MAX_MS, KEYBOARD_SETTLE_QUIET_MS, LONG_PRESS_CLICK_GRACE_MS, LONG_PRESS_MS, LONG_PRESS_SLOP, PULL_REFRESH_MAX, PULL_REFRESH_MIN_MS, PULL_REFRESH_THRESHOLD, SHEET_DRAG_FLICK_STALE_MS } from "@/lib/constants";
 import { edgeSwipeIntent, shouldGoBack, startsAtEdge } from "@/lib/edge-swipe";
-import { scrimOpacityFor, sheetDragIntent, shouldCloseSheet } from "@/lib/sheet-drag";
+import { rubberBand, scrimOpacityFor, sheetDragIntent, shouldCloseSheet } from "@/lib/sheet-drag";
 import { formatDateInputValue, formatMonthInputValue, formatMoney, moneySign } from "@/lib/format";
 import type { ConfirmDialogState, EmptyAction, Toast } from "@/lib/types";
 
@@ -265,6 +265,9 @@ function useSheetDrag(sheetRef: React.RefObject<HTMLElement | null>, onClose: ()
     if (!sheet || !backdrop || !enabled) return;
     let start: { x: number; y: number } | null = null;
     let dragging = false;
+    let canScroll = true;
+    let ground = "";
+    let lift = "";
     let offset = 0;
     let last = { y: 0, t: 0 };
     let velocity = 0;
@@ -286,7 +289,11 @@ function useSheetDrag(sheetRef: React.RefObject<HTMLElement | null>, onClose: ()
       const willClose = shouldCloseSheet(y, 0, sheet.offsetHeight);
       if (willClose && !armed) haptic("light");
       armed = willClose;
-      sheet.style.transform = y > 0 ? `translateY(${y}px)` : "";
+      sheet.style.transform = y !== 0 ? `translateY(${y}px)` : "";
+      // Stretched up, the sheet's foot would leave the screen's edge and show
+      // the page under it; its own ground is drawn down into the gap (a box
+      // shadow, which the sheet's own overflow does not clip).
+      sheet.style.boxShadow = y < 0 ? [lift, `0 ${-y}px 0 0 ${ground}`].filter(Boolean).join(", ") : "";
       // The scrim's colour, not the backdrop's opacity: the sheet is the
       // backdrop's child, and fading the parent made the sheet see-through.
       if (y > 0) backdrop.style.setProperty("--sheet-scrim", String(scrimOpacityFor(y, sheet.offsetHeight)));
@@ -302,6 +309,21 @@ function useSheetDrag(sheetRef: React.RefObject<HTMLElement | null>, onClose: ()
       start = { x: event.touches[0].clientX, y: event.touches[0].clientY };
       last = { y: start.y, t: event.timeStamp };
       velocity = 0;
+      // A sheet with nothing to scroll gives under an upward push instead --
+      // nothing at all, between the finger and the sheet: an inner list that
+      // scrolls must keep the push for itself.
+      canScroll = false;
+      for (let node = target; node && node !== backdrop; node = node.parentElement) {
+        const overflow = getComputedStyle(node).overflowY;
+        if ((node === sheet || overflow === "auto" || overflow === "scroll") && node.scrollHeight > node.clientHeight + 1) {
+          canScroll = true;
+          break;
+        }
+      }
+      // What the sheet is drawn in, to fill the gap a stretch opens under it.
+      const style = getComputedStyle(sheet);
+      ground = style.backgroundColor;
+      lift = style.boxShadow === "none" ? "" : style.boxShadow;
     };
     const onMove = (event: TouchEvent) => {
       if (!start) return;
@@ -309,7 +331,7 @@ function useSheetDrag(sheetRef: React.RefObject<HTMLElement | null>, onClose: ()
       const dx = touch.clientX - start.x;
       const dy = touch.clientY - start.y;
       if (!dragging) {
-        const intent = sheetDragIntent(dx, dy);
+        const intent = sheetDragIntent(dx, dy, canScroll);
         if (intent === "ignore") {
           start = null;
           return;
@@ -317,7 +339,8 @@ function useSheetDrag(sheetRef: React.RefObject<HTMLElement | null>, onClose: ()
         // Still undecided but heading down: hold the browser's own overscroll
         // off now, or iOS commits to its bounce and ignores a later cancel.
         if (intent === "pending") {
-          if (dy > 0 && dy >= Math.abs(dx) && event.cancelable) event.preventDefault();
+          const heading = Math.abs(dy) >= Math.abs(dx) && (dy > 0 || !canScroll);
+          if (heading && event.cancelable) event.preventDefault();
           return;
         }
         dragging = true;
@@ -330,7 +353,8 @@ function useSheetDrag(sheetRef: React.RefObject<HTMLElement | null>, onClose: ()
       const dt = event.timeStamp - last.t;
       if (dt > 0) velocity = (touch.clientY - last.y) / dt;
       last = { y: touch.clientY, t: event.timeStamp };
-      paint(Math.max(0, touch.clientY - start.y));
+      // Down follows the finger; up stretches, with resistance (rubberBand).
+      paint(rubberBand(touch.clientY - start.y));
     };
     const onEnd = (event: TouchEvent) => {
       const wasDragging = dragging;

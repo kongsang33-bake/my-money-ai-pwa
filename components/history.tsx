@@ -3,11 +3,12 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { ArrowUp, ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import { CATEGORY_DOT_TINT_ALPHA } from "@/lib/constants";
-import { formatMoney, moneySign } from "@/lib/format";
+import { formatMoney, moneySign, toMoneyAmount } from "@/lib/format";
 import { transactionTypeLabels, type TransactionType } from "@/lib/taxonomy";
 import { categories, categoryColor, categoryTint } from "@/lib/category";
 import type { HistoryFilters } from "@/lib/types";
 import { CategoryIcon } from "@/components/shared";
+import { AmountInput } from "@/components/primitives";
 
 const QUICK_TYPES: { type: TransactionType; label: string }[] = [
   { type: "personal_expense", label: "จ่ายเอง" },
@@ -145,11 +146,15 @@ export function HistoryFilterBar({
           </label>
           <label>
             ยอดต่ำสุด
-            <input inputMode="decimal" value={filters.minAmount} onChange={(event) => update({ minAmount: event.target.value })} placeholder="0" />
+            {/* Money, so the baht sign sits in the field like every other
+                amount; the filter keeps its text, empty meaning no limit --
+                and so does 0, which as a maximum would only ever match a
+                zero-amount row (the field says ไม่จำกัด when it is empty). */}
+            <AmountInput size="field" value={toMoneyAmount(filters.minAmount)} onChange={(amount) => update({ minAmount: amount ? String(amount) : "" })} />
           </label>
           <label>
             ยอดสูงสุด
-            <input inputMode="decimal" value={filters.maxAmount} onChange={(event) => update({ maxAmount: event.target.value })} placeholder="ไม่จำกัด" />
+            <AmountInput size="field" placeholder="ไม่จำกัด" value={toMoneyAmount(filters.maxAmount)} onChange={(amount) => update({ maxAmount: amount ? String(amount) : "" })} />
           </label>
         </div>
       )}
