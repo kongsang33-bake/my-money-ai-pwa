@@ -33,6 +33,7 @@ import { clampInteger, formatMoney, formatUnits, moneySign, monthKey, normalizeI
 import { currentCycleMonthKey, cycleBounds, defaultDayForCycle, entriesInRange, fromDateInput, nextBillingInfo, reportLabel, shiftMonthKey, todayDateInput } from "@/lib/cycle";
 import {
   buildDebtSummary,
+  debtorsToRebook,
   buildMonthlyTrend,
   buildPortfolioHoldings,
   buildPortfolioTrend,
@@ -1941,7 +1942,13 @@ export default function Home() {
       if (!nameKinds.has(name)) nameKinds.set(name, TYPES_USER_OWES.includes(item.transaction_type) ? "own" : "lend");
     }
 
-    if (!nameKinds.size) return;
+    // Someone already on file can have ended up in the wrong book: filed by
+    // the first row that named them, settled there, and now owed on the other
+    // side. Their record moves with the money (debtorsToRebook), since the
+    // list and fundingLegType both read its kind.
+    const rebook = debtorsToRebook(debtors, [...entries, ...items]);
+
+    if (!nameKinds.size && !rebook.length) return;
 
     // In parallel, not one await per name: this runs inside saveEntries with
     // the save spinner up, so a sequential loop charged the user a full
@@ -1950,9 +1957,10 @@ export default function Home() {
     // -- the row is already there (a concurrent save, a retry), which is the
     // outcome we wanted anyway, so it is not an error to report.
     const client = supabase;
-    const results = await Promise.all(
-      [...nameKinds].map(([name, kind]) => client.from(TABLES.debtors).insert({ user_id: user.id, name, kind })),
-    );
+    const results = await Promise.all([
+      ...[...nameKinds].map(([name, kind]) => client.from(TABLES.debtors).insert({ user_id: user.id, name, kind })),
+      ...rebook.map(({ debtor, kind }) => client.from(TABLES.debtors).update({ kind }).eq("id", debtor.id)),
+    ]);
     const failure = results.find(({ error }) => error && error.code !== "23505");
     if (failure?.error) {
       setError(failure.error.message);

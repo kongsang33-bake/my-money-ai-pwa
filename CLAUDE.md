@@ -704,6 +704,11 @@ in, the user got the next — and settling up in real life is one transfer of
 the difference. `planDebtSettlement` writes the two rows that take each side
 to zero rather than one net payment, because `buildDebtSummary` groups by name
 *within* a kind and a net row would leave both balances standing.
+A person's record still lives in one book (one record per name), filed by
+the first row that named them, so after a save `debtorsToRebook` moves a plain
+person (no card, installment or limit) whose own book is settled at zero while
+the other holds a balance -- otherwise they list at ฿0 in the wrong tab and
+`fundingLegType` reads the stale kind.
 
 **One row moves one debt balance.** `buildDebtSummary` groups by
 `debtor_name` and sums `debt_impact`, so a transaction that moves two of them

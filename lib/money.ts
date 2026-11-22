@@ -854,6 +854,42 @@ export function buildDebtSummary(debtors: Debtor[], entries: Entry[], kind: Debt
 }
 
 /**
+ * The people whose record sits in the wrong debt book, and the book each
+ * belongs in now.
+ *
+ * A person gets one record (debtors_user_name_key), and its `kind` is set by
+ * the first row that names them -- so someone who fronted one round in
+ * September stays filed under "หนี้ของฉัน" for good, and when they later owe
+ * the user for a whole night out they are listed there at ฿0 with the real
+ * debt as a footnote, while "ยืมเรา" never shows them at all. `kind` is not
+ * only a list filter either: `fundingLegType` reads it, so a stale "own" made
+ * the next bill they fronted grow the user's debt instead of working off
+ * theirs.
+ *
+ * Only a plain person moves: a card, an installment or anything with a
+ * credit limit is a debt by its nature, and stays put at zero. And only when
+ * their own book is settled (exactly zero) and the other one is not -- a
+ * person owed on both sides is left where they are, since the detail page
+ * already shows the other side and settles both together.
+ */
+export function debtorsToRebook(debtors: Debtor[], entries: Entry[]): { debtor: Debtor; kind: DebtorKind }[] {
+  const receivable = buildDebtSummary(debtors, entries, "lend", TYPES_OWED_TO_USER);
+  const payable = buildDebtSummary(debtors, entries, "own", TYPES_USER_OWES);
+  const balanceIn = (list: { name: string; amount: number }[], name: string) =>
+    roundMoney(list.filter((item) => sameDebtorName(item.name, name)).reduce((sum, item) => sum + item.amount, 0));
+  const moves: { debtor: Debtor; kind: DebtorKind }[] = [];
+  for (const debtor of debtors) {
+    if (debtor.credit_limit || debtor.monthly_installment || debtor.credit_card_min_payment_percent) continue;
+    const own = debtor.kind === "own" ? payable : receivable;
+    const other = debtor.kind === "own" ? receivable : payable;
+    if (balanceIn(own, debtor.name) !== 0) continue;
+    if (balanceIn(other, debtor.name) <= 0) continue;
+    moves.push({ debtor, kind: debtor.kind === "own" ? "lend" : "own" });
+  }
+  return moves;
+}
+
+/**
  * Adds entries to the in-memory list and keeps it in the order the whole app
  * assumes: newest first. Six call sites in app/page.tsx were each writing this
  * spread-and-sort by hand -- save, restore, edit, log-a-recurring-bill, two

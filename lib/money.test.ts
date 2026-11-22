@@ -6,6 +6,7 @@ import {
   mapTransactionRow,
   totalWallet,
   buildDebtSummary,
+  debtorsToRebook,
   buildPortfolioTrend,
   buildBalanceHistory,
   buildWalletLedger,
@@ -378,6 +379,48 @@ describe("buildDebtSummary", () => {
     const entries = [makeEntry({ transaction_type: "borrow", debtor_name: "เพื่อนบี", debt_impact: 100 }), makeEntry({ transaction_type: "debt_payment", debtor_name: "เพื่อนบี", debt_impact: -150 })];
     const summary = buildDebtSummary(debtors, entries, "own", ["borrow", "debt_payment"]);
     assert.deepEqual(summary, [{ name: "เพื่อนบี", amount: -50 }]);
+  });
+});
+
+describe("debtorsToRebook", () => {
+  // อ้อน fronted one round in September (filed under "own"), was paid back,
+  // then owed the user for a night out: she belongs in "ยืมเรา" now.
+  const settledThenOwing = [
+    makeEntry({ transaction_type: "card_charge", debtor_name: "อ้อน", debt_impact: 389 }),
+    makeEntry({ transaction_type: "debt_payment", debtor_name: "อ้อน", debt_impact: -389 }),
+    makeEntry({ transaction_type: "lend", debtor_name: "อ้อน", debt_impact: 618 }),
+  ];
+
+  it("moves a plain person whose own book is settled to the book that holds a balance", () => {
+    const debtor = makeDebtor({ name: "อ้อน", kind: "own" });
+    assert.deepEqual(debtorsToRebook([debtor], settledThenOwing), [{ debtor, kind: "lend" }]);
+  });
+
+  it("works the other way round, and matches names loosely like the rest of the debt code", () => {
+    const debtor = makeDebtor({ name: "Bank", kind: "lend" });
+    const entries = [makeEntry({ transaction_type: "borrow", debtor_name: "bank ", debt_impact: 200 })];
+    assert.deepEqual(debtorsToRebook([debtor], entries), [{ debtor, kind: "own" }]);
+  });
+
+  it("leaves a person owed on both sides where they are", () => {
+    const debtor = makeDebtor({ name: "อ้อน", kind: "own" });
+    const entries = [settledThenOwing[0], settledThenOwing[2]];
+    assert.deepEqual(debtorsToRebook([debtor], entries), []);
+  });
+
+  it("never moves a card or an installment, even at zero", () => {
+    const card = makeDebtor({ name: "บัตร", kind: "own", credit_limit: 19000 });
+    const phone = makeDebtor({ id: "d2", name: "ผ่อน", kind: "own", monthly_installment: 1000 });
+    const entries = [
+      makeEntry({ transaction_type: "lend", debtor_name: "บัตร", debt_impact: 50 }),
+      makeEntry({ transaction_type: "lend", debtor_name: "ผ่อน", debt_impact: 50 }),
+    ];
+    assert.deepEqual(debtorsToRebook([card, phone], entries), []);
+  });
+
+  it("counts an opening balance as part of the record's own book", () => {
+    const debtor = makeDebtor({ name: "อ้อน", kind: "own", opening_balance: 100 });
+    assert.deepEqual(debtorsToRebook([debtor], settledThenOwing), []);
   });
 });
 
