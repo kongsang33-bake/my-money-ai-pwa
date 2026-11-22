@@ -1106,20 +1106,6 @@ export const MissingWalletNotice = memo(function MissingWalletNotice({ entryCoun
   );
 });
 
-export function SuccessPulse({ count, onAddMore, closing }: { count: number; onAddMore: () => void; closing?: boolean }) {
-  return (
-    <section className={`success-pulse ${closing ? "closing" : ""}`} role="status">
-      <span className="success-pulse-icon" aria-hidden="true">✓</span>
-      <div>
-        <b>บันทึกเรียบร้อย</b>
-        <small>{count} รายการถูกซิงค์แล้ว พร้อมจดรายการถัดไปได้เลย</small>
-      </div>
-      <button onClick={onAddMore}>+ AI</button>
-    </section>
-  );
-}
-
-
 /**
  * One entry, opened the way docs/netflix-reference.html opens a title: its
  * category's art across the top, then what it was, what it cost, when and

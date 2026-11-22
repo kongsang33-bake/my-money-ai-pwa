@@ -126,7 +126,6 @@ import {
   AskPrompt,
   MissingWalletNotice,
   CyclePaceCard,
-  SuccessPulse,
 } from "@/components/home";
 import { FlipBillboard, PocketCardForm, PocketDetailSheet, PocketFace, PocketManageSheet, PocketShareSheet } from "@/components/pocket";
 import { movePocketCard as planPocketMove, pocketCardRow, toPocketCard, type PocketCard } from "@/lib/pocket";
@@ -452,7 +451,6 @@ export default function Home() {
   const [recapOpen, setRecapOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [closingToastIds, setClosingToastIds] = useState<number[]>([]);
-  const [savePulse, setSavePulse] = useState(0);
   const [pinMode, setPinMode] = useState<PinMode>("checking");
   const [pinError, setPinError] = useState("");
   // Signed in without an acknowledgement of the current privacy policy on
@@ -548,8 +546,11 @@ export default function Home() {
   }, []);
 
   const notify = useCallback((toast: Omit<Toast, "id">) => {
+    // One toast at a time: a new one replaces whatever is showing. A stack
+    // of three, each waiting its own turn to time out, covered the screen
+    // for ten seconds after a single save.
     const id = Date.now() + Math.random();
-    setToasts((items) => [...items.slice(-2), { id, ...toast }]);
+    setToasts([{ id, ...toast }]);
   }, []);
 
   const dismissToast = useCallback((id: number) => {
@@ -1779,11 +1780,11 @@ export default function Home() {
           },
         ),
       );
+      // No toast here: the review opening with the drafts is the news, and
+      // a failure already shows under the composer through setError.
       setReceiptTotal(typeof data.receiptTotal === "number" ? data.receiptTotal : 0);
-      notify({ tone: "success", title: "AI แยกรายการแล้ว", detail: `พบ ${data.items.length} รายการให้ตรวจสอบ` });
     } catch (e) {
       setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
-      notify({ tone: "error", title: "AI ยังวิเคราะห์ไม่ได้", detail: e instanceof Error ? e.message : undefined });
     }
 
     setBusy(false);
@@ -1937,7 +1938,6 @@ export default function Home() {
       setComposerInitialText("");
       setComposerResetKey((key) => key + 1);
       setTab("home");
-      setSavePulse(normalizedItems.length);
       haptic("success");
       notify({
         tone: "success",
@@ -3447,16 +3447,6 @@ export default function Home() {
   const deleteAccountDismiss = useDismiss(deleteAccountOpen, () => setDeleteAccountOpen(false));
   const logoutDismiss = useDismiss<[boolean]>(logoutOpen, (confirmed) => { setLogoutOpen(false); if (confirmed) void supabase?.auth.signOut(); });
   const confirmDialogDismiss = useDismiss<[boolean]>(!!confirmDialog, (confirmed) => closeConfirmDialog(confirmed));
-  const clearSavePulse = useCallback(() => setSavePulse(0), []);
-  const savePulseDismiss = useDismiss(!!savePulse, clearSavePulse, 200);
-  const { requestClose: closeSavePulse } = savePulseDismiss;
-
-  useEffect(() => {
-    if (!savePulse) return;
-    const timer = window.setTimeout(() => closeSavePulse(), 4200);
-    return () => window.clearTimeout(timer);
-  }, [savePulse, closeSavePulse]);
-
   if (!ready) return null;
 
   if (!user) return <Landing />;
@@ -3647,7 +3637,6 @@ export default function Home() {
             rule that stopped matching would throw that layout away. */}
         <div className={`view home-view${tab === "home" ? "" : " is-parked"}`} inert={tab !== "home"}>
           {dataLoading && <SkeletonDashboard />}
-          {savePulseDismiss.mounted && <SuccessPulse count={savePulse} onAddMore={openAddTab} closing={savePulseDismiss.closing} />}
           {!dataLoading && (
             <>
               {/* The billboard: Home's one full-bleed identity moment, same
