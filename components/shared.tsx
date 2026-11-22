@@ -88,7 +88,7 @@ export function IconColorPicker({
   return (
     <div className="icon-color-picker">
       <div className="icon-color-picker-preview">
-        <span className="debtor-avatar" style={{ background: previewColor }}>
+        <span className="debtor-avatar" style={{ "--hue": previewColor } as React.CSSProperties}>
           <Glyph iconKey={value.icon} fallbackName={fallbackName} size={20} />
         </span>
         {(value.icon || value.color) && (

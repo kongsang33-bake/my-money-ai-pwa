@@ -443,6 +443,12 @@ the product name -- leave them.
   with no way to scroll to them. A keyboard spec has to shrink `--vvh` alone,
   not the window: shrinking the window also shrinks every fixed box, which
   is the one thing iOS does not do.
+- **History's day groups skip what is off screen** (`content-visibility:
+  auto` on `.entry-group`): returning to History spent most of its first
+  frame restyling the whole month as the parked view came back; with the
+  days below the fold skipped it halved (about 86ms to 50ms on the throttled
+  frame-budget spec). Anything that measures a day group must expect a
+  placeholder size until it has been near the screen.
 - **A sheet swipes down to close, below 900px** (`useSheetDrag` inside
   `SheetFrame`; the decisions and their tests in lib/sheet-drag.ts, the
   thresholds `SHEET_DRAG_*` in lib/constants.ts), so every sheet gets it
@@ -453,7 +459,10 @@ the product name -- leave them.
   dragged sheet swaps them for transitions (`.sheet-drag`, in the Motion
   section, after every sheet's own rules); and the scrim fades through its
   background colour (`--sheet-scrim`), never the backdrop's opacity, which
-  is the sheet's parent and turned the sheet see-through.
+  is the sheet's parent and turned the sheet see-through. Pushed up, a sheet
+  with nothing to scroll stretches a little and springs back (`rubberBand`,
+  at most `SHEET_STRETCH_MAX`); one that scrolls keeps the upward move as
+  its own scroll.
 - **The iOS habits, as the system gives a native app** (e2e/gestures.spec.ts).
   A tab tapped while showing scrolls back to its top (`selectTab` in
   page.tsx; the side nav's debts row pops a debtor's history to the list
@@ -583,7 +592,8 @@ token value.
   Smaller moments: a calendar tap's day glows once where the list lands
   (`.entry-group.is-arrived`, on a pseudo-element so the group's card-in is
   not replayed), a new set of filtered results arrives with its card-in
-  (the list is keyed on the chips' filters, never the typed query), and the
+  (the list is keyed on the chips' filters, never anything typed -- the
+  query or the amounts), and the
   billboard's figure comes up out of a blur when the eye shows it
   (`.hero-reveal`). All of it is the motion tokens, and reduced motion
   turns it off with everything else.
@@ -635,10 +645,13 @@ token value.
   stacked with under 6px between them while at least one is a box, which is
   how a wallet statement shipped flush against the tiles above it. Target
   size, overflow and crowded are held at zero. Contrast is ratcheted
-  against `e2e/contrast-baseline.json`: it was reset to `{}` and regenerated
-  against the Cinema palette (6 pairs, down from 23 against the old paper/
-  quiet-dark palette -- not yet zero, so still read the comment at the top
-  of that spec before regenerating it further). The audit opens every
+  against `e2e/contrast-baseline.json`, which is now `{}`: the last real
+  failures (the heatmap's brightest step, and avatars drawing a white letter
+  on a bright colour -- `.debtor-avatar` is tinted from `--hue` now, like an
+  IconChip) were fixed and the ledger rebuilt from nothing. Two of its six
+  old entries were stale (screens fixed long before, kept because the
+  ledger only merges), so rebuild it from `{}` after a palette pass rather
+  than trusting what is listed; and keep it at zero -- a new pair is a bug. The audit opens every
   `InfoHint` before measuring, because a `<details>` renders nothing until
   it does — a popover that inherited surrounding light text onto its own
   light panel shipped invisible while the gate reported green.

@@ -1385,6 +1385,26 @@ export default function Home() {
       const group = groups.find((node) => node.dataset.day === day)
         ?? groups.find((node) => new Date(node.dataset.day!).getTime() <= target);
       if (!group) return;
+      // The days off screen are placeholders (content-visibility on
+      // .entry-group), so a smooth scroll aimed at a day further down would
+      // chase a target that moves as the days in between lay out at their
+      // real height. The list is laid out in full for the jump
+      // (.is-jumping), and goes back to skipping once the scroll has ended.
+      const list = group.parentElement;
+      const scroller = scrollRootRef.current;
+      if (list && scroller) {
+        list.classList.add("is-jumping");
+        void list.offsetHeight;
+        let settled = false;
+        const settle = () => {
+          if (settled) return;
+          settled = true;
+          scroller.removeEventListener("scrollend", settle);
+          list.classList.remove("is-jumping");
+        };
+        scroller.addEventListener("scrollend", settle);
+        window.setTimeout(settle, 1500);
+      }
       group.scrollIntoView({ block: "start", behavior: "smooth" });
       // Say where it landed: the day glows once (.entry-group.is-arrived).
       // Off and on again with a reflow between, so a second tap on the same
@@ -3536,7 +3556,7 @@ export default function Home() {
       <div className="wallet-carousel">
         {secondaryWallets.map((wallet) => (
           <button className={`wallet-carousel-card ${secondaryWalletTags.find((entry) => entry.tag === wallet.tag)?.className ?? ""}`} key={wallet.id} onClick={() => setTab("wallets")}>
-            <i className="debtor-avatar sm" style={{ background: wallet.icon_color ?? nameColor(wallet.name) }}>
+            <i className="debtor-avatar sm" style={{ "--hue": wallet.icon_color ?? nameColor(wallet.name) } as React.CSSProperties}>
               <WalletAvatarGlyph iconKey={wallet.icon} fallbackName={wallet.name} size={16} />
             </i>
             <span>{wallet.name}</span>
@@ -3878,11 +3898,12 @@ export default function Home() {
                     <CalendarHeatmap start={cycleRange.start} end={cycleRange.end} entries={monthlyEntries} selectedMonth={selectedMonth} onChangeMonth={selectHistoryMonth} selectedDay={selectedDay} defaultDay={defaultHistoryDay} onSelectDay={selectHistoryDay} />
                   )}
                 </div>
-                {/* Keyed on the chosen filters (never the typed query, or every
-                    keystroke would replay it), so a new set of results arrives
+                {/* Keyed on the chosen filters -- the type and category chips --
+                    never anything typed (the query, the amounts), or every
+                    keystroke would replay it; a new set of results arrives
                     with the list's own card-in instead of swapping in place. */}
                 {searchActive
-                  ? <EntryList key={`${historyFilters.type}|${historyFilters.category}|${historyFilters.minAmount}|${historyFilters.maxAmount}`} entries={searchResults} exitSource={entries} exitScope="search" onOpen={openEntryDetail} onLongPress={openEntryActions} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
+                  ? <EntryList key={`${historyFilters.type}|${historyFilters.category}`} entries={searchResults} exitSource={entries} exitScope="search" onOpen={openEntryDetail} onLongPress={openEntryActions} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />
                   : <EntryList entries={monthlyEntries} exitSource={entries} exitScope={selectedMonth} selectedDay={selectedDay} dayTotals onOpen={openEntryDetail} onLongPress={openEntryActions} onEdit={openEditSheet} onDelete={deleteEntry} emptyAction={addWithAiAction} />}
                 <HistoryBackToTop active={tab === "history"} />
               </>

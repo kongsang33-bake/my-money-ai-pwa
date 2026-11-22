@@ -243,6 +243,34 @@ test.describe("press and hold", () => {
     await expect(page.locator(".sheet-backdrop > .entry-detail-sheet, .sheet-backdrop > .edit-sheet:not(.entry-actions-sheet), .dialog-backdrop")).toHaveCount(0);
   });
 
+  test("a sheet with nothing to scroll stretches a little when pushed up, and settles back", async ({ page }) => {
+    await openStandalone(page, false);
+    await navigate(page, "history");
+    await waitForAnimations(page);
+    const box = (await page.locator(".view:not(.is-parked) .entry.swipe-row .entry-main").first().boundingBox())!;
+    const cdp = await page.context().newCDPSession(page);
+    await hold(cdp, page, { x: box.x + box.width / 2, y: box.y + box.height / 2 }, 700);
+    const sheet = page.locator(actions);
+    await expect(sheet).toBeVisible();
+    await waitForAnimations(page);
+    const head = (await sheet.locator(".entry-actions-head").boundingBox())!;
+    const from = { x: head.x + 40, y: head.y + head.height / 2 };
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [from] });
+    for (let i = 1; i <= 8; i++) {
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: from.x, y: from.y - i * 15 }] });
+      await page.waitForTimeout(16);
+    }
+    const lifted = await sheet.evaluate((node) => new DOMMatrix(getComputedStyle(node).transform).m42);
+    expect(lifted).toBeLessThan(0);
+    expect(lifted).toBeGreaterThan(-24);
+    // Its own ground drawn down into the gap the stretch opens at the foot.
+    expect(await sheet.evaluate((node) => (node as HTMLElement).style.boxShadow)).not.toBe("");
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await expect.poll(() => sheet.evaluate((node) => (node as HTMLElement).style.transform)).toBe("");
+    expect(await sheet.evaluate((node) => (node as HTMLElement).style.boxShadow)).toBe("");
+    await expect(sheet).toBeVisible();
+  });
+
   test("แก้ไข from the actions opens the one edit sheet", async ({ page }) => {
     await openStandalone(page, false);
     await navigate(page, "history");

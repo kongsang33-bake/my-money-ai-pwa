@@ -136,7 +136,7 @@ export function PortfolioView({
         {holdings.map((holding) => (
           <article className="debtor-page-item" key={holding.id}>
             <button className="debtor-main-button" onClick={() => onUpdatePrice(holding)}>
-              <span className="debtor-avatar" style={{ background: holding.icon_color ?? nameColor(holding.name) }}>
+              <span className="debtor-avatar" style={{ "--hue": holding.icon_color ?? nameColor(holding.name) } as React.CSSProperties}>
                 <WalletAvatarGlyph iconKey={holding.icon} fallbackName={holding.name} />
               </span>
               <div>
