@@ -402,6 +402,15 @@ describe("debtorsToRebook", () => {
     assert.deepEqual(debtorsToRebook([debtor], entries), [{ debtor, kind: "own" }]);
   });
 
+  it("leaves a person settled on both sides in the book they were last moved to", () => {
+    const debtor = makeDebtor({ name: "อ้อน", kind: "lend" });
+    const entries = [
+      ...settledThenOwing,
+      makeEntry({ transaction_type: "debt_repayment", debtor_name: "อ้อน", debt_impact: -618 }),
+    ];
+    assert.deepEqual(debtorsToRebook([debtor], entries), []);
+  });
+
   it("leaves a person owed on both sides where they are", () => {
     const debtor = makeDebtor({ name: "อ้อน", kind: "own" });
     const entries = [settledThenOwing[0], settledThenOwing[2]];
